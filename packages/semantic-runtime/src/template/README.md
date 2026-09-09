@@ -321,6 +321,13 @@ classification, expression parsing, and instruction lowering converge on the sam
   Open and deliberately stops before structural context changes. The closed-context traversal instead schedules
   template-controller and projection child work, processContent, containerless placement, and generated-context return
   through the same event/context forest.
+  `template-compiler-dom-host.ts` exposes that forest to isolated source hooks through the evaluator's owned-operation
+  lane. The initial surface includes node/element navigation, live collections and iteration, existing attribute value
+  writes, and descendant removal. Creation, insertion, markup/text writes, selectors and metadata effects remain explicit
+  unsupported operations until their complete lowering paths are admitted. Unsupported attempted hooks discard their
+  pending forest mutations; they are not successful no-ops or ordinary thrown exceptions. The forest journals touched
+  state in place, preserving node/live-collection identity without cloning a second DOM. Source-hook removals use the
+  existing consumed-node dispositions and operation causes, never fabricated AuSlot instruction metadata.
   Explicit-shadow hosts extract their `au-slot` contributors first, then traverse retained light children in that same
   host context (or terminal template-controller context). The existing cursor task's logical child band retains the
   captured physical source ordinals/successors separately from selected traversal order. Projection extraction owns

@@ -200,7 +200,12 @@ describe('template compiler hook bootstrap', () => {
     }
   }, 30_000);
 
-  test('commits leaf built-ins before the first receiver-bearing root hook execution boundary', async () => {
+  test.each([
+    ['effect-free', 'return false;', TemplateCompilerHookBootstrapState.Exact],
+    ['receiver-write', 'this.calls++;', TemplateCompilerHookBootstrapState.Open],
+    ['opaque-call', 'template.remove();', TemplateCompilerHookBootstrapState.Open],
+    ['async-call', 'void this.later();', TemplateCompilerHookBootstrapState.Open],
+  ] as const)('executes leaf CSS hooks before a %s root callable', async (_name, body, expectedState) => {
     const workspaceRoot = await mkdtemp(path.join(packageRoot, '.template-compiler-root-hook-bootstrap-'));
     try {
       await writeWorkspaceFiles(workspaceRoot, {
@@ -217,7 +222,7 @@ describe('template compiler hook bootstrap', () => {
           "import { Aurelia, cssModules, customElement, StandardConfiguration } from '@aurelia/runtime-html';",
           "import { TemplateCompilerHooks } from '@aurelia/template-compiler';",
           '',
-          'class RootHook { compiling(): void {} }',
+          `class RootHook { calls = 0; compiling(template: HTMLElement) { ${body} } async later() { this.calls++; } }`,
           '',
           '@customElement({',
           "  name: 'root-hook-css-host',",
@@ -251,15 +256,14 @@ describe('template compiler hook bootstrap', () => {
         const browserRun = runtime.computationLifecycle.begin({
           kind: 'template-compiler-root-hook-bootstrap-test',
           reconciliationKey: 'template-compiler-root-hook-bootstrap-test',
-          summary: 'Retain the exact CSS prefix before a root static-callable hook boundary.',
+          summary: 'Retain the exact CSS prefix and assess synchronous root callable effects.',
         });
         try {
           const execution = executeHookBootstrap(browserRun, compilation, 'root-static');
           expect(execution.result.compilerWorld).toBe(compilation.compilerWorld);
           expect(execution.result).toMatchObject({
-            state: TemplateCompilerHookBootstrapState.Open,
-            boundaryEntryOrdinal: 2,
-            summary: expect.stringContaining('no compiler-DOM execution host'),
+            state: expectedState,
+            boundaryEntryOrdinal: expectedState === TemplateCompilerHookBootstrapState.Exact ? null : 2,
           });
           expect(execution.result.operations.map((operation) => ({
             stage: (operation.target as TemplateCompilerHookOperationTarget).operationStage,
@@ -283,12 +287,18 @@ describe('template compiler hook bootstrap', () => {
             },
             {
               stage: TemplateCompilerHookOperationStage.Invocation,
-              completion: TemplateCompilerOperationCompletionKind.Open,
-              batch: TemplateCompilerMutationBatchState.Discarded,
+              completion: expectedState === TemplateCompilerHookBootstrapState.Exact
+                ? TemplateCompilerOperationCompletionKind.Complete
+                : TemplateCompilerOperationCompletionKind.Open,
+              batch: expectedState === TemplateCompilerHookBootstrapState.Exact
+                ? TemplateCompilerMutationBatchState.Committed
+                : TemplateCompilerMutationBatchState.Discarded,
             },
           ]);
           expect(classValuesByTag(execution.forest)).toEqual({ div: ['c'] });
-          expect(execution.execution.seal()).toBe(execution.execution.sequence);
+          if (expectedState === TemplateCompilerHookBootstrapState.Open) {
+            expect(execution.execution.seal()).toBe(execution.execution.sequence);
+          }
         } finally {
           browserRun.abort();
         }

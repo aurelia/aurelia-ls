@@ -55,6 +55,7 @@ export const enum TemplateCompilerSiteSpendDisposition {
   TransferredToChildInvocation = 'transferred-to-child-invocation',
   InertTemplateContent = 'inert-template-content',
   LetContentSuppressed = 'let-content-suppressed',
+  ProcessContentSuppressed = 'process-content-suppressed',
   ProcessContentRemoved = 'process-content-removed',
   ProjectionSlotAttributeConsumed = 'projection-slot-attribute-consumed',
 }
@@ -528,7 +529,8 @@ export class TemplateCompilerSiteSpendLedger {
       | TemplateCompilerSiteSpendDisposition.LocalBindableMetadataConsumed
       | TemplateCompilerSiteSpendDisposition.TransferredToChildInvocation
       | TemplateCompilerSiteSpendDisposition.InertTemplateContent
-      | TemplateCompilerSiteSpendDisposition.LetContentSuppressed,
+      | TemplateCompilerSiteSpendDisposition.LetContentSuppressed
+      | TemplateCompilerSiteSpendDisposition.ProcessContentSuppressed,
     authority: TemplateCompilerLocalSiteExclusionAuthority | null = null,
   ): TemplateCompilerSiteSpendAttempt {
     this.assertOpen();
@@ -537,6 +539,7 @@ export class TemplateCompilerSiteSpendLedger {
     if (
       disposition === TemplateCompilerSiteSpendDisposition.InertTemplateContent
       || disposition === TemplateCompilerSiteSpendDisposition.LetContentSuppressed
+      || disposition === TemplateCompilerSiteSpendDisposition.ProcessContentSuppressed
     ) {
       if (authority != null) {
         return this.conflict(

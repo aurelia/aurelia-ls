@@ -1,4 +1,10 @@
 import type { ClaimEndpointHandle } from '../kernel/claim.js';
+import {
+  evaluateStaticCallableCompletion,
+  StaticCallableCompletionKind,
+  type StaticCallableTarget,
+} from '../evaluation/function-execution.js';
+import { EvaluationValueKind } from '../evaluation/values.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import {
@@ -46,6 +52,7 @@ import {
   type TemplateCompilerNodeOccurrence,
   TemplateCompilerTextOccurrence,
 } from './template-compiler-occurrence.js';
+import { TemplateCompilerDomHost } from './template-compiler-dom-host.js';
 
 const processContentPlanAuthority = {};
 const processContentResultAuthority = {};
@@ -110,21 +117,24 @@ export class TemplateCompilerProcessContentPlan {
     readonly metadata: TemplateCompilerProcessContentNameMetadata | null,
     readonly nameCarrier: TemplateCompilerAttributeOccurrence | null,
     readonly nameScalar: TemplateCompilerReachedAttributeScalarReceipt | null,
-    readonly strictFalse: false | null,
+    /** Built-in return predicate; null until a source invocation executes. */
+    readonly returnedFalse: boolean | null,
     readonly openReason: TemplateCompilerProcessContentOpenReason | null,
     readonly forestMutationRevision: number,
     readonly globalOperationCount: number,
     readonly laneOperationCount: number,
+    readonly callableTarget: StaticCallableTarget | null = null,
   ) {
     if (
       authority !== processContentPlanAuthority
       || (state === TemplateCompilerProcessContentPlanState.Exact)
         !== (definition != null
           && callable != null
-          && auSlot != null
-          && metadata != null
-          && (nameCarrier == null) === (nameScalar == null)
-          && strictFalse === false
+          && (auSlot != null
+            ? metadata != null && (nameCarrier == null) === (nameScalar == null) && returnedFalse === false
+              && callableTarget == null
+            : metadata == null && nameCarrier == null && nameScalar == null
+              && callableTarget != null && returnedFalse == null)
           && openReason == null)
       || (state === TemplateCompilerProcessContentPlanState.Open) !== (openReason != null)
     ) {
@@ -148,7 +158,7 @@ export class TemplateCompilerProcessContentRemoval {
   ) {}
 }
 
-/** Nominal exact execution result for one committed built-in processContent operation. */
+/** Exact built-in or source processContent outcome for one reached host. */
 export class TemplateCompilerProcessContentResult {
   readonly #authority: object;
   readonly #removedSiteOccurrenceSet: ReadonlySet<
@@ -163,11 +173,11 @@ export class TemplateCompilerProcessContentResult {
     readonly plan: TemplateCompilerProcessContentPlan,
     readonly driver: TemplateCompilerSiteExecutionDriverReference,
     readonly operation: TemplateCompilerOperation,
-    readonly metadata: TemplateCompilerProcessContentNameMetadata,
+    readonly metadata: TemplateCompilerProcessContentNameMetadata | null,
     readonly nameCarrier: TemplateCompilerAttributeOccurrence | null,
     readonly nameScalar: TemplateCompilerReachedAttributeScalarReceipt | null,
     readonly removals: readonly TemplateCompilerProcessContentRemoval[],
-    readonly strictFalse: false,
+    readonly returnedFalse: boolean,
   ) {
     const target = operation.target;
     const mutations = operation.mutationBatch.nodeDetachmentMutations;
@@ -179,7 +189,10 @@ export class TemplateCompilerProcessContentResult {
       || plan.nameScalar !== nameScalar
       || driver.context !== operation.context
       || operation.operationKind !== TemplateCompilerOperationKind.ProcessContent
-      || operation.executionMechanism !== TemplateCompilerOperationExecutionMechanism.BuiltIn
+      || (plan.auSlot != null && plan.returnedFalse !== returnedFalse)
+      || operation.executionMechanism !== (plan.auSlot == null
+        ? TemplateCompilerOperationExecutionMechanism.StaticCallable
+        : TemplateCompilerOperationExecutionMechanism.BuiltIn)
       || operation.completion.completionKind !== TemplateCompilerOperationCompletionKind.Complete
       || !(target instanceof TemplateCompilerCallableEffectOperationTarget)
       || target.actedOn.occurrence !== plan.host
@@ -213,6 +226,17 @@ export class TemplateCompilerProcessContentResult {
   ): boolean {
     return this.isModuleConstructed() && this.#removedSiteOccurrenceSet.has(occurrence);
   }
+}
+
+/** An attempted source hook whose tentative owned effects were discarded. */
+export class TemplateCompilerProcessContentFailure {
+  constructor(
+    readonly plan: TemplateCompilerProcessContentPlan,
+    readonly operation: TemplateCompilerOperation,
+    readonly kind: StaticCallableCompletionKind.Open | StaticCallableCompletionKind.Abrupt,
+    readonly reason: string,
+    readonly domRefusal: TemplateCompilerDomHost['refusal'],
+  ) {}
 }
 
 /** Resolve one reached live processContent site without admitting a site driver. */
@@ -258,12 +282,27 @@ export function planTemplateCompilerProcessContent(
     );
   }
   if (!canonicalAuSlotDefinition(result, definition)) {
+    const callable = callableReference(definition);
+    const target = definition.processContentSlot == null
+      ? null
+      : request.compilerReads.world.callableBindings.target(definition.processContentSlot);
+    if (callable != null && definition.productHandle != null
+      && target != null) {
+      return new TemplateCompilerProcessContentPlan(
+        processContentPlanAuthority, TemplateCompilerProcessContentPlanState.Exact,
+        request.execution, temporal.bootstrapClosure, temporal.driver, temporal.frontier,
+        request.compilerReads, request.elementRead, request.host, definition, callable,
+        null, null, null, null, null, null,
+        temporal.forestMutationRevision, temporal.globalOperationCount, temporal.laneOperationCount,
+        target,
+      );
+    }
     return openPlan(
       request,
       temporal,
       definition,
       TemplateCompilerProcessContentOpenReasonKind.ArbitraryHook,
-      `Custom element '${definition.name}' has an arbitrary processContent hook outside the exact built-in executor.`,
+      `Custom element '${definition.name}' processContent has no current source callable authority.`,
     );
   }
   if (definition.productHandle == null) {
@@ -349,12 +388,12 @@ export interface TemplateCompilerProcessContentExecutionRequest {
   readonly driver: TemplateCompilerSiteExecutionDriverReference;
 }
 
-/** Execute one exact built-in plan as one committed callable-effect operation. */
+/** Execute once at the reached site, then commit owned effects or discard the whole attempt. */
 export function executeTemplateCompilerProcessContent(
   request: TemplateCompilerProcessContentExecutionRequest,
-): TemplateCompilerProcessContentResult {
+): TemplateCompilerProcessContentResult | TemplateCompilerProcessContentFailure {
   const { plan, driver } = request;
-  if (!plan.isExact() || plan.auSlot == null || plan.callable == null || plan.metadata == null || plan.definition == null) {
+  if (!plan.isExact() || plan.callable == null || plan.definition == null) {
     throw new Error('Only one exact processContent plan can execute.');
   }
   const removalSchedule = validateExecutionDriver(plan, driver);
@@ -364,12 +403,44 @@ export function executeTemplateCompilerProcessContent(
     operationKey: `${driver.lane.localKey}:site:process-content:${plan.host.occurrenceKey}:${driver.expectedLaneOperationCount}`,
     context: driver.context,
     operationKind: TemplateCompilerOperationKind.ProcessContent,
-    executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
+    executionMechanism: plan.auSlot == null
+      ? TemplateCompilerOperationExecutionMechanism.StaticCallable
+      : TemplateCompilerOperationExecutionMechanism.BuiltIn,
     target,
     causeHandles: processContentCauseHandles(plan),
     sourceAddressHandle: plan.definition.processContent?.addressHandle ?? plan.definition.sourceAddressHandle,
     siteExecutionDriver: driver,
   });
+  let returnedFalse = plan.returnedFalse ?? false;
+  if (plan.callableTarget != null) {
+    const dom = new TemplateCompilerDomHost(execution, attempt, plan.host);
+    const completion = evaluateStaticCallableCompletion(
+      plan.callableTarget,
+      dom.argumentValues,
+      baseHost => dom.decorateRuntimeHost(baseHost),
+      { requireStableCapturedInputs: true },
+    );
+    const value = completion.evaluation?.value;
+    if (completion.kind !== StaticCallableCompletionKind.Normal
+      || value?.kind === EvaluationValueKind.Unknown
+      || value?.kind === EvaluationValueKind.BoundaryValue) {
+      const kind = completion.kind === StaticCallableCompletionKind.Abrupt
+        ? StaticCallableCompletionKind.Abrupt
+        : StaticCallableCompletionKind.Open;
+      const reason = dom.refusal?.summary
+        ?? completion.evaluation?.auditOpenSeams[0]?.summary
+        ?? completion.reason
+        ?? 'The hook return value remains unresolved.';
+      const operation = execution.completeOperation(attempt, new TemplateCompilerOperationCompletion(
+        kind === StaticCallableCompletionKind.Abrupt
+          ? TemplateCompilerOperationCompletionKind.Abrupt
+          : TemplateCompilerOperationCompletionKind.Unsupported,
+        [], reason,
+      ));
+      return new TemplateCompilerProcessContentFailure(plan, operation, kind, reason, dom.refusal);
+    }
+    returnedFalse = value?.kind === EvaluationValueKind.Boolean && value.value === false;
+  }
   for (const removal of removalSchedule) {
     execution.detachDirectChild(attempt, plan.host, removal.liveOrdinal, removal.occurrence);
   }
@@ -389,7 +460,7 @@ export function executeTemplateCompilerProcessContent(
     plan.nameCarrier,
     plan.nameScalar,
     removals,
-    false,
+    returnedFalse,
   );
 }
 
@@ -466,6 +537,8 @@ function validateExecutionDriver(
     || driver.expectedGlobalOperationCount !== plan.globalOperationCount
     || driver.expectedLaneOperationCount !== plan.laneOperationCount
     || !plan.elementRead.observation.validate().isCurrent
+    || (plan.callableTarget != null && (plan.definition?.processContentSlot == null
+      || plan.compilerReads.world.callableBindings.target(plan.definition.processContentSlot) !== plan.callableTarget))
     || execution.forest.nodeForOccurrenceKey(plan.host.occurrenceKey) !== plan.host
     || removalSchedule == null
   ) {

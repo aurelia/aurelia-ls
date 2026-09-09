@@ -1,10 +1,11 @@
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
+import type { AddressHandle } from '../kernel/handles.js';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import type { AttributeParserParseResult } from './attribute-syntax.js';
 import type { TemplateCompilerAttributeOwnerProgressionSite } from './attribute-owner-progression.js';
 import type { TemplateResolvedResource } from './compiler-world.js';
 import { TemplateCompilerScopeClosureState, type TemplateCompilerObservedValue } from './compiler-read-view.js';
-import type { TemplateCompilerReachedAttributeScalarReceipt } from './template-compiler-execution.js';
+import type { TemplateCompilerOperation, TemplateCompilerReachedAttributeScalarReceipt } from './template-compiler-execution.js';
 import type {
   TemplateCompilerNormalizedSite,
   TemplateCompilerNormalizedTextSite,
@@ -101,6 +102,8 @@ export const enum TemplateCompilerSiteCursorFrontierKind {
   NativeSlotRootOpen = 'native-slot-root-open',
   NativeSlotWithoutShadowDomInvalid = 'native-slot-without-shadow-dom-invalid',
   BeforeProcessContent = 'before-process-content',
+  ProcessContentUnsupported = 'process-content-unsupported',
+  ProcessContentAbrupt = 'process-content-abrupt',
   AtLiveAttributeRelowering = 'at-live-attribute-relowering',
   ReachedLiveAttributeOpen = 'reached-live-attribute-open',
   ReachedLiveAttributeInvalid = 'reached-live-attribute-invalid',
@@ -414,9 +417,10 @@ export class TemplateCompilerSiteCursorContainerlessPlacementEvent extends Templ
     readonly projectionExtraction: TemplateCompilerSiteCursorProjectionExtractionEvent | null = null,
   ) {
     super(authority, ordinal, TemplateCompilerSiteCursorEventKind.ContainerlessPlacement);
-    const projectionFree = envelope.projection.state === TemplateCompilerHydrateElementProjectionState.None
+    const projectionFree = (envelope.projection.state === TemplateCompilerHydrateElementProjectionState.None
+      || envelope.projection.state === TemplateCompilerHydrateElementProjectionState.Suppressed)
       && projectionExtraction == null
-      && element.readChildren().length === 0;
+      && (element.readChildren().length === 0 || envelope.processContent.result?.returnedFalse === true);
     const projectionExtracted = envelope.projection.state === TemplateCompilerHydrateElementProjectionState.PendingExtraction
       && projectionExtraction?.host === element
       && projectionExtraction.preparation.request.envelope === envelope
@@ -493,7 +497,8 @@ export class TemplateCompilerSiteCursorSubtreeExclusionEvent extends TemplateCom
     readonly root: TemplateCompilerFragmentOccurrence | TemplateCompilerNodeOccurrence,
     readonly disposition:
       | TemplateCompilerSiteSpendDisposition.InertTemplateContent
-      | TemplateCompilerSiteSpendDisposition.LetContentSuppressed,
+      | TemplateCompilerSiteSpendDisposition.LetContentSuppressed
+      | TemplateCompilerSiteSpendDisposition.ProcessContentSuppressed,
     readonly spends: readonly TemplateCompilerSiteSpend[],
   ) {
     super(authority, ordinal, TemplateCompilerSiteCursorEventKind.SubtreeExclusion);
@@ -590,6 +595,8 @@ export class TemplateCompilerSiteCursorFrontier extends TemplateCompilerSiteCurs
     readonly forestMutationRevision: number,
     readonly globalOperationCount: number,
     readonly summary: string,
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    readonly terminalOperation: TemplateCompilerOperation | null = null,
   ) {
     super(authority, ordinal, TemplateCompilerSiteCursorEventKind.Frontier);
   }

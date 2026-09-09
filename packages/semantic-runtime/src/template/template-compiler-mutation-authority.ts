@@ -1,6 +1,7 @@
 import type { ClaimEndpointHandle } from '../kernel/claim.js';
 import {
   TemplateCompilerOccurrenceGeneration,
+  type TemplateCompilerForestMutationScope,
   type TemplateCompilerGeneratedOccurrenceRole,
   type TemplateCompilerOccurrenceForest,
 } from './template-compiler-occurrence.js';
@@ -27,6 +28,7 @@ export class TemplateCompilerPendingMutationBatch {
     /** Exact pending mutation overlay that owns this batch. */
     readonly sourceBatch: object,
     readonly initialForestMutationRevision: number,
+    readonly forestMutationScope: TemplateCompilerForestMutationScope,
   ) {
     this.#authority = authority;
   }
@@ -75,8 +77,8 @@ class TemplateCompilerGenerationRegistration {
  * Forest-first owner for mutation batches and the compiler generations they authorize.
  *
  * Execution mode is strict: generation is reserved during a pending attempt and becomes durable only when that exact
- * batch completes. Open/Abrupt may discard reservations only while the forest mutation epoch still matches begin; full
- * topology rollback remains a later boundary. Direct structural replay uses explicit completed compatibility batches.
+ * batch completes. Open/Abrupt reverses the pending forest mutations before discarding generation reservations; prior
+ * completed batches remain intact. Direct structural replay uses explicit completed compatibility batches.
  */
 export class TemplateCompilerForestMutationAuthority {
   static createForExecution(
@@ -161,6 +163,7 @@ export class TemplateCompilerForestMutationAuthority {
       [...causeHandles],
       sourceBatch,
       this.forest.mutationRevision,
+      this.forest.beginMutationScope(),
     );
     this.#pendingBatchesByOperation.set(operationIdentity, batch);
     return batch;
@@ -176,14 +179,12 @@ export class TemplateCompilerForestMutationAuthority {
     this.requirePendingBatch(pending);
     const registrations = this.pendingRegistrationsForBatch(pending);
     if (!committed) {
-      if (pending.initialForestMutationRevision !== this.forest.mutationRevision) {
-        throw new Error(
-          `Compiler mutation batch '${pending.operationKey}' cannot discard generated or topological output until forest rollback exists.`,
-        );
-      }
+      this.forest.finishMutationScope(pending.forestMutationScope, false);
       this.discardPendingBatch(pending, registrations);
       return null;
     }
+
+    this.forest.finishMutationScope(pending.forestMutationScope, true);
 
     const completed = new TemplateCompilerCompletedMutationBatch(
       this.#generationAuthority,

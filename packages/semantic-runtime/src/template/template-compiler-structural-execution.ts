@@ -55,6 +55,7 @@ import type {
   TemplateStructuralNodeReference,
 } from './template-structure.js';
 import { TemplateCompilerForestMutationAuthority } from './template-compiler-mutation-authority.js';
+import type { TemplateCompilerSiteCursorSubtreeExclusionEvent } from './template-compiler-site-cursor-event.js';
 
 const structuralExecutionForests = new WeakSet<TemplateCompilerOccurrenceForest>();
 const preparedBorrowingSessions = new WeakSet<TemplateCompilerStructuralExecutionSession>();
@@ -249,6 +250,7 @@ export class TemplateCompilerStructuralExecutionSession {
     forest: TemplateCompilerOccurrenceForest,
     targetPlan: TemplateCompilerTargetPlan,
     mutationAuthority: TemplateCompilerForestMutationAuthority,
+    subtreeExclusions: readonly TemplateCompilerSiteCursorSubtreeExclusionEvent[] = [],
   ): TemplateCompilerStructuralExecutionSession {
     if (structuralExecutionForests.has(forest)) {
       throw new Error('Compiler occurrence forest already belongs to a structural execution session.');
@@ -261,6 +263,11 @@ export class TemplateCompilerStructuralExecutionSession {
       targetPlan,
       mutationAuthority,
     );
+    for (const exclusion of subtreeExclusions) {
+      session.requireForestNode(exclusion.owner);
+      session.requireForestNode(exclusion.root);
+      session.excludedContentRoots.add(exclusion.root);
+    }
     preparedBorrowingSessions.add(session);
     return session;
   }
@@ -326,6 +333,8 @@ export class TemplateCompilerStructuralExecutionSession {
     readonly TemplateCompilerTargetContextPlan[]
   >();
   private readonly structuresByContextKey = new Map<string, TemplateCompilerContextStructure>();
+  /** Already-validated cursor exclusions retain their DOM but are not compiler-reachable content. */
+  private readonly excludedContentRoots = new Set<TemplateCompilerNodeOccurrence>();
   private readonly contextKeysByCarrierOccurrence = new Map<string, string>();
   private readonly geometriesByRow = new Map<TemplateCompilerTargetRowPlan, TemplateCompilerTargetGeometry>();
   private readonly geometriesByMarker = new Map<TemplateCompilerCommentOccurrence, TemplateCompilerTargetGeometry>();
@@ -1154,6 +1163,8 @@ export class TemplateCompilerStructuralExecutionSession {
     const requiredSourceCause = this.requiredSourceConsumptionCause(node, context);
     const exactOrigin = this.forest.exactAuthoredNodeOrigin(node)?.authored ?? null;
     const removedReference = instruction.auSlotProcessContentRemovedChildNodes[removalOrdinal] ?? null;
+    const definitionHandle = result.plan.definition?.productHandle ?? null;
+    const hostRow = context.readRows().find((row) => row.instructions.includes(instruction)) ?? null;
     if (
       !result.isModuleConstructed()
       || result.plan.execution.forest !== this.forest
@@ -1161,7 +1172,8 @@ export class TemplateCompilerStructuralExecutionSession {
       || removalOrdinal < 0
       || result.removals[removalOrdinal] !== removal
       || mutation.node !== node
-      || mutation.previousParent !== result.plan.host
+      || mutation.previousParent == null
+      || !seededDescendantOf(this.forest, node, result.plan.host)
       || mutation.previousEdgeKind !== TemplateCompilerOccurrenceEdgeKind.Child
       || removal.liveOrdinal !== mutation.previousOrdinal
       || seeded?.parent !== mutation.previousParent
@@ -1172,14 +1184,21 @@ export class TemplateCompilerStructuralExecutionSession {
       || node.generation != null
       || this.consumedNodes.has(node)
       || this.sourceTargetRowsByOccurrence.has(node)
-      || instruction.auSlotProcessContent?.name !== result.metadata.name
-      || instruction.auSlotProcessContentRemovedChildNodes.length !== result.removals.length
-      || exactOrigin == null
-      || removedReference?.productHandle !== exactOrigin.productHandle
-      || removedReference.identityHandle !== exactOrigin.identityHandle
-      || removedReference.addressHandle !== exactOrigin.addressHandle
-      || !context.readRows().some((row) => row.instructions.includes(instruction))
-      || requiredSourceCause !== instruction.productHandle
+      || definitionHandle == null
+      || instruction.resource?.definitionProductHandle !== definitionHandle
+      || !result.operation.causeHandles.includes(definitionHandle)
+      || hostRow?.occurrence !== result.plan.host
+      || (result.metadata == null
+        ? instruction.auSlotProcessContent != null || instruction.auSlotProcessContentRemovedChildNodes.length !== 0
+        : instruction.auSlotProcessContent?.name !== result.metadata.name
+          || instruction.auSlotProcessContentRemovedChildNodes.length !== result.removals.length
+          || mutation.previousParent !== result.plan.host
+          || exactOrigin == null
+          || removedReference?.productHandle !== exactOrigin.productHandle
+          || removedReference.identityHandle !== exactOrigin.identityHandle
+          || removedReference.addressHandle !== exactOrigin.addressHandle
+          || requiredSourceCause !== instruction.productHandle)
+      || (requiredSourceCause != null && requiredSourceCause !== instruction.productHandle)
     ) {
       throw new Error(`Compiler processContent removal '${node.occurrenceKey}' lost committed source-edge authority.`);
     }
@@ -1195,7 +1214,9 @@ export class TemplateCompilerStructuralExecutionSession {
       TemplateCompilerOccurrenceEdgeKind.Child,
       mutation.previousOrdinal,
       this.nextInputEventOrdinal++,
-      [instruction.productHandle],
+      result.metadata == null
+        ? [instruction.productHandle, ...result.operation.causeHandles.filter((cause) => cause !== instruction.productHandle)]
+        : [instruction.productHandle],
     );
     this.consumedNodes.set(node, disposition);
     appendMap(this.consumedNodesByContextKey, context.localKey, disposition);
@@ -3145,7 +3166,7 @@ export class TemplateCompilerStructuralExecutionSession {
         represented.add(source);
         live.push(source);
       }
-    });
+    }, this.excludedContentRoots);
     const consumedByOrdinal = new Map<number, TemplateCompilerConsumedNodeDisposition>();
     for (const disposition of this.consumedNodesByContextKey.get(structure.context.localKey) ?? []) {
       const ordinal = disposition.occurrenceMembershipOrdinal;
@@ -3206,7 +3227,7 @@ export class TemplateCompilerStructuralExecutionSession {
       ) {
         append(geometry.replacedNode);
       }
-    });
+    }, this.excludedContentRoots);
     return result;
   }
 
@@ -3376,6 +3397,20 @@ function rowCauseHandles(
   return causes;
 }
 
+/** Hook removals precede context transfers; later physical ancestry is not their source-edge authority. */
+function seededDescendantOf(
+  forest: TemplateCompilerOccurrenceForest,
+  node: TemplateCompilerNodeOccurrence,
+  ancestor: TemplateCompilerElementOccurrence,
+): boolean {
+  let parent = forest.seededNodePlacement(node)?.parent ?? null;
+  while (parent != null) {
+    if (parent === ancestor) return true;
+    parent = forest.seededNodePlacement(parent)?.parent ?? null;
+  }
+  return false;
+}
+
 function contextContains(
   compilerContent: TemplateCompilerFragmentOccurrence,
   descendant: TemplateCompilerNodeOccurrence,
@@ -3423,9 +3458,11 @@ function compilerMarkerPreorder(
 function contextPreorder(
   root: TemplateCompilerNodeOccurrence,
   visit: (node: TemplateCompilerNodeOccurrence) => void,
+  excludedContentRoots: ReadonlySet<TemplateCompilerNodeOccurrence> | null = null,
 ): void {
   visit(root);
-  for (const child of root.readChildren()) contextPreorder(child, visit);
+  if (excludedContentRoots?.has(root)) return;
+  for (const child of root.readChildren()) contextPreorder(child, visit, excludedContentRoots);
 }
 
 function exactPrefixEndForContext(context: TemplateCompilerTargetContextPlan): number {

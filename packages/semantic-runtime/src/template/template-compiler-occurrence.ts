@@ -115,6 +115,11 @@ const elementTemplateContent = new WeakMap<TemplateCompilerElementOccurrence, Te
 const attributeOwners = new WeakMap<TemplateCompilerAttributeOccurrence, TemplateCompilerElementOccurrence | null>();
 const attributeValues = new WeakMap<TemplateCompilerAttributeOccurrence, string>();
 const attributeScalarWriteRevisions = new WeakMap<TemplateCompilerAttributeOccurrence, number>();
+const characterDataValues = new WeakMap<TemplateCompilerTextOccurrence | TemplateCompilerCommentOccurrence, string>();
+const characterDataScalarWriteRevisions = new WeakMap<
+  TemplateCompilerTextOccurrence | TemplateCompilerCommentOccurrence,
+  number
+>();
 
 /**
  * Product-free mutable node occurrence used only inside one compiler execution.
@@ -227,6 +232,7 @@ export class TemplateCompilerElementOccurrence extends TemplateCompilerNodeOccur
 
 export class TemplateCompilerTextOccurrence extends TemplateCompilerNodeOccurrence {
   readonly nodeKind = HtmlIrNodeKind.Text;
+  readonly initialText: string;
 
   constructor(
     occurrenceKey: string,
@@ -234,15 +240,27 @@ export class TemplateCompilerTextOccurrence extends TemplateCompilerNodeOccurren
     inputReference: TemplateStructuralNodeReference | null,
     parent: TemplateCompilerParentOccurrence | null,
     parentEdgeKind: TemplateCompilerOccurrenceEdgeKind,
-    readonly text: string,
+    text: string,
     generation: TemplateCompilerOccurrenceGeneration | null = null,
   ) {
     super(occurrenceKey, inputIdentityKey, inputReference, parent, parentEdgeKind, generation);
+    this.initialText = text;
+    characterDataValues.set(this, text);
+    characterDataScalarWriteRevisions.set(this, 0);
+  }
+
+  get text(): string {
+    return characterDataValueFor(this);
+  }
+
+  get scalarWriteRevision(): number {
+    return characterDataScalarWriteRevisionFor(this);
   }
 }
 
 export class TemplateCompilerCommentOccurrence extends TemplateCompilerNodeOccurrence {
   readonly nodeKind = HtmlIrNodeKind.Comment;
+  readonly initialText: string;
 
   constructor(
     occurrenceKey: string,
@@ -250,11 +268,22 @@ export class TemplateCompilerCommentOccurrence extends TemplateCompilerNodeOccur
     inputReference: TemplateStructuralNodeReference | null,
     parent: TemplateCompilerParentOccurrence | null,
     parentEdgeKind: TemplateCompilerOccurrenceEdgeKind,
-    readonly text: string,
+    text: string,
     readonly semanticKind: HtmlCommentSemanticKind,
     generation: TemplateCompilerOccurrenceGeneration | null = null,
   ) {
     super(occurrenceKey, inputIdentityKey, inputReference, parent, parentEdgeKind, generation);
+    this.initialText = text;
+    characterDataValues.set(this, text);
+    characterDataScalarWriteRevisions.set(this, 0);
+  }
+
+  get text(): string {
+    return characterDataValueFor(this);
+  }
+
+  get scalarWriteRevision(): number {
+    return characterDataScalarWriteRevisionFor(this);
   }
 }
 
@@ -340,6 +369,11 @@ interface TemplateCompilerOccurrenceSeed {
   readonly exactAttributeOriginsByInputProduct: Map<ProductHandle, TemplateCompilerExactAuthoredOrigin>;
 }
 
+/** One pending compiler operation's in-place undo boundary, not a second occurrence forest. */
+export class TemplateCompilerForestMutationScope {
+  constructor(readonly initialMutationRevision: number) {}
+}
+
 /** Fresh mutable carrier forest for one browser-effective compiler occurrence. */
 export class TemplateCompilerOccurrenceForest {
   static fromBrowserEffective(input: BrowserEffectiveTemplateEmission): TemplateCompilerOccurrenceForest {
@@ -379,6 +413,8 @@ export class TemplateCompilerOccurrenceForest {
     TemplateCompilerNodeOccurrence | TemplateCompilerAttributeOccurrence
   >();
   private _mutationRevision = 0;
+  private mutationScope: TemplateCompilerForestMutationScope | null = null;
+  private mutationUndoJournal: (() => void)[] | null = null;
 
   private constructor(seed: TemplateCompilerOccurrenceSeed) {
     this.inputTree = seed.inputTree;
@@ -450,6 +486,29 @@ export class TemplateCompilerOccurrenceForest {
   /** O(1) conservative epoch for inventory, topology, ownership, ordering, and scalar forest mutation. */
   get mutationRevision(): number {
     return this._mutationRevision;
+  }
+
+  /** Open an O(1) boundary; inverse entries are recorded only for mutations actually performed. */
+  beginMutationScope(): TemplateCompilerForestMutationScope {
+    if (this.mutationScope != null) throw new Error('Compiler forest already has a pending mutation scope.');
+    const scope = new TemplateCompilerForestMutationScope(this._mutationRevision);
+    this.mutationScope = scope;
+    this.mutationUndoJournal = [];
+    return scope;
+  }
+
+  /** Restore identities and live collections in place on abort; the forest epoch never runs backwards. */
+  finishMutationScope(scope: TemplateCompilerForestMutationScope, committed: boolean): void {
+    if (this.mutationScope !== scope || this.mutationUndoJournal == null) {
+      throw new Error('Compiler mutation scope is not pending in this forest.');
+    }
+    const journal = this.mutationUndoJournal;
+    this.mutationUndoJournal = null;
+    this.mutationScope = null;
+    if (committed || journal.length === 0) return;
+    for (let index = journal.length - 1; index >= 0; index--) journal[index]!();
+    // Restored values must not make a read from before or during the attempt appear current again.
+    this._mutationRevision += 1;
   }
 
   nodeForOccurrenceKey(occurrenceKey: string): TemplateCompilerNodeOccurrence | null {
@@ -605,16 +664,25 @@ export class TemplateCompilerOccurrenceForest {
       prefix,
       generation,
     );
-    this.claimGeneration(generation, attribute);
     if (this.attributesByOccurrenceKey.has(attribute.occurrenceKey)) {
       throw new Error(`Compiler attribute occurrence key '${attribute.occurrenceKey}' is not unique.`);
     }
+    this.claimGeneration(generation, attribute);
     this.attributes.push(attribute);
     this.attributesByOccurrenceKey.set(attribute.occurrenceKey, attribute);
     if (canonicalInput != null) {
       appendMap(this.attributesByInputProduct, canonicalInput.productHandle, attribute);
       appendMap(this.attributesByInputIdentity, canonicalInput.identityHandle, attribute);
     }
+    this.mutationUndoJournal?.push(() => {
+      removeLastExact(this.attributes, attribute, `generated compiler attribute '${attribute.occurrenceKey}'`);
+      this.attributesByOccurrenceKey.delete(attribute.occurrenceKey);
+      if (canonicalInput != null) {
+        removeMapOccurrence(this.attributesByInputProduct, canonicalInput.productHandle, attribute);
+        removeMapOccurrence(this.attributesByInputIdentity, canonicalInput.identityHandle, attribute);
+      }
+      this.occurrencesByGeneration.delete(generation);
+    });
     this._mutationRevision += 1;
     return attribute;
   }
@@ -622,6 +690,17 @@ export class TemplateCompilerOccurrenceForest {
   /** Remove one live node edge while retaining the occurrence and its descendants in the historical inventory. */
   detachNode(node: TemplateCompilerNodeOccurrence): void {
     this.requireNode(node);
+    const parent = node.parent;
+    const edgeKind = node.parentEdgeKind;
+    const ordinal = this.mutationUndoJournal == null ? null : node.readParentOrdinal();
+    this.detachNodeUnchecked(node);
+    if (this.mutationUndoJournal != null && edgeKind !== TemplateCompilerOccurrenceEdgeKind.Detached) {
+      this.mutationUndoJournal.push(() => this.insertNodeUnchecked(node, parent, edgeKind, ordinal!));
+    }
+    this._mutationRevision += 1;
+  }
+
+  private detachNodeUnchecked(node: TemplateCompilerNodeOccurrence): void {
     const ownership = nodeOwnershipFor(node);
     switch (ownership.edgeKind) {
       case TemplateCompilerOccurrenceEdgeKind.Detached:
@@ -648,7 +727,6 @@ export class TemplateCompilerOccurrenceForest {
         break;
     }
     setNodeOwnership(node, null, TemplateCompilerOccurrenceEdgeKind.Detached);
-    this._mutationRevision += 1;
   }
 
   /** Detach one caller-proven ordinary child slot without rediscovering its ordinal. */
@@ -673,6 +751,9 @@ export class TemplateCompilerOccurrenceForest {
     }
     children.splice(ordinal, 1);
     setNodeOwnership(node, null, TemplateCompilerOccurrenceEdgeKind.Detached);
+    this.mutationUndoJournal?.push(() => this.insertNodeUnchecked(
+      node, parent, TemplateCompilerOccurrenceEdgeKind.Child, ordinal,
+    ));
     this._mutationRevision += 1;
   }
 
@@ -689,6 +770,7 @@ export class TemplateCompilerOccurrenceForest {
     }
     this.validateNodeInsertion(node, parent, edgeKind, ordinal);
     this.insertNodeUnchecked(node, parent, edgeKind, ordinal);
+    this.mutationUndoJournal?.push(() => this.detachNodeUnchecked(node));
     this._mutationRevision += 1;
   }
 
@@ -718,6 +800,8 @@ export class TemplateCompilerOccurrenceForest {
         previousEdgeKind,
         previousOrdinal!,
       );
+      // The failed move already restored this edge; its detach inverse must not run a second time on abort.
+      this.mutationUndoJournal?.pop();
       throw error;
     }
   }
@@ -741,8 +825,13 @@ export class TemplateCompilerOccurrenceForest {
     if (owner === null) {
       throw new Error(`Compiler attribute occurrence '${attribute.occurrenceKey}' is already detached.`);
     }
+    const ordinal = this.mutationUndoJournal == null ? null : attribute.readOwnerOrdinal();
     removeExact(mutableAttributes(owner), attribute, `compiler attribute '${attribute.occurrenceKey}'`);
     attributeOwners.set(attribute, null);
+    this.mutationUndoJournal?.push(() => {
+      mutableAttributes(owner).splice(ordinal!, 0, attribute);
+      attributeOwners.set(attribute, owner);
+    });
     this._mutationRevision += 1;
   }
 
@@ -760,6 +849,10 @@ export class TemplateCompilerOccurrenceForest {
     assertInsertionOrdinal(ordinal, mutableAttributes(owner).length, `attribute '${attribute.occurrenceKey}'`);
     mutableAttributes(owner).splice(ordinal, 0, attribute);
     attributeOwners.set(attribute, owner);
+    this.mutationUndoJournal?.push(() => {
+      removeExact(mutableAttributes(owner), attribute, `compiler attribute '${attribute.occurrenceKey}'`);
+      attributeOwners.set(attribute, null);
+    });
     this._mutationRevision += 1;
   }
 
@@ -783,6 +876,7 @@ export class TemplateCompilerOccurrenceForest {
     } catch (error) {
       mutableAttributes(previousOwner).splice(previousOrdinal!, 0, attribute);
       attributeOwners.set(attribute, previousOwner);
+      this.mutationUndoJournal?.pop();
       throw error;
     }
   }
@@ -798,8 +892,31 @@ export class TemplateCompilerOccurrenceForest {
   /** Apply one already-authorized scalar rewrite without changing DOM attribute occurrence identity. */
   rewriteAttributeValue(attribute: TemplateCompilerAttributeOccurrence, value: string): void {
     this.requireAttribute(attribute);
+    const previousValue = attribute.value;
+    const previousRevision = attribute.scalarWriteRevision;
+    this.mutationUndoJournal?.push(() => {
+      attributeValues.set(attribute, previousValue);
+      attributeScalarWriteRevisions.set(attribute, previousRevision);
+    });
     attributeValues.set(attribute, value);
-    attributeScalarWriteRevisions.set(attribute, attribute.scalarWriteRevision + 1);
+    attributeScalarWriteRevisions.set(attribute, previousRevision + 1);
+    this._mutationRevision += 1;
+  }
+
+  /** CharacterData writes preserve node identity and comment semantic kind, just as attribute writes do. */
+  rewriteCharacterData(
+    node: TemplateCompilerTextOccurrence | TemplateCompilerCommentOccurrence,
+    value: string,
+  ): void {
+    this.requireNode(node);
+    const previousValue = node.text;
+    const previousRevision = node.scalarWriteRevision;
+    this.mutationUndoJournal?.push(() => {
+      characterDataValues.set(node, previousValue);
+      characterDataScalarWriteRevisions.set(node, previousRevision);
+    });
+    characterDataValues.set(node, value);
+    characterDataScalarWriteRevisions.set(node, previousRevision + 1);
     this._mutationRevision += 1;
   }
 
@@ -968,16 +1085,25 @@ export class TemplateCompilerOccurrenceForest {
     if (node.generation == null) {
       throw new Error(`Generated compiler occurrence '${node.occurrenceKey}' has no generation authority.`);
     }
-    this.claimGeneration(node.generation, node);
     if (this.nodesByOccurrenceKey.has(node.occurrenceKey)) {
       throw new Error(`Compiler node occurrence key '${node.occurrenceKey}' is not unique.`);
     }
+    this.claimGeneration(node.generation, node);
     this.nodes.push(node);
     this.nodesByOccurrenceKey.set(node.occurrenceKey, node);
     if (node.inputReference != null) {
       appendMap(this.nodesByInputProduct, node.inputReference.productHandle, node);
       appendMap(this.nodesByInputIdentity, node.inputReference.identityHandle, node);
     }
+    this.mutationUndoJournal?.push(() => {
+      removeLastExact(this.nodes, node, `generated compiler node '${node.occurrenceKey}'`);
+      this.nodesByOccurrenceKey.delete(node.occurrenceKey);
+      if (node.inputReference != null) {
+        removeMapOccurrence(this.nodesByInputProduct, node.inputReference.productHandle, node);
+        removeMapOccurrence(this.nodesByInputIdentity, node.inputReference.identityHandle, node);
+      }
+      this.occurrencesByGeneration.delete(node.generation!);
+    });
     this._mutationRevision += 1;
     return node;
   }
@@ -1422,6 +1548,20 @@ function attributeScalarWriteRevisionFor(attribute: TemplateCompilerAttributeOcc
   return revision;
 }
 
+function characterDataValueFor(node: TemplateCompilerTextOccurrence | TemplateCompilerCommentOccurrence): string {
+  const value = characterDataValues.get(node);
+  if (value == null) throw new Error(`Compiler occurrence '${node.occurrenceKey}' has no character data state.`);
+  return value;
+}
+
+function characterDataScalarWriteRevisionFor(
+  node: TemplateCompilerTextOccurrence | TemplateCompilerCommentOccurrence,
+): number {
+  const revision = characterDataScalarWriteRevisions.get(node);
+  if (revision == null) throw new Error(`Compiler occurrence '${node.occurrenceKey}' has no character data revision.`);
+  return revision;
+}
+
 function isParentOccurrence(node: TemplateCompilerNodeOccurrence): node is TemplateCompilerParentOccurrence {
   return node instanceof TemplateCompilerElementOccurrence || node instanceof TemplateCompilerFragmentOccurrence;
 }
@@ -1470,6 +1610,20 @@ function appendMap<TKey, TValue>(map: Map<TKey, TValue[]>, key: TKey, value: TVa
   const existing = map.get(key);
   if (existing == null) map.set(key, [value]);
   else existing.push(value);
+}
+
+function removeMapOccurrence<TKey, TValue>(map: Map<TKey, TValue[]>, key: TKey, value: TValue): void {
+  const occurrences = map.get(key);
+  if (occurrences == null) throw new Error('Compiler occurrence origin index is absent during rollback.');
+  removeLastExact(occurrences, value, 'compiler occurrence origin index');
+  if (occurrences.length === 0) map.delete(key);
+}
+
+function removeLastExact<T>(values: T[], value: T, label: string): void {
+  if (values[values.length - 1] !== value) {
+    throw new Error(`Cannot roll back ${label}; its inventory is not in reverse generation order.`);
+  }
+  values.pop();
 }
 
 function inputNodeOccurrenceKey(identityHandle: IdentityHandle): string {

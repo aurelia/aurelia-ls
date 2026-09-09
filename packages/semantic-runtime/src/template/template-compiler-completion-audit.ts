@@ -209,7 +209,10 @@ export function auditTemplateCompilerTraversalCompletion(
   );
   if (
     endpoint != null
-    && !sameObjects(endpoint.siteOperations, processContentEvents.map((event) => event.result.operation))
+    && !sameObjects(endpoint.siteOperations, [
+      ...processContentEvents.map((event) => event.result.operation),
+      ...(transcript.frontier?.terminalOperation == null ? [] : [transcript.frontier.terminalOperation]),
+    ])
   ) {
     refuse(
       TemplateCompilerTraversalCompletionAuditReasonKind.SiteOperationMismatch,

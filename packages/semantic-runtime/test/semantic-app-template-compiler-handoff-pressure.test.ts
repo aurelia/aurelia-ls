@@ -69,7 +69,8 @@ describe('semantic app template compiler handoff pressure', () => {
         row.handles?.viewFactoryCompiledTemplateProductHandle,
       ].filter((handle): handle is string => handle != null)));
       expect(localDefinitions.every((definition) =>
-        controllerTemplateHandles.has(definition.sourceCompiledTemplate.productHandle)
+        definition.sourceCompiledTemplate != null
+        && controllerTemplateHandles.has(definition.sourceCompiledTemplate.productHandle)
       )).toBe(true);
 
       const secondary = requireExactHandoff(batch, 'secondary-host');
@@ -153,7 +154,7 @@ describe('semantic app template compiler handoff pressure', () => {
         ...sourceHydrateElement.projections.map((projection) => projection.compiledTemplate),
       ]);
       expect(new Set(staticProjection.definitions.map((definition) =>
-        definition.sourceCompiledTemplate.productHandle
+        definition.sourceCompiledTemplate?.productHandle
       )).size).toBe(3);
       expect(contentShape(rootDefinition(staticProjection))).toEqual([
         'comment:compiler-marker',
@@ -473,20 +474,19 @@ describe('semantic app template compiler handoff pressure', () => {
       );
 
       expect(batch.resources.filter((candidate) => candidate.state === TemplateCompilerCompiledHandoffState.Exact))
-        .toHaveLength(7);
-      expect(resource?.state).toBe(TemplateCompilerCompiledHandoffState.Open);
-      expect(resource?.reasons).toEqual([expect.objectContaining({
-        stage: 'context-family',
-        reasonKind: 'family-completion:before-process-content',
-        summary: "Custom element 'opaque-content-shell' has an arbitrary processContent hook outside the exact built-in executor.",
-        frontierCause: {
-          frontierKind: 'before-process-content',
-          nodeOccurrenceKey: expect.any(String),
-          attributeOccurrenceKey: null,
-          issue: null,
-          source: null,
-        },
-      })]);
+        .toHaveLength(8);
+      expect(resource?.state).toBe(TemplateCompilerCompiledHandoffState.Exact);
+      expect(resource?.reasons).toEqual([]);
+      if (resource?.value == null) throw new Error('Expected the formerly opaque processContent root to compile.');
+      const definitions = resource.value.definitions;
+      expect(definitions.flatMap((definition) => definition.tree.nodes).some((node) =>
+        node.nodeKind === 'text' && node.text.includes('notCompiledByOpenProcessContent')
+      )).toBe(true);
+      expect(definitions.flatMap((definition) => definition.tree.attributes).some((attribute) =>
+        attribute.name === 'expose-heading.bind'
+      )).toBe(true);
+      expect(JSON.stringify(definitions.flatMap((definition) => definition.rows)))
+        .not.toContain('notCompiledByOpenProcessContent');
     } finally {
       projectionRuntime.retireWorkspaceIncarnation();
     }
@@ -595,7 +595,7 @@ describe('semantic app template compiler handoff pressure', () => {
 type HandoffBatch = ReturnType<typeof materializeSemanticAppTemplateCompilerHandoffs>;
 
 function requireExactHandoff(batch: HandoffBatch, resourceName: string): TemplateCompilerCompiledHandoffValue {
-  const resource = batch.resources.find((candidate) => candidate.value?.resourceName === resourceName);
+  const resource = batch.resources.find((candidate) => candidate.resourceName === resourceName);
   if (resource?.state !== TemplateCompilerCompiledHandoffState.Exact || resource.value == null) {
     throw new Error(
       `Expected exact handoff '${resourceName}': ${resource?.reasons.map((reason) => reason.summary).join(' ') ?? 'missing'}`,

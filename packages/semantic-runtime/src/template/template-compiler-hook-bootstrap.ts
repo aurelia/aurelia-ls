@@ -1,6 +1,11 @@
 import type { ClaimEndpointHandle } from '../kernel/claim.js';
 import type { OpenSeamHandle } from '../kernel/handles.js';
-import { StaticCallableSlot } from '../evaluation/function-execution.js';
+import {
+  evaluateStaticCallableCompletion,
+  StaticCallableCompletionKind,
+  StaticCallableSlot,
+} from '../evaluation/function-execution.js';
+import { EvaluationBoundaryKind, EvaluationBoundaryObjectValue } from '../evaluation/values.js';
 import {
   CssClassMappingPropertyState,
   type CssClassMappingAuthority,
@@ -152,27 +157,52 @@ class TemplateCompilerHookBootstrapFrame {
           this.recordCallableInspectionOpen(entryOrdinal, entry),
         );
       case TemplateCompilerHookCallableAuthorityKind.StaticCallable:
-        return this.staticCallableBoundary(entryOrdinal, entry);
+        return this.executeStaticCallable(entryOrdinal, entry);
       case TemplateCompilerHookCallableAuthorityKind.BuiltIn:
         return this.executeBuiltIn(entryOrdinal, entry);
     }
   }
 
-  private staticCallableBoundary(
+  private executeStaticCallable(
     entryOrdinal: number,
     entry: TemplateCompilerHookEntry,
-  ): TemplateCompilerHookBootstrapResult {
+  ): TemplateCompilerHookBootstrapResult | null {
     const slotKey = entry.callable.callableSlotKey;
     const target = slotKey == null
       ? null
       : this.request.compilerWorld.callableBindings.target(new StaticCallableSlot(slotKey));
-    const summary = target == null
-      ? 'TemplateCompilerHooks retained a static callable slot without current execution authority.'
-      : 'Receiver-bearing TemplateCompilerHooks callable is exact, but no compiler-DOM execution host was admitted.';
+    if (target != null) {
+      const result = evaluateStaticCallableCompletion(target, [new EvaluationBoundaryObjectValue(
+        EvaluationBoundaryKind.HostEnvironment,
+        'TemplateCompilerHooks.compiling.template',
+      )], null, { requireStableCapturedInputs: true });
+      const operationTarget = this.request.execution.compilerHookTarget(
+        this.context, this.hooks, TemplateCompilerHookOperationStage.Invocation, entryOrdinal,
+        callableReference(this.hooks, entry),
+      );
+      const completion = result.kind === StaticCallableCompletionKind.Normal
+        ? complete()
+        : result.kind === StaticCallableCompletionKind.Abrupt
+          ? abrupt(result.reason!)
+          : open([this.request.executionOpenSeamHandle]);
+      const operation = this.recordOperation(
+        this.entryOperationKey(entryOrdinal, 'invoke'), TemplateCompilerOperationExecutionMechanism.StaticCallable,
+        operationTarget, completion, entryCauseHandles(this.hooks, entry),
+      );
+      if (result.kind === StaticCallableCompletionKind.Normal) return null;
+      return this.finishBoundary(
+        result.kind === StaticCallableCompletionKind.Abrupt
+          ? TemplateCompilerHookBootstrapState.Abrupt
+          : TemplateCompilerHookBootstrapState.Open,
+        entryOrdinal,
+        result.evaluation?.auditOpenSeams[0]?.summary ?? result.reason!,
+        operation,
+      );
+    }
     return this.finishBoundary(
       TemplateCompilerHookBootstrapState.Open,
       entryOrdinal,
-      summary,
+      'TemplateCompilerHooks retained a static callable slot without current execution authority.',
       this.recordInvocationOpen(
         entryOrdinal,
         entry,

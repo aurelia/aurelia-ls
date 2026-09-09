@@ -61,28 +61,28 @@ describe('template compiler processContent', () => {
         name: plan.metadata?.name,
         carrier: plan.nameCarrier?.value ?? null,
         scalarExact: plan.nameScalar?.isExact() ?? null,
-        strictFalse: plan.strictFalse,
+        returnedFalse: plan.returnedFalse,
       }))).toEqual([
         {
           state: TemplateCompilerProcessContentPlanState.Exact,
           name: 'default',
           carrier: null,
           scalarExact: null,
-          strictFalse: false,
+          returnedFalse: false,
         },
         {
           state: TemplateCompilerProcessContentPlanState.Exact,
           name: '',
           carrier: '',
           scalarExact: true,
-          strictFalse: false,
+          returnedFalse: false,
         },
         {
           state: TemplateCompilerProcessContentPlanState.Exact,
           name: 'heading',
           carrier: 'heading',
           scalarExact: true,
-          strictFalse: false,
+          returnedFalse: false,
         },
       ]);
       expect(run.execution.invocationPhase(run.closure.lane)).toBe(TemplateCompilerInvocationPhase.BootstrapClosed);
@@ -111,7 +111,7 @@ describe('template compiler processContent', () => {
       expect(result.nameScalar).toBe(plan.nameScalar);
       expect(result.nameScalar?.currentValue).toBe('heading');
       expect(result.nameScalar?.isExact()).toBe(true);
-      expect(result.strictFalse).toBe(false);
+      expect(result.returnedFalse).toBe(false);
       expect(result.operation).toMatchObject({
         operationKind: TemplateCompilerOperationKind.ProcessContent,
         executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
@@ -195,7 +195,7 @@ describe('template compiler processContent', () => {
     }
   });
 
-  test('keeps an arbitrary hook Open after exact execution and rejects its finished driver', () => {
+  test('executes a literal-false hook without removing its children and rejects the finished driver', () => {
     const run = fixture.run(
       'content-projection-topology-app',
       '<au-slot></au-slot><opaque-content-shell><span></span></opaque-content-shell>',
@@ -207,12 +207,14 @@ describe('template compiler processContent', () => {
       const opaqueHost = run.requiredElement('opaque-content-shell');
       const plan = run.plan(opaqueHost, driver);
 
-      expect(plan).toMatchObject({
-        state: TemplateCompilerProcessContentPlanState.Open,
-        openReason: { reasonKind: TemplateCompilerProcessContentOpenReasonKind.ArbitraryHook },
-        planningDriver: null,
-      });
-      expect(run.execution.sequence.readContextOperations(driver.context)).toHaveLength(1);
+      expect(plan.state).toBe(TemplateCompilerProcessContentPlanState.Exact);
+      expect(plan.planningDriver).toBe(driver);
+      const result = executeTemplateCompilerProcessContent({ plan, driver });
+      expect(result.returnedFalse).toBe(true);
+      expect(result.metadata).toBeNull();
+      expect(result.removals).toEqual([]);
+      expect(opaqueHost.readChildren()).toHaveLength(1);
+      expect(run.execution.sequence.readContextOperations(driver.context)).toHaveLength(2);
       run.execution.finishSiteExecutionDriver(driver);
       expect(() => run.plan(opaqueHost, driver)).toThrow(/foreign, stale, or no longer active/);
     } finally {

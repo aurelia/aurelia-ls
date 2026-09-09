@@ -376,6 +376,7 @@ function frontierOutcome(
     case TemplateCompilerSiteCursorFrontierKind.ElementResolutionOpen:
     case TemplateCompilerSiteCursorFrontierKind.NativeSlotRootOpen:
     case TemplateCompilerSiteCursorFrontierKind.BeforeProcessContent:
+    case TemplateCompilerSiteCursorFrontierKind.ProcessContentUnsupported:
     case TemplateCompilerSiteCursorFrontierKind.ReachedLiveAttributeOpen:
     case TemplateCompilerSiteCursorFrontierKind.HydrateElementEnvelopeOpen:
     case TemplateCompilerSiteCursorFrontierKind.ReachedNormalizedOpen:
@@ -383,6 +384,8 @@ function frontierOutcome(
     case TemplateCompilerSiteCursorFrontierKind.SurrogateClassificationOpen:
     case TemplateCompilerSiteCursorFrontierKind.LetElementOpen:
       return TemplateCompilerContextFamilyCompilationState.Open;
+    case TemplateCompilerSiteCursorFrontierKind.ProcessContentAbrupt:
+      return TemplateCompilerContextFamilyCompilationState.Abrupt;
     case TemplateCompilerSiteCursorFrontierKind.GeneratedSiteNeedsLowering:
     case TemplateCompilerSiteCursorFrontierKind.NonSingularBrowserOrigin:
     case TemplateCompilerSiteCursorFrontierKind.AuthoredPrecedentMismatch:
@@ -503,7 +506,7 @@ function primaryFrontierReason(
     frontier.node?.occurrenceKey ?? null,
     frontier.attribute?.occurrenceKey ?? null,
     issue,
-    issue?.sourceAddressHandle ?? bundle?.syntax.sourceAddressHandle ?? null,
+    issue?.sourceAddressHandle ?? frontier.sourceAddressHandle ?? bundle?.syntax.sourceAddressHandle ?? null,
   );
   return reasonFor(
     TemplateCompilerContextFamilyCompilationStage.FamilyCompletion,

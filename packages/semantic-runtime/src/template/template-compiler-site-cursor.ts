@@ -1,4 +1,5 @@
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
+import { StaticCallableCompletionKind } from '../evaluation/function-execution.js';
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import { ExpressionParseResultKind, type ExpressionParseResult } from '../expression/parse-result-algebra.js';
@@ -63,11 +64,13 @@ import {
 import type {
   TemplateCompilerSiteExecutionDriverReference,
   TemplateCompilerSiteExecutionEndpointReceipt,
+  TemplateCompilerOperation,
 } from './template-compiler-execution.js';
 import {
   executeTemplateCompilerProcessContent,
   planTemplateCompilerProcessContent,
   TemplateCompilerProcessContentPlanState,
+  TemplateCompilerProcessContentFailure,
   type TemplateCompilerProcessContentResult,
 } from './template-compiler-process-content.js';
 import {
@@ -1035,7 +1038,19 @@ class TemplateCompilerRootSiteCursor {
         this.siteDriver = this.binding.execution.beginSiteExecutionDriver(plan.frontier);
         this.semantics.useSiteDriver(this.siteDriver);
       }
-      processContent = executeTemplateCompilerProcessContent({ plan, driver: this.siteDriver });
+      const invocation = executeTemplateCompilerProcessContent({ plan, driver: this.siteDriver });
+      if (invocation instanceof TemplateCompilerProcessContentFailure) {
+        this.stop(
+          invocation.kind === StaticCallableCompletionKind.Abrupt
+            ? TemplateCompilerSiteCursorFrontierKind.ProcessContentAbrupt
+            : TemplateCompilerSiteCursorFrontierKind.ProcessContentUnsupported,
+          element, null, null, successor, invocation.reason,
+          elementDefinition.processContent.addressHandle ?? elementDefinition.sourceAddressHandle,
+          invocation.operation,
+        );
+        return null;
+      }
+      processContent = invocation;
       const removedSpends: TemplateCompilerSiteSpend[] = [];
       this.appendEvent(new TemplateCompilerSiteCursorProcessContentEvent(
         siteCursorConstructionAuthority,
@@ -1231,6 +1246,11 @@ class TemplateCompilerRootSiteCursor {
     const hasClosedProjection = hydrateElementDraft?.projection.state
       === TemplateCompilerHydrateElementProjectionState.PendingExtraction;
 
+    if (processContent?.returnedFalse === true && element.readChildren().length > 0) {
+      this.excludeSubtree(element, element, TemplateCompilerSiteSpendDisposition.ProcessContentSuppressed, element.readChildren());
+      if (this.frontier != null) return null;
+    }
+
     if (
       this.traversalMode === TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily
       && (hasTemplateController || hasClosedProjection)
@@ -1276,7 +1296,7 @@ class TemplateCompilerRootSiteCursor {
             && isTemplateCompilerProcessContentSettledForHost(element, hydrateElementDraft.processContent)
           )
         )
-        || element.readChildren().length > 0
+        || (processContent?.returnedFalse !== true && element.readChildren().length > 0)
       ) {
         this.stop(
           TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeContainerless,
@@ -1299,6 +1319,7 @@ class TemplateCompilerRootSiteCursor {
       ));
       return null;
     }
+    if (processContent?.returnedFalse === true) return null;
     if (element.templateContent != null) {
       this.excludeSubtree(
         element,
@@ -1585,9 +1606,9 @@ class TemplateCompilerRootSiteCursor {
       return null;
     }
     if (draft?.containerless.effective === true) {
-      const hasUnsupportedChildren = state.projectionEvent == null
+      const hasUnsupportedChildren = draft.processContent.result?.returnedFalse !== true && (state.projectionEvent == null
         ? element.readChildren().length > 0
-        : state.projectionEvent.preparation.residuals.length > 0;
+        : state.projectionEvent.preparation.residuals.length > 0);
       if (
         !(
           draft.processContent.state === TemplateCompilerHydrateElementProcessContentState.Absent
@@ -1620,6 +1641,7 @@ class TemplateCompilerRootSiteCursor {
       ));
       return null;
     }
+    if (draft?.processContent.result?.returnedFalse === true) return null;
     if (state.realization != null) {
       this.taskSession.pushContextLogicalChildBand(state.terminalContext, state.realization.residualInputs);
       return null;
@@ -2087,7 +2109,8 @@ class TemplateCompilerRootSiteCursor {
     root: TemplateCompilerFragmentOccurrence | TemplateCompilerNodeOccurrence,
     disposition:
       | TemplateCompilerSiteSpendDisposition.InertTemplateContent
-      | TemplateCompilerSiteSpendDisposition.LetContentSuppressed,
+      | TemplateCompilerSiteSpendDisposition.LetContentSuppressed
+      | TemplateCompilerSiteSpendDisposition.ProcessContentSuppressed,
     roots: readonly TemplateCompilerNodeOccurrence[],
   ): void {
     const spends: TemplateCompilerSiteSpend[] = [];
@@ -2435,7 +2458,8 @@ class TemplateCompilerRootSiteCursor {
     occurrence: TemplateCompilerAttributeOccurrence | TemplateCompilerTextOccurrence,
     disposition:
       | TemplateCompilerSiteSpendDisposition.InertTemplateContent
-      | TemplateCompilerSiteSpendDisposition.LetContentSuppressed,
+      | TemplateCompilerSiteSpendDisposition.LetContentSuppressed
+      | TemplateCompilerSiteSpendDisposition.ProcessContentSuppressed,
   ): TemplateCompilerSiteSpend | null {
     const result = this.ledger.exclude(bundle, occurrence, disposition);
     return result instanceof TemplateCompilerSiteSpendConflict ? null : result;
@@ -2472,6 +2496,8 @@ class TemplateCompilerRootSiteCursor {
     bundle: TemplateCompilerNormalizedSiteBundle | null,
     capturedSuccessor: TemplateCompilerNodeOccurrence | null,
     summary: string,
+    sourceAddressHandle: AddressHandle | null = null,
+    terminalOperation: TemplateCompilerOperation | null = null,
   ): void {
     if (this.frontier != null) return;
     const frontier = new TemplateCompilerSiteCursorFrontier(
@@ -2487,6 +2513,8 @@ class TemplateCompilerRootSiteCursor {
       this.binding.forest.mutationRevision,
       this.binding.execution.sequence.readOperations().length,
       summary,
+      sourceAddressHandle,
+      terminalOperation,
     );
     this.frontier = frontier;
     this.appendEvent(frontier);

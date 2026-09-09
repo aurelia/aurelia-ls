@@ -789,7 +789,7 @@ function processContentRemovedChildWires(
   result: TemplateCompilerProcessContentResult | null,
   wires: TemplateCompilerFamilyWireFunding,
 ): readonly HtmlNodeReference[] {
-  if (result == null) return [];
+  if (result?.metadata == null) return [];
   const drafts = wires.draftsForOwner(result, TemplateCompilerFamilyWireRole.ProcessContentRemovedChild);
   if (
     drafts.length !== result.removedOccurrences.length

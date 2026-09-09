@@ -821,6 +821,7 @@ function validateEffectAndExclusionAccounting(
   const ledgerExclusionSpends = transcript.ledger.spends.filter((spend) =>
     spend.disposition === TemplateCompilerSiteSpendDisposition.InertTemplateContent
     || spend.disposition === TemplateCompilerSiteSpendDisposition.LetContentSuppressed
+    || spend.disposition === TemplateCompilerSiteSpendDisposition.ProcessContentSuppressed
   );
   if (
     !sameObjects(eventProcessSpends, ledgerProcessSpends)
@@ -835,6 +836,9 @@ function validateEffectAndExclusionAccounting(
       spend.siteEventOrdinal != null
       || spend.disposition !== event.disposition
     ))
+    || exclusionEvents.some((event) => event.disposition === TemplateCompilerSiteSpendDisposition.ProcessContentSuppressed
+      && !processEvents.some((process) => process.host === event.owner && process.ordinal < event.ordinal
+        && process.result.returnedFalse))
   ) {
     refuse(
       TemplateCompilerContextFamilyCompletionReasonKind.EffectAccountingMismatch,
@@ -933,7 +937,7 @@ function validateContainerlessPlacements(
     if (placement.projectionExtraction !== projection) return true;
     if (
       !isTemplateCompilerProcessContentSettledForHost(staging.element, draft.processContent)
-      || (projection == null && staging.element.readChildren().length > 0)
+      || (projection == null && draft.processContent.result?.returnedFalse !== true && staging.element.readChildren().length > 0)
       || (projection != null && projection.preparation.residuals.length > 0)
     ) return true;
     const ownerEvents = audit.transcript.taskSnapshot.taskForContext(
@@ -946,6 +950,9 @@ function validateContainerlessPlacements(
     const prerequisites = [
       ...audit.attributeEvents.filter((event) => event.owner === staging.element),
       ...audit.processContentEvents.filter((event) => event.host === staging.element),
+      ...ownerEvents.filter((event) => event instanceof TemplateCompilerSiteCursorSubtreeExclusionEvent
+        && event.owner === staging.element
+        && event.disposition === TemplateCompilerSiteSpendDisposition.ProcessContentSuppressed),
       ...(templateController == null ? [] : [templateController]),
       ...(projection == null ? [] : [projection]),
       ...projectionContextEvents,

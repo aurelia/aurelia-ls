@@ -103,6 +103,9 @@ export const enum TemplateCompilerOperationCompletionKind {
   /** The operation ran and explicitly declined its optional transformation, such as `processContent` returning false. */
   Declined = 'declined',
   Open = 'open',
+  /** Invocation reached an operation/input outside the admitted compile-time surface; tentative effects are discarded. */
+  Unsupported = 'unsupported',
+  /** Execution was refused before attempting the operation. */
   Refused = 'refused',
   Abrupt = 'abrupt',
 }
@@ -138,6 +141,7 @@ export class TemplateCompilerOperationCompletion {
         }
         break;
       case TemplateCompilerOperationCompletionKind.Refused:
+      case TemplateCompilerOperationCompletionKind.Unsupported:
       case TemplateCompilerOperationCompletionKind.Abrupt:
         if (detail == null || detail.length === 0) {
           throw new Error(`Compiler operation completion '${completionKind}' requires a detail.`);
@@ -265,6 +269,10 @@ class TemplateCompilerPendingMutationOverlay {
 
   readAttributeValue(attribute: TemplateCompilerAttributeOccurrence): string {
     return this.attributeValueMutations.get(attribute)?.nextValue ?? attribute.value;
+  }
+
+  containsDetachedNode(node: TemplateCompilerNodeOccurrence): boolean {
+    return this.detachedNodes.has(node);
   }
 
   rewriteAttributeValue(attribute: TemplateCompilerAttributeOccurrence, value: string): void {
@@ -1344,6 +1352,7 @@ export class TemplateCompilerExecutionSession {
       this.forest,
       targetPlan,
       this.mutationAuthority,
+      receipt.traversal.contexts.flatMap((context) => context.exclusions),
     );
     structuralExecution.admitCompilerExtractedDetachedNodes(
       receipt.traversal.audit.transcript.binding.bootstrapClosure.localExtraction.operations.flatMap((operation) =>
@@ -1668,7 +1677,7 @@ export class TemplateCompilerExecutionSession {
     attribute: TemplateCompilerAttributeOccurrence,
   ): string {
     const overlay = this.requirePendingMutationOverlay(attempt);
-    this.requireOccurrenceContext(attempt.context, attribute);
+    this.requirePendingAttributeContext(attempt, attribute);
     return overlay.readAttributeValue(attribute);
   }
 
@@ -1686,8 +1695,26 @@ export class TemplateCompilerExecutionSession {
         `Compiler operation '${attempt.operationKey}' cannot perform extension-owned scalar DOM rewrites.`,
       );
     }
-    this.requireOccurrenceContext(attempt.context, attribute);
+    this.requirePendingAttributeContext(attempt, attribute);
     overlay.rewriteAttributeValue(attribute, value);
+  }
+
+  private requirePendingAttributeContext(
+    attempt: TemplateCompilerPendingOperationAttempt,
+    attribute: TemplateCompilerAttributeOccurrence,
+  ): void {
+    if (attempt.operationKind === TemplateCompilerOperationKind.ProcessContent
+      && attempt.executionMechanism === TemplateCompilerOperationExecutionMechanism.StaticCallable
+      && this.forest.attributeForOccurrenceKey(attribute.occurrenceKey) === attribute) {
+      const overlay = this.requirePendingMutationOverlay(attempt);
+      let node: TemplateCompilerNodeOccurrence | null = attribute.owner;
+      while (node != null) {
+        // This attempt proved ownership before detaching the ancestor. Retained references still address that subtree.
+        if (overlay.containsDetachedNode(node)) return;
+        node = node.parent;
+      }
+    }
+    this.requireOccurrenceContext(attempt.context, attribute);
   }
 
   /** Detach one live node during local-template extraction while retaining its exact event-time edge. */
@@ -1761,6 +1788,38 @@ export class TemplateCompilerExecutionSession {
       parent,
       TemplateCompilerOccurrenceEdgeKind.Child,
       ordinal,
+    );
+    this.forest.detachDirectChild(parent, ordinal, node);
+    overlay.recordNodeDetachment(mutation);
+  }
+
+  /** Remove an owned descendant during source processContent without changing its occurrence identity. */
+  detachProcessContentNode(
+    attempt: TemplateCompilerPendingOperationAttempt,
+    node: TemplateCompilerNodeOccurrence,
+  ): void {
+    const overlay = this.requirePendingMutationOverlay(attempt);
+    if (
+      !(attempt.context instanceof TemplateCompilerSiteExecutionContextReference)
+      || attempt.operationKind !== TemplateCompilerOperationKind.ProcessContent
+      || attempt.executionMechanism !== TemplateCompilerOperationExecutionMechanism.StaticCallable
+      || !(attempt.target instanceof TemplateCompilerCallableEffectOperationTarget)
+      || attempt.siteExecutionDriver == null
+      || this.activeSiteExecutionDriver !== attempt.siteExecutionDriver
+    ) {
+      throw new Error('Owned DOM removal requires the active source processContent invocation.');
+    }
+    const root = attempt.target.actedOn.occurrence;
+    let ancestor = node.parent;
+    while (ancestor != null && ancestor !== root) ancestor = ancestor.parent;
+    if (node === root || ancestor !== root || node.parentEdgeKind !== TemplateCompilerOccurrenceEdgeKind.Child) {
+      throw new Error('Owned DOM removal requires a descendant child edge of the processContent host.');
+    }
+    this.requireOccurrenceContext(attempt.context, node);
+    const parent = node.parent!;
+    const ordinal = node.readParentOrdinal()!;
+    const mutation = new TemplateCompilerNodeDetachmentMutation(
+      overlay.nextTopologyMutationOrdinal, node, parent, TemplateCompilerOccurrenceEdgeKind.Child, ordinal,
     );
     this.forest.detachDirectChild(parent, ordinal, node);
     overlay.recordNodeDetachment(mutation);
@@ -2223,7 +2282,7 @@ export class TemplateCompilerExecutionSession {
     return driver;
   }
 
-  /** Release a current nonterminal driver without claiming that the wider site walk completed. */
+  /** Release the current driver after a completed or terminal site attempt without claiming traversal completion. */
   finishSiteExecutionDriver(
     driver: TemplateCompilerSiteExecutionDriverReference,
   ): void {
@@ -2231,7 +2290,6 @@ export class TemplateCompilerExecutionSession {
     this.requireNoPendingAttempt('finish site execution driver');
     this.requireCurrentSiteExecutionDriver(driver);
     const lane = driver.lane;
-    this.requireOpenLane(lane);
     const operations = this.operationsByContext.get(driver.context) ?? [];
     if (operations.length === 0) {
       throw new Error(
@@ -2257,7 +2315,6 @@ export class TemplateCompilerExecutionSession {
     this.requireNoActiveSiteExecutionDriver('capture a site execution endpoint');
     const lane = bootstrapClosure.lane;
     this.requireLane(lane);
-    this.requireOpenLane(lane);
     const laneOperations = this.sequence.readLaneOperations(lane);
     const siteContext = this.siteContextsByLane.get(lane) ?? null;
     const phase = this.invocationPhases.get(lane);
@@ -2732,7 +2789,8 @@ export class TemplateCompilerExecutionSession {
         || (siteNodeDetachments.length > 0
           && (
             attempt.operationKind !== TemplateCompilerOperationKind.ProcessContent
-            || attempt.executionMechanism !== TemplateCompilerOperationExecutionMechanism.BuiltIn
+            || (attempt.executionMechanism !== TemplateCompilerOperationExecutionMechanism.BuiltIn
+              && attempt.executionMechanism !== TemplateCompilerOperationExecutionMechanism.StaticCallable)
           ))
       )
     ) {
@@ -2753,6 +2811,7 @@ export class TemplateCompilerExecutionSession {
     }
     if (
       isSiteExecution
+      && mutationBatch.state === TemplateCompilerMutationBatchState.Committed
       && this.forest.mutationRevision !== attempt.startForestMutationRevision + siteNodeDetachments.length
         + (mutationBatch.state === TemplateCompilerMutationBatchState.Committed
           ? mutationBatch.attributeValueMutations.length
@@ -3199,12 +3258,13 @@ export class TemplateCompilerExecutionSession {
           operation.mutationBatch.occurrenceGenerationReservations.length > 0
           || !siteTopologyIsExact
           || (siteNodeDetachments.length > 0
-            && operation.executionMechanism !== TemplateCompilerOperationExecutionMechanism.BuiltIn)
+            && operation.executionMechanism !== TemplateCompilerOperationExecutionMechanism.BuiltIn
+            && operation.executionMechanism !== TemplateCompilerOperationExecutionMechanism.StaticCallable)
           || operation.endForestMutationRevision !== operation.startForestMutationRevision
             + siteNodeDetachments.length
             + (operation.mutationBatch.state === TemplateCompilerMutationBatchState.Committed
               ? operation.mutationBatch.attributeValueMutations.length
-              : 0)
+              : siteNodeDetachments.length > 0 ? 1 : 0)
         )
       ) {
         throw new Error(`Compiler site operation '${operation.operationKey}' has incoherent mutation currentness.`);
@@ -3216,14 +3276,12 @@ export class TemplateCompilerExecutionSession {
         || isTargetTemplateControllerWrapping
         || isTargetProjectionExtraction
         || (isSiteProcessContent
-          && operation.executionMechanism === TemplateCompilerOperationExecutionMechanism.BuiltIn
+          && (operation.executionMechanism === TemplateCompilerOperationExecutionMechanism.BuiltIn
+            || operation.executionMechanism === TemplateCompilerOperationExecutionMechanism.StaticCallable)
           && siteTopologyIsExact);
       if (
         operation.mutationBatch.topologyMutations.length > 0
-        && (
-          operation.mutationBatch.state === TemplateCompilerMutationBatchState.Discarded
-          || !topologyIsAdmitted
-        )
+        && !topologyIsAdmitted
       ) {
         throw new Error(
           `Compiler operation '${operation.operationKey}' owns unsupported topology mutation history.`,
@@ -3810,6 +3868,7 @@ export class TemplateCompilerExecutionSession {
     const wasAttempted = executionMechanism !== TemplateCompilerOperationExecutionMechanism.NotAttempted;
     const requiresAttempt = completion.completionKind === TemplateCompilerOperationCompletionKind.Complete
       || completion.completionKind === TemplateCompilerOperationCompletionKind.Declined
+      || completion.completionKind === TemplateCompilerOperationCompletionKind.Unsupported
       || completion.completionKind === TemplateCompilerOperationCompletionKind.Abrupt;
     const forbidsAttempt = completion.completionKind === TemplateCompilerOperationCompletionKind.Refused;
     if ((requiresAttempt && !wasAttempted) || (forbidsAttempt && wasAttempted)) {
@@ -4373,6 +4432,7 @@ function contextFamilyOperationTargetIsExact(
 
 function isTerminalCompilerCompletion(completionKind: TemplateCompilerOperationCompletionKind): boolean {
   return completionKind === TemplateCompilerOperationCompletionKind.Open
+    || completionKind === TemplateCompilerOperationCompletionKind.Unsupported
     || completionKind === TemplateCompilerOperationCompletionKind.Refused
     || completionKind === TemplateCompilerOperationCompletionKind.Abrupt;
 }

@@ -431,7 +431,9 @@ export function prepareTemplateCompilerFamilyWireFunding(
   const seenProcessContent = new Set<TemplateCompilerProcessContentResult>();
   for (const hydrateElement of assembly.receipt.traversal.hydrateElements) {
     const result = hydrateElement.staging.draft?.processContent.result ?? null;
-    if (result == null || seenProcessContent.has(result)) continue;
+    // Only the AuSlot instruction retains authored removed-child references. Source
+    // hooks retain removal authority in their committed occurrence operation instead.
+    if (result?.metadata == null || seenProcessContent.has(result)) continue;
     seenProcessContent.add(result);
     for (const removed of result.removedOccurrences) {
       appendNode(

@@ -59,7 +59,7 @@ import {
 } from './template-instruction-runtime-value.js';
 
 export const TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION =
-  'semantic-runtime/template-compiler-compiled-handoff/v3' as const;
+  'semantic-runtime/template-compiler-compiled-handoff/v4' as const;
 
 export interface TemplateCompilerCompiledHandoffValue {
   readonly schemaVersion: typeof TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION;
@@ -104,8 +104,12 @@ export interface TemplateCompilerCompiledHandoffTemplateSource {
 export interface TemplateCompilerCompiledHandoffDefinition {
   readonly definitionId: string;
   readonly owner: TemplateCompilerCompiledHandoffDefinitionOwner;
-  /** Compiler-front-door identity used by runtime controller topology; distinct from the final browser-family product. */
-  readonly sourceCompiledTemplate: TemplateCompilerCompiledHandoffSourceCompiledTemplate;
+  /**
+   * Compiler-front-door identity used by runtime controller topology, distinct from the final browser-family product.
+   * Null when that earlier authored pass produced no corresponding child context (for example, below an opaque hook).
+   * Final compilation remains authoritative; consumers must not infer older runtime-topology facts without this join.
+   */
+  readonly sourceCompiledTemplate: TemplateCompilerCompiledHandoffSourceCompiledTemplate | null;
   readonly header: TemplateCompilerCompiledHandoffDefinitionHeader;
   readonly tree: TemplateCompilerCompiledHandoffTree;
   readonly rows: readonly (readonly TemplateCompilerCompiledHandoffInstruction[])[];
@@ -558,7 +562,7 @@ function projectSourceCompiledTemplate(
   location: TemplateCompilerContextFamilyDefinitionLocation,
   source: CompiledTemplateEmission,
   store: KernelStore,
-): TemplateCompilerCompiledHandoffSourceCompiledTemplate {
+): TemplateCompilerCompiledHandoffSourceCompiledTemplate | null {
   if (location.parentContext == null) {
     return requireSourceCompiledTemplate(
       source,
@@ -580,6 +584,7 @@ function projectSourceCompiledTemplate(
       && sameSourceAttributeReference(candidate.attribute, instruction.attribute, store)
     );
     const match = matches[0] ?? null;
+    if (matches.length === 0 || (matches.length === 1 && match?.childCompiledTemplate == null)) return null;
     if (matches.length !== 1 || match?.childCompiledTemplate == null) {
       throw new TemplateCompilerSourceCompiledTemplateUnavailable(
         'template-controller-source-compiled-template-unavailable',
@@ -605,6 +610,7 @@ function projectSourceCompiledTemplate(
   const projections = matches.flatMap((candidate) =>
     candidate.projections.filter((projection) => projection.slotName === owner.slotName)
   );
+  if (matches.length <= 1 && projections.length === 0) return null;
   if (matches.length !== 1 || projections.length !== 1) {
     throw new TemplateCompilerSourceCompiledTemplateUnavailable(
       'projection-source-compiled-template-unavailable',

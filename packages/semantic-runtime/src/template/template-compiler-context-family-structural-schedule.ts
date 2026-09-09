@@ -186,16 +186,23 @@ export class TemplateCompilerFamilyProcessContentAdoptionEntry {
   ) {
     const reference = hydrateElement.instruction.auSlotProcessContentRemovedChildNodes[removalOrdinal] ?? null;
     const exactOrigin = result.plan.execution.forest.exactAuthoredNodeOrigin(removal.occurrence)?.authored ?? null;
+    const reach = disposition.reach;
     if (
       disposition.loweringContext !== contextMapping.cursorContext
       || hydrateElement.draft.site !== disposition.site
-      || hydrateElement.draft.auSlotProcessContent == null
-      || hydrateElement.draft.auSlotProcessContent.name !== result.metadata.name
+      || !result.isModuleConstructed()
+      || reach.reachKind !== 'element'
+      || reach.hydrateElement.staging.draft?.processContent.result !== result
+      || hydrateElement.draft.occurrenceKey !== result.plan.host.occurrenceKey
+      || hydrateElement.draft.resource?.definitionProductHandle !== result.plan.definition?.productHandle
       || result.removals[removalOrdinal] !== removal
-      || reference == null
-      || reference?.productHandle !== exactOrigin?.productHandle
-      || reference.identityHandle !== exactOrigin?.identityHandle
-      || reference.addressHandle !== exactOrigin?.addressHandle
+      || (result.metadata == null
+        ? hydrateElement.draft.auSlotProcessContent != null || reference != null
+        : hydrateElement.draft.auSlotProcessContent?.name !== result.metadata.name
+          || reference == null
+          || reference.productHandle !== exactOrigin?.productHandle
+          || reference.identityHandle !== exactOrigin?.identityHandle
+          || reference.addressHandle !== exactOrigin?.addressHandle)
     ) {
       throw new Error(`Family processContent removal '${removal.occurrence.occurrenceKey}' lost funded HE order.`);
     }
@@ -761,9 +768,7 @@ export function prepareTemplateCompilerContextFamilyStructuralSchedule(
     const reach = disposition.reach;
     if (reach.reachKind !== 'element') throw new Error('Expected lowered element reach.');
     const head = heBySite.get(disposition.site) ?? null;
-    const result = head?.draft.auSlotProcessContent == null
-      ? null
-      : reach.hydrateElement.staging.draft?.processContent.result ?? null;
+    const result = reach.hydrateElement.staging.draft?.processContent.result ?? null;
     const processContent = result == null || head == null
       ? []
       : result.removals.map((removal, ordinal) => new TemplateCompilerFamilyProcessContentAdoptionEntry(

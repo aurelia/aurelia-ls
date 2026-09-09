@@ -398,7 +398,7 @@ describe('template compiler execution sequence', () => {
     }
   });
 
-  test('rejects discarded built-in processContent topology without blessing the pending attempt', () => {
+  test('discards processContent topology and advances the terminal driver over restored input', () => {
     const browser = new BrowserEffectiveTemplateFixture('compiler-execution-site-detachment-discard');
     try {
       const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(
@@ -429,15 +429,20 @@ describe('template compiler execution sequence', () => {
       });
       execution.detachDirectChild(attempt, parent, 0, child);
 
-      expect(() => execution.completeOperation(
+      const operation = execution.completeOperation(
         attempt,
         new TemplateCompilerOperationCompletion(
           TemplateCompilerOperationCompletionKind.Open,
           [browser.run.handles.openSeam('site-detachment-discard:open')],
         ),
-      )).toThrow(/cannot discard generated or topological output until forest rollback exists/);
-      expect(execution.readPendingAttempt()).toBe(attempt);
-      expect(execution.sequence.readContextOperations(driver.context)).toEqual([]);
+      );
+      expect(operation.mutationBatch.state).toBe(TemplateCompilerMutationBatchState.Discarded);
+      expect(execution.readPendingAttempt()).toBeNull();
+      expect(execution.sequence.readContextOperations(driver.context)).toEqual([operation]);
+      expect(parent.readChildren()).toEqual([child]);
+      expect(child.parent).toBe(parent);
+      expect(driver.expectedForestMutationRevision).toBe(forest.mutationRevision);
+      forest.assertCoherentTopology();
     } finally {
       browser.dispose();
     }
@@ -694,7 +699,7 @@ describe('template compiler execution sequence', () => {
     }
   });
 
-  test('rejects Open completion after pending generated topology escapes before rollback exists', () => {
+  test('discards generated inventory when a hook completes Open', () => {
     const browser = new BrowserEffectiveTemplateFixture('compiler-execution-generation-rollback-boundary');
 
     try {
@@ -735,21 +740,25 @@ describe('template compiler execution sequence', () => {
         TemplateCompilerGeneratedOccurrenceRole.Clone,
         0,
       );
-      forest.createGeneratedText(generation, 'escaped', sourceText.inputReference);
+      const generated = forest.createGeneratedText(generation, 'escaped', sourceText.inputReference);
       expect(forest.mutationRevision).toBeGreaterThan(pendingForestRevision);
 
-      expect(() => execution.completeOperation(attempt, new TemplateCompilerOperationCompletion(
+      const operation = execution.completeOperation(attempt, new TemplateCompilerOperationCompletion(
         TemplateCompilerOperationCompletionKind.Open,
         [browser.run.handles.openSeam('generation-rollback:open')],
-      ))).toThrow(/cannot discard generated or topological output until forest rollback exists/);
-      expect(execution.readPendingAttempt()).toBe(attempt);
+      ));
+      expect(operation.mutationBatch.state).toBe(TemplateCompilerMutationBatchState.Discarded);
+      expect(execution.readPendingAttempt()).toBeNull();
       expect(execution.mutationAuthority.completedBatchForGeneration(generation)).toBeNull();
+      expect(forest.nodeForOccurrenceKey(generated.occurrenceKey)).toBeNull();
+      expect(forest.nodesForInputProduct(sourceText.inputReference.productHandle)).toEqual([sourceText]);
+      forest.assertCoherentTopology();
     } finally {
       browser.dispose();
     }
   });
 
-  test('rejects Open local extraction after a typed topology detachment escapes', () => {
+  test('restores the original local-template edge after Open extraction', () => {
     const browser = new BrowserEffectiveTemplateFixture('compiler-execution-topology-rollback-boundary');
 
     try {
@@ -778,14 +787,20 @@ describe('template compiler execution sequence', () => {
         target: execution.occurrenceTarget(bootstrap, localCarrier),
         causeHandles: [browser.run.handles.product('topology-rollback:definition')],
       });
+      const previousParent = localCarrier.parent;
+      const previousOrdinal = localCarrier.readParentOrdinal();
       execution.detachNode(attempt, localCarrier);
 
-      expect(() => execution.completeOperation(attempt, new TemplateCompilerOperationCompletion(
+      const operation = execution.completeOperation(attempt, new TemplateCompilerOperationCompletion(
         TemplateCompilerOperationCompletionKind.Open,
         [browser.run.handles.openSeam('topology-rollback:open')],
-      ))).toThrow(/cannot discard generated or topological output until forest rollback exists/);
-      expect(execution.readPendingAttempt()).toBe(attempt);
-      expect(localCarrier.parentEdgeKind).toBe(TemplateCompilerOccurrenceEdgeKind.Detached);
+      ));
+      expect(operation.mutationBatch.state).toBe(TemplateCompilerMutationBatchState.Discarded);
+      expect(execution.readPendingAttempt()).toBeNull();
+      expect(localCarrier.parent).toBe(previousParent);
+      expect(localCarrier.readParentOrdinal()).toBe(previousOrdinal);
+      expect(localCarrier.parentEdgeKind).toBe(TemplateCompilerOccurrenceEdgeKind.Child);
+      forest.assertCoherentTopology();
     } finally {
       browser.dispose();
     }

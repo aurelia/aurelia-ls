@@ -133,6 +133,7 @@ export function isTemplateCompilerProcessContentSettledForHost(
 
 export const enum TemplateCompilerHydrateElementProjectionState {
   None = 'none',
+  Suppressed = 'suppressed',
   PendingExtraction = 'pending-extraction',
 }
 
@@ -153,9 +154,11 @@ export class TemplateCompilerHydrateElementProjectionDraft {
     if (
       (state === TemplateCompilerHydrateElementProjectionState.PendingExtraction)
         !== (grouping.extractedContributors.length > 0)
-      || groupedChildren.length !== postProcessChildren.length
+      || (state === TemplateCompilerHydrateElementProjectionState.Suppressed
+        ? groupedChildren.length !== 0
+        : groupedChildren.length !== postProcessChildren.length
+          || postProcessChildren.some((child) => !groupedChildSet.has(child)))
       || groupedChildSet.size !== groupedChildren.length
-      || postProcessChildren.some((child) => !groupedChildSet.has(child))
     ) {
       throw new Error('HydrateElement projection draft lost child grouping or extraction state authority.');
     }
@@ -474,7 +477,7 @@ export function stageTemplateCompilerHydrateElementEnvelope(
   ) {
     return openResult(request, blockers, reads);
   }
-  const projection = projectionDraft(request.element, request.postProcessChildren, definition, blockers);
+  const projection = projectionDraft(request.element, request.postProcessChildren, definition, blockers, processContent.result?.returnedFalse === true);
   const fromUsage = request.owner.structuralEffects.includes(
     TemplateCompilerLiveAttributeStructuralEffectKind.UsageContainerless,
   );
@@ -653,7 +656,7 @@ function processContentDraft(
   }
   return new TemplateCompilerHydrateElementProcessContentDraft(
     TemplateCompilerHydrateElementProcessContentState.Exact,
-    new AuSlotProcessContentInstructionData(result.metadata.name, nameSourceAddressHandle),
+    result.metadata == null ? null : new AuSlotProcessContentInstructionData(result.metadata.name, nameSourceAddressHandle),
     result,
   );
 }
@@ -663,12 +666,13 @@ function projectionDraft(
   children: readonly TemplateCompilerNodeOccurrence[],
   definition: CustomElementDefinition,
   blockers: TemplateCompilerHydrateElementBlocker[],
+  suppressed: boolean,
 ): TemplateCompilerHydrateElementProjectionDraft {
   const grouping = groupTemplateCompilerProjectionChildren(new TemplateCompilerProjectionGroupingInput(
     host,
     host.inputReference?.addressHandle ?? null,
     definition.shadowOptions != null,
-    children.map((child) => {
+    (suppressed ? [] : children).map((child) => {
       const slotAttribute = child instanceof TemplateCompilerElementOccurrence
         ? child.readAttributes().find((attribute) => qualifiedAttributeName(attribute) === 'au-slot') ?? null
         : null;
@@ -697,7 +701,9 @@ function projectionDraft(
     ));
   }
   return new TemplateCompilerHydrateElementProjectionDraft(
-    pending
+    suppressed && children.length > 0
+      ? TemplateCompilerHydrateElementProjectionState.Suppressed
+      : pending
       ? TemplateCompilerHydrateElementProjectionState.PendingExtraction
       : TemplateCompilerHydrateElementProjectionState.None,
     [...children],

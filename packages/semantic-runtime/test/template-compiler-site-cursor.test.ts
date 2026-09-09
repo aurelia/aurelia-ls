@@ -36,7 +36,6 @@ import {
 } from '../src/template/template-compiler-execution.js';
 import {
   compileTemplateCompilerContextFamily,
-  TemplateCompilerContextFamilyCompilationReasonRole,
   TemplateCompilerContextFamilyCompilationStage,
   TemplateCompilerContextFamilyCompilationState,
 } from '../src/template/template-compiler-context-family-compilation.js';
@@ -884,8 +883,8 @@ describe('template compiler root site cursor', () => {
         expect(envelope.draft?.definition.shadowOptions, name).toMatchObject({ mode: 'open' });
       } else {
         expect(envelope.draft?.definition.hasSlots, name).toBe(true);
-        expect(envelope.draft?.elementRead.observation.resultParts.slice(-4), name)
-          .toEqual(['false', 'false', 'true', 'false']);
+        expect(envelope.draft?.elementRead.observation.resultParts.slice(-5), name)
+          .toEqual(['false', 'false', 'true', 'false', '']);
       }
       expect(envelope.draft?.containerless, name).toMatchObject({
         effective: true,
@@ -1627,7 +1626,7 @@ describe('template compiler root site cursor', () => {
     }
   });
 
-  test('keeps arbitrary processContent open at its family-completion gate', () => {
+  test('compiles a source literal-true hook through the full context family', () => {
     const candidate = fixture.runtime.computationLifecycle.begin({
       kind: 'template-compiler-context-family-open-test',
       reconciliationKey: fixture.browserRun.locus.reconciliationKey,
@@ -1635,25 +1634,10 @@ describe('template compiler root site cursor', () => {
     });
     try {
       const result = fixture.compileContextFamily('cursor-process-content-arbitrary', candidate);
-      expect(result.state).toBe(TemplateCompilerContextFamilyCompilationState.Open);
-      expect(result.stage).toBe(TemplateCompilerContextFamilyCompilationStage.FamilyCompletion);
-      expect(result.reasons[0]).toMatchObject({
-        reasonKind: TemplateCompilerSiteCursorFrontierKind.BeforeProcessContent,
-        role: TemplateCompilerContextFamilyCompilationReasonRole.PrimaryFrontier,
-        frontierCause: {
-          frontierKind: TemplateCompilerSiteCursorFrontierKind.BeforeProcessContent,
-          nodeOccurrenceKey: expect.any(String),
-          attributeOccurrenceKey: null,
-          issue: null,
-        },
-      });
-      expect(result.reasons.filter((reason) =>
-        reason.role === TemplateCompilerContextFamilyCompilationReasonRole.FrontierDerivative
-      ).map((reason) => reason.reasonKind)).toEqual(expect.arrayContaining([
-        'cursor-frontier',
-        'root-phase-incomplete',
-        'context-task-incomplete',
-      ]));
+      expect(result.state).toBe(TemplateCompilerContextFamilyCompilationState.Exact);
+      expect(result.stage).toBe(TemplateCompilerContextFamilyCompilationStage.FrozenValue);
+      expect(result.reasons).toEqual([]);
+      expect(result.value?.isCurrent()).toBe(true);
     } finally {
       candidate.abort();
     }
@@ -1877,19 +1861,21 @@ describe('template compiler root site cursor', () => {
       .toBe(TemplateCompilerLiveAllocationLedgerState.Prepared);
   });
 
-  test('keeps arbitrary processContent Open without admitting a site driver', () => {
-    // Exact AuSlot -> arbitrary-hook chaining remains deferred: AuSlot currently reaches the projection/containerless
-    // structural frontier before a later sibling can be visited, so composing that sequence here would fabricate reach.
-    const run = fixture.run('cursor-process-content-arbitrary');
+  test('executes a literal-true source hook once per fresh forest before the projection frontier', () => {
+    const run = fixture.freshRun('cursor-process-content-arbitrary');
     const transcript = run.transcript();
-    const repeated = run.transcript();
-    expect(transcriptProjection(repeated)).toEqual(transcriptProjection(transcript));
-    expect(transcript.frontier?.frontierKind).toBe(TemplateCompilerSiteCursorFrontierKind.BeforeProcessContent);
-    expect(eventsOf(transcript, TemplateCompilerSiteCursorProcessContentEvent)).toEqual([]);
-    expect(transcript.binding.execution.siteExecutionContext(transcript.binding.lane)).toBeNull();
+    const repeated = fixture.freshRun('cursor-process-content-arbitrary').transcript();
+    expect(repeated.binding.forest).not.toBe(transcript.binding.forest);
+    expect(eventsOf(repeated, TemplateCompilerSiteCursorProcessContentEvent).map(event => event.result.returnedFalse))
+      .toEqual([false]);
+    expect(transcript.frontier?.frontierKind).toBe(TemplateCompilerSiteCursorFrontierKind.AfterAttributesBeforeProjection);
+    const events = eventsOf(transcript, TemplateCompilerSiteCursorProcessContentEvent);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.result.returnedFalse).toBe(false);
+    expect(events[0]?.result.removals).toEqual([]);
+    expect(transcript.binding.execution.siteExecutionContext(transcript.binding.lane)).not.toBeNull();
     expect(transcript.endForestMutationRevision).toBe(transcript.startForestMutationRevision);
-    expect(transcript.endGlobalOperationCount).toBe(transcript.startGlobalOperationCount);
-    expect(repeated.binding.execution.siteExecutionContext(repeated.binding.lane)).toBeNull();
+    expect(transcript.endGlobalOperationCount).toBe(transcript.startGlobalOperationCount + 1);
   });
 
   test('does not execute AuSlot from an unledgered name scalar', () => {

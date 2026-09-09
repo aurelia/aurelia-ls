@@ -32,6 +32,7 @@ import {
   TemplateCompilerSourceCompiledTemplateUnavailable,
   type TemplateCompilerCompiledHandoffLocalFamilyProjection,
   type TemplateCompilerCompiledHandoffSpreadClosure,
+  type TemplateCompilerCompiledHandoffAddress,
   type TemplateCompilerCompiledHandoffValue,
 } from './template-compiler-compiled-handoff-value.js';
 import {
@@ -61,6 +62,7 @@ import {
   compileTemplateCompilerOccurrenceFamily,
   type TemplateCompilerOccurrenceLocalDefinitionValue,
 } from './template-compiler-occurrence-family-compilation.js';
+import { TemplateCompilerSiteCursorFrontierKind } from './template-compiler-site-cursor-event.js';
 
 export const enum TemplateCompilerCompiledHandoffState {
   Exact = 'exact',
@@ -120,7 +122,7 @@ export class SemanticAppTemplateCompilerHandoffBatch {
 class SemanticAppTemplateCompilerMaterialization {
   constructor(
     readonly resource: TemplateResourceRuntimeAnalysisEmission,
-    readonly handoff: SemanticAppTemplateCompilerHandoffResource,
+    readonly handoff: SemanticAppTemplateCompilerHandoffOutcome,
     readonly requirementInputs: readonly RuntimeRegistrationRequirementCompilerInput[],
   ) {}
 }
@@ -155,7 +157,7 @@ type SemanticAppTemplateCompilerPreparation =
       readonly occurrenceSource: TemplateCompilerOccurrencePrecedentEmission | null;
     };
 
-export type SemanticAppTemplateCompilerHandoffResource =
+type SemanticAppTemplateCompilerHandoffOutcome =
   | {
       readonly state: TemplateCompilerCompiledHandoffState.Exact;
       readonly source: SemanticSourceReference | null;
@@ -172,8 +174,16 @@ export type SemanticAppTemplateCompilerHandoffResource =
       readonly value: null;
     };
 
+/** Keep the consuming definition address even when no compiled value can be detached. */
+export type SemanticAppTemplateCompilerHandoffResource = SemanticAppTemplateCompilerHandoffOutcome & {
+  readonly resourceName: string;
+  readonly address: TemplateCompilerCompiledHandoffAddress | null;
+  /** Runtime-compilation demand from a reached unsupported hook; this does not prove template-confined effects. */
+  readonly runtimeFallback: 'process-content-unsupported' | null;
+};
+
 type UnavailableSemanticAppTemplateCompilerHandoffResource = Extract<
-  SemanticAppTemplateCompilerHandoffResource,
+  SemanticAppTemplateCompilerHandoffOutcome,
   { readonly value: null }
 >;
 
@@ -230,7 +240,12 @@ export function materializeSemanticAppTemplateCompilerHandoffs(
     );
     app.requireCurrent();
     return new SemanticAppTemplateCompilerHandoffBatch(
-      materialized.map((entry) => entry.handoff),
+      materialized.map((entry): SemanticAppTemplateCompilerHandoffResource => ({
+        ...entry.handoff,
+        resourceName: entry.resource.compilation.definition.name,
+        address: entry.handoff.value?.address ?? resourceAddress(app, entry.resource),
+        runtimeFallback: processContentRuntimeFallback(entry.handoff),
+      })),
       requestedPaths.filter((filePath) => !matchedPaths.has(filePath)),
       projectSemanticAppRuntimeRegistrationRequirements(
         app,
@@ -249,6 +264,36 @@ export function materializeSemanticAppTemplateCompilerHandoffs(
   } finally {
     run.abort();
   }
+}
+
+function resourceAddress(
+  app: SemanticApp,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+): TemplateCompilerCompiledHandoffAddress | null {
+  const compilation = resource.compilation;
+  if (compilation.definition.productHandle == null) return null;
+  return {
+    definitionProductHandle: compilation.definition.productHandle,
+    definitionIdentityHandle: compilation.definition.identityHandle,
+    compilerWorldProductHandle: compilation.compilerWorld.world.productHandle,
+    compilerWorldIdentityHandle: compilation.compilerWorld.world.identityHandle,
+    sourceAttachment: app.emission.resources.definitionSelections.find((selection) =>
+      selection.definition === compilation.definition
+    )?.sourceAttachment ?? null,
+  };
+}
+
+function processContentRuntimeFallback(
+  outcome: SemanticAppTemplateCompilerHandoffOutcome,
+): 'process-content-unsupported' | null {
+  return outcome.state === TemplateCompilerCompiledHandoffState.Open
+    && outcome.reasons.length > 0
+    && outcome.reasons.every((reason) =>
+      reason.frontierCause?.frontierKind === TemplateCompilerSiteCursorFrontierKind.ProcessContentUnsupported
+      && reason.frontierCause.issue == null
+    )
+    ? 'process-content-unsupported'
+    : null;
 }
 
 function uniqueResources(
@@ -652,7 +697,7 @@ function finalizeResource(
       }],
     });
   }
-  const handoff: SemanticAppTemplateCompilerHandoffResource = {
+  const handoff: SemanticAppTemplateCompilerHandoffOutcome = {
     state: TemplateCompilerCompiledHandoffState.Exact,
     source: preparation.source,
     reasons: [],
