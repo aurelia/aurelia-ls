@@ -25,6 +25,7 @@ export function createAotAssuranceAdapter(request: AotAdapterRequest): AotAssura
     plugins: aureliaAot({
       provider: falsification.provider,
       runtimeConfiguration: 'require-replaceable',
+      compilationMode: request.compilationMode,
       conventions: {
         include,
         transformStandardDecorators: true,
@@ -43,6 +44,14 @@ export function createAotAssuranceAdapter(request: AotAdapterRequest): AotAssura
       }
       return Promise.resolve({
         analysisCount: semantic.analysisCount,
+        compilation: {
+          mode: semantic.compilation.mode,
+          fallbackScope: semantic.compilation.fallbackScope,
+          preserved: semantic.compilation.preserved.map((resource) => ({
+            resourceName: resource.resourceName,
+            disposition: resource.disposition,
+          })),
+        },
         analysis: semantic.analysis,
         runtimeConfiguration: {
           mode: semantic.runtimeConfiguration.mode,
@@ -98,6 +107,10 @@ function falsifyingProvider(
         const session = await provider.openBuild(request);
         const payloadSpecifiers = new Set<string>();
         return {
+          advisories: session.advisories,
+          templateDispositionFor(templateRequest) {
+            return session.templateDispositionFor(templateRequest);
+          },
           async artifactFor(templateRequest) {
             const artifact = await session.artifactFor(templateRequest);
             return falsifyArtifact(artifact, falsifier, () => mutationCount++);

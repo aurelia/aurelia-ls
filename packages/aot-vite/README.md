@@ -19,7 +19,23 @@ attaches that namespace at the final class location. An exact template-value
 bridge instead carries its resource payload claim directly, so the payload
 resolves even when the HTML graph is visited before the owning source transform.
 A later matching source claim is idempotent and a conflicting digest/variant
-fails closed. Neither path falls through to JIT generation.
+fails closed. Neither claimed artifact path falls through to JIT generation.
+
+An explicit `compilationMode: 'compatible'` allows the semantic provider to return a `runtime` template disposition
+before module claiming. The adapter routes that original HTML through the official `.$au.ts` production loader,
+preserving conventions, metadata and dependency imports. Compiled dispositions retain the normal AOT route.
+The provider owns eligibility and runtime-configuration retention; the adapter never classifies hook failures or
+catches an artifact-production error to attempt JIT. Strict is the default. The first provider implementation
+admits typed unsupported `processContent` invocations with application-wide JIT fallback: no definition or source
+configuration is patched, and every authored HTML request uses the official loader, including imports outside the
+static resource cohort. An unsupported hook can affect other definitions after the unsupported operation, so the
+first refusal is not treated as proof of template confinement. Issue-free open siblings may remain under JIT after
+that trigger; generic open analysis does not independently trigger fallback. Abrupt, pending, ineligible and
+issue-backed outcomes still block this initial admission policy.
+
+The source plugin renders provider-authored advisories once during build startup. Application fallback reports
+`AOT_APPLICATION_JIT_FALLBACK` as a non-fatal Vite warning; ordinary Vite warning filtering can suppress its presentation
+without changing compilation behavior. The adapter does not reconstruct reasons or decide fallback scope.
 
 The provider and session types are a narrow structural port. `@aurelia-ls/aot`'s
 `SemanticAotArtifactProvider` implements it without making the Vite adapter own

@@ -65,6 +65,25 @@ other programmatic compiler use before emitting the lookup-only `AotTemplateComp
 Generated binding evaluation/dependency specialization and broader compiler admission remain separate production
 boundaries. Full mapped framework-link profiles remain open; SSR and AOT remain independent axes.
 
+`compilationMode: 'compatible'` permits application-wide JIT fallback when semantic-runtime identifies an unsupported
+reached `processContent` invocation. Its effects are not proven template-local: it might change another component's
+definition before that component first compiles. Consequently **no** definition, source module or runtime configuration
+is patched, including otherwise exact siblings. Every requested HTML module uses ordinary JIT conventions, even when
+it was outside the static resource cohort. The real compiler/parser and authored registrations remain available.
+
+The shared typed refusal is the trigger; AOT does not classify error messages or infer scope from a successful prefix
+of hook evaluation. Source-attachment gaps do not prevent leaving source untouched. Open sibling analysis may remain
+under JIT, but abrupt, pending, ineligible and issue-backed outcomes still block this initial compatible admission.
+Those are conservative build boundaries, not a claim that every such application necessarily fails under JIT.
+Generic hook-registration/provider uncertainty and unsupported root `compiling` hooks do not independently trigger
+fallback yet. Failed artifact production is never converted into JIT.
+
+Evidence reports `fallbackScope: 'application'`, the trigger and preserved cohort. The provider supplies the non-fatal
+`AOT_APPLICATION_JIT_FALLBACK` advisory for build adapters; suppressing the warning does not change the fallback.
+The effective configuration mode becomes `preserve` even when replacement was requested. Compiler-removing framework
+links cannot apply: `allow-c0-fallback` keeps the original graph, while `require-applied` remains an explicit conflict.
+Strict remains the default, and compatible builds with no fallback trigger still compile normally.
+
 `src/testing` contains two retained low-level characterization lanes:
 
 - the direct JIT oracle batches compiler worlds in one process and supports filters, shards, repetition, timing, and

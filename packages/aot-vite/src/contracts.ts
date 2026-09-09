@@ -35,6 +35,9 @@ export type AotRuntimeConfigurationMode =
   | "replace-explicit"
   | "require-replaceable";
 
+export type AotCompilationMode = "strict" | "compatible";
+export type AotTemplateDisposition = "compiled" | "runtime";
+
 export type AotConventionTransformSourcePattern = string | RegExp;
 
 /** Exact source reach of the active conventions transform for this build invocation. */
@@ -52,6 +55,7 @@ export interface AotBuildRequest {
   readonly sourcemap: boolean | "inline" | "hidden";
   readonly nominatedEntry?: AotNominatedEntry | null;
   readonly runtimeConfiguration?: AotRuntimeConfigurationMode;
+  readonly compilationMode?: AotCompilationMode;
   readonly conventionTransformAdmission?: AotConventionTransformAdmission | null;
   /** Exact framework ESM inventory available to an optional link preparation port. */
   readonly frameworkLinks?: AotFrameworkLinksOptions;
@@ -260,7 +264,17 @@ export interface AotVirtualModuleArtifact {
   readonly digest: string;
 }
 
+/** Provider-authored, non-fatal build advice; adapters render it without reconstructing semantic eligibility. */
+export interface AotBuildAdvisory {
+  readonly code: string;
+  readonly message: string;
+  readonly sourcePath: string | null;
+}
+
 export interface AotBuildSession {
+  readonly advisories?: readonly AotBuildAdvisory[];
+  /** Optional explicit template ownership. Missing means the provider claims every requested AOT module. */
+  templateDispositionFor?(request: AotTemplateRequest): AotTemplateDisposition | Promise<AotTemplateDisposition>;
   /** Transitional standalone-HTML realization. */
   artifactFor(request: AotTemplateRequest): Promise<AotTemplateArtifact>;
   /** Optional bundler-neutral authored-source transform port. */
@@ -302,6 +316,8 @@ export interface AureliaAotOptions {
   readonly nominatedEntry?: AotNominatedEntry | null;
   /** Omit to preserve authored runtime configuration without requiring a replacement. */
   readonly runtimeConfiguration?: AotRuntimeConfigurationMode;
+  /** Explicitly permit semantic-runtime-admitted JIT definitions; strict remains the default. */
+  readonly compilationMode?: AotCompilationMode;
   readonly conventions?: AotConventionOptions;
   readonly frameworkLinks?: AotFrameworkLinksOptions;
   /** Omit to avoid emitting or retaining build-graph evidence. */

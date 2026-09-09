@@ -4,15 +4,23 @@ Private executable parity harness for the Aurelia AOT program.
 
 Each scenario builds the same source twice with Vite 8, serves both production outputs, runs one ordered Chromium
 interaction program per lane, and compares source-derived DOM/live-state outcomes. The AOT lane is supplied by the real
-semantic-runtime provider and `aot-vite` preset; there is no pass-through or hidden JIT fallback.
-The AOT lane also requires every spent `StandardConfiguration` occurrence to be replaced. Browser quick-start sources
+semantic-runtime provider and `aot-vite` preset; there is no hidden JIT fallback. The explicit `compatible-hooks` and
+`compiler-hooks` scenarios check application-wide preservation, while every other AOT scenario requires compiler-final artifacts and every spent
+`StandardConfiguration` occurrence to be replaced. Browser quick-start sources
 therefore run through the generated base-runtime facade instead of retaining the ordinary facade defaults.
 The routed storefront additionally requires its exact 11-resource/11-renderer plan and an omitted event modifier, so
 browser parity exercises the optimized configuration rather than only a compile-free conservative fallback.
 
-The default package assurance runs nine complementary scenarios:
+The default package assurance runs eleven complementary scenarios:
 
 - `g0` is the deeply instrumented parser/teardown control and owns the runtime string-parse guard;
+- `compatible-hooks` exercises explicit runtime-compilation preservation through the same two-lane build/browser
+  harness. After a geometry API unsupported by the build evaluator, its hook rewrites a separate component's
+  definition before that component's first compilation. Five checkpoints check untouched definitions before lazy
+  activation, the cross-definition rewrite, projected/root binding updates, and cached hide/reactivation with one
+  hook execution. A tentative attribute mutation must not leak into runtime input. A standalone HTML import outside
+  the resource cohort supplies literal content through the official loader. The scenario requires no AOT artifacts,
+  explicit application-wide fallback evidence, ordinary runtime configuration, and complete teardown.
 - `hello-world` runs the canonical shared IDE fixture without source instrumentation, aligned to the standard decorator
   pipeline required by Vite 8. It covers computed filtering, repeat/if/let, form writeback, child bindables and aliases,
   custom-attribute callbacks, a value converter, SVG foreign content, and selected-item interactions. Its AOT build must
@@ -57,6 +65,18 @@ The default package assurance runs nine complementary scenarios:
   events, independent retained/projected controllers, and shadow-host if/repeat lifecycle with keyed DOM reuse. Both
   native and Aurelia fallbacks are checked. Containerless shadow hosts and implicit `hasSlots` policy are outside this
   scenario. Its AOT build must emit exactly `explicit-shadow-app` and `shadow-card`.
+- `compiler-hooks` combines literal/helper/receiver-based `processContent` decisions, a root pure `compiling` hook,
+  and owner-local, child, and local-template CSS Modules. False leaves child interpolations, controller/resource attributes, and inert templates
+  uncompiled while host bindables, attributes, its own template, and outer controllers still work. True and undefined
+  compile normal projected content. Repeated local CSS hooks share a mapping and apply successive passes; runtime class
+  bindings perform one lookup. The root `compiling` hook's false return does not suppress child compilation.
+  The scenario checks those distinct rules, static/surrogate/dynamic classes, nested controller branches, CSS ownership,
+  reactive updates, repeat growth, and hide/reactivate. Earlier CSS hooks can rewrite classes even in subsequently
+  skipped children. Its authored mutable receiver flags are preserved, not rewritten into build-time constants:
+  this compatible scenario requires explicit application-wide fallback and zero compiled artifacts. It therefore
+  checks the shared engine's refusal policy and runtime preservation, not optimizer admission of mutable inputs.
+  Root-level `cssModules` registration is deferred: its DI registry-factory and distinct mapping ownership need a shared
+  semantic-runtime completion, not an AOT-only allowlist. This positive fixture does not certify that unsupported case.
 
 ```powershell
 pnpm --filter @aurelia-ls/aot-assurance test
@@ -67,6 +87,7 @@ node packages/aot-assurance/out/cli.js --scenario local-templates
 node packages/aot-assurance/out/cli.js --scenario built-in-controllers
 node packages/aot-assurance/out/cli.js --scenario browser-recovery
 node packages/aot-assurance/out/cli.js --scenario explicit-shadow
+node packages/aot-assurance/out/cli.js --scenario compiler-hooks
 node packages/aot-assurance/out/cli.js --scenario routed-storefront
 node packages/aot-assurance/out/cli.js --scenario state-backed-form
 node packages/aot-assurance/out/cli.js --scenario projects-and-milestones

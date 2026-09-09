@@ -19,6 +19,8 @@ import { runProjectsAndMilestonesLane } from './projects-and-milestones-browser.
 import { runBuiltInControllersLane } from './built-in-controllers-scenario.js';
 import { runBrowserRecoveryLane } from './browser-recovery-scenario.js';
 import { runExplicitShadowLane } from './explicit-shadow-scenario.js';
+import { runCompilerHooksLane } from './compiler-hooks-scenario.js';
+import { runCompatibleHooksLane } from './compatible-hooks-scenario.js';
 
 export interface BrowserBatchResult {
   readonly browser: Browser;
@@ -58,6 +60,8 @@ async function runLane(
   if (scenario === 'built-in-controllers') return runBuiltInControllersLane(browser, lane, url);
   if (scenario === 'browser-recovery') return runBrowserRecoveryLane(browser, lane, url);
   if (scenario === 'explicit-shadow') return runExplicitShadowLane(browser, lane, url);
+  if (scenario === 'compiler-hooks') return runCompilerHooksLane(browser, lane, url);
+  if (scenario === 'compatible-hooks') return runCompatibleHooksLane(browser, lane, url);
   if (scenario === 'routed-storefront') return runRoutedStorefrontLane(browser, lane, url);
   if (scenario === 'state-backed-form') return runStateBackedFormLane(browser, lane, url);
   if (scenario === 'projects-and-milestones') return runProjectsAndMilestonesLane(browser, lane, url);

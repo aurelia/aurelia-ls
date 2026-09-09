@@ -59,6 +59,14 @@ function toAssuranceEvidence(build: BenchmarkLaneBuild): AotBuildEvidence {
   return {
     analysisCount: semantic.analysisCount,
     analysis: semantic.analysis,
+    compilation: {
+      mode: semantic.compilation.mode,
+      fallbackScope: semantic.compilation.fallbackScope,
+      preserved: semantic.compilation.preserved.map(resource => ({
+        resourceName: resource.resourceName,
+        disposition: resource.disposition,
+      })),
+    },
     artifacts: semantic.artifacts.map(artifact => {
       const vite = receipt.artifacts.find(candidate =>
         candidate.compilerVariantKey === artifact.compilerVariantKey

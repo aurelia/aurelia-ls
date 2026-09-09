@@ -35,6 +35,7 @@ import {
   validateAotCarrierPatchHandoff,
 } from '../src/semantic-artifact-provider.js';
 import { AOT_RUNTIME_SPREAD_PLAN_PROTOCOL } from '../src/runtime-configuration.js';
+import { AOT_COMPILER_PATCH_RUNTIME_MODULE_ID } from '../src/compiler-patch-runtime-module.js';
 import type { AotSourceTransformResourcePlan } from '../src/source-transform.js';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../../..');
@@ -138,6 +139,54 @@ describe('semantic AOT artifact provider', () => {
     await expect(session.artifactFor({ sourcePath: path.resolve(fixtureRoot, 'src/missing.html') }))
       .rejects.toMatchObject({ code: 'AOT_ARTIFACT_INVALID_HANDOFF' });
   }, 15_000);
+
+  it('preserves the entire application and unmodeled template demand only in compatible mode', async () => {
+    const root = path.resolve(repositoryRoot, 'packages/aot-assurance/fixtures/compatible-hooks');
+    const compatibleProvider = new SemanticAotArtifactProvider();
+    const options = {
+      root, mode: 'production', environmentName: 'client', sourcemap: false,
+      runtimeConfiguration: 'require-replaceable' as const,
+    };
+    await expect(compatibleProvider.openBuild(options)).rejects.toMatchObject({
+      code: 'AOT_ARTIFACT_UNSUPPORTED_VALUE',
+      message: expect.stringContaining('process-content-unsupported'),
+    });
+    const compatible = await compatibleProvider.openBuild({ ...options, compilationMode: 'compatible' });
+    const sourcePath = path.join(root, 'src/runtime-page.html');
+    expect(compatible.templateDispositionFor({ sourcePath })).toBe('runtime');
+    await expect(compatible.artifactFor({ sourcePath })).rejects.toMatchObject({ code: 'AOT_ARTIFACT_INVALID_HANDOFF' });
+    const carrierPath = path.join(root, 'src/runtime-page.ts');
+    expect(await compatible.transformSource({ sourcePath: carrierPath, code: await readFile(carrierPath, 'utf8') }))
+      .toBeNull();
+    const mainPath = path.join(root, 'src/main.ts');
+    const transformed = await compatible.transformSource({ sourcePath: mainPath, code: await readFile(mainPath, 'utf8') });
+    expect(transformed).toBeNull();
+    expect(compatible.templateDispositionFor({ sourcePath: path.join(root, 'src/standalone-note.html') })).toBe('runtime');
+    expect(compatible.templateDispositionFor({ sourcePath: path.join(root, 'src/not-in-analysis.html') })).toBe('runtime');
+    expect(await compatible.transformSource({ sourcePath: path.join(root, 'src/not-in-analysis.ts'), code: 'export const value = 1;' }))
+      .toBeNull();
+    expect(await compatible.virtualModuleFor({ specifier: AOT_COMPILER_PATCH_RUNTIME_MODULE_ID })).toBeNull();
+    expect(await compatible.prepareFrameworkLinks(await exactFrameworkLinkRequest())).toMatchObject({
+      disposition: 'c0-fallback', reason: { kind: 'unsupported-input' },
+    });
+    expect(compatible.evidence()).toMatchObject({
+      compilation: {
+        mode: 'compatible',
+        fallbackScope: 'application',
+        preserved: expect.arrayContaining([
+          expect.objectContaining({ resourceName: 'runtime-page', disposition: 'unsupported-hook' }),
+          expect.objectContaining({ resourceName: 'compatible-app', disposition: 'application-fallback' }),
+        ]),
+      },
+      artifacts: [],
+      runtimeConfiguration: { mode: 'preserve', modules: [] },
+    });
+    expect(compatible.advisories).toEqual([expect.objectContaining({
+      code: 'AOT_APPLICATION_JIT_FALLBACK',
+      message: expect.stringContaining('No AOT source or configuration patches'),
+      sourcePath,
+    })]);
+  }, 45_000);
 
   it('compiles the built-in-controller app without admitting its standalone authoring examples', async () => {
     const root = path.resolve(repositoryRoot, 'packages/semantic-runtime/fixtures/pressure/template-controller-built-ins');

@@ -15,6 +15,7 @@ import {
 } from "./framework-links.js";
 import type {
   AotBuildSession,
+  AotTemplateDisposition,
   AotConventionOptions,
   AotConventionTransformAdmission,
   AotReceiptArtifact,
@@ -39,8 +40,10 @@ export {
 export { createAotBuildReceipt } from "./build-receipt.js";
 export type {
   AotArtifactProvider,
+  AotBuildAdvisory,
   AotBuildReceipt,
   AotBuildRequest,
+  AotCompilationMode,
   AotBuildSession,
   AotConventionTransformAdmission,
   AotConventionTransformSourcePattern,
@@ -82,6 +85,7 @@ export type {
   AotTemplatePayloadReference,
   AotTemplateResourceIdentity,
   AotTemplateRequest,
+  AotTemplateDisposition,
   AotTransformedBrowserFacade,
   AotTransformedConfiguration,
   AotTransformedResource,
@@ -138,11 +142,10 @@ class EnvironmentBuildRegistry {
 }
 
 /**
- * Creates the strict, build-only Vite 8 preset for Aurelia AOT.
+ * Creates the build-only Vite 8 preset for Aurelia AOT.
  *
- * Every template specifier rewritten by this preset is a claimed AOT module.
- * Artifact failure therefore terminates the build instead of falling through
- * to the official plugin's JIT template module.
+ * Semantic disposition precedes module claiming. Explicit runtime definitions use the
+ * official JIT loader; failure after an AOT claim always terminates the build.
  */
 export function aureliaAot(options: AureliaAotOptions): Plugin[] {
   const registry = new EnvironmentBuildRegistry();
@@ -182,8 +185,11 @@ export function aureliaAot(options: AureliaAotOptions): Plugin[] {
   const sources: Plugin = {
     name: "aurelia-aot:sources",
     enforce: "pre",
-    buildStart() {
-      startBuildSession(registry, effectiveOptions, conventionAdmission, config, this.environment);
+    async buildStart() {
+      const session = await startBuildSession(registry, effectiveOptions, conventionAdmission, config, this.environment);
+      for (const advisory of session.advisories ?? []) {
+        this.warn({ code: advisory.code, message: advisory.message, id: advisory.sourcePath ?? undefined });
+      }
     },
     async transform(code, id, transformOptions) {
       rejectSsr(transformOptions?.ssr);
@@ -308,8 +314,8 @@ export function aureliaAot(options: AureliaAotOptions): Plugin[] {
   const artifacts: Plugin = {
     name: "aurelia-aot:artifacts",
     enforce: "pre",
-    buildStart() {
-      startBuildSession(registry, effectiveOptions, conventionAdmission, config, this.environment);
+    async buildStart() {
+      await startBuildSession(registry, effectiveOptions, conventionAdmission, config, this.environment);
     },
     async resolveId(source, importer, resolveOptions) {
       if (!isAotTemplateId(source)) {
@@ -327,6 +333,37 @@ export function aureliaAot(options: AureliaAotOptions): Plugin[] {
           "AOT_VITE_RESOLUTION_FAILED",
           `Cannot resolve claimed AOT template '${unmarkedSource}'.`,
           unmarkedSource,
+        );
+      }
+
+      const session = await requireBuildSession(registry.for(this.environment), resolved.id);
+      const disposition: AotTemplateDisposition = await session.templateDispositionFor?.({ sourcePath: resolved.id })
+        ?? 'compiled';
+      if (disposition === 'runtime') {
+        if (effectiveOptions.compilationMode !== 'compatible') {
+          throw new AotViteError(
+            'AOT_VITE_SESSION_CONTRACT',
+            `The provider requested runtime compilation for '${resolved.id}' in a strict build.`,
+            resolved.id,
+          );
+        }
+        if (!resolved.id.endsWith('.html')) {
+          throw new AotViteError(
+            'AOT_VITE_SESSION_CONTRACT',
+            `The official JIT template loader cannot preserve '${resolved.id}'.`,
+            resolved.id,
+          );
+        }
+        return {
+          id: resolved.id.slice(0, -'.html'.length) + '.$au.ts',
+          moduleSideEffects: resolved.moduleSideEffects,
+        };
+      }
+      if (disposition !== 'compiled') {
+        throw new AotViteError(
+          'AOT_VITE_SESSION_CONTRACT',
+          `The provider returned an invalid compilation disposition for '${resolved.id}'.`,
+          resolved.id,
         );
       }
 
@@ -376,7 +413,8 @@ export function aureliaAot(options: AureliaAotOptions): Plugin[] {
       ? []
       : [frameworkLinkCoordinator.createPlugin({
           startBuildSession: (environment) => {
-            startBuildSession(registry, effectiveOptions, conventionAdmission, config, environment as AotViteEnvironment);
+            // The coordinator awaits this same promise through requireBuildSession while preparing its link graph.
+            void startBuildSession(registry, effectiveOptions, conventionAdmission, config, environment as AotViteEnvironment);
           },
           requireBuildSession: async (environment) => requireBuildSession(
             registry.for(environment),
@@ -470,17 +508,18 @@ function startBuildSession(
   conventionAdmission: AotConventionTransformAdmission | null,
   config: ResolvedConfig | undefined,
   environment: AotViteEnvironment,
-): void {
+): Promise<AotBuildSession> {
   const resolved = requireResolvedConfig(config);
   assertSupportedEnvironment(environment.name, environment.config.consumer);
   const state = registry.for(environment);
-  state.sessionPromise ??= options.provider.openBuild({
+  return state.sessionPromise ??= options.provider.openBuild({
     root: resolved.root,
     mode: resolved.mode,
     environmentName: environment.name,
     sourcemap: environment.config.build.sourcemap,
     ...(options.nominatedEntry === undefined ? {} : { nominatedEntry: options.nominatedEntry }),
     runtimeConfiguration: options.runtimeConfiguration ?? "preserve",
+    ...(options.compilationMode === undefined ? {} : { compilationMode: options.compilationMode }),
     conventionTransformAdmission: conventionAdmission,
     ...(options.frameworkLinks === undefined ? {} : { frameworkLinks: options.frameworkLinks }),
   });

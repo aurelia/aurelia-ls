@@ -10,6 +10,39 @@ import {
 } from "../src/index.js";
 
 describe("aureliaAot programmatic Vite 8 build", () => {
+  it("preserves runtime templates through the real official HTML loader", async () => {
+    const root = fileURLToPath(new URL('./fixtures/programmatic', import.meta.url));
+    const artifactFor = vi.fn(async (): Promise<AotTemplateArtifact> => {
+      throw new Error('A preserved template must never request an AOT artifact.');
+    });
+    const result = await build({
+      root,
+      configFile: false,
+      logLevel: 'silent',
+      plugins: [aureliaAot({
+        compilationMode: 'compatible',
+        conventions: { include: '**/*.{ts,js,html}' },
+        provider: { async openBuild() {
+          return { artifactFor, templateDispositionFor: () => 'runtime' as const };
+        } },
+      })],
+      build: {
+        write: false,
+        minify: false,
+        rolldownOptions: {
+          input: fileURLToPath(new URL('./fixtures/programmatic/src/main.js', import.meta.url)),
+          external: ['@aurelia/runtime-html'],
+        },
+      },
+    });
+    const chunks = buildOutput(result as Rollup.RolldownOutput | Rollup.RolldownOutput[])
+      .filter((output) => output.type === 'chunk');
+    expect(artifactFor).not.toHaveBeenCalled();
+    expect(chunks.flatMap((chunk) => Object.keys(chunk.modules)))
+      .toEqual(expect.arrayContaining([expect.stringMatching(/app\.\$au\.ts$/u)]));
+    expect(chunks.map((chunk) => chunk.code).join('\n')).toContain('${message}');
+  });
+
   it("carries the official convention rewrite through the AOT provider and final output", async () => {
     const root = fileURLToPath(new URL("./fixtures/programmatic", import.meta.url));
     const transformSource = vi.fn(async ({ sourcePath, code }): Promise<AotSourceTransformArtifact | null> => {

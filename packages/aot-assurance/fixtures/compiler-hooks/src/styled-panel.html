@@ -1,0 +1,19 @@
+<template class="local">
+  <p data-css="panel-static" class="global local step hover:bg">${value}:static</p>
+  <p data-css="panel-string" class="local" class.bind="active ? 'active' : 'other'">${value}:string</p>
+  <p data-css="panel-interpolation" class="local ${active ? 'active' : 'other'}">${value}:interpolation</p>
+  <p data-css="panel-object" class.bind="{ active, other: !active }">${value}:object</p>
+  <p data-css="panel-commands" active,other.class="active">${value}:commands</p>
+  <p data-css="panel-one-pass" class.bind="'step'">${value}:one-pass</p>
+  <template repeat.for="item of items">
+    <template if.bind="active"><b data-css="panel-row" class="local global">${item}:${value}</b></template>
+    <template else><i data-css="panel-row" class="local">${item}:${value}:inactive</i></template>
+  </template>
+  <css-child value.bind="value"></css-child>
+  <css-local value.bind="value" active.bind="active"></css-local>
+  <template as-custom-element="css-local">
+    <bindable name="value"></bindable><bindable name="active"></bindable>
+    <strong data-css="local-static" class="local global">${value}:local</strong>
+    <em data-css="local-dynamic" class.bind="active ? 'active' : 'other'">${value}:local-dynamic</em>
+  </template>
+</template>

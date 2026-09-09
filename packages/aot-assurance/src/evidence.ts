@@ -12,14 +12,25 @@ export function assertAotBuildEvidence(evidence: AotBuildEvidence): void {
     depth: 'runtime-topology',
     templateBreadth: 'app-aggregate',
   });
-  assert.ok(evidence.artifacts.length > 0, 'the AOT lane produced no compiler-final artifacts');
-  assert.equal(evidence.runtimeConfiguration.mode, 'require-replaceable');
   assert.ok(evidence.runtimeConfiguration.occurrences.length > 0, 'the AOT lane found no runtime configuration');
-  assert.ok(
-    evidence.runtimeConfiguration.occurrences.every((occurrence) => occurrence.disposition === 'replaced'),
-    'the AOT lane preserved or refused a runtime configuration occurrence',
-  );
-  assert.ok(evidence.runtimeConfiguration.modules.length > 0, 'the AOT lane emitted no runtime configuration module');
+  if (evidence.compilation.fallbackScope === 'application') {
+    assert.equal(evidence.compilation.mode, 'compatible');
+    assert.ok(evidence.compilation.preserved.some((resource) => resource.disposition === 'unsupported-hook'));
+    assert.equal(evidence.artifacts.length, 0, 'application-wide JIT fallback must not patch any compiled definition');
+    assert.equal(evidence.runtimeConfiguration.mode, 'preserve');
+    assert.ok(evidence.runtimeConfiguration.occurrences.every((occurrence) => occurrence.disposition === 'preserved'));
+    assert.equal(evidence.runtimeConfiguration.modules.length, 0);
+  } else {
+    assert.equal(evidence.compilation.fallbackScope, 'none');
+    assert.equal(evidence.compilation.preserved.length, 0);
+    assert.ok(evidence.artifacts.length > 0, 'the AOT lane produced no compiler-final artifacts');
+    assert.equal(evidence.runtimeConfiguration.mode, 'require-replaceable');
+    assert.ok(
+      evidence.runtimeConfiguration.occurrences.every((occurrence) => occurrence.disposition === 'replaced'),
+      'the AOT lane preserved or refused a runtime configuration occurrence',
+    );
+    assert.ok(evidence.runtimeConfiguration.modules.length > 0, 'the AOT lane emitted no runtime configuration module');
+  }
 
   const moduleIds = new Set<string>();
   const generations = new Set<string>();
@@ -37,7 +48,7 @@ export function assertAotBuildEvidence(evidence: AotBuildEvidence): void {
     moduleIds.add(artifact.moduleId);
     generations.add(artifact.generation);
   }
-  assert.equal(generations.size, 1, 'artifacts from more than one semantic generation entered one build');
+  assert.equal(generations.size, evidence.artifacts.length === 0 ? 0 : 1, 'artifacts from more than one semantic generation entered one build');
 }
 
 export function assertProbePolicy(jit: LaneTranscript, aot: LaneTranscript): void {

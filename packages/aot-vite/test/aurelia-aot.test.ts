@@ -142,6 +142,102 @@ describe("aureliaAot Vite preset", () => {
     }));
   });
 
+  it("routes an explicit compatible disposition through the official JIT template loader", async () => {
+    const artifactFor = vi.fn();
+    const templateDispositionFor = vi.fn(async () => 'runtime' as const);
+    const openBuild = vi.fn(async () => ({ artifactFor, templateDispositionFor }));
+    const preset = aureliaAot({ provider: { openBuild }, compilationMode: 'compatible' });
+    const loader = requiredPlugin(preset, 'aurelia-aot:artifacts');
+    const context = pluginContext();
+    await invoke(requiredPlugin(preset, 'aurelia-aot:guard'), 'configResolved', undefined, resolvedConfig());
+    await invoke(loader, 'buildStart', context);
+    const resolved = await invoke(loader, 'resolveId', context, './app.html?aurelia-aot', '/app/main.ts', {});
+    expect(resolved).toEqual({ id: 'C:/app/app.$au.ts', moduleSideEffects: true });
+    expect(templateDispositionFor).toHaveBeenCalledWith({ sourcePath: 'C:/app/app.html' });
+    expect(openBuild).toHaveBeenCalledWith(expect.objectContaining({ compilationMode: 'compatible' }));
+    expect(artifactFor).not.toHaveBeenCalled();
+    expect(await invoke(loader, 'load', context, 'C:/app/app.$au.ts', {})).toBeNull();
+  });
+
+  it("emits provider fallback advice once across shared build-start hooks", async () => {
+    const advisory = {
+      code: 'AOT_RUNTIME_COMPILATION_REQUIRED',
+      message: 'The application retains JIT because a compiler hook has unconfined effects.',
+      sourcePath: 'C:/app/late-view.html',
+    };
+    const openBuild = vi.fn(async () => ({ artifactFor: vi.fn(), advisories: [advisory] }));
+    const preset = aureliaAot({ compilationMode: 'compatible', provider: { openBuild } });
+    const context = { ...pluginContext(), warn: vi.fn() };
+    await invoke(requiredPlugin(preset, 'aurelia-aot:guard'), 'configResolved', undefined, resolvedConfig());
+    await Promise.all([
+      invoke(requiredPlugin(preset, 'aurelia-aot:sources'), 'buildStart', context),
+      invoke(requiredPlugin(preset, 'aurelia-aot:artifacts'), 'buildStart', context),
+    ]);
+    expect(openBuild).toHaveBeenCalledTimes(1);
+    expect(context.warn).toHaveBeenCalledTimes(1);
+    expect(context.warn).toHaveBeenCalledWith(expect.objectContaining({
+      code: advisory.code,
+      message: advisory.message,
+      id: advisory.sourcePath,
+    }));
+  });
+
+  it("does not emit fallback advice for a session without advisories", async () => {
+    const preset = aureliaAot({ provider: artifactProvider() });
+    const context = { ...pluginContext(), warn: vi.fn() };
+    await invoke(requiredPlugin(preset, 'aurelia-aot:guard'), 'configResolved', undefined, resolvedConfig());
+    await invoke(requiredPlugin(preset, 'aurelia-aot:sources'), 'buildStart', context);
+    expect(context.warn).not.toHaveBeenCalled();
+  });
+
+  it("does not let providers smuggle runtime dispositions into strict builds", async () => {
+    const preset = aureliaAot({ provider: { async openBuild() {
+      return { artifactFor: vi.fn(), templateDispositionFor: () => 'runtime' as const };
+    } } });
+    const loader = requiredPlugin(preset, 'aurelia-aot:artifacts');
+    const context = pluginContext();
+    await invoke(requiredPlugin(preset, 'aurelia-aot:guard'), 'configResolved', undefined, resolvedConfig());
+    await invoke(loader, 'buildStart', context);
+    await expect(invoke(loader, 'resolveId', context, './app.html?aurelia-aot', '/app/main.ts', {}))
+      .rejects.toMatchObject({ code: 'AOT_VITE_SESSION_CONTRACT' });
+  });
+
+  it("routes each imported HTML module according to an application-wide runtime disposition", async () => {
+    const artifactFor = vi.fn();
+    const templateDispositionFor = vi.fn(() => 'runtime' as const);
+    const preset = aureliaAot({ compilationMode: 'compatible', provider: { async openBuild() {
+      return { artifactFor, templateDispositionFor };
+    } } });
+    const loader = requiredPlugin(preset, 'aurelia-aot:artifacts');
+    const context = pluginContext();
+    await invoke(requiredPlugin(preset, 'aurelia-aot:guard'), 'configResolved', undefined, resolvedConfig());
+    await invoke(loader, 'buildStart', context);
+    for (const name of ['app', 'outside-resource-cohort']) {
+      expect(await invoke(loader, 'resolveId', context, `./${name}.html?aurelia-aot`, '/app/main.ts', {}))
+        .toEqual({ id: `C:/app/${name}.$au.ts`, moduleSideEffects: true });
+    }
+    expect(templateDispositionFor.mock.calls).toEqual([
+      [{ sourcePath: 'C:/app/app.html' }],
+      [{ sourcePath: 'C:/app/outside-resource-cohort.html' }],
+    ]);
+    expect(artifactFor).not.toHaveBeenCalled();
+  });
+
+  it("does not reinterpret a claimed artifact failure as compatible fallback", async () => {
+    const preset = aureliaAot({ compilationMode: 'compatible', provider: { async openBuild() {
+      return {
+        templateDispositionFor: () => 'compiled' as const,
+        artifactFor: async () => { throw new Error('broken emitted artifact'); },
+      };
+    } } });
+    const loader = requiredPlugin(preset, 'aurelia-aot:artifacts');
+    const context = pluginContext();
+    await invoke(requiredPlugin(preset, 'aurelia-aot:guard'), 'configResolved', undefined, resolvedConfig());
+    await invoke(loader, 'buildStart', context);
+    await expect(invoke(loader, 'load', context, 'C:/app/app.html?aurelia-aot', {}))
+      .rejects.toMatchObject({ code: 'AOT_VITE_ARTIFACT_FAILED' });
+  });
+
   it("claims a template bridge payload before its owning source transform", async () => {
     const transformSource = vi.fn(async ({ sourcePath, code }) => sourceTransform(sourcePath, code));
     const virtualModuleFor = vi.fn(async ({ specifier }) => virtualArtifact(specifier));

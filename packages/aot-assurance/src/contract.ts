@@ -2,6 +2,8 @@ import type { PluginOption } from 'vite';
 import type { BuiltInControllersObservation } from './built-in-controllers-scenario.js';
 import type { BrowserRecoveryApplicationObservation } from './browser-recovery-scenario.js';
 import type { ExplicitShadowApplicationObservation } from './explicit-shadow-scenario.js';
+import type { CompilerHooksApplicationObservation } from './compiler-hooks-scenario.js';
+import type { CompatibleHooksApplicationObservation } from './compatible-hooks-scenario.js';
 
 export type AssuranceLane = 'jit' | 'aot';
 export type AssuranceScenario =
@@ -11,6 +13,8 @@ export type AssuranceScenario =
   | 'built-in-controllers'
   | 'browser-recovery'
   | 'explicit-shadow'
+  | 'compiler-hooks'
+  | 'compatible-hooks'
   | 'routed-storefront'
   | 'state-backed-form'
   | 'projects-and-milestones';
@@ -25,6 +29,7 @@ export interface AotAdapterRequest {
   readonly sourceRoot: string;
   readonly entryHtml: string;
   readonly falsifier?: EmissionFalsifier;
+  readonly compilationMode?: 'strict' | 'compatible';
 }
 
 /**
@@ -58,6 +63,14 @@ export interface AotArtifactReceipt {
 export interface AotBuildEvidence {
   /** There must be exactly one semantic application analysis for this build. */
   readonly analysisCount: number;
+  readonly compilation: {
+    readonly mode: 'strict' | 'compatible';
+    readonly fallbackScope: 'none' | 'application';
+    readonly preserved: readonly {
+      readonly resourceName: string;
+      readonly disposition: 'unsupported-hook' | 'application-fallback';
+    }[];
+  };
   readonly analysis: {
     readonly depth: string;
     readonly templateBreadth: string;
@@ -174,6 +187,8 @@ export type ApplicationObservation =
   | BuiltInControllersObservation
   | BrowserRecoveryApplicationObservation
   | ExplicitShadowApplicationObservation
+  | CompilerHooksApplicationObservation
+  | CompatibleHooksApplicationObservation
   | RoutedStorefrontApplicationObservation
   | StateBackedFormApplicationObservation
   | ProjectsAndMilestonesApplicationObservation;

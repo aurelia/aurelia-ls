@@ -74,6 +74,8 @@ export type SemanticAotRuntimeConfigurationMode =
   | 'replace-explicit'
   | 'require-replaceable';
 
+export type SemanticAotCompilationMode = 'strict' | 'compatible';
+
 export interface SemanticAotBuildRequest {
   readonly root: string;
   readonly mode: string;
@@ -83,6 +85,8 @@ export interface SemanticAotBuildRequest {
   readonly nominatedEntry?: SemanticAppNominatedEntry | null;
   /** Omit to preserve every authored StandardConfiguration occurrence. */
   readonly runtimeConfiguration?: SemanticAotRuntimeConfigurationMode;
+  /** Compatible builds preserve the application as JIT when unsupported hook effects cannot be confined. */
+  readonly compilationMode?: SemanticAotCompilationMode;
   /** Exact source reach declared by the active build conventions provider. */
   readonly conventionTransformAdmission?: ResourceConventionTransformAdmissionInput | null;
   /** Exact framework ESM inventory offered to the optional link preparation port. */
@@ -91,6 +95,26 @@ export interface SemanticAotBuildRequest {
 
 export interface SemanticAotTemplateRequest {
   readonly sourcePath: string;
+}
+
+export type SemanticAotTemplateDisposition = 'compiled' | 'runtime';
+
+export interface SemanticAotCompilationEvidence {
+  readonly mode: SemanticAotCompilationMode;
+  readonly fallbackScope: 'none' | 'application';
+  readonly preserved: readonly {
+    readonly resourceName: string;
+    readonly address: SemanticAppTemplateCompilerHandoffResource['address'];
+    readonly source: SemanticAppTemplateCompilerHandoffResource['source'];
+    readonly reasons: SemanticAppTemplateCompilerHandoffResource['reasons'];
+    readonly disposition: 'unsupported-hook' | 'application-fallback';
+  }[];
+}
+
+export interface SemanticAotBuildAdvisory {
+  readonly code: 'AOT_APPLICATION_JIT_FALLBACK';
+  readonly message: string;
+  readonly sourcePath: string | null;
 }
 
 export interface SemanticAotTemplateArtifact {
@@ -141,6 +165,7 @@ export interface SemanticAotArtifactEvidence {
   readonly generation: string;
   readonly analysisCount: 1;
   readonly analysis: SemanticAotAnalysisEvidence;
+  readonly compilation: SemanticAotCompilationEvidence;
   readonly artifacts: readonly {
     readonly sourcePath: string;
     readonly carrierSourcePath: string;
@@ -213,6 +238,7 @@ interface RuntimeConfigurationBuildPlan {
 }
 
 export class SemanticAotBuildSession {
+  readonly advisories: readonly SemanticAotBuildAdvisory[];
   readonly #pendingByVariant: ReadonlyMap<string, PendingResourceArtifact>;
   readonly #pendingByPayloadSpecifier: ReadonlyMap<string, PendingResourceArtifact>;
   readonly #pendingByCarrierPath: ReadonlyMap<string, readonly PendingResourceArtifact[]>;
@@ -222,6 +248,7 @@ export class SemanticAotBuildSession {
   readonly #runtimeConfigurationEvidence: SemanticAotRuntimeConfigurationEvidence;
   readonly #analysisEvidence: SemanticAotAnalysisEvidence;
   readonly #frameworkLinkAdmission: AotFrameworkLinkSessionAdmission;
+  readonly #compilationEvidence: SemanticAotCompilationEvidence;
   readonly #templateArtifactsByVariant = new Map<string, AotTemplateModuleArtifact>();
   readonly #patchArtifactPromisesByVariant = new Map<string, Promise<AotCompilerPatchModuleArtifact>>();
   readonly #evidenceByVariant = new Map<string, SemanticAotArtifactEvidence['artifacts'][number]>();
@@ -240,7 +267,12 @@ export class SemanticAotBuildSession {
       reasonKind: 'framework-link-session-unadmitted',
       reason: 'This semantic AOT session has no admitted framework-link closure.',
     },
+    compilation: SemanticAotCompilationEvidence = { mode: 'strict', fallbackScope: 'none', preserved: [] },
   ) {
+    if (compilation.fallbackScope === 'application'
+      && (pending.length > 0 || runtimeConfiguration.replacements.length > 0 || runtimeConfiguration.artifacts.size > 0)) {
+      throw new Error('Application-wide JIT fallback cannot retain compiler or configuration patches.');
+    }
     this.#pendingByVariant = new Map(pending.map((artifact) => [artifact.compilerVariantKey, artifact]));
     const compilerPatchPending = pending.filter(requiresCarrierCompilerPatch);
     this.#pendingByPayloadSpecifier = new Map(
@@ -265,6 +297,15 @@ export class SemanticAotBuildSession {
     this.#runtimeConfigurationEvidence = runtimeConfiguration.evidence;
     this.#analysisEvidence = analysisEvidence;
     this.#frameworkLinkAdmission = frameworkLinkAdmission;
+    this.#compilationEvidence = compilation;
+    const cause = compilation.preserved.find(resource => resource.disposition === 'unsupported-hook');
+    this.advisories = compilation.fallbackScope !== 'application' ? [] : [{
+      code: 'AOT_APPLICATION_JIT_FALLBACK',
+      message: `This application is preserved as JIT because a content hook${cause == null ? '' : ` used by '${cause.resourceName}'`} could not be compiled and its effects cannot be proven template-local. `
+        + 'No AOT source or configuration patches are applied; the template compiler and expression parser remain required. '
+        + (cause?.reasons[0]?.summary ?? ''),
+      sourcePath: cause?.source?.path ?? null,
+    }];
   }
 
   public prepareFrameworkLinks(
@@ -352,6 +393,19 @@ export class SemanticAotBuildSession {
     };
   }
 
+  /** Decide ownership before a bundler claims an AOT module; emission failures never imply fallback. */
+  public templateDispositionFor(request: SemanticAotTemplateRequest): SemanticAotTemplateDisposition {
+    // Unknown/dynamic template demand is ordinary JIT input once the entire application is preserved.
+    if (this.#compilationEvidence.fallbackScope === 'application') return 'runtime';
+    const key = canonicalPath(request.sourcePath);
+    if (this.#pendingByTemplatePath.has(key)) return 'compiled';
+    throw new AotArtifactError(
+      'AOT_ARTIFACT_INVALID_HANDOFF',
+      `No semantic compilation disposition exists for '${request.sourcePath}'.`,
+      request.sourcePath,
+    );
+  }
+
   public async transformSource(
     request: SemanticAotSourceTransformRequest,
   ): Promise<SemanticAotSourceTransformArtifact | null> {
@@ -399,6 +453,7 @@ export class SemanticAotBuildSession {
   public async virtualModuleFor(
     request: SemanticAotVirtualModuleRequest,
   ): Promise<SemanticAotVirtualModuleArtifact | null> {
+    if (this.#compilationEvidence.fallbackScope === 'application') return null;
     if (request.specifier === AOT_COMPILER_PATCH_RUNTIME_MODULE_ID) {
       return {
         specifier: request.specifier,
@@ -469,6 +524,7 @@ export class SemanticAotBuildSession {
       generation: this.generation,
       analysisCount: 1,
       analysis: this.#analysisEvidence,
+      compilation: this.#compilationEvidence,
       artifacts: [...this.#evidenceByVariant.values()],
       runtimeConfiguration: this.#runtimeConfigurationEvidence,
     };
@@ -508,12 +564,17 @@ export class SemanticAotArtifactProvider {
         app,
         includeAuthoringResources: false,
       });
-      const handoffs = batch.resources.flatMap((resource) => resource.value == null ? [] : [resource.value]);
+      const compilationMode = request.compilationMode ?? 'strict';
+      const compilation = planSemanticAotCompilation(batch.resources, compilationMode);
+      const handoffs = compilation.compiled.map((resource) => resource.value);
       const runtimeExpressions = collectAotRuntimeExpressions(
         root,
         handoffs,
       );
-      const runtimeConfigurationMode = request.runtimeConfiguration ?? 'preserve';
+      // Unconfined hook effects can change any later compilation. Preserve both source and DI configuration as a unit.
+      const runtimeConfigurationMode = compilation.fallbackScope === 'application'
+        ? 'preserve'
+        : request.runtimeConfiguration ?? 'preserve';
       const compilerReplacementRefusal = runtimeCompilerReplacementRefusal(
         runtimeConfigurationMode,
         batch.runtimeRegistrationRequirements,
@@ -533,13 +594,10 @@ export class SemanticAotArtifactProvider {
         compilerReplacementRefusal,
         spreadClosureRefusal,
       });
-      const unavailable = batch.resources.filter((resource) =>
-        resource.state !== TemplateCompilerCompiledHandoffState.Exact
-      );
-      if (unavailable.length > 0) {
-        throw unavailableHandoffError(root, unavailable);
+      if (compilation.unavailable.length > 0) {
+        throw unavailableHandoffError(root, compilation.unavailable);
       }
-      const pending = batch.resources.map((resource): PendingResourceArtifact => {
+      const pending = compilation.compiled.map((resource): PendingResourceArtifact => {
         if (resource.value == null) {
           throw new Error('Exact semantic AOT handoff unexpectedly has no value.');
         }
@@ -574,6 +632,20 @@ export class SemanticAotArtifactProvider {
         runtimeConfiguration,
         analysis,
         frameworkLinkAdmission,
+        {
+          mode: compilationMode,
+          fallbackScope: compilation.fallbackScope,
+          preserved: compilation.preserved.map((resource) => ({
+            resourceName: resource.resourceName,
+            address: resource.address,
+            source: resource.source?.path == null ? resource.source : {
+              ...resource.source,
+              path: path.resolve(app.project.rootDir, resource.source.path),
+            },
+            reasons: resource.reasons,
+            disposition: resource.runtimeFallback == null ? 'application-fallback' : 'unsupported-hook',
+          })),
+        },
       );
     } finally {
       runtime.retireWorkspaceIncarnation();
@@ -590,6 +662,38 @@ interface RuntimeConfigurationSourceSlice {
   readonly start: number;
   readonly end: number;
   readonly oldText: string;
+}
+
+type ExactSemanticAotResource = Extract<SemanticAppTemplateCompilerHandoffResource, { readonly value: TemplateCompilerCompiledHandoffValue }>;
+
+export interface SemanticAotCompilationPlan {
+  readonly fallbackScope: 'none' | 'application';
+  readonly compiled: readonly ExactSemanticAotResource[];
+  readonly preserved: readonly SemanticAppTemplateCompilerHandoffResource[];
+  readonly unavailable: readonly SemanticAppTemplateCompilerHandoffResource[];
+}
+
+/** An unsupported hook has no confinement proof: compatible realization preserves the entire application. */
+export function planSemanticAotCompilation(
+  resources: readonly SemanticAppTemplateCompilerHandoffResource[],
+  mode: SemanticAotCompilationMode,
+): SemanticAotCompilationPlan {
+  const applicationFallback = mode === 'compatible' && resources.some(resource =>
+    resource.state === TemplateCompilerCompiledHandoffState.Open && resource.runtimeFallback != null
+  );
+  // Open sibling analysis may be unnecessary under JIT. Demonstrated failures and compiler-integrity/lowering
+  // refusals remain build blockers; preserving source must not hide them behind another resource's fallback.
+  const unavailable = resources.filter(resource => resource.state !== TemplateCompilerCompiledHandoffState.Exact
+    && (!applicationFallback || resource.state !== TemplateCompilerCompiledHandoffState.Open
+      || resource.reasons.some(reason => reason.frontierCause?.issue != null)));
+  return {
+    fallbackScope: applicationFallback ? 'application' : 'none',
+    compiled: resources.filter((resource): resource is ExactSemanticAotResource =>
+      resource.state === TemplateCompilerCompiledHandoffState.Exact && !applicationFallback
+    ),
+    preserved: applicationFallback ? resources : [],
+    unavailable,
+  };
 }
 
 interface RuntimeConfigurationRefusal {

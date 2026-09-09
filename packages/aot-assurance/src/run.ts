@@ -42,7 +42,12 @@ import {
   assertExplicitShadowBuildEvidence,
   assertExplicitShadowExpectations,
 } from './explicit-shadow-scenario.js';
+import {
+  assertCompilerHooksBuildEvidence,
+  assertCompilerHooksExpectations,
+} from './compiler-hooks-scenario.js';
 import { StaticBuildServer } from './server.js';
+import { assertCompatibleHooksBuildEvidence, assertCompatibleHooksExpectations } from './compatible-hooks-scenario.js';
 
 export interface RunAssuranceOptions {
   readonly adapterSpecifier: string;
@@ -62,6 +67,7 @@ export async function runAssurance(options: RunAssuranceOptions): Promise<Assura
     keepOutput: options.keepOutput === true,
     falsifier: options.falsifier,
     runtimeParserProbe: scenario === 'g0',
+    compilationMode: scenario === 'compatible-hooks' || scenario === 'compiler-hooks' ? 'compatible' : 'strict',
   });
   const jitServer = new StaticBuildServer(builds.jitOutDir);
   const aotServer = new StaticBuildServer(builds.aotOutDir);
@@ -105,6 +111,8 @@ export function assertScenarioBuildEvidence(
   else if (scenario === 'built-in-controllers') assertBuiltInControllersBuildEvidence(evidence);
   else if (scenario === 'browser-recovery') assertBrowserRecoveryBuildEvidence(evidence);
   else if (scenario === 'explicit-shadow') assertExplicitShadowBuildEvidence(evidence);
+  else if (scenario === 'compiler-hooks') assertCompilerHooksBuildEvidence(evidence);
+  else if (scenario === 'compatible-hooks') assertCompatibleHooksBuildEvidence(evidence);
   else if (scenario === 'routed-storefront') assertRoutedStorefrontBuildEvidence(evidence);
   else if (scenario === 'state-backed-form') assertStateBackedFormBuildEvidence(evidence);
   else if (scenario === 'projects-and-milestones') assertProjectsAndMilestonesBuildEvidence(evidence);
@@ -133,6 +141,12 @@ export function assertScenarioBrowserEvidence(
     } else if (scenario === 'explicit-shadow') {
       assertExplicitShadowExpectations(browserBatch.jit);
       assertExplicitShadowExpectations(browserBatch.aot);
+    } else if (scenario === 'compiler-hooks') {
+      assertCompilerHooksExpectations(browserBatch.jit);
+      assertCompilerHooksExpectations(browserBatch.aot);
+    } else if (scenario === 'compatible-hooks') {
+      assertCompatibleHooksExpectations(browserBatch.jit);
+      assertCompatibleHooksExpectations(browserBatch.aot);
     } else if (scenario === 'routed-storefront') {
       assertRoutedStorefrontExpectations(browserBatch.jit);
       assertRoutedStorefrontExpectations(browserBatch.aot);
@@ -161,6 +175,10 @@ function defaultFixtureRoot(scenario: AssuranceScenario): string {
       return resolve(packageRoot, 'fixtures', 'browser-recovery');
     case 'explicit-shadow':
       return resolve(packageRoot, 'fixtures', 'explicit-shadow');
+    case 'compiler-hooks':
+      return resolve(packageRoot, 'fixtures', 'compiler-hooks');
+    case 'compatible-hooks':
+      return resolve(packageRoot, 'fixtures', 'compatible-hooks');
     case 'routed-storefront':
       return resolve(
         packageRoot,

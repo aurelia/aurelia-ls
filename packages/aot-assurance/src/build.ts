@@ -48,6 +48,7 @@ export interface BuildBatchOptions {
   readonly keepOutput: boolean;
   readonly falsifier?: EmissionFalsifier;
   readonly runtimeParserProbe?: boolean;
+  readonly compilationMode?: 'strict' | 'compatible';
 }
 
 export class ProductionBuildBatch {
@@ -83,6 +84,7 @@ export class ProductionBuildBatch {
       sourceRoot: resolve(options.fixtureRoot, 'src'),
       entryHtml: resolve(options.fixtureRoot, 'index.html'),
       falsifier: options.falsifier,
+      compilationMode: options.compilationMode,
     });
 
     try {
