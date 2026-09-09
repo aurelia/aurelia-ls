@@ -815,6 +815,7 @@ function elementResourceResultParts(result: TemplateResolvedResource | null): re
         scalarPart(definition.shadowOptions != null),
         scalarPart(definition.hasSlots),
         scalarPart(definition.processContent != null),
+        definition.processContentSlot?.key ?? '',
       ]
       : ['no-custom-element-definition']),
   ];

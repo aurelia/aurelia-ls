@@ -213,6 +213,18 @@ and a candidate-local `StaticCallableTarget` in resource-recognition execution b
 `@capture(...)` forms use the same boundary. Compiler worlds receive the current binding sidecar under evaluation
 generation authority; durable definition comparison spends only the slot, never an evaluator value. This keeps kernel
 products serializable and prevents obsolete closure graphs from becoming resource identity.
+Custom-element `processContent` uses the same slot/binding separation. Its candidate target retains the resource Type
+as `this`, as the compiler calls the hook with `elDef.Type` regardless of whether the function came from definition
+metadata, a static member, or a decorator. Evaluator-owned static member lookup preserves inherited methods and static
+function properties. Static method annotations precede class decorator initializers; class annotations override them,
+and outer class decorators run last. A definition field of `undefined` falls through to the Type hook.
+Element-resource reads retain the callable slot as part of the definition fingerprint; they do not execute the hook or
+promote a snapshot result into compilation authority. The browser compiler executes the retained callable at its reached
+site, with compiler-owned DOM references, closed synchronous effects, and stable captured-input admission. It preserves
+the compiler's strict `result !== false` distinction: `undefined`, `null`, and zero permit child compilation.
+Unsupported operations or mutable captured inputs produce an explicit unsupported frontier; ordinary exceptions remain
+abrupt. Source callable references retain their
+admitted declaration address even for ordinary static methods and inline functions without a processContent decorator.
 `resource-definition-converger.ts` owns convergence orchestration, product publication, aliases, open seams, and the
 custom-element definition assembly path. `CustomElementConvergenceFrame` is the per-definition read epoch for custom
 element metadata; it owns the shared local-key prefix, annotation priority, bindable/watch/template/dependency reads,

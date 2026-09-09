@@ -656,6 +656,7 @@ function resourceDefinitionComparisonProjection(
           definition.watches.map(watchSemanticValue),
           definition.strict,
           resourceTargetSemanticValue(definition.processContent),
+          definition.processContentSlot?.key ?? null,
           definition.contributions.map(customElementContributionSemanticValue),
         ],
         [
@@ -1050,6 +1051,7 @@ function customElementContributionSemanticValue(
     contribution.watches.map(watchContributionSemanticValue),
     contribution.strict,
     resourceTargetSemanticValue(contribution.processContent),
+    contribution.processContentSlot?.key ?? null,
   ];
 }
 

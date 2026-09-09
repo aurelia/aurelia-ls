@@ -51,8 +51,9 @@ import {
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   readStaticStringValue,
-  type EvaluationRead,
+  EvaluationRead,
 } from '../evaluation/expression-reader.js';
+import { EvaluationBindingState } from '../evaluation/environment.js';
 import { readEvaluationEnumerableOwnEntries } from '../evaluation/enumerable-own-properties.js';
 import { evaluationIteratorProjection } from '../evaluation/iterator-projection.js';
 import {
@@ -63,6 +64,7 @@ import {
 } from '../evaluation/function-execution.js';
 import {
   closedStaticValueMemberValue,
+  readStaticOwnProperty,
   readStaticValueProperty,
 } from '../evaluation/property-access.js';
 import {
@@ -77,6 +79,7 @@ import {
   EvaluationValueKind,
   evaluationArrayUncertaintySummaries,
   type EvaluationValue,
+  type EvaluationClassValue,
 } from '../evaluation/values.js';
 import { normalizeModuleKey } from '../evaluation/module-graph.js';
 import {
@@ -139,6 +142,7 @@ import {
 import {
   type ResourceRecognitionObservation,
   type ResourceAliasObservation,
+  type ResourceTargetObservation,
   resourceTargetClassLikeNode,
 } from './resource-observation.js';
 import {
@@ -272,6 +276,7 @@ class ProcessContentRead {
     readonly records: readonly KernelStoreRecord[] = [],
     readonly issues: readonly ResourceIssue[] = [],
     readonly open: readonly ConvergenceOpen[] = [],
+    readonly callableTarget: StaticCallableTarget | null = null,
   ) {}
 }
 
@@ -376,6 +381,7 @@ interface CustomElementConvergenceFacts {
   readonly needsCompile: boolean;
   readonly strict: boolean | null;
   readonly processContent: ResourceTargetReference | null;
+  readonly processContentSlot: StaticCallableSlot | null;
   readonly issueRecords: readonly KernelStoreRecord[];
   readonly issues: readonly ResourceIssue[];
   readonly open: readonly ConvergenceOpen[];
@@ -479,6 +485,9 @@ class CustomElementConvergenceFrame {
     const hasSlots = hasSlotsRead.value ?? false;
     const controllerIssue = this.readControllerIssue(containerless, shadowOptions, hasSlots);
     const processContent = this.readProcessContent();
+    const processContentSlot = processContent.target == null
+      ? null
+      : new StaticCallableSlot(`resource-definition:${this.productHandle}:process-content`);
     const decoratorIssues = this.readDecoratorIssues();
     const aliasMaterialization = materializeResourceAliases(
       this.store,
@@ -494,7 +503,12 @@ class CustomElementConvergenceFrame {
       aliasRecords: aliasMaterialization.records,
       key,
       capture,
-      callableBindings: captureRead.callableBinding == null ? [] : [captureRead.callableBinding],
+      callableBindings: [
+        ...(captureRead.callableBinding == null ? [] : [captureRead.callableBinding]),
+        ...(processContentSlot == null || processContent.callableTarget == null ? [] : [
+          new StaticCallableExecutionBinding(processContentSlot, processContent.callableTarget),
+        ]),
+      ],
       template,
       dependencies,
       bindables,
@@ -506,6 +520,7 @@ class CustomElementConvergenceFrame {
       needsCompile: needsCompileRead.value ?? true,
       strict,
       processContent: processContent.target,
+      processContentSlot,
       issueRecords: [
         ...(controllerIssue?.records ?? []),
         ...processContent.records,
@@ -605,31 +620,54 @@ class CustomElementConvergenceFrame {
   }
 
   private readProcessContent(): ProcessContentRead {
-    const target = readTargetField(this.context, this.definitionExpression, this.targetClass, 'processContent');
+    const receiver = readProcessContentType(this.context, this.definition.target);
+    const definitionRead = readObjectProperty(this.context.expressionReader, this.definitionExpression, 'processContent');
+    const read = definitionRead != null && definitionRead.value?.kind !== EvaluationValueKind.Undefined
+      ? definitionRead
+      : readProcessContentStaticMember(receiver, 'processContent')
+        ?? readStaticClassPropertyValue(this.context, this.targetClass, 'processContent');
+    const callableDeclaration = read?.value?.kind === EvaluationValueKind.Function ? read.value.declaration : null;
+    const source = callableDeclaration == null ? null : sourceSpanAddressForNode(
+      this.store,
+      this.context,
+      callableDeclaration.name ?? callableDeclaration,
+      this.local('callable-source'),
+      callableDeclaration.name == null ? SourceSpanRole.Value : SourceSpanRole.Name,
+    );
+    const target = readTargetFieldValue(read, 'processContent', source?.addressHandle ?? null);
+    const initial = new ProcessContentRead(
+      target.target, source?.records ?? [], [], target.open, processContentCallableTarget(this.context, read, receiver),
+    );
     if (this.targetClass == null) {
-      return new ProcessContentRead(target.target, [], [], target.open);
+      return initial;
     }
-    const classDecorators = this.readClassProcessContentDecorators(target.target);
-    const memberDecorators = this.readMemberProcessContentDecorators(classDecorators.target);
+    // Static member initializers run before class decorators. A class annotation replaces any member annotation.
+    const memberDecorators = this.readMemberProcessContentDecorators(initial, receiver);
+    const classDecorators = this.readClassProcessContentDecorators(memberDecorators, receiver);
     return new ProcessContentRead(
-      memberDecorators.target,
-      [...classDecorators.records, ...memberDecorators.records],
-      [...classDecorators.issues, ...memberDecorators.issues],
-      [...target.open, ...classDecorators.open, ...memberDecorators.open],
+      classDecorators.target,
+      [...initial.records, ...memberDecorators.records, ...classDecorators.records],
+      [...memberDecorators.issues, ...classDecorators.issues],
+      [...target.open, ...memberDecorators.open, ...classDecorators.open],
+      classDecorators.callableTarget,
     );
   }
 
   private readClassProcessContentDecorators(
-    initialTarget: ResourceTargetReference | null,
+    initial: ProcessContentRead,
+    receiver: EvaluationRead<EvaluationClassValue> | null,
   ): ProcessContentRead {
     if (this.targetClass == null) {
-      return new ProcessContentRead(initialTarget);
+      return initial;
     }
     const records: KernelStoreRecord[] = [];
     const issues: ResourceIssue[] = [];
     const open: ConvergenceOpen[] = [];
-    let target = initialTarget;
-    for (const [index, decorator] of (ts.canHaveDecorators(this.targetClass) ? ts.getDecorators(this.targetClass) ?? [] : []).entries()) {
+    let target = initial.target;
+    let callableTarget = initial.callableTarget;
+    const decorators = ts.canHaveDecorators(this.targetClass) ? ts.getDecorators(this.targetClass) ?? [] : [];
+    for (let index = decorators.length - 1; index >= 0; index--) {
+      const decorator = decorators[index]!;
       const call = decoratorCallNamed(decorator, 'processContent');
       if (call == null) {
         continue;
@@ -652,10 +690,13 @@ class CustomElementConvergenceFrame {
         this.local(`class:${index}:hook`),
         this.targetClass,
         argument,
+        receiver,
       );
       if (hook.target != null) {
         target = hook.target;
+        callableTarget = hook.callableTarget;
         records.push(...hook.records);
+        open.push(...hook.open);
         continue;
       }
       open.push(...hook.open);
@@ -670,18 +711,20 @@ class CustomElementConvergenceFrame {
         issues.push(issue.issue);
       }
     }
-    return new ProcessContentRead(target, records, issues, open);
+    return new ProcessContentRead(target, records, issues, open, callableTarget);
   }
 
   private readMemberProcessContentDecorators(
-    initialTarget: ResourceTargetReference | null,
+    initial: ProcessContentRead,
+    receiver: EvaluationRead<EvaluationClassValue> | null,
   ): ProcessContentRead {
     if (this.targetClass == null) {
-      return new ProcessContentRead(initialTarget);
+      return initial;
     }
     const records: KernelStoreRecord[] = [];
     const issues: ResourceIssue[] = [];
-    let target = initialTarget;
+    let target = initial.target;
+    let callableTarget = initial.callableTarget;
     for (const [memberIndex, member] of this.targetClass.members.entries()) {
       if (!ts.canHaveDecorators(member)) {
         continue;
@@ -702,6 +745,10 @@ class CustomElementConvergenceFrame {
           );
           records.push(...source?.records ?? []);
           target = new ResourceTargetReference(null, source?.addressHandle ?? null, memberName(member));
+          const name = memberName(member);
+          callableTarget = processContentCallableTarget(
+            this.context, name == null ? null : readProcessContentStaticMember(receiver, name), receiver,
+          );
           continue;
         }
         const issue = this.publishInvalidProcessContentHook(
@@ -714,7 +761,7 @@ class CustomElementConvergenceFrame {
         issues.push(issue.issue);
       }
     }
-    return new ProcessContentRead(target, records, issues);
+    return new ProcessContentRead(target, records, issues, [], callableTarget);
   }
 
   private publishInvalidProcessContentHook(
@@ -1104,6 +1151,7 @@ export class ResourceDefinitionConverger {
       [this.customElementContribution(observation, facts)],
       [],
       nameSourceAddressHandle,
+      facts.processContentSlot,
     );
   }
 
@@ -1132,6 +1180,8 @@ export class ResourceDefinitionConverger {
       facts.watches.contributions,
       facts.strict,
       facts.processContent,
+      [],
+      facts.processContentSlot,
     );
   }
 
@@ -1750,9 +1800,16 @@ function readTemplateField(
     );
   }
   if (value.kind === EvaluationValueKind.String) {
-    const source = read.node == null
+    // Identifier, import, and property reads retain the value's producing literal. The
+    // field-read node identifies the consumer, not necessarily the authored markup.
+    const sourceNode = value.node;
+    const sourceContext = sourceNode == null ? null : context.readAdmittedNodeContext(sourceNode);
+    const source = sourceContext == null
+      || sourceNode == null
+      || !ts.isStringLiteralLike(sourceNode)
+      || sourceNode.text !== value.value
       ? null
-      : templateMarkupSourceAddress(store, context, read.node, value.value, local);
+      : templateMarkupSourceAddress(store, sourceContext, sourceNode, value.value, local);
     return new TemplateDefinitionRead(
       new CustomElementTemplateDefinition(
         source == null ? CustomElementTemplateKind.Open : CustomElementTemplateKind.Markup,
@@ -1760,7 +1817,7 @@ function readTemplateField(
         source == null ? null : value.value,
         source?.addressHandle ?? null,
         source?.sourceMap ?? null,
-        source == null ? null : sourceTextContentRevision(context.sourceFile.text),
+        source == null ? null : sourceTextContentRevision(sourceContext!.sourceFile.text),
       ),
       source?.records ?? [],
       new ResourceDependenciesRead([], []),
@@ -2205,11 +2262,13 @@ function readProcessContentHookArgument(
   local: string,
   targetClass: ts.ClassLikeDeclarationBase,
   argument: ts.Expression,
+  receiver: EvaluationRead<EvaluationClassValue> | null,
 ): {
   readonly target: ResourceTargetReference | null;
   readonly records: readonly KernelStoreRecord[];
   readonly issueNode: ts.Node | null;
   readonly open: readonly ConvergenceOpen[];
+  readonly callableTarget: StaticCallableTarget | null;
 } {
   const read = context.expressionReader.evaluateExpression(argument);
   const value = read.value;
@@ -2220,19 +2279,27 @@ function readProcessContentHookArgument(
       records: source?.records ?? [],
       issueNode: null,
       open: convergenceOpenForReadPressure('Process-content hook evaluation remained open.', read),
+      callableTarget: processContentCallableTarget(context, read, receiver),
     };
   }
   if (value?.kind === EvaluationValueKind.String) {
+    const callableRead = readProcessContentStaticMember(receiver, value.value);
     const member = readStaticMethod(targetClass, value.value);
-    if (member == null) {
-      return { target: null, records: [], issueNode: argument, open: [] };
+    if (member == null && callableRead?.value?.kind !== EvaluationValueKind.Function) {
+      return { target: null, records: [], issueNode: argument, open: [], callableTarget: null };
     }
-    const source = sourceSpanAddressForNode(store, context, memberNameNode(member) ?? member, `${local}:source`, SourceSpanRole.Name);
+    const source = sourceSpanAddressForNode(
+      store, context, member == null ? callableRead?.node ?? argument : memberNameNode(member) ?? member,
+      `${local}:source`, SourceSpanRole.Name,
+    );
     return {
       target: new ResourceTargetReference(null, source?.addressHandle ?? null, value.value),
       records: source?.records ?? [],
       issueNode: null,
       open: convergenceOpenForReadPressure('Process-content hook evaluation remained open.', read),
+      callableTarget: processContentCallableTarget(context, callableRead == null ? null : new EvaluationRead(
+        callableRead.value, callableRead.node, [...read.openSeams, ...callableRead.openSeams], callableRead.abruptCompletion,
+      ), receiver),
     };
   }
   if (value == null || value.kind === EvaluationValueKind.Unknown || value.kind === EvaluationValueKind.BoundaryValue) {
@@ -2245,9 +2312,61 @@ function readProcessContentHookArgument(
         read,
         [OpenSeamReasonKind.ResourceDefinitionFieldOpen],
       ),
+      callableTarget: null,
     };
   }
-  return { target: null, records: [], issueNode: argument, open: [] };
+  return { target: null, records: [], issueNode: argument, open: [], callableTarget: null };
+}
+
+/** Read the already-evaluated resource Type, without replaying a class expression or define call. */
+function readProcessContentType(
+  context: ResourceRecognitionContext,
+  target: ResourceTargetObservation | null,
+): EvaluationRead<EvaluationClassValue> | null {
+  if (target?.localName == null) return null;
+  const owner = context.readAdmittedNodeContext(target.node);
+  const binding = owner?.evaluation.environment.readBinding(target.localName);
+  if (binding?.state !== EvaluationBindingState.Initialized || binding.value.kind !== EvaluationValueKind.Class) {
+    return null;
+  }
+  return new EvaluationRead(binding.value, target.node, [...binding.openSeams, ...binding.value.shapeOpenSeams]);
+}
+
+/** Use the evaluator's own/static lookup, including inheritance; syntax is only a source-address fallback. */
+function readProcessContentStaticMember(
+  receiver: EvaluationRead<EvaluationClassValue> | null,
+  name: string,
+): EvaluationRead<EvaluationValue> | null {
+  if (receiver == null || receiver.value == null) return null;
+  const value = receiver.value;
+  let owner: EvaluationClassValue | null = value;
+  while (owner != null && readStaticOwnProperty(owner, name) == null && !owner.mayHaveUnknownProperties) {
+    owner = owner.baseClass;
+  }
+  if (owner == null) return null;
+  const member = readStaticValueProperty(value, name, receiver.node);
+  return new EvaluationRead(
+    closedStaticValueMemberValue(member),
+    readStaticOwnProperty(owner, name)?.node ?? receiver.node,
+    [...receiver.openSeams, ...member.openSeams],
+  );
+}
+
+function processContentCallableTarget(
+  context: ResourceRecognitionContext,
+  read: EvaluationRead<EvaluationValue> | null,
+  receiver: EvaluationRead<EvaluationClassValue> | null,
+): StaticCallableTarget | null {
+  if (read?.value?.kind !== EvaluationValueKind.Function || read.abruptCompletion != null || receiver?.value == null) {
+    return null;
+  }
+  return new StaticCallableTarget(
+    read.value,
+    context.evaluation.policy,
+    context.evaluation.runtimeHost,
+    [...read.openSeams, ...receiver.openSeams],
+    receiver.value,
+  );
 }
 
 function readStaticMethod(
@@ -2262,13 +2381,11 @@ function readStaticMethod(
   return null;
 }
 
-function readTargetField(
-  context: ResourceRecognitionContext,
-  definitionExpression: ts.Expression | null,
-  targetClass: ts.ClassLikeDeclarationBase | null,
+function readTargetFieldValue(
+  read: EvaluationRead<EvaluationValue> | null,
   fieldName: string,
+  sourceAddressHandle: AddressHandle | null,
 ): ResourceTargetFieldRead {
-  const read = readFieldValue(context, definitionExpression, targetClass, fieldName);
   if (read == null) {
     return new ResourceTargetFieldRead(null, []);
   }
@@ -2289,7 +2406,7 @@ function readTargetField(
         );
   }
   return new ResourceTargetFieldRead(
-    targetReferenceForFunction(value, null),
+    targetReferenceForFunction(value, sourceAddressHandle),
     convergenceOpenForReadPressure(`Resource ${fieldName} evaluation remained open.`, read),
   );
 }

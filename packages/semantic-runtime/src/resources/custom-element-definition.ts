@@ -144,6 +144,7 @@ export class CustomElementDefinitionContribution {
     readonly strict: boolean | null = null,
     readonly processContent: ResourceTargetReference | null = null,
     readonly fieldProvenance: readonly FieldProvenance<CustomElementDefinitionField>[] = [],
+    readonly processContentSlot: StaticCallableSlot | null = null,
   ) {}
 }
 
@@ -181,5 +182,7 @@ export class CustomElementDefinition {
     readonly fieldProvenance: readonly FieldProvenance<CustomElementDefinitionField>[] = [],
     /** Exact address for the authored public resource-name token, when the declaration has one. */
     readonly nameSourceAddressHandle: AddressHandle | null = null,
+    /** Candidate-owned executable hook authority; the durable definition retains only its stable slot. */
+    readonly processContentSlot: StaticCallableSlot | null = null,
   ) {}
 }
