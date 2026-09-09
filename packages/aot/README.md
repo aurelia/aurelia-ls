@@ -11,6 +11,10 @@ The current public API is deliberately narrow:
 
 - `SemanticAotArtifactProvider` opens one semantic build session, emits complete convention definition modules,
   transforms compiler-patch-owning source modules, and serves the virtual modules required by compiler-patch routes.
+  Its compilation cohort is the application's admitted resources, including visible registrations, resolved routes,
+  and recursive declared dependencies. Standalone IDE/MCP authoring templates are not implicitly part of a build.
+  Unknown runtime demand still prevents unsafe compiler/configuration removal; this is not whole-program dead-code
+  analysis or permission to omit a registered resource merely because no current template names it.
 - `AotCompilerPatchModuleEmitter` emits only compiler-owned fields while retaining generated controller/projection
   definitions. Source-owned local-template forests allocate every generated Type shell first, then wire the exact
   owner/peer/nested dependency graph before attaching compiler-final definitions and appending only direct local Types

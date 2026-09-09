@@ -139,6 +139,59 @@ describe('semantic AOT artifact provider', () => {
       .rejects.toMatchObject({ code: 'AOT_ARTIFACT_INVALID_HANDOFF' });
   }, 15_000);
 
+  it('compiles the built-in-controller app without admitting its standalone authoring examples', async () => {
+    const root = path.resolve(repositoryRoot, 'packages/semantic-runtime/fixtures/pressure/template-controller-built-ins');
+    const appProvider = new SemanticAotArtifactProvider();
+    const appSession = await appProvider.openBuild({
+      root, mode: 'production', environmentName: 'client', sourcemap: true,
+      runtimeConfiguration: 'require-replaceable',
+    });
+    const artifact = await appSession.artifactFor({
+      sourcePath: path.join(root, 'src/template-controller-built-ins-app.html'),
+    });
+    expect(artifact.payload?.definitionName).toBe('template-controller-built-ins-app');
+    expect(appProvider.evidence()!.artifacts.map(entry => entry.definitionName)).toEqual(['template-controller-built-ins-app']);
+    for (const name of ['template-controller-edge-cases-app', 'repeat-diagnostic-shadow-app']) {
+      await expect(appSession.artifactFor({ sourcePath: path.join(root, `src/${name}.html`) }))
+        .rejects.toMatchObject({ code: 'AOT_ARTIFACT_INVALID_HANDOFF' });
+    }
+  }, 45_000);
+
+  it('does not hide invalid templates when the application registers their resource or declares a dependency', async () => {
+    const root = await makeTemporaryDirectory('app-cohort-');
+    temporaryDirectories.push(root);
+    const sourceRoot = path.join(root, 'src');
+    await mkdir(sourceRoot, { recursive: true });
+    await writeFile(path.join(root, 'tsconfig.json'), JSON.stringify({
+      compilerOptions: { target: 'ES2022', module: 'ESNext', moduleResolution: 'Bundler', allowJs: true, checkJs: false },
+      include: ['src'],
+    }));
+    await writeFile(path.join(sourceRoot, 'unsupported.js'), [
+      "import { CustomElement } from '@aurelia/runtime-html';",
+      "export const Unsupported = CustomElement.define({ name: 'unsupported-example', template: '<!--au--><div>${message}</div>' }, class { message = 'example'; });",
+    ].join('\n'));
+    const open = () => new SemanticAotArtifactProvider().openBuild({
+      root, mode: 'production', environmentName: 'client', sourcemap: false,
+      runtimeConfiguration: 'require-replaceable',
+    });
+    for (const reachability of ['authoring-only', 'registered', 'dependency'] as const) {
+      await writeFile(path.join(sourceRoot, 'main.js'), [
+        "import { Aurelia, CustomElement, StandardConfiguration } from '@aurelia/runtime-html';",
+        ...(reachability === 'authoring-only' ? [] : ["import { Unsupported } from './unsupported.js';"]),
+        `const App = CustomElement.define({ name: 'cohort-app', template: '<p>App</p>'${reachability === 'dependency' ? ', dependencies: [Unsupported]' : ''} }, class {});`,
+        `new Aurelia().register(StandardConfiguration${reachability === 'registered' ? ', Unsupported' : ''}).app({component: App, host: document.body}).start();`,
+      ].join('\n'));
+      if (reachability === 'authoring-only') {
+        await expect(open()).resolves.toBeDefined();
+      } else {
+        await expect(open()).rejects.toMatchObject({
+          code: 'AOT_ARTIFACT_UNSUPPORTED_VALUE',
+          message: expect.stringMatching(/marker|reserved/i),
+        });
+      }
+    }
+  }, 45_000);
+
   it('keeps framework linking on C0 when the semantic session did not replace its runtime configuration', async () => {
     const result = await session.prepareFrameworkLinks(await exactFrameworkLinkRequest());
 

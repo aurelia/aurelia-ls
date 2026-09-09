@@ -475,7 +475,7 @@ export class SemanticAotBuildSession {
   }
 }
 
-/** Whole-project semantic-runtime provider structurally compatible with the Vite AOT adapter. */
+/** Application-cohort semantic provider structurally compatible with the Vite AOT adapter. */
 export class SemanticAotArtifactProvider {
   #lastSession: SemanticAotBuildSession | null = null;
 
@@ -495,7 +495,8 @@ export class SemanticAotArtifactProvider {
       const app = await runtime.openApp({
         analysisDepth: analysis.depth,
         templateAnalysisBreadth: analysis.templateBreadth,
-        includeAuthoringTemplates: true,
+        // Compile the app's admitted resource worlds, not standalone IDE/MCP authoring examples.
+        includeAuthoringTemplates: false,
         includeCompilerOccurrencePrecedents: true,
         telemetry: { inquiryProfile: 'aot' },
         nominatedEntry: request.nominatedEntry,
@@ -505,7 +506,7 @@ export class SemanticAotArtifactProvider {
       });
       const batch = materializeSemanticAppTemplateCompilerHandoffs({
         app,
-        includeAuthoringResources: true,
+        includeAuthoringResources: false,
       });
       const handoffs = batch.resources.flatMap((resource) => resource.value == null ? [] : [resource.value]);
       const runtimeExpressions = collectAotRuntimeExpressions(
