@@ -305,6 +305,9 @@ export class ConfigurationStepMaterializer {
       for (const [productHandle, value] of stepEmission.registrationCarriersByAdmissionProduct) {
         this.evaluationBindings.bindRegistrationCarrier(productHandle, value);
       }
+      for (const [productHandle, value] of stepEmission.registeredValuesByAdmissionProduct) {
+        this.evaluationBindings.bindRegisteredValue(productHandle, value);
+      }
       containers.push(...stepEmission.createdContainers);
       if (stepEmission.authoredContainer != null) {
         if (stepObservation.containerEvaluation != null) {
@@ -352,6 +355,7 @@ export class ConfigurationStepMaterializer {
     readonly optionContributions: readonly ConfigurationOptionContribution[];
     readonly registrationAdmissions: readonly RegistrationAdmissionProduct[];
     readonly registrationCarriersByAdmissionProduct: RegistrationKernelEmission['evaluatedCarriersByAdmissionProduct'];
+    readonly registeredValuesByAdmissionProduct: RegistrationKernelEmission['evaluatedRegisteredValuesByAdmissionProduct'];
     readonly authoredContainer: Container | null;
     readonly createdContainers: readonly Container[];
     readonly application: AureliaApplicationDraft | null;
@@ -557,6 +561,7 @@ export class ConfigurationStepMaterializer {
       optionContributions: options.emissions.map((emission) => emission.contribution),
       registrationAdmissions: registrationEmission.admissions,
       registrationCarriersByAdmissionProduct: registrationEmission.evaluatedCarriersByAdmissionProduct,
+      registeredValuesByAdmissionProduct: registrationEmission.evaluatedRegisteredValuesByAdmissionProduct,
       authoredContainer: createdContainer,
       createdContainers: [
         ...(createdContainer == null ? [] : [createdContainer]),

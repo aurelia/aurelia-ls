@@ -28,6 +28,8 @@ export class ConfigurationEvaluationBindings {
     readonly sourceNodesByProduct: ReadonlyMap<ProductHandle, ts.Node>,
     /** Source node that owns each product's reusable runtime value. */
     readonly runtimeValueSourceNodesByProduct: ReadonlyMap<ProductHandle, ts.Node>,
+    /** Exact offered resolver-state values; never substitute these for the registration carrier. */
+    readonly registeredValuesByAdmissionProduct: ReadonlyMap<ProductHandle, EvaluationValue> = new Map(),
   ) {}
 
   registrationCarrierForAdmission(admissionProductHandle: ProductHandle): EvaluatedRegistrationCarrier | null {
@@ -72,6 +74,7 @@ export class ConfigurationEvaluationBindingMark {
     readonly configurationValueCount: number,
     readonly sourceNodeCount: number,
     readonly runtimeValueSourceNodeCount: number,
+    readonly registeredValueCount: number = 0,
   ) {}
 }
 
@@ -83,12 +86,14 @@ export class ConfigurationEvaluationBindingFrame {
   private readonly configurationValuesByOptionContributionProduct = new Map<ProductHandle, EvaluationValue>();
   private readonly sourceNodesByProduct = new Map<ProductHandle, ts.Node>();
   private readonly runtimeValueSourceNodesByProduct = new Map<ProductHandle, ts.Node>();
+  private readonly registeredValuesByAdmissionProduct = new Map<ProductHandle, EvaluationValue>();
   private readonly containerEntries: [AureliaContainerEvaluation, Container][] = [];
   private readonly aureliaEntries: [AureliaFacadeEvaluation, Aurelia][] = [];
   private readonly registrationValueEntries: [ProductHandle, EvaluatedRegistrationCarrier][] = [];
   private readonly configurationValueEntries: [ProductHandle, EvaluationValue][] = [];
   private readonly sourceNodeEntries: [ProductHandle, ts.Node][] = [];
   private readonly runtimeValueSourceNodeEntries: [ProductHandle, ts.Node][] = [];
+  private readonly registeredValueEntries: [ProductHandle, EvaluationValue][] = [];
 
   mark(): ConfigurationEvaluationBindingMark {
     return new ConfigurationEvaluationBindingMark(
@@ -98,6 +103,7 @@ export class ConfigurationEvaluationBindingFrame {
       this.configurationValueEntries.length,
       this.sourceNodeEntries.length,
       this.runtimeValueSourceNodeEntries.length,
+      this.registeredValueEntries.length,
     );
   }
 
@@ -141,6 +147,12 @@ export class ConfigurationEvaluationBindingFrame {
     this.registrationValueEntries.push([admissionProductHandle, value]);
   }
 
+  bindRegisteredValue(admissionProductHandle: ProductHandle, value: EvaluationValue): void {
+    if (this.registeredValuesByAdmissionProduct.has(admissionProductHandle)) return;
+    this.registeredValuesByAdmissionProduct.set(admissionProductHandle, value);
+    this.registeredValueEntries.push([admissionProductHandle, value]);
+  }
+
   bindOptionContributionConfigurationValue(
     contributionProductHandle: ProductHandle,
     value: EvaluationValue,
@@ -173,6 +185,7 @@ export class ConfigurationEvaluationBindingFrame {
       new Map(this.configurationValueEntries.slice(mark.configurationValueCount)),
       new Map(this.sourceNodeEntries.slice(mark.sourceNodeCount)),
       new Map(this.runtimeValueSourceNodeEntries.slice(mark.runtimeValueSourceNodeCount)),
+      new Map(this.registeredValueEntries.slice(mark.registeredValueCount)),
     );
   }
 
@@ -184,6 +197,7 @@ export class ConfigurationEvaluationBindingFrame {
       new Map(this.configurationValuesByOptionContributionProduct),
       new Map(this.sourceNodesByProduct),
       new Map(this.runtimeValueSourceNodesByProduct),
+      new Map(this.registeredValuesByAdmissionProduct),
     );
   }
 
@@ -215,5 +229,6 @@ export function mergeConfigurationEvaluationBindings(
     new Map(bindings.flatMap((binding) => [...binding.configurationValuesByOptionContributionProduct])),
     new Map(bindings.flatMap((binding) => [...binding.sourceNodesByProduct])),
     new Map(bindings.flatMap((binding) => [...binding.runtimeValueSourceNodesByProduct])),
+    new Map(bindings.flatMap((binding) => [...binding.registeredValuesByAdmissionProduct])),
   );
 }

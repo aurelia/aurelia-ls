@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import type { EvaluationValue } from '../evaluation/values.js';
 import {
   SourceSpanAddress,
   SourceSpanRole,
@@ -156,6 +157,8 @@ export class RegistrationKernelEmission {
     readonly runtimeValueSourceNodesByAdmissionProduct: ReadonlyMap<ProductHandle, ts.Node>,
     /** Admission-local recognition pressure retained without reconstructing materialization envelopes. */
     readonly openSeamsByAdmissionProduct: ReadonlyMap<ProductHandle, readonly OpenSeam[]>,
+    /** Resolver state is distinct from the registry/factory carrier that offered it. */
+    readonly evaluatedRegisteredValuesByAdmissionProduct: ReadonlyMap<ProductHandle, EvaluationValue> = new Map(),
   ) {}
 }
 
@@ -673,6 +676,7 @@ export class RegistrationKernelEmitter {
     const records: KernelStoreRecord[] = [];
     const admissions: RegistrationAdmissionProduct[] = [];
     const evaluatedCarriersByAdmissionProduct = new Map<ProductHandle, EvaluatedRegistrationCarrier>();
+    const evaluatedRegisteredValuesByAdmissionProduct = new Map<ProductHandle, EvaluationValue>();
     const sourceNodesByAdmissionProduct = new Map<ProductHandle, ts.Node>();
     const runtimeValueSourceNodesByAdmissionProduct = new Map<ProductHandle, ts.Node>();
     const openSeamsByAdmissionProduct = new Map<ProductHandle, readonly OpenSeam[]>();
@@ -686,6 +690,9 @@ export class RegistrationKernelEmitter {
           emission.admission.productHandle,
           observation.registeredValue.node,
         );
+        if (observation.registeredValue.evaluatedValue != null && observation.openSeams.length === 0) {
+          evaluatedRegisteredValuesByAdmissionProduct.set(emission.admission.productHandle, observation.registeredValue.evaluatedValue);
+        }
       }
       const evaluatedValue = observation.evaluatedCarrierValue;
       if (evaluatedValue != null) {
@@ -705,6 +712,7 @@ export class RegistrationKernelEmitter {
       sourceNodesByAdmissionProduct,
       runtimeValueSourceNodesByAdmissionProduct,
       openSeamsByAdmissionProduct,
+      evaluatedRegisteredValuesByAdmissionProduct,
     );
   }
 

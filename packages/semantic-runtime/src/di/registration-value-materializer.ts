@@ -161,6 +161,7 @@ export class DiRegistrationValueMaterializer {
   private readonly factoryValues = new WeakMap<StaticInvocationIdentity, CanonicalDiRegistrationValue>();
   private readonly evaluatedValues = new EvaluationRuntimeIdentityIndex<CanonicalDiRegistrationValue>();
   private readonly resolverStatesByProduct = new Map<ProductHandle, EvaluationValue>();
+  private readonly registeredValuesByAdmissionProduct: Map<ProductHandle, EvaluationValue>;
   private readonly parameterElementsByProduct = new Map<ProductHandle, readonly EvaluationArrayElement[]>();
   private readonly parameterFactoriesByProduct = new Map<ProductHandle, EvaluatedRegistrationFactory>();
   private nextFactoryValueOrdinal = 0;
@@ -180,6 +181,7 @@ export class DiRegistrationValueMaterializer {
   ) {
     this.sourceIndex = new StaticProjectEvaluationSourceIndex(evaluation);
     this.registrationEmitter = new RegistrationKernelEmitter(store, publication);
+    this.registeredValuesByAdmissionProduct = new Map(configuration.evaluationBindings.registeredValuesByAdmissionProduct);
     for (const record of configuration.records) {
       if (record instanceof MaterializedProduct) {
         this.admissionProvenanceByProduct.set(record.handle, record.provenanceHandle);
@@ -406,6 +408,7 @@ export class DiRegistrationValueMaterializer {
     const records: KernelStoreRecord[] = [];
     const admissions: RegistrationAdmissionProduct[] = [];
     const evaluatedCarriersByAdmissionProduct = new Map<ProductHandle, EvaluatedRegistrationCarrier>();
+    const evaluatedRegisteredValuesByAdmissionProduct = new Map<ProductHandle, EvaluationValue>();
     const sourceNodesByAdmissionProduct = new Map<ProductHandle, ts.Node>();
     const runtimeValueSourceNodesByAdmissionProduct = new Map<ProductHandle, ts.Node>();
     const openSeamsByAdmissionProduct = new Map<ProductHandle, readonly OpenSeam[]>();
@@ -433,6 +436,10 @@ export class DiRegistrationValueMaterializer {
       for (const [productHandle, value] of emission.evaluatedCarriersByAdmissionProduct) {
         evaluatedCarriersByAdmissionProduct.set(productHandle, value);
       }
+      for (const [productHandle, value] of emission.evaluatedRegisteredValuesByAdmissionProduct) {
+        evaluatedRegisteredValuesByAdmissionProduct.set(productHandle, value);
+        this.registeredValuesByAdmissionProduct.set(productHandle, value);
+      }
       for (const [productHandle, node] of emission.sourceNodesByAdmissionProduct) {
         sourceNodesByAdmissionProduct.set(productHandle, node);
       }
@@ -450,6 +457,7 @@ export class DiRegistrationValueMaterializer {
       sourceNodesByAdmissionProduct,
       runtimeValueSourceNodesByAdmissionProduct,
       openSeamsByAdmissionProduct,
+      evaluatedRegisteredValuesByAdmissionProduct,
     );
   }
 
@@ -618,6 +626,11 @@ export class DiRegistrationValueMaterializer {
         local,
         facts.provenanceHandle,
       );
+      const registeredValue = this.registeredValuesByAdmissionProduct.get(admission.productHandle);
+      if ((strategy === RegistrationStrategy.Singleton || strategy === RegistrationStrategy.Transient)
+        && registeredValue?.kind === EvaluationValueKind.Class) {
+        this.resolverStatesByProduct.set(emitted.resolver.productHandle, registeredValue);
+      }
       return new DiRegistrationValueMaterialization(
         [...supportRecords, ...emitted.records],
         emitted.resolver,

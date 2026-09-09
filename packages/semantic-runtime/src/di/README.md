@@ -114,6 +114,10 @@ The tooling model keeps those consequences distinct:
   direct keys and resource registrations cannot falsely open an unrelated canonical interface query. Each exact
   provider entry can bind a known member function to its provider receiver under the same candidate-local evaluator
   policy and runtime host; durable consumers still retain only a callable slot under app-generation currentness.
+  Registration emission and configuration bindings retain the evaluated registered value separately from its
+  registry/factory carrier. Direct singleton/transient admissions spend that value into the existing resolver-state
+  authority, so anonymous classes do not depend on recovering a top-level declaration name. A class used as resolver
+  state must not be reclassified as an `IRegistry` carrier merely because the class also has a `register` method.
 - `DiContainerKeyExpressionIdentityKind` is source-local runtime identity evidence. Stable references can be registered
   elsewhere and are usually container-state dependent; direct object/array literals create fresh identities at the call
   site, so they can prove some miss-then-fail branches without a whole container-state join.

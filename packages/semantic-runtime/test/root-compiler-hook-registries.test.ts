@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
-import { StaticCallableSlot } from '../src/evaluation/function-execution.js';
+import { evaluateStaticCallableCompletion, StaticCallableSlot } from '../src/evaluation/function-execution.js';
 import { EvaluationValueKind } from '../src/evaluation/values.js';
 import {
   TemplateCompilerHookCallableAuthorityKind,
@@ -54,6 +54,7 @@ describe('root template-compiler hook registries', () => {
         '    Registration.instance(ITemplateCompilerHooks, absentHook),',
         '    Registration.instance(ITemplateCompilerHooks, instanceHook),',
         '    TemplateCompilerHooks.define(DefinedHook),',
+        '    TemplateCompilerHooks.define(class { static register() { throw "state-is-not-carrier"; } compiling() { return false; } }),',
         '    DecoratedHook,',
         '    InheritedHook,',
         '    TemplateCompilerHooks.define(DefinedHook),',
@@ -90,6 +91,7 @@ describe('root template-compiler hook registries', () => {
       { laneOrdinal: 3, sourceOrdinal: 3, callable: TemplateCompilerHookCallableAuthorityKind.StaticCallable },
       { laneOrdinal: 4, sourceOrdinal: 4, callable: TemplateCompilerHookCallableAuthorityKind.StaticCallable },
       { laneOrdinal: 5, sourceOrdinal: 5, callable: TemplateCompilerHookCallableAuthorityKind.StaticCallable },
+      { laneOrdinal: 6, sourceOrdinal: 6, callable: TemplateCompilerHookCallableAuthorityKind.StaticCallable },
     ]);
 
     const receiverNames = world.compilerHooks.entries.slice(2).map((entry) => {
@@ -103,10 +105,19 @@ describe('root template-compiler hook registries', () => {
     });
     expect(receiverNames).toEqual([
       'DefinedHook',
+      null,
       'DecoratedHook',
       'DecoratedBaseHook',
       'DefinedHook',
     ]);
+    const anonymousSlot = world.compilerHooks.entries[3]?.callable.callableSlotKey;
+    if (anonymousSlot == null) throw new Error('Expected anonymous provider execution slot.');
+    const anonymousTarget = world.callableBindings.target(new StaticCallableSlot(anonymousSlot));
+    if (anonymousTarget == null) throw new Error('Expected anonymous provider execution authority.');
+    expect(anonymousTarget.receiver?.kind).toBe(EvaluationValueKind.Instance);
+    const completion = evaluateStaticCallableCompletion(anonymousTarget, [], null, { requireStableCapturedInputs: true });
+    expect(completion.kind).toBe('normal');
+    expect(completion.evaluation?.value).toMatchObject({ kind: EvaluationValueKind.Boolean, value: false });
   }, 30_000);
 
   test('keeps a define registry open when its provider target is not an evaluator class', async () => {
