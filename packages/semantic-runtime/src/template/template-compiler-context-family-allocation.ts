@@ -11,7 +11,6 @@ import {
   type TemplateCompilerFamilyWireFunding,
   type TemplateCompilerFamilyWireFundingDraft,
   TemplateCompilerFamilyWireReferenceKind,
-  TemplateCompilerFamilyWireResolution,
   TemplateCompilerFamilyWireRole,
 } from './template-compiler-family-wire-funding.js';
 import {
@@ -851,7 +850,7 @@ function requiredWire(
 ): TemplateCompilerFamilyWireFundingDraft {
   const drafts = wires.draftsForOwner(owner, role);
   const draft = drafts.length === 1 ? drafts[0]! : null;
-  if (draft == null || draft.resolution !== TemplateCompilerFamilyWireResolution.ExactAuthored) {
+  if (draft == null || !draft.isWireReady) {
     throw new WireCoverageError(
       drafts[0]?.stableSlotKey ?? role,
       `Family owner requires exactly one '${role}' wire.`,

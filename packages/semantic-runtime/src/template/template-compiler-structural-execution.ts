@@ -56,6 +56,12 @@ import type {
 } from './template-structure.js';
 import { TemplateCompilerForestMutationAuthority } from './template-compiler-mutation-authority.js';
 import type { TemplateCompilerSiteCursorSubtreeExclusionEvent } from './template-compiler-site-cursor-event.js';
+import {
+  type TemplateCompilerAttributeDetachmentMutation,
+  type TemplateCompilerAttributeInsertionMutation,
+  TemplateCompilerOperationMutationBatch,
+  TemplateCompilerMutationBatchState,
+} from './template-compiler-execution.js';
 
 const structuralExecutionForests = new WeakSet<TemplateCompilerOccurrenceForest>();
 const preparedBorrowingSessions = new WeakSet<TemplateCompilerStructuralExecutionSession>();
@@ -100,7 +106,7 @@ export class TemplateCompilerConsumedAttributeDisposition {
   constructor(
     readonly context: TemplateCompilerTargetContextPlan,
     readonly attribute: TemplateCompilerAttributeOccurrence,
-    readonly inputReference: TemplateStructuralAttributeReference,
+    readonly inputReference: TemplateStructuralAttributeReference | null,
     readonly authoredProductHandle: ProductHandle | null,
     /** Exact live owner and ordinal at the consumption event, before later structural movement. */
     readonly owner: TemplateCompilerElementOccurrence,
@@ -1227,6 +1233,46 @@ export class TemplateCompilerStructuralExecutionSession {
     return disposition;
   }
 
+  /** Adopt an attribute already removed by the reached hook, independently from later compiler attribute consumption. */
+  adoptCommittedProcessContentAttributeRemoval(
+    context: TemplateCompilerTargetContextPlan,
+    instruction: HydrateElementInstruction,
+    result: TemplateCompilerProcessContentResult,
+    mutation: TemplateCompilerAttributeDetachmentMutation,
+  ): TemplateCompilerConsumedAttributeDisposition {
+    this.requireContext(context);
+    const attribute = mutation.attribute;
+    const owner = mutation.previousOwner;
+    const definitionHandle = result.plan.definition?.productHandle ?? null;
+    const sourceOwner = attribute.generation == null
+      ? this.forest.seededAttributePlacement(attribute)?.owner
+      : this.hookAttributeInsertion(attribute)?.owner;
+    if (!result.isModuleConstructed()
+      || result.plan.execution.forest !== this.forest
+      || !result.operation.mutationBatch.attributeDetachmentMutations.includes(mutation)
+      || this.forest.attributeForOccurrenceKey(attribute.occurrenceKey) !== attribute
+      || attribute.owner != null
+      || owner !== sourceOwner
+      || (owner !== result.plan.host && !seededDescendantOf(this.forest, owner, result.plan.host))
+      || this.consumedAttributes.has(attribute)
+      || (attribute.inputReference == null && attribute.generation == null)
+      || definitionHandle == null
+      || instruction.resource?.definitionProductHandle !== definitionHandle
+      || !result.operation.causeHandles.includes(definitionHandle)
+      || !context.readRows().some((row) => row.occurrence === result.plan.host && row.instructions.includes(instruction))) {
+      throw new Error(`Compiler processContent attribute '${attribute.occurrenceKey}' lost committed removal authority.`);
+    }
+    const disposition = new TemplateCompilerConsumedAttributeDisposition(
+      context, attribute, attribute.inputReference,
+      this.forest.exactAuthoredAttributeOrigin(attribute)?.authored.productHandle ?? null,
+      owner, mutation.previousOrdinal, this.nextInputEventOrdinal++,
+      [instruction.productHandle, ...result.operation.causeHandles.filter((cause) => cause !== instruction.productHandle)],
+    );
+    this.consumedAttributes.set(attribute, disposition);
+    appendMap(this.consumedAttributesByContextKey, context.localKey, disposition);
+    return disposition;
+  }
+
   /** Consume one browser-effective input node as a context-local 1→0 output with explicit semantic causes. */
   consumeNodeForContext(
     node: TemplateCompilerNodeOccurrence,
@@ -1343,6 +1389,16 @@ export class TemplateCompilerStructuralExecutionSession {
     );
   }
 
+  private hookAttributeInsertion(attribute: TemplateCompilerAttributeOccurrence): TemplateCompilerAttributeInsertionMutation | null {
+    const generation = attribute.generation;
+    if (generation?.role !== TemplateCompilerGeneratedOccurrenceRole.HookAttribute || attribute.inputReference != null) return null;
+    const batch = this.mutationAuthority.completedBatchForGeneration(generation)?.sourceBatch;
+    if (!this.mutationAuthority.ownsGeneration(generation)
+      || !(batch instanceof TemplateCompilerOperationMutationBatch)
+      || batch.state !== TemplateCompilerMutationBatchState.Committed) return null;
+    return batch.attributeInsertionMutations.find((mutation) => mutation.attribute === attribute) ?? null;
+  }
+
   private consumeAttributeWithOwnerAuthority(
     attribute: TemplateCompilerAttributeOccurrence,
     context: TemplateCompilerTargetContextPlan,
@@ -1364,8 +1420,9 @@ export class TemplateCompilerStructuralExecutionSession {
     if (requiredCause != null && !causeHandles.includes(requiredCause)) {
       throw new Error(`Consumed compiler attribute '${attribute.occurrenceKey}' omits its owning instruction cause.`);
     }
-    if (attribute.inputReference == null || attribute.generation != null) {
-      throw new Error(`Consumed compiler attribute '${attribute.occurrenceKey}' is not a seeded browser input.`);
+    const hookInsertion = this.hookAttributeInsertion(attribute);
+    if (hookInsertion == null && (attribute.inputReference == null || attribute.generation != null)) {
+      throw new Error(`Consumed compiler attribute '${attribute.occurrenceKey}' is not an admitted input or hook output.`);
     }
     if (this.consumedAttributes.has(attribute)) {
       throw new Error(`Compiler attribute '${attribute.occurrenceKey}' already has a final structural disposition.`);
@@ -1375,10 +1432,10 @@ export class TemplateCompilerStructuralExecutionSession {
     if (owner == null || ownerOrdinal == null) {
       throw new Error(`Consumed compiler attribute '${attribute.occurrenceKey}' has no live owner event.`);
     }
-    if (this.forest.seededAttributePlacement(attribute)?.owner !== owner) {
+    if ((hookInsertion?.owner ?? this.forest.seededAttributePlacement(attribute)?.owner) !== owner) {
       throw new Error(`Consumed compiler attribute '${attribute.occurrenceKey}' changed its seeded input owner.`);
     }
-    this.assertSeededAttributeOrder(attribute, owner);
+    if (hookInsertion == null) this.assertSeededAttributeOrder(attribute, owner);
     assertOwner(owner, structure);
     if (detachAttribute == null) this.forest.detachAttribute(attribute);
     else detachAttribute(attribute);
@@ -1663,7 +1720,8 @@ export class TemplateCompilerStructuralExecutionSession {
       }
     }
     for (const attribute of this.forest.readAttributes()) {
-      if (attribute.generation != null && attribute.owner == null) {
+      if (attribute.generation != null && attribute.owner == null
+        && !(this.hookAttributeInsertion(attribute) != null && this.consumedAttributes.has(attribute))) {
         throw new Error(`Generated compiler attribute '${attribute.occurrenceKey}' has no live owner edge.`);
       }
     }
@@ -2502,6 +2560,13 @@ export class TemplateCompilerStructuralExecutionSession {
     for (const attribute of this.forest.readAttributes()) {
       const generation = attribute.generation;
       if (generation == null) continue;
+      if (generation.role === TemplateCompilerGeneratedOccurrenceRole.HookAttribute) {
+        if (this.hookAttributeInsertion(attribute) == null
+          || (attribute.owner == null && !this.consumedAttributes.has(attribute))) {
+          throw new Error(`Hook-generated attribute '${attribute.occurrenceKey}' lost its insertion or final disposition.`);
+        }
+        continue;
+      }
       if (
         this.contextForLocalKey(generation.contextKey) == null
         || generation.role !== TemplateCompilerGeneratedOccurrenceRole.Clone
@@ -3018,8 +3083,7 @@ export class TemplateCompilerStructuralExecutionSession {
         || consumptionEventOrdinals.has(disposition.eventOrdinal);
       consumptionEventOrdinals.add(disposition.eventOrdinal);
       if (
-        attribute.generation != null
-        || attribute.inputReference == null
+        (attribute.generation == null ? attribute.inputReference == null : this.hookAttributeInsertion(attribute) == null)
         || disposition.attribute !== attribute
         || disposition.inputReference !== attribute.inputReference
         || disposition.authoredProductHandle !== exactOrigin

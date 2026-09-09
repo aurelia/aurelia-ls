@@ -1790,7 +1790,7 @@ export function readEvaluationTruthiness(value: EvaluationValue): boolean | null
     case EvaluationValueKind.Number:
       return value.value !== 0 && !Number.isNaN(value.value);
     case EvaluationValueKind.BigInt:
-      return value.text !== '0n';
+      return BigInt(value.text.replaceAll('_', '').replace(/n$/u, '')) !== 0n;
     case EvaluationValueKind.String:
       return value.value.length > 0;
     case EvaluationValueKind.StringPattern:

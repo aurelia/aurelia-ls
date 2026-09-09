@@ -15,7 +15,7 @@ import {
   type StaticInvocationDispatch,
   type StaticInvocationFrame,
 } from '../evaluation/invocation.js';
-import { EvaluationIteratorStep, EvaluationIteratorStepKind } from '../evaluation/iterator-projection.js';
+import { EvaluationIteratorStep, EvaluationIteratorStepKind, type EvaluationIterator } from '../evaluation/iterator-projection.js';
 import { EvaluationOpenSeamKind } from '../evaluation/seams.js';
 import { EvaluationValueEvidence } from '../evaluation/value-pressure.js';
 import { EvaluationRuntimeIdentityIndex } from '../evaluation/value-relation.js';
@@ -34,6 +34,7 @@ import {
   EvaluationUndefined,
   EvaluationUnknownValue,
   EvaluationValueKind,
+  readEvaluationTruthiness,
   readEvaluationPrimitive,
   type EvaluationValue,
 } from '../evaluation/values.js';
@@ -43,6 +44,11 @@ import type {
   TemplateCompilerPendingOperationAttempt,
 } from './template-compiler-execution.js';
 import { snapshotTemplateCompilerDescendantElements } from './template-compiler-dom-query.js';
+import {
+  compilerDomAttributeNameIssue,
+  compilerDomNamespacedAttributeName,
+  type CompilerDomAttributeName,
+} from './template-compiler-dom-attribute-name.js';
 import {
   TemplateCompilerCommentOccurrence,
   TemplateCompilerDoctypeOccurrence,
@@ -64,7 +70,18 @@ export interface TemplateCompilerDomRefusal {
 class CompilerDomNodeReference {
   readonly kind = 'node';
   readonly collections = new Map<string, CompilerDomCollectionReference>();
+  classList: CompilerDomTokenListReference | null = null;
   constructor(readonly occurrence: TemplateCompilerNodeOccurrence) {}
+}
+
+class CompilerDomTokenListReference {
+  readonly kind = 'tokens';
+  constructor(readonly element: TemplateCompilerElementOccurrence) {}
+}
+
+class CompilerDomTokenIteratorReference {
+  readonly kind = 'token-iterator';
+  constructor(readonly iterator: EvaluationIterator) {}
 }
 
 class CompilerDomCollectionReference {
@@ -79,13 +96,15 @@ class CompilerDomOpaqueReference {
   constructor(readonly kind: 'platform' | 'document' | 'metadata') {}
 }
 
-type CompilerDomReference = CompilerDomNodeReference | CompilerDomCollectionReference | CompilerDomOpaqueReference;
+type CompilerDomReference = CompilerDomNodeReference | CompilerDomCollectionReference | CompilerDomTokenListReference
+  | CompilerDomTokenIteratorReference | CompilerDomOpaqueReference;
 
 /**
  * Source-callable DOM operations over the existing compiler forest and pending operation overlay.
  *
- * This first executor admits traversal, existing attribute values, and descendant removal. Creation, reparenting,
- * markup writes, and metadata writes remain explicit refusals until generated sites enter ordinary compiler lowering.
+ * Traversal, attribute creation/removal/value updates, class tokens, and descendant removal use one pending operation.
+ * Node creation, reparenting, markup writes, and metadata writes remain explicit refusals until generated sites enter
+ * ordinary compiler lowering. Dataset remains unsupported until deletion and enumeration have owned evaluator lanes.
  */
 export class TemplateCompilerDomHost {
   readonly argumentValues: readonly EvaluationValue[];
@@ -149,21 +168,22 @@ export class TemplateCompilerDomHost {
         },
         openIterator: (source, node, moduleKey, host) => {
           const reference = this.references.read(source);
-          if (!(reference instanceof CompilerDomCollectionReference)) {
+          if (reference?.kind === 'token-iterator') return reference.iterator;
+          if (!(reference instanceof CompilerDomCollectionReference) && !(reference instanceof CompilerDomTokenListReference)) {
             return previous?.openIterator?.(source, node, moduleKey, host) ?? null;
           }
           let index = 0;
           let done = false;
           return {
             next: () => {
-              const current = done ? null : reference.read()[index];
+              const current = done ? null : reference.kind === 'tokens' ? this.classTokens(reference)[index] : reference.read()[index];
               if (current == null) {
                 done = true;
                 return new EvaluationIteratorStep(EvaluationIteratorStepKind.Done);
               }
               return new EvaluationIteratorStep(
                 EvaluationIteratorStepKind.Value,
-                new EvaluationArrayElement(this.nodeValue(current), null, [], index++),
+                new EvaluationArrayElement(typeof current === 'string' ? new EvaluationStringValue(current) : this.nodeValue(current), null, [], index++),
               );
             },
           };
@@ -181,6 +201,20 @@ export class TemplateCompilerDomHost {
   ): EvaluationValue {
     if (this.refusal != null) return this.unsupported(member, node, moduleKey, host);
     if (reference.kind === 'platform' && member === 'document') return this.referenceValue(this.document);
+    if (reference.kind === 'token-iterator') return member === 'next'
+      ? this.method('token-iterator:next') : this.unsupported(member, node, moduleKey, host);
+    if (reference.kind === 'tokens') {
+      if (member === 'value') return new EvaluationStringValue(this.reflectedAttributeValue(reference.element, 'class'));
+      if (member === 'length') return new EvaluationNumberValue(this.classTokens(reference).length);
+      if (/^(0|[1-9]\d*)$/.test(member)) {
+        const token = this.classTokens(reference)[Number(member)];
+        return token == null ? EvaluationUndefined : new EvaluationStringValue(token);
+      }
+      if (['add', 'remove', 'contains', 'toggle', 'replace', 'item', 'supports', 'toString', 'forEach', 'keys', 'values', 'entries'].includes(member)) {
+        return this.method(`tokens:${member}`);
+      }
+      return this.unsupported(member, node, moduleKey, host);
+    }
     if (reference.kind === 'collection') {
       if (member === 'length') return new EvaluationNumberValue(reference.read().length);
       if (/^(0|[1-9]\d*)$/.test(member)) {
@@ -253,18 +287,28 @@ export class TemplateCompilerDomHost {
         case 'tagName': return new EvaluationStringValue(nodeName(occurrence));
         case 'localName': return new EvaluationStringValue(occurrence.tagName);
         case 'namespaceURI': return new EvaluationStringValue(occurrence.namespaceUri);
-        case 'id': return new EvaluationStringValue(this.attributeValue(occurrence, 'id') ?? '');
+        case 'id': return new EvaluationStringValue(this.reflectedAttributeValue(occurrence, 'id'));
         case 'className':
           if (occurrence.namespace !== HtmlNamespaceKind.Html) break;
-          return new EvaluationStringValue(this.attributeValue(occurrence, 'class') ?? '');
-        case 'slot': return new EvaluationStringValue(this.attributeValue(occurrence, 'slot') ?? '');
+          return new EvaluationStringValue(this.reflectedAttributeValue(occurrence, 'class'));
+        case 'classList':
+          reference.classList ??= new CompilerDomTokenListReference(occurrence);
+          return this.referenceValue(reference.classList);
+        case 'slot': return new EvaluationStringValue(this.reflectedAttributeValue(occurrence, 'slot'));
         case 'content':
           if (occurrence.templateContent != null) return this.nodeValue(occurrence.templateContent);
           break;
         case 'getAttribute':
+        case 'getAttributeNS':
         case 'hasAttribute':
+        case 'hasAttributeNS':
+        case 'hasAttributes':
         case 'getAttributeNames':
         case 'setAttribute':
+        case 'setAttributeNS':
+        case 'removeAttribute':
+        case 'removeAttributeNS':
+        case 'toggleAttribute':
         case 'getElementsByTagName':
         case 'getElementsByClassName': return this.method(member);
       }
@@ -280,10 +324,13 @@ export class TemplateCompilerDomHost {
     moduleKey: string,
     host: StaticIntrinsicEvaluationHost,
   ): EvaluationValue {
+    if (this.refusal == null && reference.kind === 'tokens' && member === 'value') {
+      return this.setReflectedAttribute(reference.element, 'class', value, member, node, moduleKey, host);
+    }
     if (this.refusal == null && reference.kind === 'node' && reference.occurrence instanceof TemplateCompilerElementOccurrence) {
       const name = member === 'id' || member === 'slot' ? member
-        : member === 'className' && reference.occurrence.namespace === HtmlNamespaceKind.Html ? 'class' : null;
-      if (name != null) return this.setExistingAttribute(reference.occurrence, name, value, member, node, moduleKey, host);
+        : member === 'classList' || member === 'className' && reference.occurrence.namespace === HtmlNamespaceKind.Html ? 'class' : null;
+      if (name != null) return this.setReflectedAttribute(reference.occurrence, name, value, member, node, moduleKey, host);
     }
     return this.unsupported(member, node, moduleKey, host);
   }
@@ -294,6 +341,21 @@ export class TemplateCompilerDomHost {
     const reference = this.references.read(frame.thisValue.value);
     const args = frame.argumentList.elements.map((entry) => entry.value);
     if (reference == null) return domThrow('TypeError', 'Illegal DOM invocation.');
+    if (member === 'token-iterator:next') {
+      if (reference.kind !== 'token-iterator') return domThrow('TypeError', 'Illegal DOMTokenList iterator invocation.');
+      const step = reference.iterator.next();
+      const result = new EvaluationObjectValue(new Map([
+        ['done', new EvaluationObjectProperty('done', new EvaluationBooleanValue(step.kind === EvaluationIteratorStepKind.Done), null, EvaluationObjectPropertyState.Closed)],
+        ['value', new EvaluationObjectProperty('value', step.element?.value ?? EvaluationUndefined, null, EvaluationObjectPropertyState.Closed)],
+      ]), false);
+      this.evaluationGraph?.retainProduced(result);
+      return staticInvocationValue(result);
+    }
+    if (member.startsWith('tokens:')) {
+      return reference.kind === 'tokens'
+        ? this.invokeTokenList(reference, member.slice(7), args, frame, host)
+        : domThrow('TypeError', 'Illegal DOMTokenList invocation.');
+    }
     if (reference.kind === 'collection') {
       if (member === 'item') {
         if (args.length < 1) return domThrow('TypeError', 'item requires an index.');
@@ -361,24 +423,12 @@ export class TemplateCompilerDomHost {
       return staticInvocationValue(member === 'remove' ? EvaluationUndefined : this.nodeValue(child));
     }
     if (!(occurrence instanceof TemplateCompilerElementOccurrence)) return domThrow('TypeError', 'Illegal Element invocation.');
-    if (member === 'getAttributeNames') {
-      const names = stringArray(occurrence.readAttributes().map(attributeName));
-      this.evaluationGraph?.retainProduced(names);
-      return staticInvocationValue(names);
-    }
-    if (args.length < (member === 'setAttribute' ? 2 : 1)) return domThrow('TypeError', `${member} requires an argument.`);
+    const attributeResult = this.invokeAttributeMethod(occurrence, member, args, frame, host);
+    if (attributeResult != null) return attributeResult;
+    if (args.length < 1) return domThrow('TypeError', `${member} requires an argument.`);
     const argument = domPrimitiveString(args[0]!);
     if (argument == null) return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'runtime-dependent-input'));
-    const name = occurrence.namespace === HtmlNamespaceKind.Html ? asciiLower(argument) : argument;
     switch (member) {
-      case 'getAttribute': {
-        const value = this.attributeValue(occurrence, name);
-        return staticInvocationValue(value == null ? new EvaluationNullValue() : new EvaluationStringValue(value));
-      }
-      case 'hasAttribute': return staticInvocationValue(new EvaluationBooleanValue(this.attribute(occurrence, name) != null));
-      case 'setAttribute': return staticInvocationValue(this.setExistingAttribute(
-        occurrence, name, args[1]!, member, frame.node, frame.moduleKey, host,
-      ));
       case 'getElementsByTagName': return staticInvocationValue(this.referenceValue(new CompilerDomCollectionReference(false, () =>
         snapshotTemplateCompilerDescendantElements(occurrence, (candidate) => argument === '*'
           || (candidate.namespace === HtmlNamespaceKind.Html ? candidate.tagName === asciiLower(argument) : candidate.tagName === argument)),
@@ -387,7 +437,7 @@ export class TemplateCompilerDomHost {
         const tokens = argument.split(/[\t\n\f\r ]+/).filter(Boolean);
         return staticInvocationValue(this.referenceValue(new CompilerDomCollectionReference(false, () =>
           tokens.length === 0 ? [] : snapshotTemplateCompilerDescendantElements(occurrence, (candidate) => {
-            const classes = (this.attributeValue(candidate, 'class') ?? '').split(/[\t\n\f\r ]+/);
+            const classes = this.reflectedAttributeValue(candidate, 'class').split(/[\t\n\f\r ]+/);
             return tokens.every((token) => classes.includes(token));
           }),
         )));
@@ -396,7 +446,211 @@ export class TemplateCompilerDomHost {
     }
   }
 
-  private setExistingAttribute(
+  private invokeAttributeMethod(
+    element: TemplateCompilerElementOccurrence,
+    member: string,
+    args: readonly EvaluationValue[],
+    frame: StaticInvocationFrame,
+    host: StaticIntrinsicEvaluationHost,
+  ): StaticInvocationDispatch | null {
+    if (member === 'hasAttributes') return staticInvocationValue(new EvaluationBooleanValue(element.readAttributes().length > 0));
+    if (member === 'getAttributeNames') {
+      const names = stringArray(element.readAttributes().map(attributeName));
+      this.evaluationGraph?.retainProduced(names);
+      return staticInvocationValue(names);
+    }
+    const namespaced = ['getAttributeNS', 'hasAttributeNS', 'setAttributeNS', 'removeAttributeNS'].includes(member);
+    if (!namespaced && !['getAttribute', 'hasAttribute', 'setAttribute', 'removeAttribute', 'toggleAttribute'].includes(member)) return null;
+    const setter = member === 'setAttribute' || member === 'setAttributeNS';
+    const nameIndex = namespaced ? 1 : 0;
+    if (args.length < nameIndex + (setter ? 2 : 1)) return domThrow('TypeError', `${member} is missing a required argument.`);
+    const nameValue = domPrimitiveString(args[nameIndex]!);
+    const value = setter ? domPrimitiveString(args[nameIndex + 1]!) : '';
+    const nsValue = namespaced ? args[0]! : null;
+    const nsString = nsValue == null || nsValue.kind === EvaluationValueKind.Null || nsValue.kind === EvaluationValueKind.Undefined
+      ? '' : domPrimitiveString(nsValue);
+    if (nameValue == null || value == null || nsString == null) {
+      return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'runtime-dependent-input'));
+    }
+    const namespaceUri = nsString === '' ? null : nsString;
+    if (namespaced) {
+      if (setter) {
+        const descriptor = compilerDomNamespacedAttributeName(namespaceUri, nameValue);
+        if (typeof descriptor === 'string') return descriptor === 'dom-name-compatibility'
+          ? staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, descriptor))
+          : domThrow(descriptor, 'The attribute name and namespace are not valid together.');
+        return staticInvocationValue(this.setAttributeDescriptor(element, descriptor, value, member, frame.node, frame.moduleKey, host));
+      }
+      const attribute = this.namespacedAttribute(element, namespaceUri, nameValue);
+      if (member === 'getAttributeNS') return staticInvocationValue(attribute == null ? new EvaluationNullValue()
+        : new EvaluationStringValue(this.execution.readAttributeValue(this.attempt, attribute)));
+      if (member === 'hasAttributeNS') return staticInvocationValue(new EvaluationBooleanValue(attribute != null));
+      if (attribute != null) this.execution.removeProcessContentAttribute(this.attempt, attribute);
+      return staticInvocationValue(EvaluationUndefined);
+    }
+    if (setter || member === 'toggleAttribute') {
+      const issue = compilerDomAttributeNameIssue(nameValue);
+      if (issue != null) return issue === 'dom-name-compatibility'
+        ? staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, issue))
+        : domThrow(issue, 'The attribute name is invalid.');
+    }
+    const name = element.namespace === HtmlNamespaceKind.Html ? asciiLower(nameValue) : nameValue;
+    const attribute = this.attribute(element, name);
+    if (member === 'getAttribute') return staticInvocationValue(attribute == null ? new EvaluationNullValue()
+      : new EvaluationStringValue(this.execution.readAttributeValue(this.attempt, attribute)));
+    if (member === 'hasAttribute') return staticInvocationValue(new EvaluationBooleanValue(attribute != null));
+    if (member === 'setAttribute') {
+      // Non-namespace setters target the first qualified-name match, even if that attribute has a namespace.
+      if (attribute != null) this.execution.rewriteAttributeValue(this.attempt, attribute, value);
+      else return staticInvocationValue(this.setAttributeDescriptor(
+        element, { name, namespaceUri: null, prefix: null }, value, member, frame.node, frame.moduleKey, host,
+      ));
+      return staticInvocationValue(EvaluationUndefined);
+    }
+    if (member === 'removeAttribute') {
+      if (attribute != null) this.execution.removeProcessContentAttribute(this.attempt, attribute);
+      return staticInvocationValue(EvaluationUndefined);
+    }
+    const force = args[1] == null || args[1].kind === EvaluationValueKind.Undefined ? undefined : readEvaluationTruthiness(args[1]);
+    if (force === null) return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'runtime-dependent-input'));
+    const present = force ?? (attribute == null);
+    if (present && attribute == null) {
+      const result = this.setAttributeDescriptor(element, { name, namespaceUri: null, prefix: null }, '', member, frame.node, frame.moduleKey, host);
+      if (this.refusal != null) return staticInvocationValue(result);
+    } else if (!present && attribute != null) {
+      this.execution.removeProcessContentAttribute(this.attempt, attribute);
+    }
+    return staticInvocationValue(new EvaluationBooleanValue(present));
+  }
+
+  /** DOMTokenList operations use the null-namespace class attribute as their sole mutable authority. */
+  private invokeTokenList(
+    reference: CompilerDomTokenListReference,
+    member: string,
+    args: readonly EvaluationValue[],
+    frame: StaticInvocationFrame,
+    host: StaticIntrinsicEvaluationHost,
+  ): StaticInvocationDispatch {
+    if (member === 'toString') return staticInvocationValue(new EvaluationStringValue(this.reflectedAttributeValue(reference.element, 'class')));
+    if (member === 'values' || member === 'entries' || member === 'keys') {
+      let index = 0;
+      let done = false;
+      return staticInvocationValue(this.referenceValue(new CompilerDomTokenIteratorReference({ next: () => {
+        const token = done ? null : this.classTokens(reference)[index];
+        if (token == null) {
+          done = true;
+          return new EvaluationIteratorStep(EvaluationIteratorStepKind.Done);
+        }
+        let value: EvaluationValue = member === 'keys' ? new EvaluationNumberValue(index) : new EvaluationStringValue(token);
+        if (member === 'entries') {
+          value = new EvaluationArrayValue([
+            new EvaluationArrayElement(new EvaluationNumberValue(index), null, [], 0),
+            new EvaluationArrayElement(new EvaluationStringValue(token), null, [], 1),
+          ]);
+          this.evaluationGraph?.retainProduced(value);
+        }
+        return new EvaluationIteratorStep(EvaluationIteratorStepKind.Value, new EvaluationArrayElement(value, null, [], index++));
+      } })));
+    }
+    if (member === 'item') {
+      if (args.length === 0) return domThrow('TypeError', 'item requires an index.');
+      const value = args[0]!;
+      if (value.kind === EvaluationValueKind.BigInt) return domThrow('TypeError', 'A BigInt cannot be converted to a DOMTokenList index.');
+      if (value.kind !== EvaluationValueKind.String && value.kind !== EvaluationValueKind.Number
+        && value.kind !== EvaluationValueKind.Boolean && value.kind !== EvaluationValueKind.Null
+        && value.kind !== EvaluationValueKind.Undefined) {
+        return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'runtime-dependent-input'));
+      }
+      const token = this.classTokens(reference)[Number(readEvaluationPrimitive(value)) >>> 0];
+      return staticInvocationValue(token == null ? new EvaluationNullValue() : new EvaluationStringValue(token));
+    }
+    if (member === 'forEach' && ts.isCallExpression(frame.node)) {
+      const callback = args[0];
+      if (callback?.kind !== EvaluationValueKind.Function) return domThrow('TypeError', 'forEach requires a callback.');
+      const length = this.classTokens(reference).length;
+      if (length > host.guardrails.maxIntrinsicCallbackEvaluations) {
+        return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'evaluation-limit'));
+      }
+      for (let index = 0; index < length; index++) {
+        const token = this.classTokens(reference)[index];
+        if (token == null) continue;
+        host.evaluateFunctionWithArguments(callback, frame.node, [
+          new EvaluationValueEvidence(new EvaluationStringValue(token), []),
+          new EvaluationValueEvidence(new EvaluationNumberValue(index), []),
+          frame.thisValue!,
+        ], frame.moduleKey, frame.depth + 1, args[1] == null ? null : new EvaluationValueEvidence(args[1], []));
+      }
+      return staticInvocationValue(EvaluationUndefined);
+    }
+    const variadic = member === 'add' || member === 'remove';
+    const arity = variadic ? args.length : member === 'replace' ? 2 : 1;
+    if (args.length < arity) return domThrow('TypeError', `${member} is missing a required argument.`);
+    const argumentsTokens: string[] = [];
+    for (let index = 0; index < arity; index++) {
+      const token = domPrimitiveString(args[index]!);
+      if (token == null) return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'runtime-dependent-input'));
+      argumentsTokens.push(token);
+    }
+    const tokens = this.classTokens(reference);
+    if (member === 'contains') return staticInvocationValue(new EvaluationBooleanValue(tokens.includes(argumentsTokens[0]!)));
+    if (member === 'supports') return domThrow('TypeError', 'classList does not define supported tokens.');
+    // replace validates emptiness across both arguments before whitespace; add/remove validate each argument in order.
+    if (member === 'replace' && argumentsTokens.some(token => token.length === 0)) return domThrow('SyntaxError', 'Class tokens cannot be empty.');
+    for (const token of argumentsTokens) {
+      if (token.length === 0) return domThrow('SyntaxError', 'Class tokens cannot be empty.');
+      if (/[\t\n\f\r ]/.test(token)) return domThrow('InvalidCharacterError', 'Class tokens cannot contain ASCII whitespace.');
+    }
+    if (variadic) {
+      for (const token of argumentsTokens) {
+        const index = tokens.indexOf(token);
+        if (member === 'add' && index < 0) tokens.push(token);
+        else if (member === 'remove' && index >= 0) tokens.splice(index, 1);
+      }
+      return staticInvocationValue(this.writeClassTokens(reference, tokens, member, frame, host));
+    }
+    const index = tokens.indexOf(argumentsTokens[0]!);
+    if (member === 'replace') {
+      if (index < 0) return staticInvocationValue(new EvaluationBooleanValue(false));
+      const replacement = argumentsTokens[1]!;
+      const existingIndex = tokens.indexOf(replacement);
+      if (existingIndex < 0) tokens[index] = replacement;
+      else if (existingIndex > index) { tokens[index] = replacement; tokens.splice(existingIndex, 1); }
+      else if (existingIndex < index) tokens.splice(index, 1);
+      const result = this.writeClassTokens(reference, tokens, member, frame, host);
+      return staticInvocationValue(this.refusal == null ? new EvaluationBooleanValue(true) : result);
+    }
+    if (member === 'toggle') {
+      const force = args[1] == null || args[1].kind === EvaluationValueKind.Undefined ? undefined : readEvaluationTruthiness(args[1]);
+      if (force === null) return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'runtime-dependent-input'));
+      const present = force ?? (index < 0);
+      if (present === (index >= 0)) return staticInvocationValue(new EvaluationBooleanValue(present));
+      if (present) tokens.push(argumentsTokens[0]!);
+      else tokens.splice(index, 1);
+      const result = this.writeClassTokens(reference, tokens, member, frame, host);
+      return staticInvocationValue(this.refusal == null ? new EvaluationBooleanValue(present) : result);
+    }
+    return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host));
+  }
+
+  private classTokens(reference: CompilerDomTokenListReference): string[] {
+    return [...new Set(this.reflectedAttributeValue(reference.element, 'class').split(/[\t\n\f\r ]+/).filter(Boolean))];
+  }
+
+  private writeClassTokens(
+    reference: CompilerDomTokenListReference,
+    tokens: readonly string[],
+    member: string,
+    frame: StaticInvocationFrame,
+    host: StaticIntrinsicEvaluationHost,
+  ): EvaluationValue {
+    if (tokens.length === 0 && this.namespacedAttribute(reference.element, null, 'class') == null) return EvaluationUndefined;
+    return this.setAttributeDescriptor(
+      reference.element, { name: 'class', namespaceUri: null, prefix: null }, tokens.join(' '),
+      member, frame.node, frame.moduleKey, host,
+    );
+  }
+
+  private setReflectedAttribute(
     element: TemplateCompilerElementOccurrence,
     name: string,
     value: EvaluationValue,
@@ -407,9 +661,24 @@ export class TemplateCompilerDomHost {
   ): EvaluationValue {
     const text = domPrimitiveString(value);
     if (text == null) return this.unsupported(member, node, moduleKey, host, 'runtime-dependent-input');
-    const attribute = this.attribute(element, name);
-    if (attribute == null) return this.unsupported(member, node, moduleKey, host, 'generated-attribute-lowering');
-    this.execution.rewriteAttributeValue(this.attempt, attribute, text);
+    return this.setAttributeDescriptor(element, { name, namespaceUri: null, prefix: null }, text, member, node, moduleKey, host);
+  }
+
+  private setAttributeDescriptor(
+    element: TemplateCompilerElementOccurrence,
+    descriptor: CompilerDomAttributeName,
+    value: string,
+    member: string,
+    node: ts.Node,
+    moduleKey: string,
+    host: StaticIntrinsicEvaluationHost,
+  ): EvaluationValue {
+    const existing = this.namespacedAttribute(element, descriptor.namespaceUri, descriptor.name);
+    const qualifiedName = descriptor.prefix == null ? descriptor.name : `${descriptor.prefix}:${descriptor.name}`;
+    if (existing == null && this.attribute(element, qualifiedName) != null) {
+      return this.unsupported(member, node, moduleKey, host, 'duplicate-qualified-attribute-lowering');
+    }
+    this.execution.setProcessContentAttribute(this.attempt, element, descriptor, value);
     return EvaluationUndefined;
   }
 
@@ -417,9 +686,17 @@ export class TemplateCompilerDomHost {
     return element.readAttributes().find((attribute) => attributeName(attribute) === name) ?? null;
   }
 
-  private attributeValue(element: TemplateCompilerElementOccurrence, name: string): string | null {
-    const attribute = this.attribute(element, name);
-    return attribute == null ? null : this.execution.readAttributeValue(this.attempt, attribute);
+  private namespacedAttribute(
+    element: TemplateCompilerElementOccurrence,
+    namespaceUri: string | null,
+    name: string,
+  ): TemplateCompilerAttributeOccurrence | null {
+    return element.readAttributes().find((attribute) => attribute.namespaceUri === namespaceUri && attribute.name === name) ?? null;
+  }
+
+  private reflectedAttributeValue(element: TemplateCompilerElementOccurrence, name: string): string {
+    const attribute = this.namespacedAttribute(element, null, name);
+    return attribute == null ? '' : this.execution.readAttributeValue(this.attempt, attribute);
   }
 
   private collection(
@@ -539,7 +816,7 @@ function domPrimitiveString(value: EvaluationValue): string | null {
     case EvaluationValueKind.Boolean:
     case EvaluationValueKind.Null:
     case EvaluationValueKind.Undefined: return String(readEvaluationPrimitive(value));
-    case EvaluationValueKind.BigInt: return value.text.replace(/n$/, '');
+    case EvaluationValueKind.BigInt: return BigInt(value.text.replace(/_/g, '').replace(/n$/, '')).toString();
     default: return null;
   }
 }

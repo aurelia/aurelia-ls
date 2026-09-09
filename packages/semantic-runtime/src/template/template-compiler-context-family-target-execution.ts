@@ -4,6 +4,7 @@ import {
   TemplateCompilerOperationCompletionKind,
   TemplateCompilerOperationExecutionMechanism,
   TemplateCompilerInstructionOperationTarget,
+  TemplateCompilerAttributeDetachmentMutation,
   type TemplateCompilerContextFamilyTargetExecutionClosure,
   type TemplateCompilerContextFamilyTargetAttachment,
   type TemplateCompilerExecutionContextReference,
@@ -100,6 +101,9 @@ export function executeTemplateCompilerContextFamilyTarget(
     || entry.node !== rootStructure.compilerCarrier
     || entry.destinationParent !== null
   ) ?? null;
+  const hookRemovedAttributes = new Set(attachment.schedule.processContentExecutionOrder.flatMap((entry) =>
+    entry.removal instanceof TemplateCompilerAttributeDetachmentMutation ? [entry.removal.attribute] : []
+  ));
   if (
     execution.structuralExecution !== structural
     || !structural.readTargetPlans().includes(attachment.target.targetPlan)
@@ -108,7 +112,8 @@ export function executeTemplateCompilerContextFamilyTarget(
     || attachment.contexts.slice(1).some((context) =>
       structural.readContextStructure(context.targetContext) != null
     )
-    || structural.readConsumedAttributeDispositions().some((entry) => attachmentContexts.has(entry.context))
+    || structural.readConsumedAttributeDispositions().some((entry) => attachmentContexts.has(entry.context)
+      && !hookRemovedAttributes.has(entry.attribute))
     || existingTransfers.length > 1
     || unexpectedExistingTransfer != null
     || structural.readInputTextExpansions().some((entry) => attachmentContexts.has(entry.context))

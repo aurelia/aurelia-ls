@@ -43,6 +43,7 @@ export const enum TemplateCompilerGeneratedOccurrenceRole {
   BindingPlaceholder = 'binding-placeholder',
   StaticTextSegment = 'static-text-segment',
   Clone = 'clone',
+  HookAttribute = 'hook-attribute',
 }
 
 /** Path-independent cause of one compiler-created output occurrence. */

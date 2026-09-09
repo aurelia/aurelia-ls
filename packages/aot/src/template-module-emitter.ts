@@ -735,7 +735,10 @@ function emitAttributes(
     const name = attribute.prefix == null || attribute.name.startsWith(`${attribute.prefix}:`)
       ? attribute.name
       : `${attribute.prefix}:${attribute.name}`;
-    if (attribute.namespaceUri == null) {
+    // setAttribute lowercases HTML names; a hook's setAttributeNS(null, ...) can intentionally preserve uppercase.
+    const requiresExactNullNamespaceName = node.namespaceUri === htmlNamespace
+      && attribute.prefix == null && !name.includes(':') && /[A-Z]/u.test(name);
+    if (attribute.namespaceUri == null && !requiresExactNullNamespaceName) {
       lines.push(
         `  ${variable}.setAttribute(${emitJavaScriptValue(name, request)}, ${emitJavaScriptValue(attribute.value, request)});`,
       );

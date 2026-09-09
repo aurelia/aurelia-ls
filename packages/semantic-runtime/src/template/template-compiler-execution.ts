@@ -60,6 +60,7 @@ import {
 import {
   TemplateCompilerStructuralExecutionSession,
   type TemplateCompilerConsumedNodeDisposition,
+  type TemplateCompilerConsumedAttributeDisposition,
   type TemplateCompilerInputNodeTransfer,
   TemplateCompilerTargetGeometryKind,
   type TemplateCompilerInputTextExpansion,
@@ -220,9 +221,20 @@ export class TemplateCompilerAttributeDetachmentMutation {
   }
 }
 
+/** A newly generated attribute attached by one source hook at its exact live owner ordinal. */
+export class TemplateCompilerAttributeInsertionMutation {
+  constructor(
+    readonly eventOrdinal: number,
+    readonly attribute: TemplateCompilerAttributeOccurrence,
+    readonly owner: TemplateCompilerElementOccurrence,
+    readonly ordinal: number,
+  ) {}
+}
+
 export type TemplateCompilerTopologyMutation =
   | TemplateCompilerNodeDetachmentMutation
-  | TemplateCompilerAttributeDetachmentMutation;
+  | TemplateCompilerAttributeDetachmentMutation
+  | TemplateCompilerAttributeInsertionMutation;
 
 /** Normalized mutations attempted by one compiler operation. */
 export class TemplateCompilerOperationMutationBatch {
@@ -256,6 +268,28 @@ export class TemplateCompilerOperationMutationBatch {
       mutation instanceof TemplateCompilerAttributeDetachmentMutation
     );
   }
+
+  get attributeInsertionMutations(): readonly TemplateCompilerAttributeInsertionMutation[] {
+    return this.topologyMutations.filter((mutation): mutation is TemplateCompilerAttributeInsertionMutation =>
+      mutation instanceof TemplateCompilerAttributeInsertionMutation
+    );
+  }
+
+  /** Site hooks create+attach each new attribute; scalar writes remain staged until completion. */
+  get siteTopologyMutationDelta(): number {
+    return this.topologyMutations.reduce((total, mutation) =>
+      total + (mutation instanceof TemplateCompilerAttributeInsertionMutation ? 2 : 1), 0);
+  }
+
+  isSourceHookTopology(): boolean {
+    const inserted = this.attributeInsertionMutations;
+    return this.nodeDetachmentMutations.every(mutation =>
+      mutation.previousParent != null && mutation.previousEdgeKind === TemplateCompilerOccurrenceEdgeKind.Child
+    ) && this.occurrenceGenerationReservations.length === inserted.length
+      && inserted.every((mutation, ordinal) => mutation.attribute.generation === this.occurrenceGenerationReservations[ordinal]
+        && mutation.attribute.generation?.role === TemplateCompilerGeneratedOccurrenceRole.HookAttribute
+        && mutation.attribute.inputReference == null);
+  }
 }
 
 class TemplateCompilerPendingMutationOverlay {
@@ -273,6 +307,10 @@ class TemplateCompilerPendingMutationOverlay {
 
   containsDetachedNode(node: TemplateCompilerNodeOccurrence): boolean {
     return this.detachedNodes.has(node);
+  }
+
+  containsDetachedAttribute(attribute: TemplateCompilerAttributeOccurrence): boolean {
+    return this.detachedAttributes.has(attribute);
   }
 
   rewriteAttributeValue(attribute: TemplateCompilerAttributeOccurrence, value: string): void {
@@ -309,6 +347,10 @@ class TemplateCompilerPendingMutationOverlay {
       throw new Error('Compiler attribute detachment lost global topology mutation order.');
     }
     this.detachedAttributes.add(mutation.attribute);
+    this.topologyMutations.push(mutation);
+  }
+
+  recordAttributeInsertion(mutation: TemplateCompilerAttributeInsertionMutation): void {
     this.topologyMutations.push(mutation);
   }
 
@@ -922,7 +964,7 @@ export class TemplateCompilerContextFamilyTargetAttachmentPreparation {
     readonly structuralExecution: TemplateCompilerStructuralExecutionSession,
     readonly contexts: readonly TemplateCompilerExecutionContextReference[],
     readonly operationSchedule: TemplateCompilerContextFamilyOperationSchedule,
-    readonly adoptedProcessContent: readonly TemplateCompilerConsumedNodeDisposition[],
+    readonly adoptedProcessContent: readonly (TemplateCompilerConsumedNodeDisposition | TemplateCompilerConsumedAttributeDisposition)[],
     readonly forestMutationRevision: number,
     readonly globalOperationCount: number,
     readonly laneOperationCount: number,
@@ -947,10 +989,12 @@ export class TemplateCompilerContextFamilyTargetAttachmentPreparation {
         || context.laneOrdinal !== ordinal
       )
       || adoptedProcessContent.length !== scheduledProcessRemovals.length
-      || adoptedProcessContent.some((disposition, ordinal) =>
-        disposition.node !== scheduledProcessRemovals[ordinal]?.removal.occurrence
-        || disposition.context !== scheduledProcessRemovals[ordinal]?.contextMapping.targetContext
-      )
+      || adoptedProcessContent.some((disposition, ordinal) => {
+        const entry = scheduledProcessRemovals[ordinal];
+        return entry == null || ('node' in disposition ? disposition.node : disposition.attribute)
+          !== (entry.removal instanceof TemplateCompilerAttributeDetachmentMutation ? entry.removal.attribute : entry.removal.occurrence)
+          || disposition.context !== entry.contextMapping.targetContext;
+      })
       || !operationSchedule.isModuleConstructed()
       || operationSchedule.structural !== schedule
       || !sameOccurrences(operationSchedule.contexts, contexts)
@@ -1364,15 +1408,17 @@ export class TemplateCompilerExecutionSession {
         operation.mutationBatch.attributeDetachmentMutations.map((mutation) => mutation.attribute)
       ),
     );
-    const adoptedProcessContent: TemplateCompilerConsumedNodeDisposition[] = [];
+    const adoptedProcessContent: (TemplateCompilerConsumedNodeDisposition | TemplateCompilerConsumedAttributeDisposition)[] = [];
     for (const processContent of schedule.processContentExecutionOrder) {
-      adoptedProcessContent.push(structuralExecution.adoptCommittedProcessContentRemoval(
-        processContent.contextMapping.targetContext,
-        processContent.hydrateElement.instruction,
-        processContent.result,
-        processContent.removal,
-        processContent.removalOrdinal,
-      ));
+      adoptedProcessContent.push(processContent.removal instanceof TemplateCompilerAttributeDetachmentMutation
+        ? structuralExecution.adoptCommittedProcessContentAttributeRemoval(
+            processContent.contextMapping.targetContext, processContent.hydrateElement.instruction,
+            processContent.result, processContent.removal,
+          )
+        : structuralExecution.adoptCommittedProcessContentRemoval(
+            processContent.contextMapping.targetContext, processContent.hydrateElement.instruction,
+            processContent.result, processContent.removal, processContent.removalOrdinal,
+          ));
     }
     const globalContextBase = this.contexts.length;
     const contexts = targetPlan.readContexts().map((targetContext, ordinal) =>
@@ -1707,6 +1753,7 @@ export class TemplateCompilerExecutionSession {
       && attempt.executionMechanism === TemplateCompilerOperationExecutionMechanism.StaticCallable
       && this.forest.attributeForOccurrenceKey(attribute.occurrenceKey) === attribute) {
       const overlay = this.requirePendingMutationOverlay(attempt);
+      if (overlay.containsDetachedAttribute(attribute)) return;
       let node: TemplateCompilerNodeOccurrence | null = attribute.owner;
       while (node != null) {
         // This attempt proved ownership before detaching the ancestor. Retained references still address that subtree.
@@ -1715,6 +1762,66 @@ export class TemplateCompilerExecutionSession {
       }
     }
     this.requireOccurrenceContext(attempt.context, attribute);
+  }
+
+  setProcessContentAttribute(
+    attempt: TemplateCompilerPendingOperationAttempt,
+    element: TemplateCompilerElementOccurrence,
+    descriptor: { readonly name: string; readonly namespaceUri: string | null; readonly prefix: string | null },
+    value: string,
+  ): TemplateCompilerAttributeOccurrence {
+    this.requireOwnedProcessContentElement(attempt, element);
+    const existing = element.readAttributes().find(attribute =>
+      attribute.name === descriptor.name && attribute.namespaceUri === descriptor.namespaceUri
+    );
+    if (existing != null) {
+      // DOM setAttributeNS updates the existing value without changing its prefix or Attr identity.
+      this.rewriteAttributeValue(attempt, existing, value);
+      return existing;
+    }
+    const overlay = this.requirePendingMutationOverlay(attempt);
+    const eventOrdinal = overlay.nextTopologyMutationOrdinal;
+    const generation = this.createGeneration(attempt, TemplateCompilerGeneratedOccurrenceRole.HookAttribute, eventOrdinal);
+    const attribute = this.forest.createGeneratedAttribute(
+      generation, descriptor.name, value, descriptor.namespaceUri, descriptor.prefix,
+    );
+    const ordinal = element.readAttributes().length;
+    this.forest.insertDetachedAttribute(attribute, element, ordinal);
+    overlay.recordAttributeInsertion(new TemplateCompilerAttributeInsertionMutation(eventOrdinal, attribute, element, ordinal));
+    return attribute;
+  }
+
+  removeProcessContentAttribute(
+    attempt: TemplateCompilerPendingOperationAttempt,
+    attribute: TemplateCompilerAttributeOccurrence,
+  ): void {
+    const owner = attribute.owner;
+    if (owner == null) throw new Error('Source hook attribute removal requires a live attribute.');
+    this.requireOwnedProcessContentElement(attempt, owner);
+    const overlay = this.requirePendingMutationOverlay(attempt);
+    const mutation = new TemplateCompilerAttributeDetachmentMutation(
+      overlay.nextTopologyMutationOrdinal, attribute, owner, attribute.readOwnerOrdinal()!,
+    );
+    this.forest.detachAttribute(attribute);
+    overlay.recordAttributeDetachment(mutation);
+  }
+
+  private requireOwnedProcessContentElement(
+    attempt: TemplateCompilerPendingOperationAttempt,
+    element: TemplateCompilerElementOccurrence,
+  ): void {
+    const overlay = this.requirePendingMutationOverlay(attempt);
+    if (attempt.operationKind !== TemplateCompilerOperationKind.ProcessContent
+      || attempt.executionMechanism !== TemplateCompilerOperationExecutionMechanism.StaticCallable
+      || !(attempt.target instanceof TemplateCompilerCallableEffectOperationTarget)) {
+      throw new Error('Attribute mutation requires the current source processContent invocation.');
+    }
+    let node: TemplateCompilerNodeOccurrence | null = element;
+    while (node != null) {
+      if (node === attempt.target.actedOn.occurrence || overlay.containsDetachedNode(node)) return;
+      node = node.parent;
+    }
+    throw new Error('Attribute mutation is outside the source hook subtree.');
   }
 
   /** Detach one live node during local-template extraction while retaining its exact event-time edge. */
@@ -2775,16 +2882,14 @@ export class TemplateCompilerExecutionSession {
     );
     const isSiteExecution = attempt.context instanceof TemplateCompilerSiteExecutionContextReference;
     const siteNodeDetachments = mutationBatch.nodeDetachmentMutations;
-    const siteTopologyIsExact = mutationBatch.topologyMutations.length === siteNodeDetachments.length
-      && siteNodeDetachments.every((mutation) =>
-        mutation.previousParent != null
-        && mutation.previousEdgeKind === TemplateCompilerOccurrenceEdgeKind.Child
-      );
+    const siteTopologyIsExact = mutationBatch.isSourceHookTopology()
+      && (attempt.executionMechanism === TemplateCompilerOperationExecutionMechanism.StaticCallable
+        || (mutationBatch.topologyMutations.length === siteNodeDetachments.length
+          && mutationBatch.occurrenceGenerationReservations.length === 0));
     if (
       isSiteExecution
       && (
-        this.forest.mutationRevision !== attempt.startForestMutationRevision + siteNodeDetachments.length
-        || mutationBatch.occurrenceGenerationReservations.length > 0
+        this.forest.mutationRevision !== attempt.startForestMutationRevision + mutationBatch.siteTopologyMutationDelta
         || !siteTopologyIsExact
         || (siteNodeDetachments.length > 0
           && (
@@ -2812,10 +2917,8 @@ export class TemplateCompilerExecutionSession {
     if (
       isSiteExecution
       && mutationBatch.state === TemplateCompilerMutationBatchState.Committed
-      && this.forest.mutationRevision !== attempt.startForestMutationRevision + siteNodeDetachments.length
-        + (mutationBatch.state === TemplateCompilerMutationBatchState.Committed
-          ? mutationBatch.attributeValueMutations.length
-          : 0)
+      && this.forest.mutationRevision !== attempt.startForestMutationRevision + mutationBatch.siteTopologyMutationDelta
+        + mutationBatch.attributeValueMutations.length
     ) {
       throw new Error(
         `Compiler site operation '${attempt.operationKey}' lost exact scalar-only mutation currentness.`,
@@ -2913,7 +3016,10 @@ export class TemplateCompilerExecutionSession {
         `Compiler generation '${attempt.operationKey}' requires its exact pending mutation batch.`,
       );
     }
-    if (attempt.context instanceof TemplateCompilerSiteExecutionContextReference) {
+    if (attempt.context instanceof TemplateCompilerSiteExecutionContextReference
+      && !(attempt.operationKind === TemplateCompilerOperationKind.ProcessContent
+        && attempt.executionMechanism === TemplateCompilerOperationExecutionMechanism.StaticCallable
+        && role === TemplateCompilerGeneratedOccurrenceRole.HookAttribute)) {
       throw new Error(
         `Compiler site operation '${attempt.operationKey}' does not admit generated structure before typed site topology exists.`,
       );
@@ -3247,24 +3353,25 @@ export class TemplateCompilerExecutionSession {
         && projectionTopology.length > 0
         && projectionTopology.every((mutation) =>
           mutation instanceof TemplateCompilerAttributeDetachmentMutation
-          || (
-            mutation.previousParent != null
+          || (mutation instanceof TemplateCompilerNodeDetachmentMutation
+            && mutation.previousParent != null
             && mutation.previousEdgeKind === TemplateCompilerOccurrenceEdgeKind.Child
           )
         );
       if (
         isSiteProcessContent
         && (
-          operation.mutationBatch.occurrenceGenerationReservations.length > 0
-          || !siteTopologyIsExact
+          !operation.mutationBatch.isSourceHookTopology()
+          || (operation.executionMechanism !== TemplateCompilerOperationExecutionMechanism.StaticCallable
+            && (!siteTopologyIsExact || operation.mutationBatch.occurrenceGenerationReservations.length > 0))
           || (siteNodeDetachments.length > 0
             && operation.executionMechanism !== TemplateCompilerOperationExecutionMechanism.BuiltIn
             && operation.executionMechanism !== TemplateCompilerOperationExecutionMechanism.StaticCallable)
           || operation.endForestMutationRevision !== operation.startForestMutationRevision
-            + siteNodeDetachments.length
+            + operation.mutationBatch.siteTopologyMutationDelta
             + (operation.mutationBatch.state === TemplateCompilerMutationBatchState.Committed
               ? operation.mutationBatch.attributeValueMutations.length
-              : siteNodeDetachments.length > 0 ? 1 : 0)
+              : operation.mutationBatch.siteTopologyMutationDelta > 0 ? 1 : 0)
         )
       ) {
         throw new Error(`Compiler site operation '${operation.operationKey}' has incoherent mutation currentness.`);
@@ -3278,7 +3385,7 @@ export class TemplateCompilerExecutionSession {
         || (isSiteProcessContent
           && (operation.executionMechanism === TemplateCompilerOperationExecutionMechanism.BuiltIn
             || operation.executionMechanism === TemplateCompilerOperationExecutionMechanism.StaticCallable)
-          && siteTopologyIsExact);
+          && operation.mutationBatch.isSourceHookTopology());
       if (
         operation.mutationBatch.topologyMutations.length > 0
         && !topologyIsAdmitted
@@ -3288,6 +3395,10 @@ export class TemplateCompilerExecutionSession {
         );
       }
       for (const mutation of operation.mutationBatch.topologyMutations) {
+        if (operation.mutationBatch.state === TemplateCompilerMutationBatchState.Discarded
+          && !(mutation instanceof TemplateCompilerNodeDetachmentMutation)
+          && mutation.attribute.generation != null
+          && operation.mutationBatch.occurrenceGenerationReservations.includes(mutation.attribute.generation)) continue;
         if (mutation instanceof TemplateCompilerNodeDetachmentMutation) {
           if (this.forest.nodeForOccurrenceKey(mutation.node.occurrenceKey) !== mutation.node) {
             throw new Error(

@@ -41,6 +41,7 @@ import type {
   TemplateCompilerProcessContentRemoval,
   TemplateCompilerProcessContentResult,
 } from './template-compiler-process-content.js';
+import { TemplateCompilerAttributeDetachmentMutation, TemplateCompilerNodeDetachmentMutation } from './template-compiler-execution.js';
 import type {
   TemplateCompilerSiteCursorProjectionExtractionEvent,
   TemplateCompilerSiteCursorTemplateControllerTransitionEvent,
@@ -181,11 +182,14 @@ export class TemplateCompilerFamilyProcessContentAdoptionEntry {
       { readonly stableSlotKey: string; readonly site: object }
     >,
     readonly result: TemplateCompilerProcessContentResult,
-    readonly removal: TemplateCompilerProcessContentRemoval,
+    readonly removal: TemplateCompilerProcessContentRemoval | TemplateCompilerAttributeDetachmentMutation,
     readonly removalOrdinal: number,
   ) {
+    const attributeRemoval = removal instanceof TemplateCompilerAttributeDetachmentMutation;
+    const occurrence = attributeRemoval ? removal.attribute : removal.occurrence;
     const reference = hydrateElement.instruction.auSlotProcessContentRemovedChildNodes[removalOrdinal] ?? null;
-    const exactOrigin = result.plan.execution.forest.exactAuthoredNodeOrigin(removal.occurrence)?.authored ?? null;
+    const exactOrigin = removal instanceof TemplateCompilerAttributeDetachmentMutation
+      ? null : result.plan.execution.forest.exactAuthoredNodeOrigin(removal.occurrence)?.authored ?? null;
     const reach = disposition.reach;
     if (
       disposition.loweringContext !== contextMapping.cursorContext
@@ -195,7 +199,10 @@ export class TemplateCompilerFamilyProcessContentAdoptionEntry {
       || reach.hydrateElement.staging.draft?.processContent.result !== result
       || hydrateElement.draft.occurrenceKey !== result.plan.host.occurrenceKey
       || hydrateElement.draft.resource?.definitionProductHandle !== result.plan.definition?.productHandle
-      || result.removals[removalOrdinal] !== removal
+      || (attributeRemoval
+        ? result.operation.mutationBatch.attributeDetachmentMutations[removalOrdinal] !== removal
+        : result.removals[removalOrdinal] !== removal)
+      || (attributeRemoval && result.metadata != null)
       || (result.metadata == null
         ? hydrateElement.draft.auSlotProcessContent != null || reference != null
         : hydrateElement.draft.auSlotProcessContent?.name !== result.metadata.name
@@ -204,7 +211,7 @@ export class TemplateCompilerFamilyProcessContentAdoptionEntry {
           || reference.identityHandle !== exactOrigin?.identityHandle
           || reference.addressHandle !== exactOrigin?.addressHandle)
     ) {
-      throw new Error(`Family processContent removal '${removal.occurrence.occurrenceKey}' lost funded HE order.`);
+      throw new Error(`Family processContent removal '${occurrence.occurrenceKey}' lost funded HE order.`);
     }
   }
 }
@@ -614,7 +621,7 @@ export class TemplateCompilerContextFamilyStructuralSchedulePreparation {
     const executionOrder = structuralScheduleExecutionOrder(rootExecution);
     this.processContentExecutionOrder = executionOrder.processContent;
     const expectedProcessRemovals = rows.receipt.traversal.audit.processContentEvents.flatMap(
-      (event) => event.result.removals,
+      (event) => orderedProcessContentRemovals(event.result),
     );
     if (
       authority !== familyStructuralScheduleAuthority
@@ -669,6 +676,19 @@ export class TemplateCompilerContextFamilyStructuralSchedulePreparation {
   isCurrent(): boolean {
     return this.isModuleConstructed() && this.target.isCurrent();
   }
+}
+
+function orderedProcessContentRemovals(
+  result: TemplateCompilerProcessContentResult,
+): readonly (TemplateCompilerProcessContentRemoval | TemplateCompilerAttributeDetachmentMutation)[] {
+  const nodes = new Map(result.removals.map((removal) => [removal.mutation, removal] as const));
+  return result.operation.mutationBatch.topologyMutations.flatMap<TemplateCompilerProcessContentRemoval | TemplateCompilerAttributeDetachmentMutation>((mutation) =>
+    mutation instanceof TemplateCompilerAttributeDetachmentMutation
+      ? [mutation]
+      : mutation instanceof TemplateCompilerNodeDetachmentMutation
+        ? [nodes.get(mutation)!]
+        : []
+  );
 }
 
 function structuralScheduleExecutionOrder(
@@ -771,13 +791,15 @@ export function prepareTemplateCompilerContextFamilyStructuralSchedule(
     const result = reach.hydrateElement.staging.draft?.processContent.result ?? null;
     const processContent = result == null || head == null
       ? []
-      : result.removals.map((removal, ordinal) => new TemplateCompilerFamilyProcessContentAdoptionEntry(
+      : orderedProcessContentRemovals(result).map((removal) => new TemplateCompilerFamilyProcessContentAdoptionEntry(
           disposition,
           contextMapping,
           head,
           result,
           removal,
-          ordinal,
+          removal instanceof TemplateCompilerAttributeDetachmentMutation
+            ? result.operation.mutationBatch.attributeDetachmentMutations.indexOf(removal)
+            : result.removals.indexOf(removal),
         ));
     const projectionEvent = reach.hydrateElement.projectionExtraction;
     const projection = projectionEvent == null || head == null

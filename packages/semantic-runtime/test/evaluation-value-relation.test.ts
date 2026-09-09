@@ -24,9 +24,18 @@ import {
   EvaluationObjectValue,
   EvaluationStringPatternHole,
   EvaluationStringPatternValue,
+  readEvaluationTruthiness,
 } from '../src/evaluation/values.js';
 
 describe('evaluator value relation', () => {
+  test('reads BigInt truthiness from its value rather than decimal literal spelling', () => {
+    for (const literal of ['0n', '0x0n', '0X00n', '0b0n', '0o00n', '-0n', '0x0_0n']) {
+      expect(readEvaluationTruthiness(new EvaluationBigIntValue(literal)), literal).toBe(false);
+    }
+    for (const literal of ['1n', '-1n', '0x10n', '0b10n', '0o10n', '1_000n']) {
+      expect(readEvaluationTruthiness(new EvaluationBigIntValue(literal)), literal).toBe(true);
+    }
+  });
   test('keeps strict equality, SameValue, and SameValueZero distinct', () => {
     const nan = new EvaluationNumberValue(Number.NaN);
     const zero = new EvaluationNumberValue(0);

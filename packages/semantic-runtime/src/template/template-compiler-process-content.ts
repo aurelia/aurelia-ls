@@ -206,7 +206,10 @@ export class TemplateCompilerProcessContentResult {
       throw new Error('Template compiler processContent result lost operation, metadata, or removal authority.');
     }
     this.#authority = authority;
-    this.removedSiteOccurrences = removals.flatMap((removal) => siteOccurrencesInSubtree(removal.occurrence));
+    this.removedSiteOccurrences = [
+      ...removals.flatMap((removal) => siteOccurrencesInSubtree(removal.occurrence)),
+      ...operation.mutationBatch.attributeDetachmentMutations.map(mutation => mutation.attribute),
+    ].filter(occurrence => occurrence.generation == null && occurrence.inputReference != null);
     this.#removedSiteOccurrenceSet = new Set(this.removedSiteOccurrences);
     if (this.#removedSiteOccurrenceSet.size !== this.removedSiteOccurrences.length) {
       throw new Error('Template compiler processContent result repeats one removed site occurrence.');

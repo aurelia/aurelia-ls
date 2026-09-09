@@ -9,13 +9,19 @@ import {
 import type { TemplateInstruction } from './instruction-ir.js';
 import type { TemplateCompilerContextFamilyTargetPlanPreparation } from './template-compiler-context-family-target-plan.js';
 import type { TemplateCompilerContextFamilyTargetExecution } from './template-compiler-context-family-target-execution.js';
-import type { TemplateCompilerOperation } from './template-compiler-execution.js';
+import {
+  TemplateCompilerAttributeDetachmentMutation,
+  TemplateCompilerAttributeInsertionMutation,
+  TemplateCompilerNodeDetachmentMutation,
+  type TemplateCompilerOperation,
+} from './template-compiler-execution.js';
 import {
   type TemplateCompilerAttributeOccurrence,
   TemplateCompilerDoctypeOccurrence,
   TemplateCompilerElementOccurrence,
   TemplateCompilerFragmentOccurrence,
   type TemplateCompilerNodeOccurrence,
+  type TemplateCompilerOccurrenceGeneration,
   type TemplateCompilerOccurrenceForest,
 } from './template-compiler-occurrence.js';
 import {
@@ -482,7 +488,7 @@ export function prepareTemplateCompilerContextFamilyFreeze(
       surrogateSequenceReservation,
     );
   });
-  const derivationOperations = structuralDerivationOperations(execution);
+  const derivationOperations = structuralDerivationOperations(execution, contexts);
   const derivations = derivationOperations.map((operation) => {
     const operationKey = stableDigest(`${operation.context.localKey}:${operation.operationKey}`);
     const siteKey = `${rootSiteKey}:operation:${operationKey}`;
@@ -577,15 +583,85 @@ function sourceAddressForOccurrence(occurrence: TemplateCompilerNodeOccurrence):
 
 function structuralDerivationOperations(
   execution: TemplateCompilerContextFamilyTargetExecution,
+  contexts: readonly TemplateCompilerContextFamilyFreezeContextPreparation[],
 ): readonly TemplateCompilerOperation[] {
   const targetOperations = new Set(execution.operations);
   const lane = execution.attachment.contexts[0]!.lane;
-  return execution.attachment.execution.sequence.readLaneOperations(lane).filter((operation) =>
-    targetOperations.has(operation)
-    || operation.mutationBatch.attributeValueMutations.length > 0
-    || operation.mutationBatch.occurrenceGenerationReservations.length > 0
-    || operation.mutationBatch.topologyMutations.length > 0
-  );
+  const outputs = new Set<TemplateCompilerNodeOccurrence | TemplateCompilerAttributeOccurrence>();
+  for (const context of contexts) {
+    for (const node of context.nodes) outputs.add(node.occurrence);
+    for (const attribute of context.attributes) outputs.add(attribute.occurrence);
+  }
+  const visitOccurrences = createTemplateCompilerStructuralDerivationVisitor(execution);
+  return execution.attachment.execution.sequence.readLaneOperations(lane).filter((operation) => {
+    if (
+      !targetOperations.has(operation)
+      && operation.mutationBatch.attributeValueMutations.length === 0
+      && operation.mutationBatch.occurrenceGenerationReservations.length === 0
+      && operation.mutationBatch.topologyMutations.length === 0
+    ) return false;
+    let hasTerms = false;
+    visitOccurrences(
+      operation,
+      (occurrence) => { hasTerms ||= occurrence.inputReference != null; },
+      (occurrence) => { hasTerms ||= outputs.has(occurrence); },
+    );
+    // Generated syntax may be consumed into instructions without a final structural product.
+    // Its operation remains in execution history; there is no 0→0 structural edge to publish.
+    return hasTerms;
+  });
+}
+
+/** Share the operation footprint between final-structure reservation and materialization. */
+export function createTemplateCompilerStructuralDerivationVisitor(
+  execution: TemplateCompilerContextFamilyTargetExecution,
+): (
+  operation: TemplateCompilerOperation,
+  visitInput: (occurrence: TemplateCompilerNodeOccurrence | TemplateCompilerAttributeOccurrence) => void,
+  visitOutput: (occurrence: TemplateCompilerNodeOccurrence | TemplateCompilerAttributeOccurrence) => void,
+) => void {
+  const forest = execution.attachment.execution.forest;
+  const generated = new Map<
+    TemplateCompilerOccurrenceGeneration,
+    TemplateCompilerNodeOccurrence | TemplateCompilerAttributeOccurrence
+  >();
+  for (const node of forest.readNodes()) {
+    if (node.generation != null) generated.set(node.generation, node);
+  }
+  for (const attribute of forest.readAttributes()) {
+    if (attribute.generation != null) generated.set(attribute.generation, attribute);
+  }
+  const transfers = execution.attachment.structuralExecution.readInputNodeTransfers();
+  return (operation, visitInput, visitOutput) => {
+    for (const mutation of operation.mutationBatch.topologyMutations) {
+      if (mutation instanceof TemplateCompilerNodeDetachmentMutation) {
+        visitInput(mutation.node);
+      } else if (mutation instanceof TemplateCompilerAttributeDetachmentMutation) {
+        visitInput(mutation.attribute);
+      } else if (mutation instanceof TemplateCompilerAttributeInsertionMutation) {
+        visitOutput(mutation.attribute);
+      }
+    }
+    for (const mutation of operation.mutationBatch.attributeValueMutations) {
+      visitInput(mutation.attribute);
+      visitOutput(mutation.attribute);
+    }
+    for (const generation of operation.mutationBatch.occurrenceGenerationReservations) {
+      const occurrence = generated.get(generation);
+      if (occurrence == null) {
+        throw new Error(`Operation '${operation.operationKey}' lost generated output occurrence.`);
+      }
+      visitOutput(occurrence);
+    }
+    for (const transfer of transfers) {
+      if (
+        transfer.startForestMutationRevision < operation.startForestMutationRevision
+        || transfer.endForestMutationRevision > operation.endForestMutationRevision
+      ) continue;
+      visitInput(transfer.node);
+      visitOutput(transfer.node);
+    }
+  };
 }
 
 function ineligible(

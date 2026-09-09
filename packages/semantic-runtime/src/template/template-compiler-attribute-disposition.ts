@@ -30,6 +30,7 @@ export class TemplateCompilerAttributeDispositionDraft {
     ].map((instruction) => instruction.productHandle));
     this.causeHandles = uniqueHandles([
       ...(attribute.inputReference == null ? [] : [attribute.inputReference.productHandle]),
+      ...(attribute.generation?.causeHandles ?? []),
       ...this.instructionCauseHandles,
     ]);
     this.qualifiedName = contribution.frame.scalar.qualifiedName;

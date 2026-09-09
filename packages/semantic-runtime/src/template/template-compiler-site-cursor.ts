@@ -28,6 +28,7 @@ import {
 } from './template-compiler-instruction-staging.js';
 import {
   TemplateCompilerAttributeOccurrence,
+  TemplateCompilerGeneratedOccurrenceRole,
   TemplateCompilerCommentOccurrence,
   TemplateCompilerDoctypeOccurrence,
   TemplateCompilerElementOccurrence,
@@ -1031,6 +1032,16 @@ class TemplateCompilerRootSiteCursor {
           successor,
           plan.openReason?.summary
             ?? `Custom element '${elementDefinition.name}' has an open processContent effect.`,
+        );
+        return null;
+      }
+      if (plan.callableTarget != null
+        && (this.projectedOwnerInput(reachedElement)?.suppressedAttributes.length ?? 0) > 0) {
+        this.stop(
+          TemplateCompilerSiteCursorFrontierKind.ProcessContentUnsupported,
+          element, null, null, successor,
+          'Source processContent requires the post-projection DOM view; compiler-consumed au-slot attributes are still represented only by logical suppression.',
+          elementDefinition.processContent.addressHandle ?? elementDefinition.sourceAddressHandle,
         );
         return null;
       }
@@ -2174,6 +2185,10 @@ class TemplateCompilerRootSiteCursor {
       }
       if (node instanceof TemplateCompilerElementOccurrence) {
         for (const attribute of node.readAttributes()) {
+          if (attribute.generation?.role === TemplateCompilerGeneratedOccurrenceRole.HookAttribute) {
+            this.binding.execution.mutationAuthority.assertRegisteredGeneration(attribute.generation);
+            continue;
+          }
           const originState = this.semantics.originState(attribute);
           if (
             attribute.generation != null
@@ -2226,6 +2241,11 @@ class TemplateCompilerRootSiteCursor {
     spends: TemplateCompilerSiteSpend[],
   ): void {
     for (const occurrence of result.removedSiteOccurrences) {
+      if (occurrence instanceof TemplateCompilerAttributeOccurrence
+        && occurrence.generation?.role === TemplateCompilerGeneratedOccurrenceRole.HookAttribute) {
+        this.binding.execution.mutationAuthority.assertRegisteredGeneration(occurrence.generation);
+        continue;
+      }
       const originState = this.semantics.originState(occurrence);
       const node = occurrence instanceof TemplateCompilerAttributeOccurrence
         ? occurrence.owner

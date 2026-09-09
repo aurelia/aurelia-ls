@@ -92,6 +92,274 @@ describe('interpreted compiler DOM host', () => {
     } finally { run.dispose(); }
   });
 
+  test('creates, rewrites, removes, and readds attributes in DOM list order within one pending invocation', () => {
+    const run = new DomHookRun('<div a="original" b="retained"></div>');
+    try {
+      const original = run.root.readAttributes()[0]!;
+      const result = run.invoke(`function hook(node) {
+        node.setAttribute('a', 'pending');
+        node.removeAttribute('a');
+        node.setAttribute('A', 'new');
+        node.setAttribute('data-new', 0xFFn);
+        node.id = null;
+        const created = node.toggleAttribute('data-flag', undefined);
+        const removed = node.toggleAttribute('DATA-FLAG');
+        const unchanged = node.toggleAttribute('absent', false);
+        return node.hasAttributes() && node.getAttributeNames().join(',') === 'b,a,data-new,id'
+          && node.getAttribute('A') === 'new' && node.getAttribute('data-new') === '255'
+          && node.id === 'null' && created && !removed && !unchanged;
+      }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+      expect(original.owner).toBeNull();
+      expect(run.root.readAttributes().map(attribute => [attribute.name, attribute.value])).toEqual([
+        ['b', 'retained'], ['a', 'new'], ['data-new', '255'], ['id', 'null'],
+      ]);
+      expect(run.root.readAttributes()[1]).not.toBe(original);
+      run.execution.mutationAuthority.assertGeneratedInventory();
+    } finally { run.dispose(); }
+  });
+
+  test('keeps namespace/local-name lookup distinct from qualified-name lookup and preserves existing prefixes', () => {
+    const run = new DomHookRun('<div></div>');
+    try {
+      const result = run.invoke(`function hook(node) {
+        node.setAttributeNS('urn:test', 'p:key', 'first');
+        node.setAttributeNS('urn:test', 'q:key', 'second');
+        const prefixKept = node.getAttributeNames()[0] === 'p:key' && node.getAttribute('q:key') === null;
+        node.setAttribute('p:key', 'third');
+        const reads = node.hasAttributeNS('urn:test', 'key') && node.getAttributeNS('urn:test', 'key') === 'third';
+        node.setAttributeNS(null, 'DATA-X', 'upper');
+        const uppercase = node.getAttributeNS('', 'DATA-X') === 'upper' && node.getAttribute('DATA-X') === null;
+        node.removeAttribute('DATA-X');
+        const stillPresent = node.hasAttributeNS(undefined, 'DATA-X');
+        node.removeAttributeNS(undefined, 'DATA-X');
+        node.removeAttributeNS('urn:test', 'key');
+        node.setAttributeNS('urn:test', 'q:key', 'readded');
+        node.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:lang', 'en');
+        node.setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:p', 'urn:test');
+        return prefixKept && reads && uppercase && stillPresent && !node.hasAttributeNS(null, 'DATA-X')
+          && node.getAttributeNames().join(',') === 'q:key,xml:lang,xmlns:p';
+      }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+      expect(run.root.readAttributes().map(attribute => [attribute.name, attribute.namespaceUri, attribute.prefix, attribute.value])).toEqual([
+        ['key', 'urn:test', 'q', 'readded'],
+        ['lang', 'http://www.w3.org/XML/1998/namespace', 'xml', 'en'],
+        ['p', 'http://www.w3.org/2000/xmlns/', 'xmlns', 'urn:test'],
+      ]);
+    } finally { run.dispose(); }
+  });
+
+  test('reflects id, className, slot, and class tokens only from null-namespace attributes', () => {
+    const run = new DomHookRun('<div><i></i></div>');
+    try {
+      const result = run.invoke(`function hook(node) {
+        const child = node.firstChild;
+        child.setAttributeNS('urn:other', 'class', 'fake');
+        child.setAttributeNS('urn:other', 'id', 'fake');
+        child.setAttributeNS('urn:other', 'slot', 'fake');
+        return child.getAttribute('class') === 'fake' && child.className === '' && child.id === '' && child.slot === ''
+          && child.classList.value === '' && child.classList.length === 0
+          && node.getElementsByClassName('fake').length === 0;
+      }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+    } finally { run.dispose(); }
+  });
+
+  test('keeps classList identity live across creation, raw value replacement, removal, and normalization', () => {
+    const run = new DomHookRun('<div></div>');
+    try {
+      const result = run.invoke(`function hook(node) {
+        const classes = node.classList;
+        classes.add(); classes.remove();
+        const absent = !node.hasAttribute('class');
+        classes.value = '';
+        const createdEmpty = node.hasAttribute('class');
+        node.removeAttribute('class');
+        const removed = classes.length === 0 && classes.value === '';
+        classes.add('b', 'a', 'b');
+        classes.toggle('c', undefined);
+        classes.replace('b', 'c');
+        const ordered = classes.value === 'c a';
+        classes.replace('c', 'a');
+        const deduplicated = classes.value === 'a';
+        classes.value = '  z z  y ';
+        const raw = classes.value === '  z z  y ' && classes.toString() === '  z z  y ' && classes.length === 2;
+        node.classList = 'q q r';
+        return absent && createdEmpty && removed && ordered && deduplicated && raw && classes === node.classList
+          && classes.item(true) === 'r' && classes.item(99) === null && classes[99] === undefined
+          && Array.from(classes).join(',') === 'q,r' && node.className === 'q q r';
+      }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+      expect(run.root.readAttributes()[0]!.value).toBe('q q r');
+    } finally { run.dispose(); }
+  });
+
+  test('preserves raw class spacing on toggle/replace no-ops, but normalizes zero-argument add/remove', () => {
+    const run = new DomHookRun('<div class=" a  a&#9;b "></div>');
+    try {
+      const result = run.invoke(`function hook(node) {
+        const classes = node.classList;
+        const raw = classes.value;
+        const contains = !classes.contains('') && !classes.contains('a b');
+        const present = classes.toggle('a', true);
+        const absent = classes.toggle('missing', false);
+        const replaced = classes.replace('missing', 'x');
+        const preserved = classes.value === raw;
+        classes.add();
+        const normalized = classes.value === 'a b';
+        classes.value = ' c  c d ';
+        classes.remove();
+        return contains && present && !absent && !replaced && preserved && normalized && classes.value === 'c d';
+      }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+    } finally { run.dispose(); }
+  });
+
+  test('uses WebIDL optional boolean coercion, including explicit undefined and hexadecimal BigInt zero', () => {
+    const run = new DomHookRun('<div></div>');
+    try {
+      const result = run.invoke(`function hook(node) {
+        const classes = node.classList;
+        const zeroClass = classes.toggle('zero', 0x0n);
+        const zeroAttribute = node.toggleAttribute('data-zero', 0x0n);
+        const addedClass = classes.toggle('x', undefined);
+        const addedAttribute = node.toggleAttribute('data-x', undefined);
+        const removedClass = classes.toggle('x', undefined);
+        const removedAttribute = node.toggleAttribute('data-x', undefined);
+        const trueObject = classes.toggle('always', {});
+        return !zeroClass && !zeroAttribute && addedClass && addedAttribute && !removedClass && !removedAttribute
+          && !node.hasAttribute('data-zero') && trueObject && classes.value === 'always';
+      }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+    } finally { run.dispose(); }
+  });
+
+  test.each([
+    ['for-of', `const seen=[];for(const token of classes){seen.push(token);classes.remove(token);}return seen.join(',')==='a,c';`, 'b'],
+    ['spread', `const seen=[];for(const token of [...classes]){seen.push(token);classes.remove(token);}return seen.join(',')==='a,b,c';`, ''],
+    ['Array.from', `const seen=Array.from(classes,token=>{classes.remove(token);return token;});return seen.join(',')==='a,c';`, 'b'],
+    ['forEach', `const seen=[];classes.forEach(token=>{seen.push(token);classes.remove(token);});return seen.join(',')==='a,c';`, 'b'],
+    ['named iterators', `const values=classes.values();const first=values.next();classes.remove('a');const next=values.next();const last=values.next();classes.add('d');return first.value==='a'&&!first.done&&next.value==='c'&&last.done&&values.next().done&&[...classes.keys()].join(',')==='0,1,2'&&Array.from(classes.entries(),pair=>pair.join(':')).join(',')==='0:b,1:c,2:d';`, 'b c d'],
+  ] as const)('preserves live class token %s iteration', (_name, body, expected) => {
+    const run = new DomHookRun('<div class="a b c"></div>');
+    try {
+      const result = run.invoke(`function hook(node){const classes=node.classList;${body}}`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+      expect(run.root.readAttributes()[0]!.value).toBe(expected);
+    } finally { run.dispose(); }
+  });
+
+  test('classList.forEach snapshots length while its iterator observes appended tokens', () => {
+    const run = new DomHookRun('<div class="a"></div>');
+    try {
+      const result = run.invoke(`function hook(node) {
+        const classes = node.classList;
+        const seen = [];
+        classes.forEach(token => { seen.push(token); if(token === 'a') classes.add('b'); });
+        const initialLength = seen.join(',') === 'a' && classes.value === 'a b';
+        classes.value = 'a';
+        const live = Array.from(classes, token => { if(token === 'a') classes.add('b'); return token; });
+        return initialLength && live.join(',') === 'a,b';
+      }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+    } finally { run.dispose(); }
+  });
+
+  test.each(['node.contains === node.classList.contains', 'typeof node.classList.add'])('keeps unsupported DOM method introspection open: %s', expression => {
+    const run = new DomHookRun('<div></div>');
+    try {
+      const result = run.invoke(`function hook(node){if (${expression}) node.setAttribute('data-introspection', 'yes'); return false;}`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Open);
+      run.complete(result.kind);
+    } finally { run.dispose(); }
+  });
+
+  test.each([
+    ['node.setAttribute("bad name", "x")', 'InvalidCharacterError'],
+    ['node.toggleAttribute("")', 'InvalidCharacterError'],
+    ['node.setAttributeNS(null, "p:key", "x")', 'NamespaceError'],
+    ['node.setAttributeNS("urn:wrong", "xml:lang", "x")', 'NamespaceError'],
+    ['node.setAttributeNS("urn:wrong", "xmlns:p", "x")', 'NamespaceError'],
+    ['node.setAttributeNS("http://www.w3.org/2000/xmlns/", "p:key", "x")', 'NamespaceError'],
+    ['node.setAttribute("missing-value")', 'TypeError'],
+    ['node.getAttributeNS("urn:x")', 'TypeError'],
+    ['node.classList.add("x", "")', 'SyntaxError'],
+    ['node.classList.remove("x", "a b")', 'InvalidCharacterError'],
+    ['node.classList.toggle("")', 'SyntaxError'],
+    ['node.classList.replace("a b", "")', 'SyntaxError'],
+    ['node.classList.replace("a", "b c")', 'InvalidCharacterError'],
+    ['node.classList.contains()', 'TypeError'],
+    ['node.classList.item(0n)', 'TypeError'],
+    ['node.classList.supports("a")', 'TypeError'],
+  ])('models the real %s exception before any invalid token batch mutates', (operation, errorName) => {
+    const run = new DomHookRun('<div class=" a  a b "></div>');
+    try {
+      const result = run.invoke(`function hook(node){
+        try { ${operation}; } catch(error) { return error.name === '${errorName}' && node.className === ' a  a b '; }
+        return false;
+      }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      expect(run.host.refusal).toBeNull();
+      run.complete(result.kind);
+    } finally { run.dispose(); }
+  });
+
+  test.each([
+    ['node.setAttribute("@click", "x")', 'dom-name-compatibility'],
+    ['node.setAttribute("1x", "x")', 'dom-name-compatibility'],
+    ['node.setAttributeNS("urn:x", "p:a:b", "x")', 'dom-name-compatibility'],
+    ['node.setAttributeNS("urn:first", "class", "x"); node.classList.add("real")', 'duplicate-qualified-attribute-lowering'],
+  ])('refuses unsupported compatibility/namespace lowering rather than manufacturing a DOM error: %s', (operation, kind) => {
+    const run = new DomHookRun('<div></div>');
+    try {
+      const result = run.invoke(`function hook(node){${operation};return true;}`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Open);
+      expect(run.host.refusal?.kind).toBe(kind);
+      run.complete(result.kind);
+      expect(run.root.readAttributes()).toHaveLength(0);
+    } finally { run.dispose(); }
+  });
+
+  test('rolls back write/remove/readd and class creation/normalization to original attribute identities', () => {
+    const run = new DomHookRun('<div title="original"></div>');
+    try {
+      const original = run.root.readAttributes()[0]!;
+      const inventory = run.execution.forest.readAttributes().length;
+      const result = run.invoke(`function hook(node){
+        node.setAttribute('title','before-remove'); node.removeAttribute('title');
+        node.setAttribute('title','after-readd'); node.setAttribute('title','rewritten');
+        node.classList.value=' a a  b ';node.classList.add();node.classList.remove('b');
+        node.getBoundingClientRect();return false;
+      }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Open);
+      run.complete(result.kind);
+      expect(run.root.readAttributes()).toHaveLength(1);
+      expect(run.root.readAttributes()[0]).toBe(original);
+      expect(original.value).toBe('original');
+      expect(original.scalarWriteRevision).toBe(0);
+      expect(run.execution.forest.readAttributes()).toHaveLength(inventory);
+      run.execution.mutationAuthority.assertGeneratedInventory();
+      run.execution.forest.assertCoherentTopology();
+    } finally { run.dispose(); }
+  });
+
   test('observes live indices and sibling identity while removing descendants', () => {
     const run = new DomHookRun('<div><i id="a"><u></u></i><i id="b"></i><i id="c"></i></div>');
     try {
@@ -156,7 +424,7 @@ describe('interpreted compiler DOM host', () => {
     ['geometry', 'node.getBoundingClientRect();', 'getBoundingClientRect', 'unsupported-dom-member'],
     ['outside parent', 'node.parentNode;', 'parentNode', 'outside-compiler-root'],
     ['ambient document', 'platform.document.body;', 'body', 'unsupported-dom-member'],
-    ['generated attribute', 'node.setAttribute("new-attribute", "x");', 'setAttribute', 'generated-attribute-lowering'],
+    ['dataset', 'node.dataset.key = "x";', 'dataset', 'unsupported-dom-member'],
     ['markup write', 'node.innerHTML = "<b></b>";', 'innerHTML', 'unsupported-dom-member'],
     ['text write', 'node.textContent = "changed";', 'textContent', 'unsupported-dom-member'],
     ['metadata', 'metadata.name = "changed";', 'name', 'unsupported-dom-member'],

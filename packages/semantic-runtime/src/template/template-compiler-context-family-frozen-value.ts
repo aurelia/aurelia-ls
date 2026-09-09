@@ -11,18 +11,15 @@ import {
   TemplateRenderTarget,
 } from './compiled-template.js';
 import { TemplateCompilerTargetContextRole } from './compiler-target-plan.js';
-import type {
-  TemplateCompilerContextFamilyFreezeContextPreparation,
-  TemplateCompilerContextFamilyFreezeNodeReservation,
-  TemplateCompilerContextFamilyFreezePreparation,
-  TemplateCompilerContextFamilyFreezeTargetRowReservation,
+import {
+  createTemplateCompilerStructuralDerivationVisitor,
+  type TemplateCompilerContextFamilyFreezeContextPreparation,
+  type TemplateCompilerContextFamilyFreezeNodeReservation,
+  type TemplateCompilerContextFamilyFreezePreparation,
+  type TemplateCompilerContextFamilyFreezeTargetRowReservation,
 } from './template-compiler-context-family-freeze.js';
 import {
-  TemplateCompilerAttributeDetachmentMutation,
-  TemplateCompilerNodeDetachmentMutation,
-} from './template-compiler-execution.js';
-import {
-  type TemplateCompilerAttributeOccurrence,
+  TemplateCompilerAttributeOccurrence,
   TemplateCompilerCommentOccurrence,
   TemplateCompilerElementOccurrence,
   TemplateCompilerFragmentOccurrence,
@@ -668,44 +665,25 @@ function materializeDerivations(
   outputRanks: ReadonlyMap<string, number>,
   provenanceHandle: ProvenanceHandle,
 ): readonly TemplateStructureDerivation[] {
-  const forest = family.execution.attachment.execution.forest;
-  const generatedNodes = new Map(forest.readNodes().flatMap((node) =>
-    node.generation == null ? [] : [[node.generation, node] as const]
-  ));
-  const generatedAttributes = new Map(forest.readAttributes().flatMap((attribute) =>
-    attribute.generation == null ? [] : [[attribute.generation, attribute] as const]
-  ));
-  const transfers = family.execution.attachment.structuralExecution.readInputNodeTransfers();
+  const visitOccurrences = createTemplateCompilerStructuralDerivationVisitor(family.execution);
   return family.derivations.map((derivation) => {
     const operation = derivation.operation;
     const inputTerms: TemplateStructureDerivationTerm[] = [];
     const outputTerms: TemplateStructureDerivationTerm[] = [];
-    for (const mutation of operation.mutationBatch.topologyMutations) {
-      if (mutation instanceof TemplateCompilerNodeDetachmentMutation) {
-        appendInputNode(inputTerms, mutation.node);
-      } else if (mutation instanceof TemplateCompilerAttributeDetachmentMutation) {
-        appendInputAttribute(inputTerms, mutation.attribute);
-      }
-    }
-    for (const mutation of operation.mutationBatch.attributeValueMutations) {
-      appendInputAttribute(inputTerms, mutation.attribute);
-      appendOutputAttribute(outputTerms, mutation.attribute, attributeOutputs);
-    }
-    for (const generation of operation.mutationBatch.occurrenceGenerationReservations) {
-      const node = generatedNodes.get(generation) ?? null;
-      const attribute = generatedAttributes.get(generation) ?? null;
-      if (node != null) appendOutputNode(outputTerms, node, nodeOutputs);
-      else if (attribute != null) appendOutputAttribute(outputTerms, attribute, attributeOutputs);
-      else throw new Error(`Operation '${operation.operationKey}' lost generated output occurrence.`);
-    }
-    for (const transfer of transfers) {
-      if (
-        transfer.startForestMutationRevision < operation.startForestMutationRevision
-        || transfer.endForestMutationRevision > operation.endForestMutationRevision
-      ) continue;
-      appendInputNode(inputTerms, transfer.node);
-      appendOutputNode(outputTerms, transfer.node, nodeOutputs);
-    }
+    visitOccurrences(
+      operation,
+      (occurrence) => {
+        if (occurrence instanceof TemplateCompilerAttributeOccurrence) appendInputAttribute(inputTerms, occurrence);
+        else appendInputNode(inputTerms, occurrence);
+      },
+      (occurrence) => {
+        if (occurrence instanceof TemplateCompilerAttributeOccurrence) {
+          appendOutputAttribute(outputTerms, occurrence, attributeOutputs);
+        } else {
+          appendOutputNode(outputTerms, occurrence, nodeOutputs);
+        }
+      },
+    );
     const inputs = uniqueTerms(inputTerms);
     const outputs = [...uniqueTerms(outputTerms)].sort((left, right) => {
       const leftRank = outputRanks.get(structureKey(left.structure));

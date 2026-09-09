@@ -2978,7 +2978,11 @@ export class StaticEvaluator {
       return value;
     }
     if (operand.kind === EvaluationValueKind.BoundaryValue) {
-      return new EvaluationUnknownValue(`typeof ${operand.path} depends on host environment state.`, expression, true);
+      const reason = `typeof ${operand.path} depends on host environment state.`;
+      // A closed-effects invocation must not skip an unknown branch without retaining why it was unexecuted.
+      return this.options.requireClosedSynchronousEffects
+        ? this.unknown(reason, expression, moduleKey, EvaluationOpenSeamKind.UnsupportedExpression)
+        : new EvaluationUnknownValue(reason, expression, true);
     }
     return this.unknown('typeof operand did not reduce to a modeled value.', expression, moduleKey, EvaluationOpenSeamKind.UnsupportedExpression);
   }

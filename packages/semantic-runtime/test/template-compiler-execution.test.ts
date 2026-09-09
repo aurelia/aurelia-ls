@@ -398,6 +398,68 @@ describe('template compiler execution sequence', () => {
     }
   });
 
+  test.each([true, false])('keeps attribute creation, removal and scalar history coherent (commit=%s)', (committed) => {
+    const browser = new BrowserEffectiveTemplateFixture(`compiler-attribute-transaction-${committed}`);
+    try {
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(
+        browser.materialize('root', '<div before="1" data-x="a" after="2"></div>').emission,
+      );
+      const execution = TemplateCompilerExecutionSession.createForForest('attribute-transaction:family', forest);
+      const lane = execution.admitRootInvocation('attribute-transaction:plan');
+      const closure = closeExactNoLocalBootstrap(browser, execution, lane, 'attribute-transaction');
+      const driver = execution.beginSiteExecutionDriver(execution.captureSiteExecutionFrontier(closure));
+      const root = forest.compilerContent.readChildren()[0] as TemplateCompilerElementOccurrence;
+      const liveAttributes = root.readAttributes();
+      const original = [...liveAttributes];
+      const old = original[1]!;
+      const originalInventoryCount = forest.readAttributes().length;
+      const attempt = execution.beginOperation({
+        operationKey: 'attribute-transaction:process', context: driver.context,
+        operationKind: TemplateCompilerOperationKind.ProcessContent,
+        executionMechanism: TemplateCompilerOperationExecutionMechanism.StaticCallable,
+        target: execution.callableEffectTarget(driver.context, new TemplateCompilerCallableReference(
+          null, null, browser.run.handles.address('hook'),
+        ), root),
+        causeHandles: [browser.run.handles.product('definition')], siteExecutionDriver: driver,
+      });
+      execution.rewriteAttributeValue(attempt, old, 'b');
+      execution.removeProcessContentAttribute(attempt, old);
+      const replacement = execution.setProcessContentAttribute(attempt, root,
+        { name: 'data-x', namespaceUri: null, prefix: null }, 'c');
+      execution.rewriteAttributeValue(attempt, replacement, 'd');
+      const transient = execution.setProcessContentAttribute(attempt, root,
+        { name: 'transient', namespaceUri: null, prefix: null }, 'gone');
+      execution.removeProcessContentAttribute(attempt, transient);
+      expect(execution.readAttributeValue(attempt, old)).toBe('b');
+      expect(execution.readAttributeValue(attempt, replacement)).toBe('d');
+      expect(replacement).not.toBe(old);
+      expect(replacement.inputReference).toBeNull();
+      const operation = execution.completeOperation(attempt, committed
+        ? new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete)
+        : new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Unsupported, [], 'Later API not supported.'));
+      expect(root.readAttributes()).toBe(liveAttributes);
+      if (committed) {
+        expect(root.readAttributes()).toEqual([original[0], original[2], replacement]);
+        expect(old.owner).toBeNull();
+        expect(old.value).toBe('b');
+        expect(replacement.value).toBe('d');
+        expect(execution.captureReachedAttributeScalar(driver, root, replacement, 2).isExact()).toBe(true);
+        expect(operation.mutationBatch.attributeInsertionMutations.map(mutation => mutation.attribute))
+          .toEqual([replacement, transient]);
+      } else {
+        expect(root.readAttributes()).toEqual(original);
+        expect(old.value).toBe('a');
+        expect(forest.readAttributes()).toHaveLength(originalInventoryCount);
+        expect(forest.attributeForOccurrenceKey(replacement.occurrenceKey)).toBeNull();
+        expect(forest.attributeForOccurrenceKey(transient.occurrenceKey)).toBeNull();
+      }
+      execution.finishSiteExecutionDriver(driver);
+      if (!committed) execution.seal();
+      forest.assertCoherentTopology();
+      execution.mutationAuthority.assertGeneratedInventory();
+    } finally { browser.dispose(); }
+  });
+
   test('discards processContent topology and advances the terminal driver over restored input', () => {
     const browser = new BrowserEffectiveTemplateFixture('compiler-execution-site-detachment-discard');
     try {
