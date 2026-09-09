@@ -1,0 +1,19 @@
+<template>
+  <main id="recovery">
+    <input id="duplicate" value.bind="message" VALUE.BIND="ignored">
+    <button id="toggle" click.trigger="visible = !visible">Toggle recovered hosts</button>
+    <button id="add" click.trigger="add()">Append repeated item</button>
+
+    <!-- These divs are deliberately authored INSIDE the table. -->
+    <section id="foster-zone"><table id="foster-table"><div id="foster-first" if.bind="visible" title.bind="message">${message}</div><tr><td id="table-cell">${message}</td></tr><div id="foster-second" title.bind="message">${message}</div></table></section>
+
+    <!-- Browser paragraph closure makes repeat a sibling, not a child of if. -->
+    <section id="paragraph-zone"><p id="recovered-paragraph" if.bind="visible">prefix<div class="recovered-item" repeat.for="item of items">${item}</div>tail</p></section>
+
+    <svg id="recovery-svg" viewbox="0 0 40 40"><defs><lineargradient id="gradient"><stop offset="0" stop-color="red"></stop></lineargradient></defs><foreignobject width="40" height="40"><DIV id="svg-html" title.bind="message">${message}</DIV></foreignobject><text id="svg-text">${message}</text><use id="svg-use" xlink:href="#gradient" xml:lang="en"></use></svg>
+    <math id="recovery-math"><mi id="math-mi">${message}</mi><mtext><span id="math-html">${message}</span></mtext><annotation-xml encoding="text/html"><div id="annotation-html">${message}</div></annotation-xml></math>
+
+    <selected-carrier></selected-carrier>
+    <wrapped-carrier></wrapped-carrier>
+  </main>
+</template>

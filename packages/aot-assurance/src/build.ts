@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 
 import * as aureliaPluginModule from '@aurelia/vite-plugin';
 import { build, type Plugin, type PluginOption } from 'vite';
+import { createG0RuntimeProbePlugin } from './g0-runtime-probe.js';
 
 import type {
   AotAssuranceAdapter,
@@ -46,6 +47,7 @@ export interface BuildBatchOptions {
   readonly fixtureRoot: string;
   readonly keepOutput: boolean;
   readonly falsifier?: EmissionFalsifier;
+  readonly runtimeParserProbe?: boolean;
 }
 
 export class ProductionBuildBatch {
@@ -88,14 +90,17 @@ export class ProductionBuildBatch {
         'jit',
         options.fixtureRoot,
         jitOutDir,
-        createAureliaPlugin({
+        [createAureliaPlugin({
           // Vite 8 presents absolute normalized ids to the hook on Windows;
           // the framework plugin's relative default does not match them.
           include: '**/src/**/*.{ts,js,html}',
           transformStandardDecorators: true,
-        }),
+        }), ...(options.runtimeParserProbe === true ? [createG0RuntimeProbePlugin('jit', options.fixtureRoot)] : [])],
       );
-      const aotReceipt = await buildLane('aot', options.fixtureRoot, aotOutDir, adapter.plugins);
+      const aotReceipt = await buildLane('aot', options.fixtureRoot, aotOutDir, [
+        adapter.plugins,
+        ...(options.runtimeParserProbe === true ? [createG0RuntimeProbePlugin('aot', options.fixtureRoot)] : []),
+      ]);
       const aotEvidence = await adapter.readEvidence(aotReceipt.moduleGraph);
       return new ProductionBuildBatch(
         root,

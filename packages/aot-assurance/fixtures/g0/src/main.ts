@@ -4,11 +4,11 @@
 import Aurelia from 'aurelia';
 
 import { G0App } from './g0-app';
-import { readInstalledRuntimeProbe } from './runtime-probe';
 
 const lane = __AOT_ASSURANCE_LANE__;
 const aurelia = Aurelia.app(G0App);
-const probe = readInstalledRuntimeProbe();
+const probe = window.__aotAssuranceProbe;
+if (probe == null) throw new Error('Runtime probe was not installed before root hydration.');
 let stopped = false;
 
 await aurelia.start();

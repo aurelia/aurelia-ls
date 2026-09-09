@@ -1,10 +1,14 @@
 import type { PluginOption } from 'vite';
+import type { BuiltInControllersObservation } from './built-in-controllers-scenario.js';
+import type { BrowserRecoveryApplicationObservation } from './browser-recovery-scenario.js';
 
 export type AssuranceLane = 'jit' | 'aot';
 export type AssuranceScenario =
   | 'g0'
   | 'hello-world'
   | 'local-templates'
+  | 'built-in-controllers'
+  | 'browser-recovery'
   | 'routed-storefront'
   | 'state-backed-form'
   | 'projects-and-milestones';
@@ -165,6 +169,8 @@ export type ApplicationObservation =
   | G0ApplicationObservation
   | HelloWorldApplicationObservation
   | LocalTemplatesApplicationObservation
+  | BuiltInControllersObservation
+  | BrowserRecoveryApplicationObservation
   | RoutedStorefrontApplicationObservation
   | StateBackedFormApplicationObservation
   | ProjectsAndMilestonesApplicationObservation;

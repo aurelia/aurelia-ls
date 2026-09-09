@@ -10,7 +10,7 @@ therefore run through the generated base-runtime facade instead of retaining the
 The routed storefront additionally requires its exact 11-resource/11-renderer plan and an omitted event modifier, so
 browser parity exercises the optimized configuration rather than only a compile-free conservative fallback.
 
-The default package assurance runs six complementary scenarios:
+The default package assurance runs eight complementary scenarios:
 
 - `g0` is the deeply instrumented parser/teardown control and owns the runtime string-parse guard;
 - `hello-world` runs the canonical shared IDE fixture without source instrumentation, aligned to the standard decorator
@@ -26,6 +26,22 @@ The default package assurance runs six complementary scenarios:
   fulfilled promise branch, debounced search, checkbox and select observation, switch branches, class/style output,
   no-match structure, shared DI state, route-state persistence, and data-bound detail navigation. Its AOT build must
   emit exactly `app-root`, `item-list-route`, `item-detail-route`, and `item-card`.
+- `built-in-controllers` runs the existing semantic-runtime controller pressure app and its unchanged template. One
+  source-shared browser bridge mutates ordinary view-model inputs; the ordered journey checks array, Map and Set
+  mutations, keyed tuple destructuring with a hole, collection replacement, contextual and contextless/nested repeats,
+  numeric and nullable repeat sources, scoped `with`/`if`, discriminant/type/property/instance guards, promise
+  pending/fulfillment/rejection with four assignment forms, `let` propagation, switch arrays/fall-through/overlap,
+  parent-scope events, and portal removal on teardown. Explicit source-derived content, repeat-row, and writeback
+  expectations accompany lane parity. Its AOT build emits only `template-controller-built-ins-app`; authoring-only
+  sibling resources remain in the same TypeScript project. The unguarded `with.bind="selectedProduct"` is deliberately
+  not driven to null: RC2 throws on that fixture input, so nullable repeat and guarded `maybeProduct` cover supported
+  null transitions without presenting the unguarded `with` case as certified behavior.
+- `browser-recovery` deliberately keeps invalid table children and paragraph nesting in authored markup. Browser
+  foster parenting reorders bound targets; paragraph closure makes an `if` host and a repeated sibling independent.
+  Its five checkpoints check initial structure, first-wins duplicate-attribute form writeback, removal, collection
+  mutation while the paragraph is hidden, and restoration. SVG/MathML namespace integration and adjusted names,
+  namespaced attributes, selected versus wrapped string-template carriers, and inert template content remain correct
+  through updates. All three resource artifacts are required, and teardown must empty the application host.
 - `state-backed-form` runs the form value-channel pressure fixture without source instrumentation. It covers captured
   field forwarding, independent computed-submit dependencies, checkbox and radio-model writeback, nullable,
   object-valued, and multiple selects, submission state, and per-request persistence. Its AOT build must emit exactly
@@ -42,6 +58,8 @@ pnpm --filter @aurelia-ls/aot-assurance assure
 node packages/aot-assurance/out/cli.js --receipt .temp/aot-assurance-receipt.json
 node packages/aot-assurance/out/cli.js --scenario hello-world
 node packages/aot-assurance/out/cli.js --scenario local-templates
+node packages/aot-assurance/out/cli.js --scenario built-in-controllers
+node packages/aot-assurance/out/cli.js --scenario browser-recovery
 node packages/aot-assurance/out/cli.js --scenario routed-storefront
 node packages/aot-assurance/out/cli.js --scenario state-backed-form
 node packages/aot-assurance/out/cli.js --scenario projects-and-milestones
@@ -55,9 +73,14 @@ fail-closed for unplanned markup/spread calls; browser success covers its requir
 app-authored compiler override. Bundle size, heap, and timing outcomes belong to the benchmark scorecard; package or
 implementation names are diagnostic evidence rather than assurance purity gates.
 
+G0's parser counter/poison is explicitly harness-owned: a post-analysis transform installs it during root construction
+in both lanes. Its virtual module is not authored application demand, so production compiler-API admission is not
+weakened to accommodate observation instrumentation. The fixture still fails when the probe was not installed.
+
 The `--falsifier mutate-instruction`, `--falsifier restore-needs-compile`, and
 `--falsifier drop-nested-definition` options mutate emitted artifacts and are expected to make the real assurance run
 fail. They remain explicit negative controls rather than a synthetic success-only test mode.
 
-The current G0 fixture intentionally uses standards-valid table structure. Its original foster-parenting pressure
-exposed a distinct G4 compiler-accounting blocker and remains tracked rather than being normalized away here.
+The G0 fixture intentionally keeps standards-valid table structure. Actual foster-parenting recovery now runs through
+the separate `browser-recovery` scenario; the earlier compiler-accounting blocker is no longer reproduced by that
+executable cohort. This does not certify every HTML recovery case, such as discontiguous merged-text interpolation.

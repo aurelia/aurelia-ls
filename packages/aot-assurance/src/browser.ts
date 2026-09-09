@@ -16,6 +16,8 @@ import type {
   StateBackedFormObservation,
 } from './contract.js';
 import { runProjectsAndMilestonesLane } from './projects-and-milestones-browser.js';
+import { runBuiltInControllersLane } from './built-in-controllers-scenario.js';
+import { runBrowserRecoveryLane } from './browser-recovery-scenario.js';
 
 export interface BrowserBatchResult {
   readonly browser: Browser;
@@ -52,6 +54,8 @@ async function runLane(
 ): Promise<LaneTranscript> {
   if (scenario === 'hello-world') return runHelloWorldLane(browser, lane, url);
   if (scenario === 'local-templates') return runLocalTemplatesLane(browser, lane, url);
+  if (scenario === 'built-in-controllers') return runBuiltInControllersLane(browser, lane, url);
+  if (scenario === 'browser-recovery') return runBrowserRecoveryLane(browser, lane, url);
   if (scenario === 'routed-storefront') return runRoutedStorefrontLane(browser, lane, url);
   if (scenario === 'state-backed-form') return runStateBackedFormLane(browser, lane, url);
   if (scenario === 'projects-and-milestones') return runProjectsAndMilestonesLane(browser, lane, url);

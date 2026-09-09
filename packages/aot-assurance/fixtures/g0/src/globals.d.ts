@@ -4,6 +4,7 @@ declare global {
   const __AOT_ASSURANCE_LANE__: 'jit' | 'aot';
 
   interface Window {
+    __aotAssuranceProbe?: { read(): RuntimeProbeSnapshot };
     __aotAssurance?: {
       lane: 'jit' | 'aot';
       ready: boolean;

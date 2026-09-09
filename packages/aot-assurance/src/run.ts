@@ -30,6 +30,14 @@ import {
   assertProjectsAndMilestonesBuildEvidence,
   assertProjectsAndMilestonesExpectations,
 } from './projects-and-milestones-expectations.js';
+import {
+  assertBuiltInControllersBuildEvidence,
+  assertBuiltInControllersExpectations,
+} from './built-in-controllers-scenario.js';
+import {
+  assertBrowserRecoveryBuildEvidence,
+  assertBrowserRecoveryExpectations,
+} from './browser-recovery-scenario.js';
 import { StaticBuildServer } from './server.js';
 
 export interface RunAssuranceOptions {
@@ -49,6 +57,7 @@ export async function runAssurance(options: RunAssuranceOptions): Promise<Assura
     fixtureRoot,
     keepOutput: options.keepOutput === true,
     falsifier: options.falsifier,
+    runtimeParserProbe: scenario === 'g0',
   });
   const jitServer = new StaticBuildServer(builds.jitOutDir);
   const aotServer = new StaticBuildServer(builds.aotOutDir);
@@ -89,6 +98,8 @@ export function assertScenarioBuildEvidence(
 ): void {
   if (scenario === 'hello-world') assertHelloWorldBuildEvidence(evidence);
   else if (scenario === 'local-templates') assertLocalTemplatesBuildEvidence(evidence);
+  else if (scenario === 'built-in-controllers') assertBuiltInControllersBuildEvidence(evidence);
+  else if (scenario === 'browser-recovery') assertBrowserRecoveryBuildEvidence(evidence);
   else if (scenario === 'routed-storefront') assertRoutedStorefrontBuildEvidence(evidence);
   else if (scenario === 'state-backed-form') assertStateBackedFormBuildEvidence(evidence);
   else if (scenario === 'projects-and-milestones') assertProjectsAndMilestonesBuildEvidence(evidence);
@@ -108,6 +119,12 @@ export function assertScenarioBrowserEvidence(
     } else if (scenario === 'local-templates') {
       assertLocalTemplatesExpectations(browserBatch.jit);
       assertLocalTemplatesExpectations(browserBatch.aot);
+    } else if (scenario === 'built-in-controllers') {
+      assertBuiltInControllersExpectations(browserBatch.jit);
+      assertBuiltInControllersExpectations(browserBatch.aot);
+    } else if (scenario === 'browser-recovery') {
+      assertBrowserRecoveryExpectations(browserBatch.jit);
+      assertBrowserRecoveryExpectations(browserBatch.aot);
     } else if (scenario === 'routed-storefront') {
       assertRoutedStorefrontExpectations(browserBatch.jit);
       assertRoutedStorefrontExpectations(browserBatch.aot);
@@ -130,6 +147,10 @@ function defaultFixtureRoot(scenario: AssuranceScenario): string {
       return resolve(packageRoot, '..', '..', 'fixtures', 'hello-world');
     case 'local-templates':
       return resolve(packageRoot, 'fixtures', 'local-templates');
+    case 'built-in-controllers':
+      return resolve(packageRoot, '..', 'semantic-runtime', 'fixtures', 'pressure', 'template-controller-built-ins');
+    case 'browser-recovery':
+      return resolve(packageRoot, 'fixtures', 'browser-recovery');
     case 'routed-storefront':
       return resolve(
         packageRoot,

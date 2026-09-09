@@ -1,8 +1,4 @@
-/* global HTMLElement, __AOT_ASSURANCE_LANE__ */
-/* eslint-disable @typescript-eslint/no-unsafe-call -- Linked fixture framework types are resolved by its Bundler tsconfig. */
-
-import { IAurelia, resolve } from 'aurelia';
-import { installRuntimeProbe } from './runtime-probe';
+/* global HTMLElement */
 
 export class G0App {
   public message = 'alpha';
@@ -12,10 +8,6 @@ export class G0App {
   public items = ['A', 'B'];
   public hostRef: HTMLElement | null = null;
   public readonly events: string[] = [];
-
-  public constructor() {
-    installRuntimeProbe(resolve(IAurelia).container, __AOT_ASSURANCE_LANE__);
-  }
 
   public binding(): void { this.events.push('binding'); }
   public bound(): void { this.events.push('bound'); }
@@ -56,5 +48,3 @@ export class G0App {
     };
   }
 }
-
-/* eslint-enable @typescript-eslint/no-unsafe-call */
