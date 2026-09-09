@@ -48,6 +48,7 @@ import {
 } from './compiler-hooks-scenario.js';
 import { StaticBuildServer } from './server.js';
 import { assertCompatibleHooksBuildEvidence, assertCompatibleHooksExpectations } from './compatible-hooks-scenario.js';
+import { assertContentAttributesBuildEvidence, assertContentAttributesExpectations } from './content-attributes-scenario.js';
 
 export interface RunAssuranceOptions {
   readonly adapterSpecifier: string;
@@ -113,6 +114,7 @@ export function assertScenarioBuildEvidence(
   else if (scenario === 'explicit-shadow') assertExplicitShadowBuildEvidence(evidence);
   else if (scenario === 'compiler-hooks') assertCompilerHooksBuildEvidence(evidence);
   else if (scenario === 'compatible-hooks') assertCompatibleHooksBuildEvidence(evidence);
+  else if (scenario === 'content-attributes') assertContentAttributesBuildEvidence(evidence);
   else if (scenario === 'routed-storefront') assertRoutedStorefrontBuildEvidence(evidence);
   else if (scenario === 'state-backed-form') assertStateBackedFormBuildEvidence(evidence);
   else if (scenario === 'projects-and-milestones') assertProjectsAndMilestonesBuildEvidence(evidence);
@@ -147,6 +149,9 @@ export function assertScenarioBrowserEvidence(
     } else if (scenario === 'compatible-hooks') {
       assertCompatibleHooksExpectations(browserBatch.jit);
       assertCompatibleHooksExpectations(browserBatch.aot);
+    } else if (scenario === 'content-attributes') {
+      assertContentAttributesExpectations(browserBatch.jit);
+      assertContentAttributesExpectations(browserBatch.aot);
     } else if (scenario === 'routed-storefront') {
       assertRoutedStorefrontExpectations(browserBatch.jit);
       assertRoutedStorefrontExpectations(browserBatch.aot);
@@ -179,6 +184,8 @@ function defaultFixtureRoot(scenario: AssuranceScenario): string {
       return resolve(packageRoot, 'fixtures', 'compiler-hooks');
     case 'compatible-hooks':
       return resolve(packageRoot, 'fixtures', 'compatible-hooks');
+    case 'content-attributes':
+      return resolve(packageRoot, 'fixtures', 'content-attributes');
     case 'routed-storefront':
       return resolve(
         packageRoot,

@@ -17,7 +17,7 @@ const adapterSpecifier = options.adapterSpecifier
   ?? process.env.AOT_ASSURANCE_ADAPTER
   ?? new URL('./aot-adapter.js', import.meta.url).href;
 const scenarios: readonly AssuranceScenario[] = options.scenario === 'all'
-  ? ['g0', 'hello-world', 'local-templates', 'built-in-controllers', 'browser-recovery', 'explicit-shadow', 'compiler-hooks', 'compatible-hooks', 'routed-storefront', 'state-backed-form', 'projects-and-milestones']
+  ? ['g0', 'hello-world', 'local-templates', 'built-in-controllers', 'browser-recovery', 'explicit-shadow', 'compiler-hooks', 'compatible-hooks', 'content-attributes', 'routed-storefront', 'state-backed-form', 'projects-and-milestones']
   : [options.scenario];
 if (options.falsifier != null && scenarios.some((scenario) => scenario !== 'g0')) {
   throw new Error('Emission falsifiers are G0-only controls; select --scenario g0.');
@@ -68,6 +68,7 @@ function readOptions(args: readonly string[]): CliOptions {
           && value !== 'explicit-shadow'
           && value !== 'compiler-hooks'
           && value !== 'compatible-hooks'
+          && value !== 'content-attributes'
           && value !== 'routed-storefront'
           && value !== 'state-backed-form'
           && value !== 'projects-and-milestones'

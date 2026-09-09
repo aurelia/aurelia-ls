@@ -4,6 +4,7 @@ import type { BrowserRecoveryApplicationObservation } from './browser-recovery-s
 import type { ExplicitShadowApplicationObservation } from './explicit-shadow-scenario.js';
 import type { CompilerHooksApplicationObservation } from './compiler-hooks-scenario.js';
 import type { CompatibleHooksApplicationObservation } from './compatible-hooks-scenario.js';
+import type { ContentAttributesApplicationObservation } from './content-attributes-scenario.js';
 
 export type AssuranceLane = 'jit' | 'aot';
 export type AssuranceScenario =
@@ -15,6 +16,7 @@ export type AssuranceScenario =
   | 'explicit-shadow'
   | 'compiler-hooks'
   | 'compatible-hooks'
+  | 'content-attributes'
   | 'routed-storefront'
   | 'state-backed-form'
   | 'projects-and-milestones';
@@ -189,6 +191,7 @@ export type ApplicationObservation =
   | ExplicitShadowApplicationObservation
   | CompilerHooksApplicationObservation
   | CompatibleHooksApplicationObservation
+  | ContentAttributesApplicationObservation
   | RoutedStorefrontApplicationObservation
   | StateBackedFormApplicationObservation
   | ProjectsAndMilestonesApplicationObservation;

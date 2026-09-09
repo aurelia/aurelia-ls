@@ -11,9 +11,16 @@ therefore run through the generated base-runtime facade instead of retaining the
 The routed storefront additionally requires its exact 11-resource/11-renderer plan and an omitted event modifier, so
 browser parity exercises the optimized configuration rather than only a compile-free conservative fallback.
 
-The default package assurance runs eleven complementary scenarios:
+The default package assurance runs twelve complementary scenarios:
 
 - `g0` is the deeply instrumented parser/teardown control and owns the runtime string-parse guard;
+- `content-attributes` is strict AOT for ordinary source-hook attribute transforms. It creates, removes and readds
+  attributes; generates input bindings, custom attributes, `as-element` components, `if`/`repeat` controllers, and a
+  select whose generated `value` binding precedes `multiple` in source order. HTML/SVG classList and xlink/XML
+  namespace operations run through the same hook. Seven checkpoints cover updates, two-way writeback, controller
+  removal/restoration, repeat growth while hidden, and teardown. It preserves the distinction between selected
+  options in DOM order and Aurelia's in-place model-array update order. Exactly three compiler-final definitions
+  and replacement runtime configuration are required; compatible fallback cannot satisfy this scenario.
 - `compatible-hooks` exercises explicit runtime-compilation preservation through the same two-lane build/browser
   harness. After a geometry API unsupported by the build evaluator, its hook rewrites a separate component's
   definition before that component's first compilation. Five checkpoints check untouched definitions before lazy

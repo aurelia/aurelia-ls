@@ -1,0 +1,17 @@
+<template>
+  <output id="message-value">${message}</output>
+  <button id="toggle" click.trigger="active = !active">Toggle</button>
+  <button id="append" click.trigger="append()">Append</button>
+  <output id="selected-value">${selected.join(',')}</output>
+  <attribute-lab id="lab">
+    <div id="order-case" data-case="order" data-first="first" data-remove="remove" data-second="second">order</div>
+    <input id="generated-input" data-case="input" value="authored-static" title.bind="discarded" placeholder.bind="discarded">
+    <p id="attribute-case" data-case="attribute">stamped</p>
+    <div id="element-case" data-case="element"></div>
+    <p id="conditional-case" data-case="conditional">conditional:${message}</p>
+    <p class="generated-row" data-case="repeat">${item}:${message}</p>
+    <select id="generated-select" data-case="select"><option value="a">A</option><option value="b">B</option></select>
+    <div id="classes-case" data-case="classes" class="authored">classes</div>
+    <svg id="svg-case" data-case="svg" viewBox="0 0 20 20" xmlns:xlink="http://www.w3.org/1999/xlink"><a id="svg-link" class="base old old" xlink:href="#old"><text>vector</text></a></svg>
+  </attribute-lab>
+</template>

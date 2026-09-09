@@ -1,0 +1,185 @@
+/* global window, document, Element, HTMLElement, HTMLInputElement, HTMLSelectElement, requestAnimationFrame */
+import assert from 'node:assert/strict';
+import type { Browser, Page } from 'playwright';
+import type { AotBuildEvidence, AssuranceLane, CheckpointTranscript, LaneTranscript, LiveElementTranscript } from './contract.js';
+
+export interface ContentAttributesApplicationObservation {
+  readonly kind: 'content-attributes';
+  readonly live: readonly LiveElementTranscript[];
+  readonly focus: string | null;
+  readonly model: {
+    readonly message: string;
+    readonly host: readonly (readonly [string, string])[];
+    readonly order: readonly (readonly [string, string])[];
+    readonly orderNamespace: { readonly upper: string | null; readonly lower: string | null; readonly html: string | null };
+    readonly input: { readonly title: string | null; readonly valueAttribute: string | null; readonly placeholder: string | null };
+    readonly stamped: string | null;
+    readonly card: string;
+    readonly cardHost: string;
+    readonly conditional: string | null;
+    readonly rows: readonly string[];
+    readonly selection: { readonly multiple: boolean; readonly values: readonly string[]; readonly model: string };
+    readonly classes: { readonly value: string | null; readonly tokens: string | null };
+    readonly svg: {
+      readonly viewBox: string | null;
+      readonly classes: string | null;
+      readonly readback: string | null;
+      readonly namespaced: readonly (readonly [string, string | null, string])[];
+    };
+  };
+}
+
+declare global {
+  interface Window {
+    contentAttributesFixture?: { stop(): Promise<void> };
+  }
+}
+
+export async function runContentAttributesLane(browser: Browser, lane: AssuranceLane, url: string): Promise<LaneTranscript> {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const consoleMessages: string[] = [];
+  const pageErrors: string[] = [];
+  page.on('console', (message) => consoleMessages.push(`${message.type()}:${message.text()}`));
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  try {
+    await page.goto(url, { waitUntil: 'load' });
+    try {
+      await page.waitForFunction(() => window.contentAttributesFixture != null, undefined, { timeout: 15_000 });
+    } catch (error) {
+      throw new Error(`${lane} content-attributes fixture did not start\n${pageErrors.join('\n')}`, { cause: error });
+    }
+    const checkpoints: CheckpointTranscript[] = [];
+    const checkpoint = async (label: string): Promise<void> => {
+      await settle(page);
+      checkpoints.push({ label, observation: await capture(page) });
+    };
+    await checkpoint('generated-attribute-families');
+    await page.locator('#generated-input').fill('bravo');
+    await checkpoint('generated-two-way-writeback');
+    await page.locator('#toggle').click();
+    await checkpoint('generated-controllers-hidden');
+    await page.locator('#append').click();
+    await checkpoint('repeat-growth-while-hidden');
+    await page.locator('#generated-select').focus();
+    await page.locator('#generated-select').selectOption(['a', 'b']);
+    await checkpoint('generated-select-multiple-writeback');
+    await page.locator('#toggle').click();
+    await checkpoint('generated-controllers-restored');
+    await page.locator('#generated-input').fill('charlie');
+    await checkpoint('restored-bindings-update');
+    await page.evaluate(() => window.contentAttributesFixture!.stop());
+    assert.equal(await page.locator('content-attributes-app').evaluate((host) => host.childNodes.length), 0);
+    return { lane, semantic: { checkpoints, teardownEvents: null, console: consoleMessages, pageErrors }, probes: null };
+  } finally {
+    await context.close();
+  }
+}
+
+async function settle(page: Page): Promise<void> {
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+}
+
+async function capture(page: Page): Promise<ContentAttributesApplicationObservation> {
+  return page.evaluate(() => {
+    const root = document.querySelector('content-attributes-app')!;
+    const input = root.querySelector<HTMLInputElement>('#generated-input')!;
+    const select = root.querySelector<HTMLSelectElement>('#generated-select')!;
+    const order = root.querySelector('#order-case')!;
+    const link = root.querySelector('#svg-link')!;
+    const attributes = (element: Element) => Array.from(element.attributes, (attribute) => [attribute.name, attribute.value] as const);
+    return {
+      kind: 'content-attributes',
+      live: [{ id: input.id, value: input.value }],
+      focus: document.activeElement instanceof HTMLElement ? document.activeElement.id || null : null,
+      model: {
+        message: root.querySelector('#message-value')!.textContent,
+        host: attributes(root.querySelector('#lab')!),
+        order: attributes(order),
+        orderNamespace: {
+          upper: order.getAttributeNS(null, 'DATA-UPPER'),
+          lower: order.getAttributeNS(null, 'data-upper'),
+          html: order.getAttribute('DATA-UPPER'),
+        },
+        input: { title: input.getAttribute('title'), valueAttribute: input.getAttribute('value'), placeholder: input.getAttribute('placeholder') },
+        stamped: root.querySelector('#attribute-case')!.getAttribute('data-stamped'),
+        card: root.querySelector('.card-value')!.textContent,
+        cardHost: root.querySelector('#element-case')!.localName,
+        conditional: root.querySelector('#conditional-case')?.textContent ?? null,
+        rows: Array.from(root.querySelectorAll('.generated-row'), (row) => row.textContent),
+        selection: { multiple: select.multiple, values: Array.from(select.selectedOptions, (option) => option.value), model: root.querySelector('#selected-value')!.textContent },
+        classes: { value: root.querySelector('#classes-case')!.getAttribute('class'), tokens: root.querySelector('#classes-case')!.getAttribute('data-tokens') },
+        svg: {
+          viewBox: root.querySelector('#svg-case')!.getAttribute('viewBox'),
+          classes: link.getAttribute('class'),
+          readback: link.getAttribute('data-namespace-read'),
+          namespaced: Array.from(link.attributes).filter((attribute) => attribute.namespaceURI != null)
+            .map((attribute) => [attribute.name, attribute.namespaceURI, attribute.value] as const),
+        },
+      },
+    };
+  });
+}
+
+export function assertContentAttributesBuildEvidence(evidence: AotBuildEvidence): void {
+  assert.equal(evidence.compilation.mode, 'strict');
+  assert.equal(evidence.compilation.fallbackScope, 'none');
+  assert.deepEqual(evidence.artifacts.map((artifact) => artifact.definitionName).sort(), [
+    'attribute-card', 'attribute-lab', 'content-attributes-app',
+  ]);
+}
+
+export function assertContentAttributesExpectations(transcript: LaneTranscript): void {
+  assert.deepEqual(transcript.semantic.pageErrors, []);
+  assert.deepEqual(transcript.semantic.console, []);
+  assert.equal(transcript.probes, null);
+  assert.equal(transcript.semantic.teardownEvents, null);
+  const cases = [
+    ['generated-attribute-families', 'alpha', true, 2, ['b'], null],
+    ['generated-two-way-writeback', 'bravo', true, 2, ['b'], 'generated-input'],
+    ['generated-controllers-hidden', 'bravo', false, 2, ['b'], 'toggle'],
+    ['repeat-growth-while-hidden', 'bravo', false, 3, ['b'], 'append'],
+    ['generated-select-multiple-writeback', 'bravo', false, 3, ['a', 'b'], 'generated-select'],
+    ['generated-controllers-restored', 'bravo', true, 3, ['a', 'b'], 'toggle'],
+    ['restored-bindings-update', 'charlie', true, 3, ['a', 'b'], 'generated-input'],
+  ] as const;
+  assert.equal(transcript.semantic.checkpoints.length, cases.length);
+  for (const [index, [label, message, active, count, selection, focus]] of cases.entries()) {
+    assert.deepEqual(transcript.semantic.checkpoints[index], {
+      label,
+      observation: {
+        kind: 'content-attributes',
+        live: [{ id: 'generated-input', value: message }],
+        focus,
+        model: {
+          message,
+          host: [['id', 'lab'], ['data-host-created', 'yes'], ['class', 'generated-host']],
+          order: [
+            ['id', 'order-case'], ['data-case', 'order'], ['data-second', 'replaced'], ['data-first', 'readded'],
+            ['data-forced', ''], ['data-toggle-result', 'true:false:true'],
+            ['DATA-UPPER', 'upper'],
+            ['data-namespace-case', 'upper:null:null'],
+            ['data-order', 'id|data-case|data-second|data-first|data-forced|data-toggle-result|DATA-UPPER|data-namespace-case'],
+          ],
+          orderNamespace: { upper: 'upper', lower: null, html: null },
+          input: { title: message, valueAttribute: null, placeholder: null },
+          stamped: message,
+          card: `card:${message}`,
+          cardHost: 'div',
+          conditional: active ? `conditional:${message}` : null,
+          rows: active ? ['one', 'two', 'three'].slice(0, count).filter((item) => item !== 'two').map((item) => `${item}:${message}`) : [],
+          // SelectValueObserver preserves existing model members and appends new selections, independently of DOM order.
+          selection: { multiple: true, values: selection, model: selection.length === 1 ? 'b' : 'b,a' },
+          classes: { value: 'base highlight active', tokens: '3:highlight:true' },
+          svg: {
+            viewBox: '0 0 10 10', classes: 'base highlight active', readback: 'true:#final',
+            namespaced: [
+              ['xlink:href', 'http://www.w3.org/1999/xlink', '#final'],
+              ['xml:lang', 'http://www.w3.org/XML/1998/namespace', 'en'],
+            ],
+          },
+        },
+      },
+    }, `${transcript.lane} ${label}`);
+  }
+}
