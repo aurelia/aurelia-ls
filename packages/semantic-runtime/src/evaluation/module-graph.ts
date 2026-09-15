@@ -142,6 +142,10 @@ export function readEvaluationModuleRecord(
       imports.push(...readImportEntries(statement, sourceFile, compilerOptions));
       continue;
     }
+    if (ts.isImportEqualsDeclaration(statement)) {
+      imports.push(...readImportEqualsEntries(statement, sourceFile, compilerOptions));
+      continue;
+    }
     if (ts.isExportDeclaration(statement)) {
       exports.push(...readExportDeclarationEntries(statement, sourceFile, compilerOptions));
       continue;
@@ -164,6 +168,32 @@ export function readEvaluationModuleRecord(
     ...readCommonJsRequireEntries(sourceFile, compilerOptions),
     ...readDynamicImportEntries(sourceFile, compilerOptions),
   ], exports);
+}
+
+function readImportEqualsEntries(
+  statement: ts.ImportEqualsDeclaration,
+  sourceFile: ts.SourceFile,
+  compilerOptions: ts.CompilerOptions,
+): readonly EvaluationImportEntry[] {
+  if (
+    statement.isTypeOnly
+    || !ts.isExternalModuleReference(statement.moduleReference)
+    || statement.moduleReference.expression == null
+    || !ts.isStringLiteralLike(statement.moduleReference.expression)
+  ) {
+    return [];
+  }
+  const specifier = statement.moduleReference.expression;
+  // Import-equals executes its target as a static dependency. Preserve that graph edge without pretending that the
+  // evaluator already models the declaration's CommonJS-shaped local value.
+  return [new EvaluationImportEntry(
+    EvaluationImportKind.SideEffect,
+    specifier.text,
+    null,
+    null,
+    statement,
+    ts.getModeForUsageLocation(sourceFile, specifier, compilerOptions),
+  )];
 }
 
 /** Normalize module keys for graph lookups and emitted diagnostics. */

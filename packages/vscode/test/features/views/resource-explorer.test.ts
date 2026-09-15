@@ -728,6 +728,33 @@ describe("ResourceExplorerProvider", () => {
     expect(findNode(await roots(harness.provider), "initial-card")).toBeDefined();
   });
 
+  test("does not dispatch analysis limitations before inventory settles", async () => {
+    const inventory = deferred<unknown>();
+    const getAnalysisLimitations = vi.fn(async () => null);
+    const harness = createHarness(() => inventory.promise, getAnalysisLimitations);
+
+    const pending = harness.provider.refresh();
+    await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledOnce());
+    expect(getAnalysisLimitations).not.toHaveBeenCalled();
+
+    inventory.resolve(response([readyProject([])]));
+    await vi.waitFor(() => expect(getAnalysisLimitations).toHaveBeenCalledOnce());
+    await pending;
+  });
+
+  test("skips analysis limitations when inventory is superseded before settling", async () => {
+    const inventory = new Promise<unknown>(() => undefined);
+    const getAnalysisLimitations = vi.fn(async () => null);
+    const harness = createHarness(() => inventory, getAnalysisLimitations);
+
+    const pending = harness.provider.refresh();
+    await vi.waitFor(() => expect(harness.getResourceInventory).toHaveBeenCalledOnce());
+    harness.provider.supersedeRefresh(null);
+    await pending;
+
+    expect(getAnalysisLimitations).not.toHaveBeenCalled();
+  });
+
   test("observes coherent publications with exact row state and navigation facts", async () => {
     const observation = captureResourceDiscoveryObservations("resource-explorer");
     try {
@@ -989,7 +1016,11 @@ describe("ResourceExplorerProvider", () => {
     expect(cardNode.children?.map((node) => node.label)).toEqual(["store-card", "labelText (display-label)"]);
     expect(cardNode.children?.[1]?.description).toBe("mode default");
     expect(harness.getResourceInventory).toHaveBeenCalledWith(
-      { includeTypeSurfaces: false },
+      { includeTypeSurfaces: false, projectSelection: "default-app" },
+      expect.anything(),
+    );
+    expect(harness.getAnalysisLimitations).toHaveBeenCalledWith(
+      { projectSelection: "default-app" },
       expect.anything(),
     );
     expect(harness.provider.getTreeItem(cardNode as never).command).toEqual(expect.objectContaining({
@@ -1469,6 +1500,7 @@ describe("ResourceExplorerProvider", () => {
       {
         workspaceKey: workspaceA.key,
         includeTypeSurfaces: false,
+        projectSelection: "default-app",
       },
       expect.anything(),
     );
@@ -1682,7 +1714,7 @@ describe("ResourceExplorerProvider", () => {
     await harness.provider.refreshWorkspace(workspaceA.key);
 
     expect(harness.getResourceInventory).toHaveBeenCalledWith(
-      { includeTypeSurfaces: false },
+      { includeTypeSurfaces: false, projectSelection: "default-app" },
       expect.anything(),
     );
     expect((await roots(harness.provider)).map((node) => node.label)).toEqual([

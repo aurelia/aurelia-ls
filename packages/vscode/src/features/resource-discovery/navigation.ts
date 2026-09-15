@@ -78,7 +78,10 @@ export async function openResourceNavigation(
   observe("start", () => ({ workspaceKey: request.workspaceKey, projectKey: request.projectKey }));
   let inventory;
   try {
-    inventory = await lsp.getResourceInventory({ workspaceKey: request.workspaceKey });
+    inventory = await lsp.getResourceInventory({
+      workspaceKey: request.workspaceKey,
+      projectKey: request.projectKey,
+    });
   } catch (error) {
     refuse("inventory-request-failed", () => null);
     throw error;

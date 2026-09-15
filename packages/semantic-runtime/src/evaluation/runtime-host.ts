@@ -6,7 +6,7 @@ import {
   StaticInvocationDispatchKind,
   StaticInvocationNotApplicable,
 } from './invocation.js';
-import type { EvaluationClassValue, EvaluationFunctionValue } from './values.js';
+import type { EvaluationClassValue, EvaluationFunctionValue, EvaluationValue } from './values.js';
 
 const defaultGraphIsolatedBranchOperations: StaticEvaluationRuntimeHostOperations = {};
 
@@ -21,6 +21,14 @@ export function isStaticEvaluationCallableExternallyOwned(
   value: EvaluationFunctionValue | EvaluationClassValue,
 ): boolean {
   return host.isCallableExternallyOwned?.(value) ?? host.evaluateInvocation != null;
+}
+
+/** A metadata owner must explicitly prove that ordinary snapshot storage can omit its state. */
+export function staticEvaluationRuntimeHostCanShareSnapshotValue(
+  host: StaticEvaluationRuntimeHostOperations,
+  value: EvaluationValue,
+): boolean {
+  return host.canShareSnapshotValue?.(value) ?? host.transferValueMetadata == null;
 }
 
 /** Materialize a complete host permitted inside one graph-isolated unresolved branch. */

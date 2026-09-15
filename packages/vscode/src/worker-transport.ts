@@ -1,5 +1,11 @@
 import { Worker } from "node:worker_threads";
 import {
+  AURELIA_WORKER_PROGRESS_SCHEMA,
+  isAureliaWorkerProgressMessage,
+  readAureliaWorkerProgressSnapshot,
+  type AureliaWorkerProgressSnapshot,
+} from "@aurelia-ls/language-server/protocol";
+import {
   AbstractMessageReader,
   AbstractMessageWriter,
   CancellationReceiverStrategy,
@@ -15,12 +21,20 @@ export const FORCE_IPC_TRANSPORT_ENV = "AURELIA_LS_FORCE_IPC_TRANSPORT";
 
 const DEFAULT_WORKER_SHUTDOWN_GRACE_MS = 2_000;
 const DEBUG_FLAGS = new Set(["--debug", "--debug-brk", "--inspect", "--inspect-brk"]);
+let nextWorkerInstance = 0;
+
+export interface WorkerProgressEvidence {
+  /** Host-owned identity, distinct for replacement Workers of the same language client. */
+  readonly workerInstance: number;
+  readonly snapshot: AureliaWorkerProgressSnapshot;
+}
 
 export type WorkerTransportEvent =
   | { readonly type: "online" }
   | { readonly type: "stdout"; readonly text: string }
   | { readonly type: "stderr"; readonly text: string }
-  | { readonly type: "error"; readonly error: Error }
+  | { readonly type: "progress"; readonly progress: WorkerProgressEvidence }
+  | { readonly type: "error"; readonly error: Error; readonly lastProgress?: WorkerProgressEvidence }
   | { readonly type: "exit"; readonly code: number }
   | { readonly type: "force-terminate"; readonly graceMilliseconds: number };
 
@@ -73,6 +87,7 @@ export function createWorkerMessageTransports(
   const worker = options.createWorker?.(serverModule) ?? new Worker(serverModule, {
     stdout: true,
     stderr: true,
+    workerData: { aureliaWorkerProgress: AURELIA_WORKER_PROGRESS_SCHEMA },
   });
   worker.unref();
   const lifetime = new WorkerLifetime(
@@ -111,6 +126,8 @@ class WorkerLifetime {
   #exitCode: number | undefined;
   #terminationTimer: ReturnType<typeof setTimeout> | undefined;
   #terminationPromise: Promise<number> | undefined;
+  readonly #workerInstance = ++nextWorkerInstance;
+  #lastProgress: WorkerProgressEvidence | undefined;
 
   constructor(
     worker: Worker,
@@ -133,6 +150,7 @@ class WorkerLifetime {
     });
     worker.once("error", (error) => this.#handleError(error));
     worker.once("exit", (code) => this.#handleExit(code));
+    worker.on("message", this.#handleProgress);
   }
 
   attach(reader: OwnedWorkerMessageReader, writer: OwnedWorkerMessageWriter): void {
@@ -172,13 +190,14 @@ class WorkerLifetime {
   }
 
   #handleError(error: Error): void {
-    this.#report({ type: "error", error });
+    this.#report({ type: "error", error, ...(this.#lastProgress == null ? {} : { lastProgress: this.#lastProgress }) });
     this.#writer?.signalError(error);
   }
 
   #handleExit(code: number): void {
     if (this.#exitCode != null) return;
     this.#exitCode = code;
+    this.#worker.off("message", this.#handleProgress);
     if (this.#terminationTimer != null) {
       clearTimeout(this.#terminationTimer);
       this.#terminationTimer = undefined;
@@ -188,6 +207,15 @@ class WorkerLifetime {
     this.#writer?.signalClose();
     this.#resolveExited(code);
   }
+
+  readonly #handleProgress = (message: unknown): void => {
+    if (this.#exitCode != null || !isAureliaWorkerProgressMessage(message)) return;
+    const snapshot = readAureliaWorkerProgressSnapshot(message.snapshot);
+    if (snapshot == null || snapshot.sequence <= (this.#lastProgress?.snapshot.sequence ?? 0)) return;
+    const progress = { workerInstance: this.#workerInstance, snapshot };
+    this.#lastProgress = progress;
+    this.#report({ type: "progress", progress });
+  };
 
   #report(event: WorkerTransportEvent): void {
     try {
@@ -217,7 +245,10 @@ class OwnedWorkerMessageReader extends AbstractMessageReader {
       throw new Error("Worker message reader can only listen once");
     }
     this.#listened = true;
-    const listener = (message: Message): void => callback(message);
+    const listener = (message: Message): void => {
+      // Operational messages are consumed by the lifetime owner, never admitted as JSON-RPC traffic.
+      if (!isAureliaWorkerProgressMessage(message)) callback(message);
+    };
     this.#messageListener = listener;
     this.#worker.on("message", listener);
     return Disposable.create(() => {

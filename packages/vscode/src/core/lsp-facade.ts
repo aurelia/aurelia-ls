@@ -3,7 +3,9 @@ import { LSPErrorCodes } from "vscode-languageserver-protocol";
 import {
   AureliaProtocolNotification,
   AureliaProtocolRequest,
+  type AnalysisLimitationsParams,
   type AnalysisLimitationsResponse,
+  type AppProjectSelectionKind,
   type AttributeInterpretationExplanationParams,
   type AttributeInterpretationExplanationResponse,
   type BindingUncertaintyExplanationParams,
@@ -49,10 +51,13 @@ const READ_CURRENTNESS_RETRY_LIMIT = 2;
 export interface ResourceInventoryOptions {
   readonly workspaceKey?: string;
   readonly includeTypeSurfaces?: boolean;
+  readonly projectSelection?: AppProjectSelectionKind;
+  readonly projectKey?: string;
 }
 
 export interface AnalysisLimitationsOptions {
   readonly workspaceKey?: string;
+  readonly projectSelection?: AppProjectSelectionKind;
 }
 
 /** Routes custom LSP traffic across the active workspace-owned client sessions. */
@@ -129,9 +134,11 @@ export class LspFacade implements Disposable {
       ? 0
       : await beforeControl.beforeDispatch(controlRequest, token);
     this.#assertSessionCohortCurrent(sessions, options.workspaceKey);
-    const params: ResourceInventoryParams = options.includeTypeSurfaces === true
-      ? { includeTypeSurfaces: true }
-      : {};
+    const params: ResourceInventoryParams = {
+      ...(options.includeTypeSurfaces === true ? { includeTypeSurfaces: true } : {}),
+      ...(options.projectSelection == null ? {} : { projectSelection: options.projectSelection }),
+      ...(options.projectKey == null ? {} : { projectKey: options.projectKey }),
+    };
     const rows = await Promise.all(sessions.map(async (session) => {
       try {
         const response = await this.#sendRequest<ResourceInventoryResponse>(
@@ -174,12 +181,15 @@ export class LspFacade implements Disposable {
       ? this.#clients.sessions
       : this.#clients.sessions.filter((session) => session.workspace.key === options.workspaceKey);
     if (sessions.length === 0) return null;
+    const params: AnalysisLimitationsParams | undefined = options.projectSelection == null
+      ? undefined
+      : { projectSelection: options.projectSelection };
     const workspaces = await Promise.all(sessions.map(async (session) => {
       try {
         const response = await this.#sendRequest<AnalysisLimitationsResponse>(
           session,
           AureliaProtocolRequest.AnalysisLimitations,
-          undefined,
+          params,
           token,
           "read-currentness",
         );

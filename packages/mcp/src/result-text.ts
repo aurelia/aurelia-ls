@@ -128,6 +128,12 @@ function semanticAnswerDisplayText(value: unknown): string | null {
   if (analysisDepth != null) {
     lines.push(analysisDepth);
   }
+  const applicationEntrypointPolicy = semanticAnswerApplicationEntrypointPolicyText(
+    value.applicationEntrypointPolicy,
+  );
+  if (applicationEntrypointPolicy != null) {
+    lines.push(applicationEntrypointPolicy);
+  }
   const templateAnalysisBreadth = semanticAnswerTemplateAnalysisBreadthText(value.templateAnalysisBreadth);
   if (templateAnalysisBreadth != null) {
     lines.push(templateAnalysisBreadth);
@@ -168,6 +174,12 @@ function semanticAnswerStateText(value: Record<string, unknown>): string | null 
 function semanticAnswerAnalysisDepthText(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0
     ? `Analysis depth used: ${value}.`
+    : null;
+}
+
+function semanticAnswerApplicationEntrypointPolicyText(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0
+    ? `Application entrypoint policy used: ${value}.`
     : null;
 }
 

@@ -17,7 +17,7 @@ declare const __AURELIA_MCP_SERVER_VERSION__: string | undefined;
 export const AURELIA_MCP_SERVER_NAME = 'au-mcp' as const;
 export const AURELIA_MCP_SERVER_VERSION = typeof __AURELIA_MCP_SERVER_VERSION__ === 'string'
   ? __AURELIA_MCP_SERVER_VERSION__
-  : '0.3.2';
+  : '0.3.3';
 
 export const aureliaMcpToolNames = {
   workspaceOverview: 'aurelia_workspace_overview',
@@ -186,6 +186,7 @@ export interface AureliaMcpTemplateCursorInput extends AureliaMcpWorkspaceInput,
   readonly cursor: SemanticRuntimeSourceCursorInput;
   readonly projectKey?: string | null;
   readonly analysisDepth?: OpenSemanticAppOptions['analysisDepth'] | null;
+  readonly applicationEntrypointPolicy?: OpenSemanticAppOptions['applicationEntrypointPolicy'] | null;
   readonly includeAuthoringTemplates?: boolean | null;
   readonly authoringTemplateSourceFiles?: readonly string[] | null;
   readonly authoringTemplateLimit?: number | null;
@@ -199,6 +200,7 @@ export interface AureliaMcpTemplateDiagnosticsInput extends AureliaMcpWorkspaceI
   readonly diagnosticProjection?: SemanticAppQuery['diagnosticProjection'];
   readonly projectKey?: string | null;
   readonly analysisDepth?: OpenSemanticAppOptions['analysisDepth'] | null;
+  readonly applicationEntrypointPolicy?: OpenSemanticAppOptions['applicationEntrypointPolicy'] | null;
   readonly includeAuthoringTemplates?: boolean | null;
   readonly authoringTemplateSourceFiles?: readonly string[] | null;
   readonly authoringTemplateLimit?: number | null;

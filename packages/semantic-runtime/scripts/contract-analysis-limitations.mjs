@@ -222,7 +222,12 @@ async function openFixture(fixtureName, storeKey) {
     workspaceRoot: path.join(pressureRoot, fixtureName),
     storeKey,
   });
-  return runtime.openApp({ analysisDepth: 'binding-observation' });
+  return runtime.openApp({
+    analysisDepth: 'binding-observation',
+    ...(fixtureName === 'observer-setup-selection'
+      ? { applicationEntrypointPolicy: 'aggregate-independent-graphs' }
+      : {}),
+  });
 }
 
 async function withConfiguredFixture(disposition, callback) {

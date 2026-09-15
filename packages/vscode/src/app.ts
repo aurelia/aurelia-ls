@@ -1,4 +1,5 @@
 import type {
+  CancellationToken,
   CancellationTokenSource,
   Disposable,
   ExtensionContext,
@@ -20,6 +21,48 @@ import {
 } from "./template-language.js";
 import { emitWorkerRestartContextObservation } from "./worker-restart-host-control.js";
 import type { SupportReportService } from "./support-report.js";
+
+const INITIAL_CONTEXT_READINESS_TIMEOUT_MS = 15_000;
+const INITIAL_CONTEXT_RETRY_DELAY_MS = 1_000;
+
+class ContextTransitionCancelledError extends Error {
+  constructor() {
+    super("Aurelia client context transition was superseded.");
+    this.name = "Canceled";
+  }
+}
+
+/** Owns feature contributions even when extension teardown races an asynchronous feature activation. */
+class FeatureActivationScope implements Disposable {
+  readonly #logger: ClientLogger;
+  #contributions: Disposable[] = [];
+  #open = true;
+
+  constructor(logger: ClientLogger) {
+    this.#logger = logger;
+  }
+
+  get isOpen(): boolean {
+    return this.#open;
+  }
+
+  readonly own = <T extends Disposable>(contribution: T): T => {
+    if (this.#open) {
+      this.#contributions.push(contribution);
+    } else {
+      disposeOwned(this.#logger, "late feature contribution", [contribution]);
+    }
+    return contribution;
+  };
+
+  dispose(): void {
+    if (!this.#open) return;
+    this.#open = false;
+    const contributions = this.#contributions;
+    this.#contributions = [];
+    disposeOwned(this.#logger, "feature contributions", [...contributions].reverse());
+  }
+}
 
 export interface ClientAppServices {
   readonly vscode: VscodeApi;
@@ -45,10 +88,11 @@ export class ClientApp {
   #lsp: LspFacade | null = null;
   #templateLanguage: OwnedTemplateLanguageController | null = null;
   #subscriptions: readonly Disposable[] = [];
-  #featureActivations: readonly Disposable[] = [];
+  #featureActivation: FeatureActivationScope | null = null;
   #contextTransition: Promise<void> = Promise.resolve();
   #contextCommit: Promise<void> = Promise.resolve();
   #contextCancellation: CancellationTokenSource | null = null;
+  #contextReadinessRetry: ReturnType<typeof setTimeout> | null = null;
   #contextRequest = 0;
   #analysisSequence = 0;
   readonly #analysisVersions = new Map<string, WorkspaceAnalysisVersion>();
@@ -91,11 +135,19 @@ export class ClientApp {
 
       const templateLanguage = new OwnedTemplateLanguageController(ctx);
       this.#templateLanguage = templateLanguage;
-      templateLanguage.start();
 
-      this.#featureActivations = await activateFeatures(ctx, features);
       this.#subscriptions = this.#registerStateListeners(ctx);
-      await this.#queueContextTransition(ctx);
+      // A restored visible feature may issue workspace-wide requests as soon as it activates. Settle the value-neutral
+      // active-document context first; owned, unowned, and absent-document outcomes all release this readiness barrier.
+      void this.#queueContextTransition(ctx);
+      await this.#awaitInitialContextReadiness(ctx);
+      if (this.#ctx !== ctx || this.#deactivation != null) return;
+      // Reconcile every open template after the active editor has had the first ownership read. The controller remains
+      // independently authoritative for language-mode projection, but no longer competes with cold-start context work.
+      templateLanguage.start();
+      const featureActivation = new FeatureActivationScope(ctx.logger);
+      this.#featureActivation = featureActivation;
+      await activateFeatures(ctx, features, featureActivation);
     } catch (error) {
       this.#deactivation ??= this.#deactivate(error);
       await this.#deactivation;
@@ -175,6 +227,37 @@ export class ClientApp {
     return transition;
   }
 
+  async #awaitInitialContextReadiness(ctx: ClientContext): Promise<void> {
+    const deadline = Date.now() + INITIAL_CONTEXT_READINESS_TIMEOUT_MS;
+    while (this.#ctx === ctx) {
+      const request = this.#contextRequest;
+      const transition = this.#contextTransition;
+      const remaining = deadline - Date.now();
+      if (remaining <= 0 || !await settlesBeforeDeadline(transition, remaining)) {
+        ctx.logger.warn(
+          `[client] initial document context did not settle within ${INITIAL_CONTEXT_READINESS_TIMEOUT_MS}ms; `
+          + "activating features with value-neutral ownership",
+        );
+        this.#cancelContextRequest();
+        this.#scheduleContextReadinessRetry(ctx, this.#contextRequest);
+        return;
+      }
+      if (request === this.#contextRequest && transition === this.#contextTransition) {
+        return;
+      }
+    }
+  }
+
+  #scheduleContextReadinessRetry(ctx: ClientContext, request: number): void {
+    if (this.#contextReadinessRetry != null) return;
+    this.#contextReadinessRetry = setTimeout(() => {
+      this.#contextReadinessRetry = null;
+      if (this.#ctx === ctx && this.#contextRequest === request) {
+        void this.#queueContextTransition(ctx);
+      }
+    }, INITIAL_CONTEXT_RETRY_DELAY_MS);
+  }
+
   async #resolveContextTransition(
     ctx: ClientContext,
     request: number,
@@ -214,7 +297,10 @@ export class ClientApp {
         session.incarnation,
       )) return;
       try {
-        ownership = await ctx.lsp.getSourceOwnership(uri, cancellation.token);
+        ownership = await untilContextCancellation(
+          ctx.lsp.getSourceOwnership(uri, cancellation.token),
+          cancellation.token,
+        );
       } catch (error) {
         if (!cancellation.token.isCancellationRequested) {
           ctx.logger.warn(`[client] source ownership unavailable for ${uri}: ${errorMessage(error)}`);
@@ -338,6 +424,10 @@ export class ClientApp {
     this.#ctx = null;
     this.#contextRequest += 1;
     this.#cancelContextRequest();
+    if (this.#contextReadinessRetry != null) {
+      clearTimeout(this.#contextReadinessRetry);
+      this.#contextReadinessRetry = null;
+    }
 
     disposeOwned(logger, "client subscriptions", [...this.#subscriptions].reverse());
     this.#subscriptions = [];
@@ -355,8 +445,9 @@ export class ClientApp {
         logger.error("[client] template language restoration failed", undefined, error);
       }
     }
-    disposeOwned(logger, "feature contributions", [...this.#featureActivations].reverse());
-    this.#featureActivations = [];
+    const featureActivation = this.#featureActivation;
+    this.#featureActivation = null;
+    featureActivation?.dispose();
     disposeOwned(logger, "LSP facade", this.#lsp == null ? [] : [this.#lsp]);
     this.#lsp = null;
 
@@ -377,22 +468,53 @@ export class ClientApp {
   }
 }
 
+async function untilContextCancellation<T>(
+  operation: Promise<T>,
+  token: CancellationToken,
+): Promise<T> {
+  if (token.isCancellationRequested) throw new ContextTransitionCancelledError();
+  let subscription: Disposable | undefined;
+  const cancellation = new Promise<never>((_resolve, reject) => {
+    subscription = token.onCancellationRequested(() => {
+      reject(new ContextTransitionCancelledError());
+    });
+  });
+  try {
+    return await Promise.race([operation, cancellation]);
+  } finally {
+    subscription?.dispose();
+  }
+}
+
+async function settlesBeforeDeadline(operation: Promise<unknown>, milliseconds: number): Promise<boolean> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<false>((resolve) => {
+    timeout = setTimeout(() => resolve(false), milliseconds);
+  });
+  try {
+    return await Promise.race([
+      operation.then(() => true, () => true),
+      deadline,
+    ]);
+  } finally {
+    if (timeout != null) clearTimeout(timeout);
+  }
+}
+
 async function activateFeatures(
   ctx: ClientContext,
   features: readonly ClientFeature[],
-): Promise<readonly Disposable[]> {
-  const activations: Disposable[] = [];
+  activation: FeatureActivationScope,
+): Promise<void> {
   try {
     for (const feature of features) {
+      if (!activation.isOpen) return;
       ctx.logger.info(`[features] activating: ${feature.id}`);
-      await feature.activate(ctx, (contribution) => {
-        activations.push(contribution);
-        return contribution;
-      });
+      await feature.activate(ctx, activation.own);
+      if (!activation.isOpen) return;
     }
-    return activations;
   } catch (error) {
-    disposeOwned(ctx.logger, "partially activated features", [...activations].reverse());
+    activation.dispose();
     throw error;
   }
 }

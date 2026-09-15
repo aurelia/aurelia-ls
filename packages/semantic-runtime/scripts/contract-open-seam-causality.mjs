@@ -21,6 +21,7 @@ const runtime = await createSemanticRuntime({
 });
 const app = await runtime.openApp({
   analysisDepth: 'binding-observation',
+  applicationEntrypointPolicy: 'aggregate-independent-graphs',
 });
 
 const rawRows = readAllRows(app, {

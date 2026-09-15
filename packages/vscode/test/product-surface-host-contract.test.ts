@@ -82,6 +82,7 @@ const {
   publicationContainsProjectIssue,
   publicationHasExactProjectIssueNodeIds,
   publicationNodeDurableShape,
+  publicationSubtreeContentShape,
 } = localRequire(
   "./extension-host/resource-discovery-host-driver.cjs",
 ) as {
@@ -144,6 +145,7 @@ const {
   ): boolean;
   predecessorRaceFactKeys: readonly string[];
   publicationNodeDurableShape(this: void, node: HostObservation): Record<string, unknown>;
+  publicationSubtreeContentShape(this: void, nodes: readonly HostObservation[]): readonly Record<string, unknown>[];
 };
 
 interface HostDocument {
@@ -1293,7 +1295,10 @@ describe("Extension Host product-surface contracts", () => {
   test("accepts only the correlated current publication containing the intended project issue", () => {
     const frame = currentPublicationFrame("resource-explorer:1", 43, [
       projectPublicationNode("resource-explorer:1", 43, "host-alpha", "resourceProjectIssue"),
-      projectPublicationNode("resource-explorer:1", 43, "host-beta", "resourceProjectIssue"),
+      {
+        ...projectPublicationNode("resource-explorer:1", 43, "host-beta", "resourceProjectIssue"),
+        answerResult: null,
+      },
     ]);
     const observations: HostObservation[] = [
       projectPublicationNode("resource-explorer:other", 43, "host-beta", "resourceProjectIssue"),
@@ -1302,6 +1307,16 @@ describe("Extension Host product-surface contracts", () => {
     ];
 
     expect(publicationContainsProjectIssue(observations, frame.publication, "host-beta")).toBe(true);
+  });
+
+  test.each(["open", "truncated"])("rejects intentional %s coverage as a controlled project failure", (coverage) => {
+    const frame = currentPublicationFrame("resource-explorer:1", 44, [{
+      ...projectPublicationNode("resource-explorer:1", 44, "host-alpha", "resourceProjectIssue"),
+      answerResult: "answered",
+      answerCoverage: coverage,
+    }]);
+
+    expect(publicationContainsProjectIssue(frame.observations, frame.publication, "host-alpha")).toBe(false);
   });
 
   test("rejects a clean aggregate successor after the controlled all-error generation is discarded", () => {
@@ -1627,6 +1642,44 @@ describe("Extension Host product-surface contracts", () => {
     }
     expect(publicationNodeDurableShape({ ...currentNode, label: "changed" }))
       .not.toEqual(publicationNodeDurableShape(oldNode));
+  });
+
+  test("retains exact subtree content when a failed sibling changes collision presentation", () => {
+    const baseline = ["resource", "bindable"].map((nodeId, ordinal) => ({
+      ...scopedPublicationNode(nodeId, "workspace:primary", "epoch:primary", null),
+      nodeId,
+      ordinal,
+      label: nodeId === "bindable" ? "flushMode (flush-mode)" : "au-compose",
+      description: "Aurelia framework · element · hello-world",
+      accessibilityLabel: `${nodeId}. distinguished by element · hello-world.`,
+      answerResult: "answered",
+      answerCoverage: "complete",
+      answerRowCount: 32,
+    }));
+    const contextual = [...baseline].reverse().map((node, ordinal) => ({
+      ...node,
+      ordinal: ordinal + 100,
+      description: "Aurelia framework",
+      accessibilityLabel: `${node.nodeId}.`,
+    }));
+    const expected = publicationSubtreeContentShape(baseline);
+    expect(publicationSubtreeContentShape(contextual)).toEqual(expected);
+    expect(publicationSubtreeContentShape(contextual.slice(1))).not.toEqual(expected);
+    for (const field of [
+      "nodeId", "parentId", "nodeKind", "label", "contextValue", "command",
+      "navigationWorkspaceIdentity", "navigationProjectKey", "navigationResourceIdentity",
+      "navigationChildIdentity", "navigationRole", "navigationPlacement",
+      "implementationAvailable", "implementationWorkspaceIdentity", "implementationProjectKey",
+      "implementationResourceIdentity", "implementationRole", "implementationPlacement",
+      "collapsible", "defaultExpanded", "rowStates", "answerResult", "answerCoverage", "answerRowCount",
+    ]) {
+      expect(publicationSubtreeContentShape([
+        { ...contextual[0]!, [field]: `changed-${field}` },
+        contextual[1]!,
+      ])).not.toEqual(expected);
+    }
+    expect(() => publicationSubtreeContentShape([baseline[0]!, baseline[0]!])).toThrow(/unique/u);
+    expect(() => publicationSubtreeContentShape([{ ...baseline[0]!, nodeId: "" }])).toThrow(/nonempty/u);
   });
 
   test("requires final serial recovery rows to carry each workspace's latest token", () => {

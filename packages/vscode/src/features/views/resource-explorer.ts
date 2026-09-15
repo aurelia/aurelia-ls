@@ -1,8 +1,9 @@
-import type {
-  AnalysisLimitationsProjectResult,
-  ResourceInventoryItem,
-  ResourceInventoryProjectResult,
-  ResourceSourceLocation,
+import {
+  AppProjectSelection,
+  type AnalysisLimitationsProjectResult,
+  type ResourceInventoryItem,
+  type ResourceInventoryProjectResult,
+  type ResourceSourceLocation,
 } from "@aurelia-ls/language-server/protocol";
 import { LSPErrorCodes } from "vscode-languageserver-protocol";
 import type {
@@ -103,6 +104,16 @@ async function untilResourceExplorerCancellation<T>(
     return await Promise.race([operation, cancellation]);
   } finally {
     subscription?.dispose();
+  }
+}
+
+async function settleResourceExplorerRequest<T>(
+  operation: Promise<T>,
+): Promise<PromiseSettledResult<T>> {
+  try {
+    return { status: "fulfilled", value: await operation };
+  } catch (reason) {
+    return { status: "rejected", reason };
   }
 }
 
@@ -1174,15 +1185,24 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode>, Dis
     readonly limitations: AnalysisLimitationsSnapshot | null;
   }> {
     return this.#runWithProgress(async () => {
-      const options = workspaceKey == null ? {} : { workspaceKey };
-      const [inventory, limitations] = await untilResourceExplorerCancellation(Promise.allSettled([
+      const options = {
+        ...(workspaceKey == null ? {} : { workspaceKey }),
+        projectSelection: AppProjectSelection.DefaultApp,
+      };
+      if (token.isCancellationRequested) throw new ResourceExplorerRefreshCancelledError();
+      // Inventory is the tree's primary workspace read. Let it settle before launching the optional limitations
+      // decoration so cold boot, retries, and checker work cannot compete as two independent managed operations.
+      const inventory = await untilResourceExplorerCancellation(settleResourceExplorerRequest(
         // The tree needs authored bindable metadata, not checker-projected value types. Type surfaces are a deliberate
         // deep query: projecting every bindable can briefly double a large app's live heap and must not run merely
         // because the Resource Explorer is visible.
         this.#lsp.getResourceInventory({ ...options, includeTypeSurfaces: false }, token),
-        this.#lsp.getAnalysisLimitations(options, token),
-      ]), token);
+      ), token);
       if (inventory.status === "rejected") throw inventory.reason;
+      if (token.isCancellationRequested) throw new ResourceExplorerRefreshCancelledError();
+      const limitations = await untilResourceExplorerCancellation(settleResourceExplorerRequest(
+        this.#lsp.getAnalysisLimitations(options, token),
+      ), token);
       if (limitations.status === "rejected") {
         if (isRequestCancelledError(limitations.reason)) throw limitations.reason;
         this.#logger.warn("resourceExplorer.analysisLimitations.failed", {

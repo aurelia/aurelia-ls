@@ -18,6 +18,7 @@ import {
   SemanticAppQueryKind,
   type SemanticAttributeInterpretationExplanationResult,
   type SemanticAnalysisLimitationsResult,
+  type SemanticApplicationEntrypointPolicy,
   type SemanticApplicationTopologyResult,
   type SemanticTemplateDocumentOwnershipResult,
   type SemanticBindingUncertaintyExplanationResult,
@@ -125,13 +126,18 @@ export interface SemanticRuntimeLspOperation {
   templateRenameFromTypeScript(uri: DocumentUri, position: Position, newName?: string | null): Promise<SemanticRuntimeAnswer<SemanticTemplateRenameResult>>;
   templateCodeActions(uri: DocumentUri, position: Position): Promise<SemanticRuntimeAnswer<SemanticTemplateCodeActionsResult>>;
   resourceDefinitions(): Promise<SemanticRuntimeAnswer<SemanticResourceDefinitionsResult>>;
-  resourceInventory(projectKey: string, includeTypeSurfaces: boolean): Promise<SemanticRuntimeAnswer<SemanticResourceInventoryResult>>;
+  resourceInventory(
+    projectKey: string,
+    includeTypeSurfaces: boolean,
+    applicationEntrypointPolicy?: SemanticApplicationEntrypointPolicy,
+  ): Promise<SemanticRuntimeAnswer<SemanticResourceInventoryResult>>;
   projectsOwningDocument(document: TextDocument, projects: readonly SemanticProjectCandidateSummary[]): Promise<readonly SemanticProjectCandidateSummary[]>;
   templateResourceAvailability(
     projectKey: string,
     uri: DocumentUri,
     position: Position,
     templateResourceScopeIdentityKey: string | null,
+    applicationEntrypointPolicy?: SemanticApplicationEntrypointPolicy,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateResourceAvailabilityResult>>;
   resourceAvailabilityExplanation(
     projectKey: string,
@@ -952,16 +958,23 @@ export class SemanticRuntimeLspSession {
         this.templateRenameFromTypeScript(uri, position, token, newName),
       templateCodeActions: (uri, position) => this.templateCodeActions(uri, position, token),
       resourceDefinitions: () => this.resourceDefinitions(token),
-      resourceInventory: (projectKey, includeTypeSurfaces) =>
-        this.resourceInventory(projectKey, includeTypeSurfaces, token),
+      resourceInventory: (projectKey, includeTypeSurfaces, applicationEntrypointPolicy) =>
+        this.resourceInventory(projectKey, includeTypeSurfaces, token, applicationEntrypointPolicy),
       projectsOwningDocument: (document, projects) => this.projectsOwningDocument(document, projects, token),
-      templateResourceAvailability: (projectKey, uri, position, templateResourceScopeIdentityKey) =>
+      templateResourceAvailability: (
+        projectKey,
+        uri,
+        position,
+        templateResourceScopeIdentityKey,
+        applicationEntrypointPolicy,
+      ) =>
         this.templateResourceAvailability(
           projectKey,
           uri,
           position,
           templateResourceScopeIdentityKey,
           token,
+          applicationEntrypointPolicy,
         ),
       resourceAvailabilityExplanation: (
         projectKey,
@@ -1298,6 +1311,7 @@ export class SemanticRuntimeLspSession {
     projectKey: string,
     includeTypeSurfaces: boolean,
     token: SemanticRuntimeLspRequestToken,
+    applicationEntrypointPolicy?: SemanticApplicationEntrypointPolicy,
   ): Promise<SemanticRuntimeAnswer<SemanticResourceInventoryResult>> {
     const runtime = this.runtimeForOperation(token);
     return drainSemanticRuntimePages({
@@ -1306,6 +1320,7 @@ export class SemanticRuntimeLspSession {
       readPage: (cursor) => runtime.answerAppQuery({
         kind: SemanticAppQueryKind.ResourceInventory,
         projectKey,
+        ...(applicationEntrypointPolicy == null ? {} : { applicationEntrypointPolicy }),
         templateAnalysisBreadth: "resource-local",
         includeTypeSurfaces,
         page: { size: 500, cursor },
@@ -1426,12 +1441,14 @@ export class SemanticRuntimeLspSession {
     position: Position,
     templateResourceScopeIdentityKey: string | null,
     token: SemanticRuntimeLspRequestToken,
+    applicationEntrypointPolicy?: SemanticApplicationEntrypointPolicy,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateResourceAvailabilityResult>> {
     const runtime = this.runtimeForOperation(token);
     const cursorInput = this.operationSourceCursor(uri, position, token);
     const answer = await runtime.answerAppQuery({
       kind: SemanticAppQueryKind.TemplateResourceAvailability,
       projectKey,
+      ...(applicationEntrypointPolicy == null ? {} : { applicationEntrypointPolicy }),
       sourceFilePath: cursorInput.filePath,
       cursor: cursorInput,
       ...(templateResourceScopeIdentityKey == null ? {} : { templateResourceScopeIdentityKey }),

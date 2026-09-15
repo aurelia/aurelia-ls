@@ -68,6 +68,7 @@ import {
   normalizeSemanticAppAnalysisDepth,
   normalizeSemanticTemplateAnalysisBreadth,
   type SemanticAppAnalysisDepth,
+  type SemanticApplicationEntrypointPolicy,
   type SemanticTemplateAnalysisBreadth,
 } from './app-analysis.js';
 import type { NormalizedSemanticAppNominatedEntry } from './nominated-app-entry.js';
@@ -311,6 +312,9 @@ export interface AureliaAppWorldProjectProfile {
 
 export interface AureliaAppWorldProjectOptions {
   readonly analysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`;
+  readonly applicationEntrypointPolicy?:
+    | SemanticApplicationEntrypointPolicy
+    | `${SemanticApplicationEntrypointPolicy}`;
   readonly templateAnalysisBreadth?: SemanticTemplateAnalysisBreadth | `${SemanticTemplateAnalysisBreadth}`;
   readonly includeAuthoringTemplates?: boolean;
   readonly includeCompilerOccurrencePrecedents?: boolean;

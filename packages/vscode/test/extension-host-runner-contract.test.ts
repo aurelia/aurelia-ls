@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -13,7 +14,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, test } from "vitest";
 
@@ -1594,6 +1595,7 @@ describe("Extension Host support runner", () => {
       const runner = await import(pathToFileURL(runnerPath).href);
       const sourceManifest = JSON.parse(readFileSync(committedFixturePath, "utf8"));
       expect(sourceManifest.generatedInputs).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: "alpha-entrypoint", lanes: ["current-stable", "minimum"] }),
         expect.objectContaining({ id: "package-origins", lanes: ["current-stable"] }),
         expect.objectContaining({ id: "page-drain", lanes: ["current-stable"] }),
         expect.objectContaining({
@@ -1693,6 +1695,23 @@ describe("Extension Host support runner", () => {
 
       const currentHostAlpha = current.descriptor.projectTopology.projects[0].sourceInput.files;
       const minimumHostAlpha = minimum.descriptor.projectTopology.projects[0].sourceInput.files;
+      for (const receipt of [current, minimum]) {
+        const bootstrapPath = join(receipt.rendered.workspaceRoot, "host-corpus/entrypoints/main.ts");
+        const bootstrap = readFileSync(bootstrapPath, "utf8");
+        const importedPaths = [...bootstrap.matchAll(/^import '(.+)';$/gmu)]
+          .map((match) => resolve(dirname(bootstrapPath), `${match[1]}.ts`));
+        const alphaPaths = receipt.descriptor.projectTopology.projects[0].sourceInput.files
+          .map((file: { path: string }) => file.path);
+        expect(alphaPaths).toContain(bootstrapPath);
+        expect(importedPaths.sort()).toEqual(alphaPaths.filter((filePath: string) => (
+          filePath !== bootstrapPath && filePath.endsWith(`${sep}main.ts`)
+        )).sort());
+        expect(importedPaths.every((filePath) => existsSync(filePath))).toBe(true);
+        expect(bootstrap).not.toMatch(/guardrail|\/open\//u);
+        const betaPaths = receipt.descriptor.projectTopology.projects[1].sourceInput.files
+          .map((file: { path: string }) => file.path);
+        expect(betaPaths).not.toContain(bootstrapPath);
+      }
       expect(currentHostAlpha).toHaveLength(sourceManifest.projects[0].relativeFiles.length);
       expect(minimumHostAlpha).toHaveLength(sourceManifest.projects[0].relativeFiles.length - 2);
       expect(current.descriptor.projectTopology.projects[2].sourceInput).toEqual({

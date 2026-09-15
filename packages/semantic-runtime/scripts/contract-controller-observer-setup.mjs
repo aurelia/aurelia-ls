@@ -405,7 +405,10 @@ async function openFixture(name) {
     workspaceRoot: root,
     storeKey: `controller-observer-setup-contract:${name}`,
   });
-  const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+  const app = await runtime.openApp({
+    analysisDepth: 'binding-observation',
+    applicationEntrypointPolicy: 'aggregate-independent-graphs',
+  });
   return { app, root };
 }
 

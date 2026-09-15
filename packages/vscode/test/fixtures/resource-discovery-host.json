@@ -48,6 +48,15 @@
   ],
   "generatedInputs": [
     {
+      "id": "alpha-entrypoint",
+      "destination": "host-corpus/entrypoints",
+      "generatorVersion": "resource-discovery-alpha-entrypoint/1",
+      "lanes": [
+        "current-stable",
+        "minimum"
+      ]
+    },
+    {
       "id": "guardrail",
       "destination": "host-corpus/guardrail",
       "generatorVersion": "resource-discovery-guardrail/1",
@@ -109,6 +118,7 @@
         "host-corpus/effective-definitions/src/main.ts",
         "host-corpus/effective-definitions/src/resource-api-errors.ts",
         "host-corpus/effective-definitions/src/resources.ts",
+        "host-corpus/entrypoints/main.ts",
         "host-corpus/local-templates/src/aurelia-assets.d.ts",
         "host-corpus/local-templates/src/global-resources.ts",
         "host-corpus/local-templates/src/local-templates-app.html",

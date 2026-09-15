@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { observeSemanticRuntimePhase } from '../telemetry/phase.js';
 import type ts from 'typescript';
 import type {
   ProjectBootFrame,
@@ -73,6 +74,7 @@ import {
   withStaticEvaluationAmbientGlobals,
 } from './ambient-globals.js';
 import { StaticEvaluationSessionFork } from './evaluation-session.js';
+import { StaticDataSnapshotPool } from './data-snapshot.js';
 import { DefaultStaticEvaluationRuntimeHost } from './runtime-host.js';
 import type { EvaluationUnknownValue } from './values.js';
 
@@ -179,6 +181,8 @@ export class StaticProjectEvaluationResult {
     private readonly upstreamReads: readonly ComputationRead[] = [],
     /** Explicit execution overlay order; omitted for ordinary dependency-before-entry module evaluation. */
     executionOrderInvocations: readonly StaticInvocationOccurrence[] | null = null,
+    /** Generation-owned immutable states; each analysis fork still owns its writable views. */
+    private readonly dataSnapshots: StaticDataSnapshotPool = new StaticDataSnapshotPool(),
   ) {
     this.projectFrame = project;
     this.executionOrderInvocations = executionOrderInvocations
@@ -212,6 +216,11 @@ export class StaticProjectEvaluationResult {
     return this.sources.flatMap((source) => source.unresolvedModules);
   }
 
+  /** Module-linkage pressure retained by the graph evaluator, including cycles and dynamic/open imports. */
+  readGraphOpenValues(): readonly EvaluationUnknownValue[] {
+    return this.graphOpenValues;
+  }
+
   /** Read exact package provenance for an evaluated module without changing authored source ownership. */
   packageOriginForModuleKey(moduleKey: string): ResolvedEvaluationModuleOrigin | null {
     return this.packageOriginsByModuleKey.get(evaluationModuleKey(this.projectFrame.rootDir, moduleKey)) ?? null;
@@ -238,6 +247,7 @@ export class StaticProjectEvaluationResult {
       this.inputReadScope,
       this.upstreamReads,
       executionOrderInvocations,
+      this.dataSnapshots,
     );
   }
 
@@ -259,9 +269,13 @@ export class StaticProjectEvaluationResult {
 
   /** Fork mutable evaluator values and environments for one speculative follow-up analysis session. */
   forkSession(): StaticProjectEvaluationResult {
+    return observeSemanticRuntimePhase('evaluation-session-fork', () => this.forkSessionGraph());
+  }
+
+  private forkSessionGraph(): StaticProjectEvaluationResult {
     const runtimeHost = this.readEvaluatedSources()[0]?.evaluation.runtimeHost
       ?? DefaultStaticEvaluationRuntimeHost;
-    const session = new StaticEvaluationSessionFork(runtimeHost);
+    const session = new StaticEvaluationSessionFork(runtimeHost, 'complete', this.dataSnapshots);
     const forkedSources = this.sources.map((source) => isEvaluatedProjectSource(source)
       ? new StaticProjectEvaluationSourceResult(
           source.admission,
@@ -303,6 +317,7 @@ export class StaticProjectEvaluationResult {
         }
         return forked;
       }),
+      this.dataSnapshots,
     );
   }
 }
@@ -427,6 +442,12 @@ export class StaticProjectEvaluationAccess<TContext> {
   readBaselineContext(): TContext {
     return this.generation.readBaselineContext(this.validationScope);
   }
+}
+
+export interface StaticProjectEvaluationCurrentProbe<TContext> {
+  readonly access: StaticProjectEvaluationAccess<TContext> | null;
+  /** Opaque, single-use authority to replace only the incumbent observed by this failed probe. */
+  readonly replacementProof: object | null;
 }
 
 /** Per-consumer timing and reuse facts for one acquired evaluator generation. */
@@ -814,6 +835,13 @@ export class StaticProjectEvaluationComputationService implements KernelStoreSid
   private readonly authoritiesByLocus = new Map<string, StaticProjectEvaluationAuthority>();
   private readonly ambientAuthoritiesByProject = new Map<string, StaticEvaluationAmbientGlobalAuthority>();
   private readonly profilesByKey = new Map<string, StaticProjectEvaluationComputationProfile<unknown>>();
+  private readonly replacementProofs = new WeakMap<object, {
+    readonly project: ProjectBootFrame;
+    readonly profile: object;
+    readonly projectKey: string;
+    readonly profileKey: string;
+    readonly incumbent: StaticProjectEvaluationGeneration<unknown> | null;
+  }>();
   readonly key = 'static-project-evaluation-generations';
   readonly summary = 'Current reusable static project-evaluation generations by project and semantic profile.';
 
@@ -846,6 +874,56 @@ export class StaticProjectEvaluationComputationService implements KernelStoreSid
     return false;
   }
 
+  /** Whether one admitted evaluator generation exists before any currentness or ambient-world work is requested. */
+  hasCommittedGeneration<TContext>(
+    projectKey: string,
+    profile: StaticProjectEvaluationComputationProfile<TContext>,
+  ): boolean {
+    this.requireProfileOwnership(profile);
+    return this.authorityFor(projectKey, profile.key).committedGeneration() != null;
+  }
+
+  /** Reuse one exact current generation without constructing a replacement when its inputs no longer match. */
+  probeCurrent<TContext>(
+    project: ProjectBootFrame,
+    profile: StaticProjectEvaluationComputationProfile<TContext>,
+    validationScope: ComputationReadValidationScope = new ComputationReadValidationScope(),
+  ): StaticProjectEvaluationCurrentProbe<TContext> {
+    project.requireCurrent();
+    this.requireProfileOwnership(profile);
+    const started = performance.now();
+    // Static-evaluation currentness includes the shared ambient declaration generation. Reconcile that upstream locus
+    // before asking the evaluator authority to rebase, exactly as a normal acquisition does.
+    this.acquireAmbientGlobals(project, validationScope);
+    const authority = this.authorityFor(project.projectKey, profile.key);
+    const incumbent = authority.committedGeneration();
+    const current = authority.current(
+      project,
+      profile,
+      validationScope,
+    );
+    if (current != null) {
+      return {
+        access: new StaticProjectEvaluationAccess(
+          current,
+          StaticProjectEvaluationAcquisitionKind.Reused,
+          performance.now() - started,
+          validationScope,
+        ),
+        replacementProof: null,
+      };
+    }
+    const replacementProof = {};
+    this.replacementProofs.set(replacementProof, {
+      project,
+      profile,
+      projectKey: project.projectKey,
+      profileKey: profile.key,
+      incumbent,
+    });
+    return { access: null, replacementProof };
+  }
+
   acquire<TContext>(
     project: ProjectBootFrame,
     profile: StaticProjectEvaluationComputationProfile<TContext>,
@@ -865,13 +943,98 @@ export class StaticProjectEvaluationComputationService implements KernelStoreSid
         validationScope,
       );
     }
+    return this.computeReplacement(project, profile, validationScope, authority, ambientAccess, started);
+  }
 
+  /** Compute after an exact current-generation probe failed, without letting intervening preflight reads retry it. */
+  acquireReplacement<TContext>(
+    project: ProjectBootFrame,
+    profile: StaticProjectEvaluationComputationProfile<TContext>,
+    validationScope: ComputationReadValidationScope,
+    replacementProof: object,
+  ): StaticProjectEvaluationAccess<TContext> {
+    project.requireCurrent();
+    this.requireProfileOwnership(profile);
+    const proof = this.replacementProofs.get(replacementProof);
+    this.replacementProofs.delete(replacementProof);
+    if (
+      proof == null
+      || proof.project !== project
+      || proof.profile !== profile
+      || proof.projectKey !== project.projectKey
+      || proof.profileKey !== profile.key
+    ) {
+      throw new Error('Static project-evaluation replacement requires its exact failed current-generation probe.');
+    }
+    const authority = this.authorityFor(project.projectKey, profile.key);
+    if (authority.committedGeneration() !== proof.incumbent) {
+      return this.acquire(project, profile, validationScope);
+    }
+    const started = performance.now();
+    return this.computeReplacement(
+      project,
+      profile,
+      validationScope,
+      authority,
+      this.acquireAmbientGlobals(project, validationScope),
+      started,
+    );
+  }
+
+  /** Retire only the stale incumbent authorized by one failed current-generation probe. */
+  retireProbedIncumbent<TContext>(
+    project: ProjectBootFrame,
+    profile: StaticProjectEvaluationComputationProfile<TContext>,
+    replacementProof: object,
+  ): boolean {
+    project.requireCurrent();
+    this.requireProfileOwnership(profile);
+    const proof = this.replacementProofs.get(replacementProof);
+    this.replacementProofs.delete(replacementProof);
+    if (
+      proof == null
+      || proof.project !== project
+      || proof.profile !== profile
+      || proof.projectKey !== project.projectKey
+      || proof.profileKey !== profile.key
+    ) {
+      throw new Error('Static project-evaluation retirement requires its exact failed current-generation probe.');
+    }
+    const incumbent = proof.incumbent;
+    if (
+      incumbent == null
+      || this.authorityFor(project.projectKey, profile.key).committedGeneration() !== incumbent
+    ) {
+      return false;
+    }
+    return this.lifecycle.retireCommittedGeneration(
+      incumbent.computationAuthority.computationId,
+      incumbent.computationAuthority.runSequence,
+    );
+  }
+
+  /** Retire one exact evaluator generation after a consumer rejects its newly computed semantic shape. */
+  retire(generation: StaticProjectEvaluationGeneration<unknown>): boolean {
+    return this.lifecycle.retireCommittedGeneration(
+      generation.computationAuthority.computationId,
+      generation.computationAuthority.runSequence,
+    );
+  }
+
+  private computeReplacement<TContext>(
+    project: ProjectBootFrame,
+    profile: StaticProjectEvaluationComputationProfile<TContext>,
+    validationScope: ComputationReadValidationScope,
+    authority: StaticProjectEvaluationAuthority,
+    ambientAccess: StaticEvaluationAmbientGlobalAccess,
+    started: number,
+  ): StaticProjectEvaluationAccess<TContext> {
     const run = this.lifecycle.begin(new StaticProjectEvaluationLocus(project.projectKey, profile.key));
     let finished = false;
     try {
       run.guardCurrent(project.inputGeneration.currentnessGuardKey, project.inputGeneration);
       const preparation = profile.prepare();
-      const result = new StaticProjectEvaluationPass().evaluateAndEmit(
+      const result = observeSemanticRuntimePhase('static-evaluation', () => new StaticProjectEvaluationPass().evaluateAndEmit(
         this.store,
         project,
         preparation.options,
@@ -879,7 +1042,7 @@ export class StaticProjectEvaluationComputationService implements KernelStoreSid
         profile.readKey,
         ambientAccess,
         started,
-      );
+      ));
       run.observe(profile);
       for (const read of project.readRegisteredInputs()) {
         run.observe(read);
@@ -943,6 +1106,68 @@ export class StaticProjectEvaluationComputationService implements KernelStoreSid
           generation.computationAuthority.runSequence,
         );
       }
+    }
+    return retired;
+  }
+
+  /** Retire every evaluator profile and shared ambient generation owned by one project. */
+  retireProject(projectKey: string): number {
+    let retired = 0;
+    for (const authority of this.authoritiesByLocus.values()) {
+      if (authority.projectKey !== projectKey) continue;
+      const generation = authority.committedGeneration();
+      if (
+        generation != null
+        && this.lifecycle.retireCommittedGeneration(
+          generation.computationAuthority.computationId,
+          generation.computationAuthority.runSequence,
+        )
+      ) {
+        retired += 1;
+      }
+    }
+    const ambient = this.ambientAuthoritiesByProject.get(projectKey)?.committedGeneration() ?? null;
+    if (ambient != null) {
+      this.lifecycle.retireCommittedGeneration(
+        ambient.computationAuthority.computationId,
+        ambient.computationAuthority.runSequence,
+      );
+    }
+    return retired;
+  }
+
+  /** Revalidate one project's incumbents against an exact current frame and retire only stale profiles. */
+  retireStaleProject(project: ProjectBootFrame): number {
+    project.requireCurrent();
+    let retired = 0;
+    for (const authority of this.authoritiesByLocus.values()) {
+      if (authority.projectKey !== project.projectKey) continue;
+      const generation = authority.committedGeneration();
+      const profile = this.profilesByKey.get(authority.profileKey) ?? null;
+      if (
+        generation == null
+        || profile == null
+        || authority.current(project, profile, new ComputationReadValidationScope()) != null
+      ) {
+        continue;
+      }
+      if (this.lifecycle.retireCommittedGeneration(
+        generation.computationAuthority.computationId,
+        generation.computationAuthority.runSequence,
+      )) {
+        retired += 1;
+      }
+    }
+    const ambientAuthority = this.ambientAuthoritiesByProject.get(project.projectKey) ?? null;
+    const ambient = ambientAuthority?.committedGeneration() ?? null;
+    if (
+      ambient != null
+      && ambientAuthority?.current(project, new ComputationReadValidationScope()) == null
+    ) {
+      this.lifecycle.retireCommittedGeneration(
+        ambient.computationAuthority.computationId,
+        ambient.computationAuthority.runSequence,
+      );
     }
     return retired;
   }
@@ -1094,6 +1319,7 @@ export class StaticProjectEvaluationPass {
 }
 
 class StaticProjectEvaluationFrame {
+  private readonly dataSnapshots = new StaticDataSnapshotPool();
   private readonly phases: StaticProjectEvaluationPhaseTiming[] = [];
   private readonly host: FileSystemEvaluationModuleSourceHost;
   private readonly runtimeHost: StaticEvaluationRuntimeHost;
@@ -1161,6 +1387,7 @@ class StaticProjectEvaluationFrame {
         this.options.policy,
         this.runtimeHost,
         this.options.externalValueResolver,
+        this.dataSnapshots,
       ).evaluateEntries(entryModuleKeys),
       (result) => result.modules.size,
     );
@@ -1173,7 +1400,7 @@ class StaticProjectEvaluationFrame {
       sourceFiles: staticProjectEvaluationSourceFileStats(this.project.rootDir, this.sources),
     }, graphEvaluation.openValues, this.inputReadScope, this.ambientAccess == null
       ? []
-      : [this.ambientAccess.generation]);
+      : [this.ambientAccess.generation], null, this.dataSnapshots);
   }
 
   private indexProjectAdmissions(): void {

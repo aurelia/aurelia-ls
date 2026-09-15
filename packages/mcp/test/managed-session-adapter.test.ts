@@ -53,6 +53,27 @@ afterEach(async () => {
 });
 
 describe('managed MCP workspace operations', () => {
+  it('forwards explicit application entrypoint policy through single and batch answers', async () => {
+    const adapter = managedAdapter();
+    const applicationEntrypointPolicy = 'aggregate-independent-graphs' as const;
+
+    const single = await adapter.appQuery({
+      workspaceRoot,
+      queryKind: 'app-topology',
+      applicationEntrypointPolicy,
+    }, projectDetachedAureliaMcpResponse);
+    expect(single.value.applicationEntrypointPolicy).toBe(applicationEntrypointPolicy);
+
+    const batch = await adapter.appQueryBatch({
+      workspaceRoot,
+      applicationEntrypointPolicy,
+      queries: [{ kind: 'app-topology' }],
+    }, projectDetachedAureliaMcpResponse);
+    expect(batch.value.applicationEntrypointPolicy).toBe(applicationEntrypointPolicy);
+    expect((batch.value.value as { rows?: Array<{ answer?: { applicationEntrypointPolicy?: string } }> })
+      .rows?.[0]?.answer?.applicationEntrypointPolicy).toBe(applicationEntrypointPolicy);
+  });
+
   it('reconciles added source membership without a manual cache clear', async () => {
     const adapter = managedAdapter();
     const before = await adapter.workspaceOverview(
