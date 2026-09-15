@@ -8,6 +8,14 @@ preserve the repository's earlier package line.
 
 ---
 
+## VS Code 0.5.3 and MCP 0.3.3
+
+- Reduced evaluator memory use through shared data snapshots and lazy analysis copies.
+- Fixed cache cleanup and tuple analysis; made independent app aggregation explicit.
+- Improved VS Code startup and Resource Explorer loading, and retained pre-crash Worker evidence in support reports.
+
+---
+
 ## VS Code 0.5.2 and MCP 0.3.2 (2026-08-31)
 
 - Improved large-project semantic analysis by reducing repeated template work and evaluator graph copies.

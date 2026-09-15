@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.3
+
+### Fixes
+
+- Reduced memory use during startup and template analysis, fixing crashes in data-heavy projects.
+- Fixed an analysis crash involving TypeScript tuples.
+- Scoped automatic Resource Explorer loading to the default app.
+- Support reports now retain memory usage and analysis progress from crashed language-server workers.
+
 ## 0.5.2
 
 ### Fixes
