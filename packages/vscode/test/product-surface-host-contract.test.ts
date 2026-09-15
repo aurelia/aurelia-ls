@@ -1647,6 +1647,7 @@ describe("Extension Host product-surface contracts", () => {
   test("retains exact subtree content when a failed sibling changes collision presentation", () => {
     const baseline = ["resource", "bindable"].map((nodeId, ordinal) => ({
       ...scopedPublicationNode(nodeId, "workspace:primary", "epoch:primary", null),
+      nodeId,
       ordinal,
       label: nodeId === "bindable" ? "flushMode (flush-mode)" : "au-compose",
       description: "Aurelia framework · element · hello-world",

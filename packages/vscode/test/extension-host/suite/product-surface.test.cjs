@@ -5424,6 +5424,7 @@ function assertResourceDiscoveryFactsReady(facts) {
     "failedPublication",
     "retry",
     "recoveredPublication",
+    "retainedWorkspaceKey",
     "retainedSiblingCount",
     "stableCodeVisibleCount",
   ]);
