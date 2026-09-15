@@ -1,7 +1,28 @@
-/* global window, document, Element, HTMLElement, HTMLInputElement, HTMLSelectElement, requestAnimationFrame */
+/* global window, document, Element, HTMLElement, HTMLButtonElement, HTMLInputElement, HTMLSelectElement, HTMLTemplateElement, customElements, requestAnimationFrame */
 import assert from 'node:assert/strict';
 import type { Browser, Page } from 'playwright';
 import type { AotBuildEvidence, AssuranceLane, CheckpointTranscript, LaneTranscript, LiveElementTranscript } from './contract.js';
+
+interface NativeConstruction {
+  readonly kind: 'element' | 'button' | 'other-button';
+  readonly role: string | null;
+  readonly is: string | null;
+  readonly child: string | null;
+  readonly connected: boolean;
+}
+
+interface NativeConstructionObservation {
+  readonly beforeApp: number | null;
+  readonly constructors: readonly NativeConstruction[];
+  readonly live: readonly string[];
+  readonly buttons: readonly { readonly role: string; readonly is: string | null; readonly upgradedAs: string | null }[];
+  readonly retained: { readonly upgraded: boolean; readonly platformDocument: boolean; readonly children: number };
+}
+
+interface NativeConstructionProbe {
+  beforeApp: number | null;
+  constructors: NativeConstruction[];
+}
 
 export interface ContentAttributesApplicationObservation {
   readonly kind: 'content-attributes';
@@ -9,6 +30,7 @@ export interface ContentAttributesApplicationObservation {
   readonly focus: string | null;
   readonly model: {
     readonly message: string;
+    readonly native: NativeConstructionObservation;
     readonly host: readonly (readonly [string, string])[];
     readonly order: readonly (readonly [string, string])[];
     readonly orderNamespace: { readonly upper: string | null; readonly lower: string | null; readonly html: string | null };
@@ -43,6 +65,7 @@ export interface ContentAttributesApplicationObservation {
 declare global {
   interface Window {
     contentAttributesFixture?: { stop(): Promise<void> };
+    contentNativeProbe: NativeConstructionProbe;
   }
 }
 
@@ -54,6 +77,24 @@ export async function runContentAttributesLane(browser: Browser, lane: Assurance
   page.on('console', (message) => consoleMessages.push(`${message.type()}:${message.text()}`));
   page.on('pageerror', (error) => pageErrors.push(error.message));
   try {
+    await page.addInitScript(() => {
+      const probe: NativeConstructionProbe = { beforeApp: null, constructors: [] };
+      window.contentNativeProbe = probe;
+      window.addEventListener('content-attributes:before-app', () => { probe.beforeApp = probe.constructors.length; });
+      const record = (element: Element, kind: NativeConstruction['kind']) => probe.constructors.push({
+        kind, role: element.getAttribute('data-native'), is: element.getAttribute('is'),
+        child: element.firstElementChild?.localName ?? null, connected: element.isConnected,
+      });
+      customElements.define('native-probe', class extends HTMLElement {
+        constructor() { super(); record(this, 'element'); }
+      });
+      customElements.define('native-button', class extends HTMLButtonElement {
+        constructor() { super(); record(this, 'button'); }
+      }, { extends: 'button' });
+      customElements.define('native-button-other', class extends HTMLButtonElement {
+        constructor() { super(); record(this, 'other-button'); }
+      }, { extends: 'button' });
+    });
     await page.goto(url, { waitUntil: 'load' });
     try {
       await page.waitForFunction(() => window.contentAttributesFixture != null, undefined, { timeout: 15_000 });
@@ -98,6 +139,8 @@ async function capture(page: Page): Promise<ContentAttributesApplicationObservat
     const select = root.querySelector<HTMLSelectElement>('#generated-select')!;
     const order = root.querySelector('#order-case')!;
     const link = root.querySelector('#svg-link')!;
+    const retained = root.querySelector<HTMLTemplateElement>('#native-retained')!.content;
+    const isCustom = (element: Element, name: string): boolean => element instanceof customElements.get(name)!;
     const attributes = (element: Element) => Array.from(element.attributes, (attribute) => [attribute.name, attribute.value] as const);
     return {
       kind: 'content-attributes',
@@ -105,6 +148,21 @@ async function capture(page: Page): Promise<ContentAttributesApplicationObservat
       focus: document.activeElement instanceof HTMLElement ? document.activeElement.id || null : null,
       model: {
         message: root.querySelector('#message-value')!.textContent,
+        native: {
+          beforeApp: window.contentNativeProbe.beforeApp,
+          constructors: window.contentNativeProbe.constructors,
+          live: Array.from(root.querySelectorAll('native-probe'), (element) => element.getAttribute('data-native')!).sort(),
+          buttons: Array.from(root.querySelectorAll<HTMLButtonElement>('button[data-native]'), (button) => ({
+            role: button.getAttribute('data-native')!, is: button.getAttribute('is'),
+            upgradedAs: isCustom(button, 'native-button') ? 'native-button'
+              : isCustom(button, 'native-button-other') ? 'native-button-other' : null,
+          })),
+          retained: {
+            upgraded: isCustom(retained.firstElementChild!, 'native-probe'),
+            platformDocument: retained.ownerDocument === document,
+            children: retained.firstElementChild!.childElementCount,
+          },
+        },
         host: attributes(root.querySelector('#lab')!),
         order: attributes(order),
         orderNamespace: {
@@ -178,6 +236,7 @@ export function assertContentAttributesExpectations(transcript: LaneTranscript):
         focus,
         model: {
           message,
+          native: expectedNativeConstruction(count, active),
           host: [['id', 'lab'], ['data-host-created', 'yes'], ['class', 'generated-host']],
           order: [
             ['id', 'order-case'], ['data-case', 'order'], ['data-second', 'replaced'], ['data-first', 'readded'],
@@ -219,4 +278,34 @@ export function assertContentAttributesExpectations(transcript: LaneTranscript):
       },
     }, `${transcript.lane} ${label}`);
   }
+}
+
+function expectedNativeConstruction(count: number, active: boolean): NativeConstructionObservation {
+  const element = (role: string, connected = false): NativeConstruction => ({ kind: 'element', role, is: null, child: 'i', connected });
+  return {
+    beforeApp: 0,
+    // Callback order is observable across element kinds, including later collection growth.
+    constructors: [
+      element('root'),
+      { kind: 'button', role: 'is-remove', is: null, child: 'i', connected: false },
+      { kind: 'button', role: 'is-rewrite', is: 'native-button-other', child: 'i', connected: false },
+      element('resource'), element('projection'), element('flat-projection'), element('conditional'),
+      element('repeat'), element('repeat'),
+      element('retained-repeat'), element('retained-repeat', true),
+      element('resource', true), element('resource', true),
+      ...(count === 3 ? [element('repeat'), element('retained-repeat', true), element('resource', true)] : []),
+    ],
+    live: [
+      ...(active ? ['conditional'] : []), 'flat-projection', 'projection',
+      ...Array.from({ length: count }, () => 'repeat'),
+      ...Array.from({ length: count + 1 }, () => 'resource'),
+      ...Array.from({ length: count }, () => 'retained-repeat'), 'root',
+    ],
+    buttons: [
+      { role: 'is-remove', is: null, upgradedAs: 'native-button' },
+      { role: 'is-rewrite', is: 'native-button-other', upgradedAs: 'native-button' },
+      { role: 'is-add', is: 'native-button', upgradedAs: null },
+    ],
+    retained: { upgraded: false, platformDocument: false, children: 1 },
+  };
 }

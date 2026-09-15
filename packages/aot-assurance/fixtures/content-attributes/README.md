@@ -32,6 +32,25 @@ of the strict golden: source hooks refuse `ownerDocument` reads until document a
 native inert-template construction. A single platform-document or inert-document reference would misrepresent one
 of these cases.
 
+The browser harness registers an autonomous native custom element and two customized button built-ins before any
+application modules load. The fixture's `before-app` event verifies that loading compiler-final definitions did not
+construct any of them. Constructors record their existing attributes, child element, and connection state without
+mutating the DOM. The seven ordinary interaction checkpoints also cover:
+
+- The inert root, named and flattened projections, and a native-element `if` view (restored from its cache).
+- Native-element `repeat` views whose generated template contents are platform-owned: every new instance upgrades
+  before connection, including growth after the first instance.
+- An authored `<template repeat>` and repeated `AttributeCard` definitions whose contents remain inert: the first
+  imported instance upgrades before connection; later cached-template clones upgrade only when connected.
+- An ordinary retained template whose contents remain in the template-contents document and never upgrade.
+- Hook removal and rewriting of an original `is="native-button"`: both instances still upgrade as the original
+  customized built-in. Adding an `is` attribute to a plain button does not give it a custom-element identity.
+
+These are independently checked against the pinned JIT, not just compared between two unknown lane outcomes.
+The native registry is harness-owned so observation instrumentation does not add authored framework demands or
+require support for source-hook document/registry access. The existing five resource definitions remain the complete
+strict AOT cohort.
+
 The existing shared assurance harness runs seven browser checkpoints and teardown. Multiple-select model order is
 intentionally separate from selected-options DOM order: RC2 retains the already selected `b` and appends newly
 selected `a` to the model array. The scenario requires five AOT artifacts and no JIT fallback.

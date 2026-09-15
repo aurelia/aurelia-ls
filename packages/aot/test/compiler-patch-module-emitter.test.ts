@@ -7,6 +7,7 @@ import { createSemanticRuntime } from '@aurelia-ls/semantic-runtime';
 import {
   materializeSemanticAppTemplateCompilerHandoffs,
   TemplateCompilerCompiledHandoffState,
+  type TemplateCompilerCompiledHandoffTree,
   type TemplateCompilerCompiledHandoffValue,
 } from '@aurelia-ls/semantic-runtime/browser-template';
 import { JSDOM } from 'jsdom';
@@ -169,6 +170,83 @@ beforeAll(async () => {
 }, 45_000);
 
 describe('AOT compiler patch module emitter', () => {
+  for (const contentOwnerDocument of ['template-contents', 'platform'] as const) {
+    it(`constructs native elements inertly before publishing ${contentOwnerDocument} content`, async () => {
+      const dom = new JSDOM('<!doctype html><html><body></body></html>');
+      const document = dom.window.document;
+      const constructed: string[] = [];
+      const reactions: string[] = [];
+      class NativeProbe extends dom.window.HTMLElement {
+        static observedAttributes = ['data-ready'];
+        constructor() {
+          super();
+          constructed.push(`probe:${this.getAttribute('data-ready')}:${this.childNodes.length}`);
+        }
+        attributeChangedCallback(name: string, oldValue: string | null, value: string | null) {
+          reactions.push(`${name}:${oldValue}:${value}`);
+        }
+      }
+      class NativeButton extends dom.window.HTMLButtonElement {
+        constructor() {
+          super();
+          constructed.push(`button:${this.getAttribute('is')}`);
+        }
+      }
+      document.defaultView!.customElements.define('aot-native-probe', NativeProbe);
+      document.defaultView!.customElements.define('aot-native-button', NativeButton, { extends: 'button' });
+      try {
+        const artifact = new AotCompilerPatchModuleEmitter().emit({
+          handoff: withNativeConstructionTree(contentOwnerDocument),
+          projectRoot: fixtureRoot,
+          sourcePath: templatePath,
+          sourceText,
+        });
+        const imported = await importPatchModule(artifact.code, artifact.digest, dom);
+        expect(constructed).toEqual([]);
+        expect(reactions).toEqual([]);
+        const content = imported.template.content;
+        const inertDocument = document.createElement('template').content.ownerDocument;
+        expect(content.ownerDocument).toBe(contentOwnerDocument === 'platform' ? document : inertDocument);
+        expect(content.querySelector('template')!.content.ownerDocument).toBe(inertDocument);
+        const probe = content.querySelector('aot-native-probe')!;
+        expect(Array.from(probe.childNodes, node => node.nodeValue)).toEqual(['left', 'right']);
+        const realized = document.importNode(content, true);
+        expect(constructed).toEqual(['probe:yes:2', 'button:aot-other-button', 'button:null']);
+        expect(reactions).toEqual(['data-ready:null:yes']);
+        const buttons = realized.querySelectorAll('button');
+        expect(buttons[0]).toBeInstanceOf(NativeButton);
+        expect(buttons[1]).toBeInstanceOf(NativeButton);
+        expect(buttons[2]).not.toBeInstanceOf(NativeButton);
+        expect(buttons[2]!.getAttribute('is')).toBe('aot-native-button');
+        expect(realized.querySelector('template')!.content.firstElementChild).not.toBeInstanceOf(NativeProbe);
+        constructed.length = 0;
+        reactions.length = 0;
+        // Rendering.createNodes caches the source fragment: later views use cloneNode followed by adoptNode.
+        const cachedView = document.adoptNode(content.cloneNode(true));
+        expect(constructed).toEqual(contentOwnerDocument === 'platform'
+          ? ['probe:yes:2', 'button:aot-other-button', 'button:null']
+          : []);
+        document.body.append(cachedView);
+        expect(constructed).toEqual(['probe:yes:2', 'button:aot-other-button', 'button:null']);
+        expect(reactions).toEqual(['data-ready:null:yes']);
+      } finally {
+        dom.window.close();
+      }
+    });
+  }
+
+  it('rejects a compiled tree without document affiliation or native creation inputs', () => {
+    for (const field of ['contentOwnerDocument', 'customElementIs'] as const) {
+      const value = withNativeConstructionTree('template-contents');
+      const tree = value.definitions.find(definition => definition.definitionId === value.rootDefinitionId)!.tree;
+      if (field === 'contentOwnerDocument') Reflect.deleteProperty(tree, field);
+      else Reflect.deleteProperty(tree.nodes.find(node => node.nodeKind === 'element')!, field);
+      expect(() => new AotCompilerPatchModuleEmitter().emit({
+        handoff: value, projectRoot: fixtureRoot, sourcePath: templatePath, sourceText,
+      })).toThrowError(expect.objectContaining({ code: 'AOT_ARTIFACT_INVALID_HANDOFF' }));
+    }
+  });
+
   it('shares the carrier transform runtime module contract', () => {
     expect(AOT_COMPILER_PATCH_RUNTIME_MODULE_ID).toBe(AOT_RUNTIME_MODULE_SPECIFIER);
     expect(AOT_COMPILER_PATCH_RUNTIME_MODULE_SOURCE).toContain('export function applyCompiledCustomElement');
@@ -513,10 +591,10 @@ interface RuntimeGeneratedDefinition extends Record<string, unknown> {
   readonly instructions: readonly (readonly RuntimeInstruction[])[];
 }
 
-async function importPatchModule(code: string, digest: string): Promise<RuntimeCompilerPatchModule> {
+async function importPatchModule(code: string, digest: string, suppliedDom?: JSDOM): Promise<RuntimeCompilerPatchModule> {
   const outputRoot = await mkdtemp(path.resolve(repositoryRoot, 'packages/aot/.tmp-compiler-patch-'));
   const outputPath = path.resolve(outputRoot, 'compiler-patch.mjs');
-  const dom = new JSDOM('<!doctype html><html><body></body></html>');
+  const dom = suppliedDom ?? new JSDOM('<!doctype html><html><body></body></html>');
   const previousDocument = globalThis.document;
   try {
     await writeFile(outputPath, code, 'utf8');
@@ -524,9 +602,48 @@ async function importPatchModule(code: string, digest: string): Promise<RuntimeC
     return await import(`${pathToFileURL(outputPath).href}?digest=${digest}`) as RuntimeCompilerPatchModule;
   } finally {
     Object.defineProperty(globalThis, 'document', { configurable: true, value: previousDocument });
-    dom.window.close();
+    if (suppliedDom == null) dom.window.close();
     await rm(outputRoot, { recursive: true, force: true });
   }
+}
+
+function withNativeConstructionTree(
+  contentOwnerDocument: TemplateCompilerCompiledHandoffTree['contentOwnerDocument'],
+): TemplateCompilerCompiledHandoffValue {
+  const common = { source: null, fieldProvenance: [] };
+  const element = (nodeId: string, tagName: string, customElementIs: string | null = null) => ({
+    ...common, nodeId, nodeKind: 'element' as const, tagName, namespace: 'html',
+    namespaceUri: 'http://www.w3.org/1999/xhtml', customElementIs,
+    attributeIds: [] as string[], children: [] as string[], templateContentNodeId: null as string | null,
+  });
+  const tree: TemplateCompilerCompiledHandoffTree = {
+    ...common,
+    compilerCarrierNodeId: 'carrier', compilerContentNodeId: 'content', contentOwnerDocument,
+    nodes: [
+      { ...element('carrier', 'template'), templateContentNodeId: 'content' },
+      { ...common, nodeId: 'content', nodeKind: 'fragment', children: ['probe', 'changed', 'removed', 'added', 'retained'] },
+      { ...element('probe', 'aot-native-probe'), attributeIds: ['ready'], children: ['left', 'right'] },
+      { ...common, nodeId: 'left', nodeKind: 'text', text: 'left', textKind: 'static' },
+      { ...common, nodeId: 'right', nodeKind: 'text', text: 'right', textKind: 'static' },
+      { ...element('changed', 'button', 'aot-native-button'), attributeIds: ['changed-is'] },
+      element('removed', 'button', 'aot-native-button'),
+      { ...element('added', 'button'), attributeIds: ['added-is'] },
+      { ...element('retained', 'template'), templateContentNodeId: 'retained-content' },
+      { ...common, nodeId: 'retained-content', nodeKind: 'fragment', children: ['inert-probe'] },
+      element('inert-probe', 'aot-native-probe'),
+    ],
+    attributes: [
+      { ...common, attributeId: 'ready', ownerNodeId: 'probe', name: 'data-ready', value: 'yes', namespaceUri: null, prefix: null },
+      { ...common, attributeId: 'changed-is', ownerNodeId: 'changed', name: 'is', value: 'aot-other-button', namespaceUri: null, prefix: null },
+      { ...common, attributeId: 'added-is', ownerNodeId: 'added', name: 'is', value: 'aot-native-button', namespaceUri: null, prefix: null },
+    ],
+  };
+  return {
+    ...handoff,
+    definitions: handoff.definitions.map(definition => definition.definitionId === handoff.rootDefinitionId
+      ? { ...definition, tree }
+      : definition),
+  };
 }
 
 async function importRuntimeHelper(): Promise<{

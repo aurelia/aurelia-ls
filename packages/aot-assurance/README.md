@@ -19,8 +19,12 @@ The default package assurance runs twelve complementary scenarios:
   select whose generated `value` binding precedes `multiple` in source order. HTML/SVG classList and xlink/XML
   namespace operations run through the same hook. Seven checkpoints cover updates, two-way writeback, controller
   removal/restoration, repeat growth while hidden, and teardown. It preserves the distinction between selected
-  options in DOM order and Aurelia's in-place model-array update order. Exactly three compiler-final definitions
-  and replacement runtime configuration are required; compatible fallback cannot satisfy this scenario.
+  options in DOM order and Aurelia's in-place model-array update order. Native custom-element constructors also
+  expose inert-versus-platform template construction and cached-clone timing; customized built-ins retain their
+  original parser `is` identity after hook removal or rewriting. The native registry is installed by the browser
+  harness before module loading, so eager compiler-output construction cannot pass unnoticed. Exactly five
+  compiler-final definitions and replacement runtime configuration are required; compatible fallback cannot satisfy
+  this scenario.
 - `compatible-hooks` exercises explicit runtime-compilation preservation through the same two-lane build/browser
   harness. After a geometry API unsupported by the build evaluator, its hook rewrites a separate component's
   definition before that component's first compilation. Five checkpoints check untouched definitions before lazy

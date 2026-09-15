@@ -319,7 +319,7 @@ describe('template structural model', () => {
       handles.address('source-span'),
     );
     const tree = bindDetail(
-      new CompilerTransformedTemplateTree(source, inputTree, carrier, content),
+      new CompilerTransformedTemplateTree(source, inputTree, carrier, content, 'template-contents'),
       handles,
       'transformed-tree',
       KernelVocabulary.Template.StructuralTree.key,
@@ -348,6 +348,7 @@ describe('template structural model', () => {
         'http://www.w3.org/1999/xhtml',
         [attribute],
         [],
+        null,
         null,
       ),
       handles,

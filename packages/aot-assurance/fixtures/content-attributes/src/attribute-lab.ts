@@ -7,6 +7,15 @@ export class AttributeLab {
     host.classList.add('generated-host');
     for (const child of host.children) {
       switch (child.getAttribute('data-case')) {
+        case 'is-remove':
+          child.removeAttribute('is');
+          break;
+        case 'is-rewrite':
+          child.setAttribute('is', 'native-button-other');
+          break;
+        case 'is-add':
+          child.setAttribute('is', 'native-button');
+          break;
         case 'order': {
           child.removeAttribute('data-remove');
           child.setAttribute('DATA-SECOND', 'replaced');

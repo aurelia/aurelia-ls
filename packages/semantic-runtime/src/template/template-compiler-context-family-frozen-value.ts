@@ -466,6 +466,7 @@ function materializeContext(
       browserEmission(family).tree.toReference(),
       nodeReferences.get(context.structure.compilerCarrier)!,
       nodeReferences.get(context.structure.compilerContent)!,
+      context.structure.contentOwnerDocument,
       [],
     ),
     context.treeReservation,
@@ -522,6 +523,7 @@ function materializeNode(
       occurrence.readAttributes().map((attribute) => attributeReferences.get(attribute)!),
       childReferences,
       occurrence.templateContent == null ? null : nodeReferences.get(occurrence.templateContent)!,
+      occurrence.customElementIs,
       [],
     );
   } else if (occurrence instanceof TemplateCompilerTextOccurrence) {

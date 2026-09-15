@@ -3,7 +3,15 @@
   <button id="toggle" click.trigger="active = !active">Toggle</button>
   <button id="append" click.trigger="append()">Append</button>
   <output id="selected-value">${selected.join(',')}</output>
+  <native-probe data-native="root"><i></i></native-probe>
+  <native-probe data-native="conditional" if.bind="active"><i></i></native-probe>
+  <native-probe data-native="repeat" repeat.for="item of items"><i></i></native-probe>
+  <template repeat.for="item of items"><native-probe data-native="retained-repeat"><i></i></native-probe></template>
+  <template id="native-retained"><native-probe data-native="retained"><i></i></native-probe></template>
   <attribute-lab id="lab">
+    <button data-native="is-remove" data-case="is-remove" is="native-button"><i></i></button>
+    <button data-native="is-rewrite" data-case="is-rewrite" is="native-button"><i></i></button>
+    <button data-native="is-add" data-case="is-add"><i></i></button>
     <div id="order-case" data-case="order" data-first="first" data-remove="remove" data-second="second">order</div>
     <input id="generated-input" data-case="input" value="authored-static" title.bind="discarded" placeholder.bind="discarded">
     <p id="attribute-case" data-case="attribute">stamped</p>
@@ -14,7 +22,10 @@
     <div id="classes-case" data-case="classes" class="authored">classes</div>
     <svg id="svg-case" data-case="svg" viewBox="0 0 20 20" xmlns:xlink="http://www.w3.org/1999/xlink"><a id="svg-link" class="base old old" xlink:href="#old"><text>vector</text></a></svg>
   </attribute-lab>
+  <attribute-card class="native-repeat-card" repeat.for="item of items" label.bind="item"></attribute-card>
   <projection-lab>
+    <native-probe data-native="projection" au-slot="first"><i></i></native-probe>
+    <template au-slot="first"><native-probe data-native="flat-projection"><i></i></native-probe></template>
     <projection-probe id="projected-first" au-slot="first"><span au-slot="authored" class="projected-value">first:${message}</span></projection-probe>
     <projection-probe id="projected-second" au-slot="second"><span au-slot="authored" class="projected-value">second:${message}</span></projection-probe>
     <template au-slot="first"><projection-probe id="projected-flat"><span au-slot="authored" class="projected-value">flat:${message}</span></projection-probe></template>

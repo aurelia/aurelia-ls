@@ -7,11 +7,12 @@ import { localKeyPart } from '../kernel/local-key.js';
 import {
   HtmlCommentSemanticKind,
   HtmlIrNodeKind,
-  type HtmlNamespaceKind,
+  HtmlNamespaceKind,
 } from './html-ir.js';
 import type { BrowserEffectiveTemplateEmission } from './browser-effective-template-materializer.js';
 import type {
   BrowserEffectiveTemplateAttribute,
+  BrowserEffectiveTemplateElement,
   BrowserEffectiveTemplateNode,
   TemplateStructuralAttributeReference,
   TemplateStructuralNodeReference,
@@ -215,6 +216,8 @@ export class TemplateCompilerElementOccurrence extends TemplateCompilerNodeOccur
     readonly tagName: string,
     readonly namespace: HtmlNamespaceKind,
     readonly namespaceUri: string,
+    /** Native creation-time `is` value; attribute mutations cannot change the native element identity. */
+    readonly customElementIs: string | null,
     generation: TemplateCompilerOccurrenceGeneration | null = null,
   ) {
     super(occurrenceKey, inputIdentityKey, inputReference, parent, parentEdgeKind, generation);
@@ -590,6 +593,7 @@ export class TemplateCompilerOccurrenceForest {
     tagName: string,
     namespace: HtmlNamespaceKind,
     namespaceUri: string,
+    customElementIs: string | null,
     inputReference: TemplateStructuralNodeReference | null = null,
   ): TemplateCompilerElementOccurrence {
     const canonicalInput = this.canonicalGeneratedNodeInput(inputReference, HtmlIrNodeKind.Element);
@@ -602,6 +606,7 @@ export class TemplateCompilerOccurrenceForest {
       tagName,
       namespace,
       namespaceUri,
+      customElementIs,
       generation,
     ));
   }
@@ -1357,6 +1362,7 @@ class TemplateCompilerOccurrenceForestBuilder {
           input.tagName,
           input.namespace,
           input.namespaceUri,
+          this.initialCustomElementIs(input),
         );
         break;
       case HtmlIrNodeKind.Text:
@@ -1417,6 +1423,15 @@ class TemplateCompilerOccurrenceForestBuilder {
       }
     }
     return occurrence;
+  }
+
+  private initialCustomElementIs(element: BrowserEffectiveTemplateElement): string | null {
+    if (element.namespace !== HtmlNamespaceKind.Html) return null;
+    for (const reference of element.attributes) {
+      const attribute = this.inputAttributesByProduct.get(reference.productHandle)!;
+      if (attribute.namespaceUri == null && attribute.name === 'is') return attribute.value;
+    }
+    return null;
   }
 
   private cloneAttribute(

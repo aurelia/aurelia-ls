@@ -50,6 +50,7 @@ import {
   CompilerTransformedTemplateText,
   type CompilerTransformedTemplateAttribute,
   type CompilerTransformedTemplateNode,
+  type TemplateContentOwnerDocument,
 } from './template-structure.js';
 import {
   TemplateCompilerFrameworkInstructionType,
@@ -59,7 +60,7 @@ import {
 } from './template-instruction-runtime-value.js';
 
 export const TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION =
-  'semantic-runtime/template-compiler-compiled-handoff/v4' as const;
+  'semantic-runtime/template-compiler-compiled-handoff/v5' as const;
 
 export interface TemplateCompilerCompiledHandoffValue {
   readonly schemaVersion: typeof TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION;
@@ -250,6 +251,7 @@ export interface TemplateCompilerCompiledHandoffWatchPropertyKey {
 export interface TemplateCompilerCompiledHandoffTree {
   readonly compilerCarrierNodeId: string;
   readonly compilerContentNodeId: string;
+  readonly contentOwnerDocument: TemplateContentOwnerDocument;
   readonly nodes: readonly TemplateCompilerCompiledHandoffNode[];
   readonly attributes: readonly TemplateCompilerCompiledHandoffAttribute[];
   readonly source: SemanticSourceReference | null;
@@ -281,6 +283,7 @@ export interface TemplateCompilerCompiledHandoffElement extends TemplateCompiler
   readonly attributeIds: readonly string[];
   readonly children: readonly string[];
   readonly templateContentNodeId: string | null;
+  readonly customElementIs: string | null;
 }
 
 export interface TemplateCompilerCompiledHandoffText extends TemplateCompilerCompiledHandoffNodeBase {
@@ -774,6 +777,7 @@ function projectTree(
   return {
     compilerCarrierNodeId: nodeId(context.tree.compilerCarrier.productHandle),
     compilerContentNodeId: nodeId(context.tree.compilerContent.productHandle),
+    contentOwnerDocument: context.tree.contentOwnerDocument,
     nodes: context.nodes.map((node) => nodeValue(node, nodeIds, attributeIds, store)),
     attributes: context.attributes.map((attribute) => attributeValue(attribute, nodeIds, attributeIds, store)),
     source: sourceReference(store, context.tree.sourceAddressHandle),
@@ -802,6 +806,7 @@ function nodeValue(
       tagName: node.tagName,
       namespace: node.namespace,
       namespaceUri: node.namespaceUri,
+      customElementIs: node.customElementIs,
       attributeIds: references(node.attributes, attributeIds, 'attribute'),
       children: references(node.children, nodeIds, 'child node'),
       templateContentNodeId: node.templateContent == null

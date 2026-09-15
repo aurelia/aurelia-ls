@@ -260,6 +260,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   an input origin. Every generated occurrence carries its generation context, semantic operation key, ordered nonempty
   causes, output role, and ordinal. Scalar text/comment/attribute values remain read-only until their mutation can
   travel through the ordered compiler-effect owner rather than bypassing provenance.
+  Elements also retain their native creation-time `customElementIs` from immutable browser input, independently of
+  subsequent attribute edits. Generated-element factories require that creation input explicitly; input-reference
+  lineage alone does not mean the new node is a clone with identical native identity.
 - `template-compiler-structural-execution.ts` is the product-free join between that forest and the existing
   `TemplateCompilerTargetPlan`. One session can admit a family of sealed root plans over one forest; plan/context keys,
   compiled-definition products, compiler-reachable authored nodes, and projection contributors are family-unique
@@ -276,6 +279,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   `AuSlot.processContent` removed-child references preserve their source-edge dispositions. Text expansion is an
   explicit source-anchored 1→N operation, and output bands retain browser-input order across replacements. Generated
   authority is session-branded and role-checked, including exact generated carrier pairs. This is
+  also where final content-document affiliation is selected: newly generated compiler templates use the platform
+  document, while reused authored and local template contents stay in the inert template-contents document. This
+  final-state fact does not answer a source hook's earlier `ownerDocument` read during traversal. The layer remains
   execution mechanics only: it does not freeze transformed products, allocate durable targets, publish kernel records,
   or switch the production compiler traversal.
 - `template-compiler-execution.ts` is the matching product-free ordered semantic-operation transaction. It binds

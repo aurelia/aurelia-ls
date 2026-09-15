@@ -661,12 +661,18 @@ function emitTemplateNodeValue(
   if (carrier?.nodeKind !== 'element' || carrier.tagName !== 'template' || content?.nodeKind !== 'fragment') {
     throw invalidHandoff(request, 'Compiled tree carrier/content is not one template and fragment pair.');
   }
+  if (tree.contentOwnerDocument !== 'platform' && tree.contentOwnerDocument !== 'template-contents') {
+    throw invalidHandoff(request, 'Compiled tree is missing its content document affiliation.');
+  }
   const variableByNodeId = new Map(tree.nodes.map((node, index) => [node.nodeId, `$node${index}`]));
   const emitted = new Set<string>();
+  const carrierVariable = requireMap(variableByNodeId, tree.compilerCarrierNodeId, request);
   const lines = [
     '(() => {',
-    '  const $document = globalThis.document;',
-    "  if ($document == null) throw new Error('AOT browser template requires globalThis.document.');",
+    '  const $platformDocument = globalThis.document;',
+    "  if ($platformDocument == null) throw new Error('AOT browser template requires globalThis.document.');",
+    // Build before adoption so native custom elements upgrade when the runtime instantiates the view, not at import.
+    "  const $document = $platformDocument.createElement('template').content.ownerDocument;",
   ];
 
   const emitNode = (nodeId: string): string => {
@@ -686,8 +692,14 @@ function emitTemplateNodeValue(
         }
         break;
       case 'element': {
+        if (node.customElementIs !== null && typeof node.customElementIs !== 'string') {
+          throw invalidHandoff(request, 'Compiled element is missing its native custom-element creation input.');
+        }
+        const options = node.customElementIs === null
+          ? ''
+          : `, { is: ${emitJavaScriptValue(node.customElementIs, request)} }`;
         const create = node.namespaceUri === htmlNamespace
-          ? `$document.createElement(${emitJavaScriptValue(node.tagName, request)})`
+          ? `$document.createElement(${emitJavaScriptValue(node.tagName, request)}${options})`
           : `$document.createElementNS(${emitJavaScriptValue(node.namespaceUri, request)}, ${emitJavaScriptValue(node.tagName, request)})`;
         lines.push(`  const ${variable} = ${create};`);
         emitAttributes(node, variable, attributes, request, lines);
@@ -712,9 +724,13 @@ function emitTemplateNodeValue(
     return variable;
   };
 
-  const carrierVariable = emitNode(tree.compilerCarrierNodeId);
+  emitNode(tree.compilerCarrierNodeId);
   if (!emitted.has(tree.compilerContentNodeId)) {
     throw invalidHandoff(request, 'Compiler carrier did not structurally own its compiler content fragment.');
+  }
+  lines.push(`  $platformDocument.adoptNode(${carrierVariable});`);
+  if (tree.contentOwnerDocument === 'platform') {
+    lines.push(`  $platformDocument.adoptNode(${carrierVariable}.content);`);
   }
   lines.push(`  return ${carrierVariable};`, '})()');
   return lines.join('\n');

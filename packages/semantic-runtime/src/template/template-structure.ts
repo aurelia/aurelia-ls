@@ -333,6 +333,7 @@ export type CompilerTransformedTemplateTreeField =
   | 'inputTree'
   | 'compilerCarrier'
   | 'compilerContent'
+  | 'contentOwnerDocument'
   | 'source';
 
 export type CompilerTransformedTemplateNodeField =
@@ -343,6 +344,7 @@ export type CompilerTransformedTemplateNodeField =
   | 'attributes'
   | 'children'
   | 'templateContent'
+  | 'customElementIs'
   | 'value'
   | 'realization'
   | 'source';
@@ -360,6 +362,9 @@ export const enum CompilerTransformedTextKind {
   BindingPlaceholder = 'binding-placeholder',
 }
 
+/** The two document domains used by JIT's authored and generated template contents. */
+export type TemplateContentOwnerDocument = 'platform' | 'template-contents';
+
 /** Immutable compiler-final tree rooted at the template carrier consumed by runtime Rendering. */
 export class CompilerTransformedTemplateTree {
   readonly treeKind = TemplateStructuralTreeKind.CompilerTransformed;
@@ -369,6 +374,7 @@ export class CompilerTransformedTemplateTree {
     readonly inputTree: TemplateStructuralTreeReference,
     readonly compilerCarrier: TemplateStructuralNodeReference,
     readonly compilerContent: TemplateStructuralNodeReference,
+    readonly contentOwnerDocument: TemplateContentOwnerDocument,
     readonly fieldProvenance: readonly FieldProvenance<CompilerTransformedTemplateTreeField>[] = [],
   ) {}
 
@@ -431,6 +437,8 @@ export class CompilerTransformedTemplateElement {
     readonly attributes: readonly TemplateStructuralAttributeReference[],
     readonly children: readonly TemplateStructuralNodeReference[],
     readonly templateContent: TemplateStructuralNodeReference | null,
+    /** Original element-creation input, independent of a later removed or rewritten `is` attribute. */
+    readonly customElementIs: string | null,
     readonly fieldProvenance: readonly FieldProvenance<CompilerTransformedTemplateNodeField>[] = [],
   ) {}
 

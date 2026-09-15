@@ -53,6 +53,7 @@ import type {
 import type { TemplateCompilerProjectionSlotConsumptionReceipt } from './template-compiler-projection-logical-extraction.js';
 import { TemplateCompilerOperationKind } from './template-compiler-operation.js';
 import type {
+  TemplateContentOwnerDocument,
   TemplateStructuralAttributeReference,
   TemplateStructuralNodeReference,
 } from './template-structure.js';
@@ -82,6 +83,7 @@ export class TemplateCompilerContextStructure {
     readonly context: TemplateCompilerTargetContextPlan,
     readonly compilerCarrier: TemplateCompilerElementOccurrence,
     readonly compilerContent: TemplateCompilerFragmentOccurrence,
+    readonly contentOwnerDocument: TemplateContentOwnerDocument,
   ) {}
 }
 
@@ -324,6 +326,7 @@ export class TemplateCompilerStructuralExecutionSession {
       targetPlan.root,
       forest.compilerCarrier,
       forest.compilerContent,
+      'template-contents',
     );
     return session;
   }
@@ -782,6 +785,7 @@ export class TemplateCompilerStructuralExecutionSession {
       'template',
       HtmlNamespaceKind.Html,
       'http://www.w3.org/1999/xhtml',
+      null,
     );
     const content = this.forest.createGeneratedFragment(this.createGeneration(
       context,
@@ -802,7 +806,8 @@ export class TemplateCompilerStructuralExecutionSession {
       TemplateCompilerOccurrenceEdgeKind.TemplateContent,
       0,
     );
-    return this.bindContextStructure(context, carrier, content);
+    // CompilationContext.t() adopts the generated template's content into the platform document.
+    return this.bindContextStructure(context, carrier, content, 'platform');
   }
 
   /** Bind a context to an existing template occurrence after compiler-owned extraction/movement made it a root. */
@@ -810,6 +815,7 @@ export class TemplateCompilerStructuralExecutionSession {
     context: TemplateCompilerTargetContextPlan,
     compilerCarrier: TemplateCompilerElementOccurrence,
     compilerContent: TemplateCompilerFragmentOccurrence,
+    contentOwnerDocument: TemplateContentOwnerDocument,
   ): TemplateCompilerContextStructure {
     this.requireContext(context);
     if (this.structuresByContextKey.has(context.localKey)) {
@@ -861,7 +867,7 @@ export class TemplateCompilerStructuralExecutionSession {
       );
     }
     this.requireInitialOccurrenceMembership(context, compilerCarrier, compilerContent);
-    const structure = new TemplateCompilerContextStructure(context, compilerCarrier, compilerContent);
+    const structure = new TemplateCompilerContextStructure(context, compilerCarrier, compilerContent, contentOwnerDocument);
     this.structuresByContextKey.set(context.localKey, structure);
     this.contextKeysByCarrierOccurrence.set(compilerCarrier.occurrenceKey, context.localKey);
     return structure;
@@ -977,7 +983,7 @@ export class TemplateCompilerStructuralExecutionSession {
       this.forest.readRoots().length,
       causeHandles,
     );
-    return this.bindContextStructure(context, compilerCarrier, compilerContent);
+    return this.bindContextStructure(context, compilerCarrier, compilerContent, 'template-contents');
   }
 
   /** Adopt a compiler-extracted local-template carrier as the root of its already-admitted invocation context. */
@@ -1019,7 +1025,7 @@ export class TemplateCompilerStructuralExecutionSession {
       null,
       true,
     );
-    return this.bindContextStructure(context, compilerCarrier, compilerContent);
+    return this.bindContextStructure(context, compilerCarrier, compilerContent, 'template-contents');
   }
 
   private assertExtractedInvocationContextStructureInput(

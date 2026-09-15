@@ -79,7 +79,7 @@ describe('compiler mutation rollback', () => {
     const browser = new BrowserEffectiveTemplateFixture('compiler-rollback-generation');
     try {
       const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(browser.materialize(
-        'root', '<div title="seed">text<!--comment--></div>',
+        'root', '<div title="seed" is="source-div">text<!--comment--></div>',
       ).emission);
       const owner = {};
       const authority = TemplateCompilerForestMutationAuthority.createForExecution(forest, owner);
@@ -88,6 +88,8 @@ describe('compiler mutation rollback', () => {
       const text = forest.readNodes().find((node) => node instanceof TemplateCompilerTextOccurrence)!;
       const comment = forest.readNodes().find((node) => node instanceof TemplateCompilerCommentOccurrence)!;
       const attribute = div.readAttributes()[0]!;
+      const originalCustomIs = div.customElementIs;
+      expect(originalCustomIs).toBe('source-div');
       const baseline = forestState(forest);
       const nodeInventory = forest.readNodes();
       const attributeInventory = forest.readAttributes();
@@ -99,8 +101,10 @@ describe('compiler mutation rollback', () => {
         owner, batch, TemplateCompilerGeneratedOccurrenceRole.Clone, ordinal++,
       );
       const generatedElement = forest.createGeneratedElement(
-        generation(), 'template', HtmlNamespaceKind.Html, 'http://www.w3.org/1999/xhtml', div.inputReference,
+        generation(), 'template', HtmlNamespaceKind.Html, 'http://www.w3.org/1999/xhtml', 'generated-template', div.inputReference,
       );
+      // Input lineage does not choose the new element's native creation identity.
+      expect(generatedElement.customElementIs).toBe('generated-template');
       const generatedFragment = forest.createGeneratedFragment(generation(), forest.compilerContent.inputReference);
       const generatedText = forest.createGeneratedText(generation(), 'copy', text.inputReference);
       const generatedComment = forest.createGeneratedComment(
@@ -121,12 +125,15 @@ describe('compiler mutation rollback', () => {
       forest.moveNode(text, generatedFragment, Child, 3);
       forest.rewriteCharacterData(generatedText, 'changed copy');
       forest.rewriteAttributeValue(generatedAttribute, 'changed copy');
+      forest.rewriteAttributeValue(div.readAttributes()[1]!, 'rewritten-div');
+      expect(div.customElementIs).toBe(originalCustomIs);
       const abandonedGenerations = authority.readPendingGenerations(batch);
       expect(textOrigins).toHaveLength(2);
       expect(attributeOrigins).toHaveLength(2);
       authority.finishExecutionBatch(owner, batch, false, {});
 
       expect(forestState(forest)).toEqual(baseline);
+      expect(div.customElementIs).toBe(originalCustomIs);
       expect(forest.readNodes()).toBe(nodeInventory);
       expect(forest.readAttributes()).toBe(attributeInventory);
       expect(forest.nodesForInputProduct(text.inputReference!.productHandle)).toBe(textOrigins);
@@ -161,8 +168,9 @@ describe('compiler mutation rollback', () => {
         owner, retry, TemplateCompilerGeneratedOccurrenceRole.Clone, 0,
       );
       const retryElement = forest.createGeneratedElement(
-        retryGeneration, 'template', HtmlNamespaceKind.Html, 'http://www.w3.org/1999/xhtml', div.inputReference,
+        retryGeneration, 'template', HtmlNamespaceKind.Html, 'http://www.w3.org/1999/xhtml', 'generated-template', div.inputReference,
       );
+      expect(retryElement.customElementIs).toBe('generated-template');
       expect(retryElement.occurrenceKey).toBe(generatedElement.occurrenceKey);
       expect(retryElement).not.toBe(generatedElement);
       authority.finishExecutionBatch(owner, retry, true, {});

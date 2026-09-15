@@ -656,6 +656,7 @@ describe('template compiler structural execution mechanics', () => {
         'template',
         HtmlNamespaceKind.Html,
         'http://www.w3.org/1999/xhtml',
+        null,
       );
       const firstContent = forest.createGeneratedFragment(session.createGeneration(
         contexts[0]!,
@@ -676,10 +677,10 @@ describe('template compiler structural execution mechanics', () => {
         TemplateCompilerOccurrenceEdgeKind.TemplateContent,
         0,
       );
-      expect(() => session.bindContextStructure(contexts[1]!, firstCarrier, firstContent))
+      expect(() => session.bindContextStructure(contexts[1]!, firstCarrier, firstContent, 'platform'))
         .toThrow(/incoherent generated carrier pair/);
       const structures = [
-        session.bindContextStructure(contexts[0]!, firstCarrier, firstContent),
+        session.bindContextStructure(contexts[0]!, firstCarrier, firstContent, 'platform'),
         ...contexts.slice(1).map((context) => session.createGeneratedContextStructure(context)),
       ];
       const rootGeometries: TemplateCompilerRenderLocationTargetGeometry[] = [];
@@ -1916,6 +1917,7 @@ describe('template compiler structural execution mechanics', () => {
           element.tagName,
           element.namespace,
           element.namespaceUri,
+          element.customElementIs,
           forgedNode,
         )).toThrow(/seeded origin index/);
         const forgedAttribute = new TemplateStructuralAttributeReference(
@@ -1951,6 +1953,7 @@ describe('template compiler structural execution mechanics', () => {
           element.tagName,
           element.namespace,
           element.namespaceUri,
+          element.customElementIs,
           element.inputReference,
         );
         expect(() => forest.createGeneratedAttribute(
@@ -1984,6 +1987,7 @@ describe('template compiler structural execution mechanics', () => {
           'template',
           HtmlNamespaceKind.Html,
           'http://www.w3.org/1999/xhtml',
+          null,
         );
         expect(() => session.createGeneration(
           context,
@@ -2001,7 +2005,7 @@ describe('template compiler structural execution mechanics', () => {
         ));
         forest.insertDetachedNode(carrier, null, TemplateCompilerOccurrenceEdgeKind.Root, forest.readRoots().length);
         forest.insertDetachedNode(content, carrier, TemplateCompilerOccurrenceEdgeKind.TemplateContent, 0);
-        expect(() => session.bindContextStructure(context, carrier, content))
+        expect(() => session.bindContextStructure(context, carrier, content, 'platform'))
           .toThrow(/incoherent generated carrier pair/);
       }
 
@@ -2026,6 +2030,7 @@ describe('template compiler structural execution mechanics', () => {
           'template',
           HtmlNamespaceKind.Svg,
           'http://www.w3.org/2000/svg',
+          null,
         );
         const content = forest.createGeneratedFragment(session.createGeneration(
           context,
@@ -2036,7 +2041,7 @@ describe('template compiler structural execution mechanics', () => {
         ));
         forest.insertDetachedNode(carrier, null, TemplateCompilerOccurrenceEdgeKind.Root, forest.readRoots().length);
         forest.insertDetachedNode(content, carrier, TemplateCompilerOccurrenceEdgeKind.TemplateContent, 0);
-        expect(() => session.bindContextStructure(context, carrier, content))
+        expect(() => session.bindContextStructure(context, carrier, content, 'platform'))
           .toThrow(/exact template-content carrier/);
       }
 
@@ -2081,6 +2086,7 @@ describe('template compiler structural execution mechanics', () => {
           'div',
           HtmlNamespaceKind.Html,
           'http://www.w3.org/1999/xhtml',
+          null,
         );
         forest.insertDetachedNode(
           falseCarrier,

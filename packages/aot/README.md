@@ -52,8 +52,17 @@ This split does not infer unresolved convention composition: named/local depende
 and executable header values remain subject to the complete emitter's existing fail-closed checks.
 
 The current emitter is a CSR baseline. It preserves the compiler's exact DOM node graph rather than serializing and
-reparsing HTML, because reparsing can merge adjacent text nodes that Aurelia instruction rows address separately. A
-small virtual runtime helper applies compiler fields to carrier-owned Aurelia definitions after resource definition and
+reparsing HTML, because reparsing can merge adjacent text nodes that Aurelia instruction rows address separately.
+Handoff v5 carries final template-content document affiliation and each element's original native `is` creation input.
+The emitter constructs the complete graph in the inert template-contents document, then adopts generated-context
+content into the platform document when requested by semantic-runtime. Native custom elements therefore do not
+construct during module loading. The original `is` creation value stays distinct from hook-rewritten attributes.
+This also preserves JIT Rendering's first-import versus cached-clone upgrade timing; simply keeping all content inert
+would change repeated generated-template views. Adjacent text nodes remain separate throughout.
+The carrier element itself is platform-owned in the emitted representation; introspection of an authored outer
+template's original carrier-document identity is not yet represented. This is distinct from the content-document
+affiliation that Rendering uses to instantiate views, and from source hooks' still-unsupported temporal ownerDocument.
+A small virtual runtime helper applies compiler fields to carrier-owned Aurelia definitions after resource definition and
 before its first `Rendering.compile`; this is the candidate for a later additive framework hook. The generated facade
 keeps Aurelia/AppRoot lifecycle while replacing implicit `StandardConfiguration` installation through an exact
 old-text-validated source carrier. Runtime-html resources, renderers, and event-modifier support are selected

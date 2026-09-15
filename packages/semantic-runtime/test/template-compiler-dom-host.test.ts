@@ -29,6 +29,23 @@ import { TemplateCompilerElementOccurrence, TemplateCompilerOccurrenceForest } f
 import { BrowserEffectiveTemplateFixture } from './browser-effective-template-fixture.js';
 
 describe('interpreted compiler DOM host', () => {
+  test.each([
+    ['<button is="native-original"></button>', 'node.removeAttribute("is");', 'native-original', null],
+    ['<button is="native-original"></button>', 'node.setAttribute("is", "native-rewritten");', 'native-original', 'native-rewritten'],
+    ['<button></button>', 'node.setAttribute("is", "native-added");', null, 'native-added'],
+    ['<svg is="not-an-html-element"></svg>', 'node.removeAttribute("is");', null, null],
+  ] as const)('keeps native creation identity separate from hook attribute edits: %s', (markup, body, original, final) => {
+    const run = new DomHookRun(markup);
+    try {
+      expect(run.root.customElementIs).toBe(original);
+      const result = run.invoke(`function hook(node) { ${body} }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+      run.complete(result.kind);
+      expect(run.root.customElementIs).toBe(original);
+      expect(run.root.readAttributes().find(attribute => attribute.name === 'is')?.value ?? null).toBe(final);
+    } finally { run.dispose(); }
+  });
+
   test('reads node identity, namespace, text, template-content, and ordinary-child navigation through graph forks', () => {
     const run = new DomHookRun('<div id="host">lead<!--comment--><i></i><b>tail</b><template><span>inert</span></template><svg><linearGradient></linearGradient></svg></div>');
     try {
