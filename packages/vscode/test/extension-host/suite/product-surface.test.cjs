@@ -42,6 +42,7 @@ const {
   publicationContainsProjectIssue,
   publicationHasExactProjectIssueNodeIds,
   publicationNodeDurableShape,
+  publicationSubtreeContentShape,
 } = require("../resource-discovery-host-driver.cjs");
 
 const aureliaWorkspace = process.env.AURELIA_LS_EXTENSION_HOST_WORKSPACE;
@@ -4656,9 +4657,8 @@ suite("extension-host product surface", () => {
     const retainedSiblingCount = retainedSiblingNodes.length;
     assert(retainedSiblingCount > 0, "Partial failure must retain the primary workspace's resources.");
     assert.deepStrictEqual(
-      [retainedProject, ...publishedDescendants(partialNodes, retainedProject.nodeId)]
-        .map(publicationNodeDurableShape),
-      retainedBaselineNodes.map(publicationNodeDurableShape),
+      publicationSubtreeContentShape([retainedProject, ...publishedDescendants(partialNodes, retainedProject.nodeId)]),
+      publicationSubtreeContentShape(retainedBaselineNodes),
       "Partial failure must preserve the complete primary subtree, including rows without navigation metadata.",
     );
     const partialOutput = await invokeTreeOutputAction(partialTarget);

@@ -26,6 +26,7 @@ import {
   sep,
 } from "node:path";
 import { fileURLToPath } from "node:url";
+import { publicationSubtreeContentShape } from "../test/extension-host/resource-discovery-host-driver.cjs";
 import { extensionHostStaticContractSha256 } from "./extension-host-static-contract.mjs";
 import { minimumVSCodeVersion } from "./extension-host-version-contract.mjs";
 import {
@@ -4072,9 +4073,16 @@ function validateRecoveryFacts(value, context) {
   if (!partialIssue.event.description.includes("resources could not be loaded")) {
     throw new Error(`${label}.partial project row omits public failure copy.`);
   }
+  const retainedContent = (nodes) => {
+    const project = projectNodeForKey(nodes, retainedProject.projectKey);
+    return publicationSubtreeContentShape([
+      project.event,
+      ...descendantRecords(nodes, project.event.nodeId).map((record) => record.event),
+    ]);
+  };
   requireEqual(
-    JSON.stringify(projectPublicationDurableShape(partialNodes, retainedProject.projectKey)),
-    JSON.stringify(projectPublicationDurableShape(context.baseline.nodes, retainedProject.projectKey)),
+    JSON.stringify(retainedContent(partialNodes)),
+    JSON.stringify(retainedContent(context.baseline.nodes)),
     `${label}.partial retained primary subtree`,
   );
   const partialRetry = resolveLedgerReference(

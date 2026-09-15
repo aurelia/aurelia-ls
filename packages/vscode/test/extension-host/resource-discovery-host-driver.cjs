@@ -65,6 +65,20 @@ function publicationNodeDurableShape(node) {
   return Object.fromEntries(durablePublicationNodeFields.map((field) => [field, node?.[field]]));
 }
 
+function publicationSubtreeContentShape(nodes) {
+  const nodeIds = new Set();
+  return nodes.map((node) => {
+    assert(typeof node.nodeId === "string" && node.nodeId.length > 0, "Subtree node IDs must be nonempty.");
+    assert(!nodeIds.has(node.nodeId), "Subtree node IDs must be unique.");
+    nodeIds.add(node.nodeId);
+    const shape = publicationNodeDurableShape(node);
+    // Removing a sibling app changes collision descriptions and publication ordinals.
+    // Authored labels, ancestry, navigation, metadata, and answer state stay exact.
+    for (const field of ["ordinal", "description", "accessibilityLabel"]) delete shape[field];
+    return shape;
+  }).sort((left, right) => left.nodeId < right.nodeId ? -1 : left.nodeId > right.nodeId ? 1 : 0);
+}
+
 function observedWorkspaceIdentity(workspaceKey) {
   assert(typeof workspaceKey === "string" && workspaceKey.length > 0, "workspace key must be nonempty");
   return `workspace:${createHash("sha256").update(workspaceKey, "utf8").digest("hex")}`;
@@ -447,4 +461,5 @@ module.exports = {
   publicationContainsProjectIssue,
   publicationHasExactProjectIssueNodeIds,
   publicationNodeDurableShape,
+  publicationSubtreeContentShape,
 };
