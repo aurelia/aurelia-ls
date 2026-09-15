@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+export * from "./worker-progress-protocol.js";
 import type {
   ApplicationFileRole,
   SemanticAttributeInterpretationExplanation,

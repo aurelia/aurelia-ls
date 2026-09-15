@@ -77,6 +77,9 @@ const createLanguageClient = (
           onEvent: (event) => {
             support.recordWorkerTransportEvent({ id, name }, event);
             switch (event.type) {
+              case "progress":
+                // Bounded, source-free samples are retained by the support report without output-channel traffic.
+                break;
               case "online":
                 transportLogger.debug("Worker transport is online");
                 break;

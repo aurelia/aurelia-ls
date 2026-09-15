@@ -61,6 +61,40 @@ interface SemanticRuntimePhaseStackFrame {
 
 const phaseStacks = new WeakMap<SemanticRuntimePhaseTiming<string>[], SemanticRuntimePhaseStackFrame[]>();
 
+export type SemanticRuntimePhaseProgress = 'started' | 'completed' | 'failed';
+type PhaseObserver = (name: string, progress: SemanticRuntimePhaseProgress) => void;
+const phaseObservers = new Set<PhaseObserver>();
+
+/** Observe synchronous phase boundaries without retaining values or enabling detailed profiling. */
+export function observeSemanticRuntimePhases(observer: PhaseObserver): () => void {
+  phaseObservers.add(observer);
+  return () => { phaseObservers.delete(observer); };
+}
+
+/** An observation-only boundary for work that has its own construction profile. */
+export function observeSemanticRuntimePhase<T>(name: string, read: () => T): T {
+  if (phaseObservers.size === 0) return read();
+  publishPhaseProgress(name, 'started');
+  try {
+    const value = read();
+    publishPhaseProgress(name, 'completed');
+    return value;
+  } catch (error) {
+    publishPhaseProgress(name, 'failed');
+    throw error;
+  }
+}
+
+function publishPhaseProgress(name: string, progress: SemanticRuntimePhaseProgress): void {
+  for (const observer of phaseObservers) {
+    try {
+      observer(name, progress);
+    } catch {
+      // Operational evidence must not affect semantic evaluation or its original failure.
+    }
+  }
+}
+
 /** Measure a named semantic-runtime phase, optionally sampling memory and kernel density at its boundary. */
 export function measureSemanticRuntimePhase<TName extends string, TValue>(
   phases: SemanticRuntimePhaseTiming<TName>[],
@@ -69,7 +103,7 @@ export function measureSemanticRuntimePhase<TName extends string, TValue>(
   telemetry: NormalizedSemanticRuntimeTelemetryOptions,
   read: () => TValue,
 ): TValue {
-  const stack = phaseStackFor(phases as SemanticRuntimePhaseTiming<string>[]);
+  const stack = phaseStackFor(phases);
   const frame: SemanticRuntimePhaseStackFrame = { childMilliseconds: 0 };
   const memoryBefore = telemetry.capturePhaseMemory
     ? readSemanticRuntimeMemorySample()
@@ -82,6 +116,7 @@ export function measureSemanticRuntimePhase<TName extends string, TValue>(
     : null;
   stack.push(frame);
   const started = performance.now();
+  if (phaseObservers.size !== 0) publishPhaseProgress(name, 'started');
   try {
     const value = read();
     const memoryAfter = telemetry.capturePhaseMemory
@@ -141,9 +176,11 @@ export function measureSemanticRuntimePhase<TName extends string, TValue>(
           },
         }),
     });
+    if (phaseObservers.size !== 0) publishPhaseProgress(name, 'completed');
     return value;
   } catch (error) {
     stack.pop();
+    if (phaseObservers.size !== 0) publishPhaseProgress(name, 'failed');
     throw error;
   }
 }

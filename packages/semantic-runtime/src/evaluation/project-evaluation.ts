@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { observeSemanticRuntimePhase } from '../telemetry/phase.js';
 import type ts from 'typescript';
 import type {
   ProjectBootFrame,
@@ -240,6 +241,10 @@ export class StaticProjectEvaluationResult {
 
   /** Fork mutable evaluator values and environments for one speculative follow-up analysis session. */
   forkSession(): StaticProjectEvaluationResult {
+    return observeSemanticRuntimePhase('evaluation-session-fork', () => this.forkSessionGraph());
+  }
+
+  private forkSessionGraph(): StaticProjectEvaluationResult {
     const runtimeHost = this.readEvaluatedSources()[0]?.evaluation.runtimeHost
       ?? DefaultStaticEvaluationRuntimeHost;
     const session = new StaticEvaluationSessionFork(runtimeHost);
@@ -956,7 +961,7 @@ export class StaticProjectEvaluationComputationService implements KernelStoreSid
     try {
       run.guardCurrent(project.inputGeneration.currentnessGuardKey, project.inputGeneration);
       const preparation = profile.prepare();
-      const result = new StaticProjectEvaluationPass().evaluateAndEmit(
+      const result = observeSemanticRuntimePhase('static-evaluation', () => new StaticProjectEvaluationPass().evaluateAndEmit(
         this.store,
         project,
         preparation.options,
@@ -964,7 +969,7 @@ export class StaticProjectEvaluationComputationService implements KernelStoreSid
         profile.readKey,
         ambientAccess,
         started,
-      );
+      ));
       run.observe(profile);
       for (const read of project.readRegisteredInputs()) {
         run.observe(read);

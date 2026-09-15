@@ -10,7 +10,7 @@
  * - handlers/custom.ts   - Custom Aurelia request handlers
  * - handlers/lifecycle.ts - Lifecycle and document event handlers
  */
-import { parentPort } from "node:worker_threads";
+import { parentPort, workerData } from "node:worker_threads";
 import { TextDocuments } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { createServerContext } from "./context.js";
@@ -20,9 +20,20 @@ import { registerCustomHandlers } from "./handlers/custom.js";
 import { registerLifecycleHandlers } from "./handlers/lifecycle.js";
 import { registerDiagnosticHandlers } from "./handlers/diagnostics.js";
 import { createLanguageServerConnection } from "./transport.js";
+import { installWorkerProgress } from "./worker-progress.js";
+import { AURELIA_WORKER_PROGRESS_SCHEMA } from "./worker-progress-protocol.js";
 
 // Create LSP connection and document store
 const workerMode = parentPort != null;
+const transportOptions: unknown = workerData;
+// Only a host that understands the transport-local envelope receives progress messages.
+if (parentPort != null && transportOptions != null && typeof transportOptions === "object"
+  && "aureliaWorkerProgress" in transportOptions
+  && transportOptions.aureliaWorkerProgress === AURELIA_WORKER_PROGRESS_SCHEMA) {
+  const port = parentPort;
+  const stopProgress = installWorkerProgress((message) => port.postMessage(message));
+  port.once("close", stopProgress);
+}
 const connection = createLanguageServerConnection(parentPort);
 const documents = new TextDocuments(TextDocument);
 

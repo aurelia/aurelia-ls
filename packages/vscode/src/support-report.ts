@@ -8,11 +8,12 @@ import type {
 } from "./client-core.js";
 import {
   AureliaProtocolRequest,
+  readAureliaWorkerProgressSnapshot,
   type AureliaSupportSnapshotResponse,
 } from "@aurelia-ls/language-server/protocol";
 import { AureliaCommand } from "./product-contract.js";
 import type { VscodeApi } from "./vscode-api.js";
-import type { WorkerTransportEvent } from "./worker-transport.js";
+import type { WorkerProgressEvidence, WorkerTransportEvent } from "./worker-transport.js";
 import {
   readWorkspaceActivationTopology,
   workspaceFolderKey,
@@ -21,6 +22,7 @@ import {
 export const AURELIA_SUPPORT_REPORT_SCHEMA = "aurelia-support-report/1" as const;
 
 const MAX_WORKER_EVENTS = 64;
+const MAX_WORKER_PROGRESS_SAMPLES = 64;
 const MAX_LOG_FILES = 8;
 const MAX_LOG_BYTES_PER_FILE = 64 * 1_024;
 const MAX_TOTAL_LOG_BYTES = 256 * 1_024;
@@ -84,6 +86,7 @@ interface WorkerEventRecord {
 
 type WorkerEventEvidence =
   | { readonly type: "online" }
+  | { readonly type: "progress"; readonly progress: WorkerProgressEvidence }
   | { readonly type: "stdout" | "stderr"; readonly characterCount: number; readonly lineCount: number }
   | {
       readonly type: "error";
@@ -93,6 +96,7 @@ type WorkerEventEvidence =
         readonly messageKind: "worker-out-of-memory" | "other";
         readonly messageCharacterCount: number;
       };
+      readonly lastProgress?: WorkerProgressEvidence;
     }
   | { readonly type: "exit"; readonly code: number }
   | { readonly type: "force-terminate"; readonly graceMilliseconds: number };
@@ -121,6 +125,8 @@ export class SupportReportService implements Disposable {
   readonly #readLogTails: (logUri: Uri) => Promise<PersistedLogTailRead>;
   readonly #serverSnapshotDeadlineMilliseconds: number;
   readonly #workerEvents: WorkerEventRecord[] = [];
+  readonly #workerProgress: WorkerEventRecord[] = [];
+  #omittedWorkerProgressSamples = 0;
   readonly #workerIdentityKey = randomBytes(32);
   #languageClient: AureliaLanguageClient | null = null;
   #resourceExplorerState: (() => ResourceExplorerSupportState) | null = null;
@@ -164,14 +170,18 @@ export class SupportReportService implements Disposable {
     event: WorkerTransportEvent,
   ): void {
     if (this.#disposed) return;
-    this.#workerEvents.push({
+    const records = event.type === "progress" ? this.#workerProgress : this.#workerEvents;
+    records.push({
       recordedAt: this.#now().toISOString(),
       clientIdDigest: privateIngressIdentity(this.#workerIdentityKey, "language-client", client.id),
       clientNameDigest: privateIngressIdentity(this.#workerIdentityKey, "language-client-name", client.name),
       event: projectWorkerEventAtIngress(event),
     });
-    if (this.#workerEvents.length > MAX_WORKER_EVENTS) {
-      this.#workerEvents.splice(0, this.#workerEvents.length - MAX_WORKER_EVENTS);
+    const limit = event.type === "progress" ? MAX_WORKER_PROGRESS_SAMPLES : MAX_WORKER_EVENTS;
+    if (records.length > limit) {
+      const omitted = records.length - limit;
+      records.splice(0, omitted);
+      if (event.type === "progress") this.#omittedWorkerProgressSamples += omitted;
     }
   }
 
@@ -213,6 +223,7 @@ export class SupportReportService implements Disposable {
         identityPolicy: "fresh per-report HMAC pseudonyms",
         liveServerSnapshots:
           "bounded schema-projected counters only; collection is skipped for explicit server overrides",
+        workerProgress: "bounded phase labels and heap counters retained across Worker failures",
         persistedLogs: "bounded tails with paths, URIs, and source-like file names pseudonymized",
         persistedLogCaveat:
           "Log messages are not source files, but may still contain authored identifiers or short text emitted by an error. Review the report before sharing.",
@@ -226,6 +237,9 @@ export class SupportReportService implements Disposable {
         serverOverridePresent: process.env.AURELIA_LS_SERVER_PATH != null,
         recentEvents: this.#workerEvents.map((record) =>
           projectWorkerEvent(record, identities)),
+        recentProgress: this.#workerProgress.map((record) => projectWorkerEvent(record, identities)),
+        omittedProgressSamples: this.#omittedWorkerProgressSamples,
+        maximumProgressSamples: MAX_WORKER_PROGRESS_SAMPLES,
       },
       servers,
       resourceExplorer: explorer,
@@ -243,6 +257,7 @@ export class SupportReportService implements Disposable {
     this.#languageClient = null;
     this.#resourceExplorerState = null;
     this.#workerEvents.splice(0);
+    this.#workerProgress.splice(0);
   }
 
   #readClientState(
@@ -855,6 +870,8 @@ function projectWorkerEvent(
     type: record.event.type,
   };
   switch (record.event.type) {
+    case "progress":
+      return { ...base, ...record.event.progress };
     case "online":
       return base;
     case "stdout":
@@ -863,6 +880,7 @@ function projectWorkerEvent(
     case "error":
       return {
         ...base,
+        ...(record.event.lastProgress == null ? {} : { lastProgress: record.event.lastProgress }),
         error: {
           name: record.event.error.name,
           code: errorCode(record.event.error),
@@ -879,6 +897,8 @@ function projectWorkerEvent(
 
 function projectWorkerEventAtIngress(event: WorkerTransportEvent): WorkerEventEvidence {
   switch (event.type) {
+    case "progress":
+      return { type: event.type, progress: projectWorkerProgress(event.progress) };
     case "online":
       return { type: event.type };
     case "stdout":
@@ -892,6 +912,7 @@ function projectWorkerEventAtIngress(event: WorkerTransportEvent): WorkerEventEv
       const code = safeWorkerErrorCode(errorCode(event.error));
       return {
         type: event.type,
+        ...(event.lastProgress == null ? {} : { lastProgress: projectWorkerProgress(event.lastProgress) }),
         error: {
           name: /^[A-Za-z][A-Za-z0-9_.-]{0,99}$/.test(event.error.name) ? event.error.name : "Error",
           code,
@@ -908,6 +929,14 @@ function projectWorkerEventAtIngress(event: WorkerTransportEvent): WorkerEventEv
     case "force-terminate":
       return { type: event.type, graceMilliseconds: event.graceMilliseconds };
   }
+}
+
+function projectWorkerProgress(value: WorkerProgressEvidence): WorkerProgressEvidence {
+  const snapshot = readAureliaWorkerProgressSnapshot(value.snapshot);
+  if (snapshot == null || !Number.isSafeInteger(value.workerInstance) || value.workerInstance < 1) {
+    throw new TypeError("Invalid Worker progress evidence.");
+  }
+  return { workerInstance: value.workerInstance, snapshot };
 }
 
 function safeWorkerErrorCode(code: string | number | null): string | number | null {

@@ -1,4 +1,7 @@
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { pathToFileURL } from "node:url";
 import { Worker } from "node:worker_threads";
 import {
   CancellationTokenSource,
@@ -20,6 +23,47 @@ const WORKER_FIXTURE = path.resolve(
 );
 
 describe("Worker transport", () => {
+  test("negotiates progress with the real server while preserving plain Worker clients", async () => {
+    const server = path.resolve(import.meta.dirname, "../../language-server/out/main.js");
+    for (const enabled of [true, false]) {
+      const events: WorkerTransportEvent[] = [];
+      const transports = createWorkerMessageTransports(server, {
+        ...(enabled ? {} : { createWorker: (module: string) => new Worker(module) }),
+        onEvent: (event) => { events.push(event); },
+      });
+      const connection = createMessageConnection(transports.reader, transports.writer);
+      connection.listen();
+      try {
+        await connection.sendRequest("initialize", {
+          processId: process.pid,
+          rootUri: pathToFileURL(path.resolve(import.meta.dirname, "../../language-server/test/fixtures")).href,
+          capabilities: {},
+        });
+        expect(events.some((event) => event.type === "progress")).toBe(enabled);
+        await connection.sendRequest("shutdown");
+        await connection.sendNotification("exit");
+        expect(await transports.exited).toBe(0);
+      } finally {
+        connection.dispose();
+        await transports.terminate();
+      }
+    }
+  }, 30_000);
+  test("preserves Worker heap evidence after real OOM without forwarding progress into JSON-RPC", async () => {
+    // NODE_OPTIONS in the test runner overrides Worker resourceLimits even with a different Worker env/execArgv.
+    // Start a clean parent process so this test always exhausts a small, verified heap.
+    const fixture = path.resolve(import.meta.dirname, "fixtures/heap-progress-host.mjs");
+    const { stdout } = await promisify(execFile)(process.execPath, [fixture], {
+      env: { ...process.env, NODE_OPTIONS: "" }, timeout: 25_000, maxBuffer: 64 * 1024,
+    });
+    const result = JSON.parse(stdout);
+    expect(result.exitCode).not.toBe(0);
+    expect(result.failure.code).toBe("ERR_WORKER_OUT_OF_MEMORY");
+    expect(result.failure.lastProgress.snapshot).toMatchObject({ phase: "static-evaluation", status: "started" });
+    expect(result.failure.lastProgress.snapshot.heapLimitBytes).toBeGreaterThan(0);
+    expect(result.failure.lastProgress.snapshot.heapLimitBytes).toBeLessThan(200 * 1024 * 1024);
+    expect(result.messages).toEqual([{ jsonrpc: "2.0", method: "test/ready" }]);
+  }, 30_000);
   test("is the default and keeps forced IPC and Node inspector sessions on IPC", () => {
     expect(shouldUseWorkerTransport({}, [])).toBe(true);
     expect(shouldUseWorkerTransport({}, ["--inspect=0"])).toBe(false);

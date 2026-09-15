@@ -1,4 +1,5 @@
 import type { ProjectBootFrame } from '../boot/frames.js';
+import { observeSemanticRuntimePhase } from '../telemetry/phase.js';
 import {
   computationCommitCurrentnessError,
   computationReadCurrentnessError,
@@ -341,11 +342,11 @@ export class TypeSystemProjectComputationService implements KernelStoreSidecarIn
       for (const read of project.readRegisteredInputs()) {
         run.observe(read);
       }
-      const typeSystem = new TypeSystemProjectBuilder(generationProgramSources).build(
+      const typeSystem = observeSemanticRuntimePhase('type-system', () => new TypeSystemProjectBuilder(generationProgramSources).build(
         project,
         evaluation.readBaseline(validationScope),
         { previousProject: incumbent },
-      );
+      ));
       for (const read of typeSystem.readRegisteredInputs()) {
         run.observe(read);
       }

@@ -22,6 +22,37 @@ afterEach(async () => {
 });
 
 describe("SupportReportService", () => {
+  test("retains bounded crash progress across replacement Workers when the server cannot answer", async () => {
+    const { vscode: stubVscode } = createVscodeApi();
+    const service = new SupportReportService(stubExtensionContext(stubVscode), stubVscode as unknown as VscodeApi, {
+      transportMode: "worker",
+      readLogTails: async () => ({ tails: [], failures: [] }),
+    });
+    const client = { id: "private-client", name: "private-client-name" };
+    const snapshot = { sequence: 10, elapsedMilliseconds: 40_000, phase: "static-evaluation" as const,
+      status: "started" as const, heapUsedBytes: 100, heapTotalBytes: 110, heapLimitBytes: 128,
+      externalBytes: 1, omittedEventCount: 8, privateText: "DO_NOT_RETAIN" };
+    service.recordWorkerTransportEvent(client, {
+      type: "error", error: Object.assign(new Error("heap out of memory"), { code: "ERR_WORKER_OUT_OF_MEMORY" }),
+      lastProgress: { workerInstance: 1, snapshot },
+    });
+    for (let sequence = 1; sequence <= 100; sequence++) {
+      service.recordWorkerTransportEvent(client, { type: "progress", progress: {
+        workerInstance: 2, snapshot: { ...snapshot, sequence },
+      } });
+    }
+    snapshot.heapUsedBytes = 999;
+    const report = await service.createReport() as any;
+    expect(report.servers).toEqual({ status: "unavailable" });
+    expect(report.worker.recentProgress).toHaveLength(64);
+    expect(report.worker.omittedProgressSamples).toBe(36);
+    expect(report.worker.recentProgress[0]).toMatchObject({ workerInstance: 2, snapshot: { sequence: 37 } });
+    expect(report.worker.recentEvents[0]).toMatchObject({ type: "error",
+      lastProgress: { workerInstance: 1, snapshot: { sequence: 10, heapUsedBytes: 100 } },
+    });
+    expect(JSON.stringify(report)).not.toContain("DO_NOT_RETAIN");
+    service.dispose();
+  });
   test("opens a source-free, pseudonymized, locally reviewable JSON report", async () => {
     const privateWorkspace = "file:///C:/Users/fred/private-rpg";
     const privateDocument = `${privateWorkspace}/src/ui-pvp-local.html`;
