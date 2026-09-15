@@ -2562,12 +2562,6 @@ export class SemanticRuntime {
     if (existing != null) {
       return existing;
     }
-    // Policy is part of cache compatibility, so a stale variant may not have reached `isCurrent` during lookup.
-    // Retire stale state for this project before a new policy request can itself be refused by entrypoint preflight.
-    const disposedStaleApps = this.disposeStaleProjectAppEpochsBeforeReplacement(
-      project.projectKey,
-      QueryClaimDisposalReason.AppEpochDisposed,
-    );
     const result = (() => {
       try {
         if (this.hasCachedAppForProject(project.projectKey)) {
@@ -2593,7 +2587,15 @@ export class SemanticRuntime {
           telemetry,
         }).commit();
       } catch (error) {
-        this.retireStaleProjectUpstreamsAfterRefusal(project.projectKey, disposedStaleApps, error);
+        if (isSemanticApplicationEntrypointSelectionRequiredError(error)) {
+          // Supported replacements need the committed family graph for incremental reconciliation. A refused
+          // entrypoint has no replacement to publish, so reclaim only its stale incumbent after that decision.
+          const disposedStaleApps = this.disposeStaleProjectAppEpochsAfterRefusal(
+            project.projectKey,
+            QueryClaimDisposalReason.AppEpochDisposed,
+          );
+          this.retireStaleProjectUpstreamsAfterRefusal(project.projectKey, disposedStaleApps);
+        }
         throw error;
       }
     })();
@@ -2733,12 +2735,8 @@ export class SemanticRuntime {
   private retireStaleProjectUpstreamsAfterRefusal(
     projectKey: string,
     disposedStaleApps: number,
-    error: unknown,
   ): void {
-    if (
-      disposedStaleApps === 0
-      || !isSemanticApplicationEntrypointSelectionRequiredError(error)
-    ) {
+    if (disposedStaleApps === 0) {
       return;
     }
     this.typeSystemProjects.retire(projectKey);
@@ -2746,8 +2744,8 @@ export class SemanticRuntime {
     this.typeSystemProjects.compactProgramSources();
   }
 
-  /** Retire stale variants before a request that may refuse without publishing their replacement. */
-  private disposeStaleProjectAppEpochsBeforeReplacement(
+  /** Retire stale variants after entrypoint refusal leaves them without a replacement. */
+  private disposeStaleProjectAppEpochsAfterRefusal(
     projectKey: string,
     reason: QueryClaimDisposalReason,
   ): number {

@@ -60,7 +60,12 @@ describe('router resource literal closure', () => {
         { rootDir: workspaceRoot, projectKey: 'host-beta', sourceFiles: hostBetaSources },
       ],
     });
-    const app = await runtime.openApp({ projectKey: 'host-alpha', analysisDepth: 'binding-observation' });
+    const app = await runtime.openApp({
+      projectKey: 'host-alpha',
+      analysisDepth: 'binding-observation',
+      // This fixture deliberately combines independent applications to exercise broad resource pressure.
+      applicationEntrypointPolicy: 'aggregate-independent-graphs',
+    });
     const cursorInfo = (marker: string, needle: string): SemanticTemplateCursorInfoResult => app.ask({
       kind: SemanticAppQueryKind.TemplateCursorInfo,
       detail: 'handles',
