@@ -64,6 +64,7 @@ export class AureliaAppAnalysisLocus implements ComputationLocus {
 /** One committed app object graph guarded by the computation that owns all of its kernel publications. */
 export class AureliaAppWorldProjectGeneration implements GenerationAuthority, ComputationGenerationReference {
   readonly key: string;
+  readonly projectKey: string;
   readonly currentnessWitness: GenerationCurrentnessWitness;
 
   constructor(
@@ -71,6 +72,7 @@ export class AureliaAppWorldProjectGeneration implements GenerationAuthority, Co
     private readonly currentEmission: AureliaAppWorldProjectEmission,
   ) {
     this.key = computationAuthority.key;
+    this.projectKey = currentEmission.project.projectKey;
     this.currentnessWitness = combineGenerationCurrentnessWitnesses([
       computationAuthority.currentnessWitness,
       currentEmission.project.inputGeneration.currentnessWitness,
@@ -148,6 +150,13 @@ export class AureliaAppWorldProjectAuthority {
       this.generation = null;
     }
     return this.generation;
+  }
+
+  /** Release the exact retired graph immediately, even when no subsequent lookup occurs. */
+  releaseRetired(generation: AureliaAppWorldProjectGeneration): void {
+    if (this.generation === generation && !generation.isAdmitted()) {
+      this.generation = null;
+    }
   }
 
   accept(
@@ -285,7 +294,9 @@ export class AureliaAppWorldProjectComputationService implements KernelStoreSide
   }
 
   retire(generation: AureliaAppWorldProjectGeneration): boolean {
-    return this.lifecycle.retireCommittedGeneration(generation.computationId, generation.runSequence);
+    const retired = this.lifecycle.retireCommittedGeneration(generation.computationId, generation.runSequence);
+    this.authoritiesByProjectKey.get(generation.projectKey)?.releaseRetired(generation);
+    return retired;
   }
 
   /** Run the nominal entrypoint boundary without acquiring TypeScript or opening an app-analysis transaction. */

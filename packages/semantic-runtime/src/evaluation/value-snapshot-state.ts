@@ -1,6 +1,5 @@
-import ts from 'typescript';
-
 import { EvaluationBindingState } from './environment.js';
+import { staticLexicalReferences } from './lexical-references.js';
 import {
   EvaluationObjectPropertyPresence,
   EvaluationObjectPropertyState,
@@ -11,9 +10,6 @@ import {
   type EvaluationValue,
 } from './values.js';
 import { evaluationValuesShareLineage } from './value-relation.js';
-
-const referencedIdentifierNamesByDeclaration = new WeakMap<ts.Node, ReadonlySet<string>>();
-const declarationsWithUnsupportedLexicalMeta = new WeakSet<ts.Node>();
 
 /**
  * Whether two immutable evaluator snapshots carry the same closed execution state.
@@ -197,11 +193,11 @@ class EvaluationSnapshotStateComparator {
   }
 
   private capturedBindingsEqual(left: EvaluationFunctionValue, right: EvaluationFunctionValue): boolean {
-    const names = referencedIdentifierNames(left.declaration);
-    if (declarationsWithUnsupportedLexicalMeta.has(left.declaration)) {
+    const references = staticLexicalReferences(left.declaration);
+    if (references.hasUnsupportedLexicalMeta || references.requiresCompleteEnvironment) {
       return false;
     }
-    for (const name of names) {
+    for (const name of references.names) {
       const leftBinding = left.environment.readBinding(name);
       const rightBinding = right.environment.readBinding(name);
       if (leftBinding == null && rightBinding == null) {
@@ -278,36 +274,6 @@ class EvaluationSnapshotStateComparator {
     this.remainingPairs -= 1;
     return this.remainingPairs >= 0;
   }
-}
-
-function referencedIdentifierNames(node: ts.Node): ReadonlySet<string> {
-  const cached = referencedIdentifierNamesByDeclaration.get(node);
-  if (cached != null) {
-    return cached;
-  }
-  const names = new Set<string>();
-  let hasUnsupportedLexicalMeta = false;
-  const visit = (current: ts.Node): void => {
-    if (ts.isTypeNode(current)) {
-      return;
-    }
-    if (current.kind === ts.SyntaxKind.ThisKeyword) {
-      names.add('this');
-    }
-    if (current.kind === ts.SyntaxKind.SuperKeyword || ts.isMetaProperty(current)) {
-      hasUnsupportedLexicalMeta = true;
-    }
-    if (ts.isIdentifier(current)) {
-      names.add(current.text);
-    }
-    ts.forEachChild(current, visit);
-  };
-  visit(node);
-  if (hasUnsupportedLexicalMeta) {
-    declarationsWithUnsupportedLexicalMeta.add(node);
-  }
-  referencedIdentifierNamesByDeclaration.set(node, names);
-  return names;
 }
 
 function sameStrings(left: readonly string[], right: readonly string[]): boolean {

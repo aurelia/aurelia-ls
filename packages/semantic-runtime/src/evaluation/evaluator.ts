@@ -29,7 +29,7 @@ import {
   type StaticFunctionEvaluationHost,
 } from './function-values.js';
 import {
-  EvaluationArgumentList,
+  type EvaluationArgumentList,
   EvaluationArgumentListOutcome,
   evaluateStaticArgumentList,
 } from './argument-list.js';
@@ -2235,7 +2235,7 @@ export class StaticEvaluator {
   private snapshotInvocationPreparation(
     frame: Pick<StaticInvocationFrame, 'identity' | 'reference' | 'argumentList'>,
   ): StaticInvocationPreparationEvidence {
-    const snapshot = new StaticEvaluationSessionFork(this.runtimeHost);
+    const snapshot = new StaticEvaluationSessionFork(this.runtimeHost, 'referenced-bindings');
     const mapValue = (value: EvaluationValue): EvaluationValue => snapshot.forkValue(value);
     return {
       identity: frame.identity,
@@ -2247,7 +2247,7 @@ export class StaticEvaluator {
   private snapshotInvocationCompletion(
     completion: EvaluationExpressionCompletion,
   ): EvaluationExpressionCompletion {
-    const snapshot = new StaticEvaluationSessionFork(this.runtimeHost);
+    const snapshot = new StaticEvaluationSessionFork(this.runtimeHost, 'referenced-bindings');
     return mapEvaluationExpressionCompletionValues(
       completion,
       (value) => snapshot.forkValue(value),

@@ -34,6 +34,7 @@ import {
   type StaticEvaluationForkLineage,
 } from './evaluation-graph.js';
 import { bindEvaluationValueLineage } from './value-relation.js';
+import { staticLexicalReferences } from './lexical-references.js';
 import {
   EvaluationArrayElement,
   EvaluationArrayValue,
@@ -65,11 +66,14 @@ const enum StaticEvaluationGraphRetentionKind {
   Produced,
 }
 
+export type StaticEvaluationCallableEnvironmentPolicy = 'complete' | 'referenced-bindings';
+
 export class StaticEvaluationSessionFork implements StaticEvaluationForkLineage {
   private readonly environments = new WeakMap<ModuleEnvironmentRecord, ModuleEnvironmentRecord>();
   private readonly sourceEnvironments = new WeakMap<ModuleEnvironmentRecord, ModuleEnvironmentRecord>();
   private readonly populatedEnvironments = new WeakSet<ModuleEnvironmentRecord>();
   private readonly populatingEnvironments = new WeakSet<ModuleEnvironmentRecord>();
+  private readonly capturedBindings = new WeakSet<EvaluationBinding>();
   private readonly values = new WeakMap<object, EvaluationValue>();
   private readonly sourceValues = new WeakMap<object, EvaluationValue>();
   private readonly populatedClasses = new WeakSet<EvaluationClassValue>();
@@ -83,7 +87,10 @@ export class StaticEvaluationSessionFork implements StaticEvaluationForkLineage 
 
   private readonly sourceRuntimeHost: StaticEvaluationRuntimeHost;
 
-  constructor(runtimeHost: StaticEvaluationRuntimeHost) {
+  constructor(
+    runtimeHost: StaticEvaluationRuntimeHost,
+    private readonly callableEnvironmentPolicy: StaticEvaluationCallableEnvironmentPolicy = 'complete',
+  ) {
     this.sourceRuntimeHost = sourceRuntimeHostsBySessionHost.get(runtimeHost) ?? runtimeHost;
   }
 
@@ -229,7 +236,7 @@ export class StaticEvaluationSessionFork implements StaticEvaluationForkLineage 
           source.propertyOrderOpenSeams,
         );
         this.bindValue(source, target);
-        this.populateEnvironment(this.moduleEnvironment(source.environment), environment);
+        this.populateCallableEnvironment(source, environment);
         this.forkProperties(source.properties, target.properties);
         return target;
       }
@@ -334,6 +341,45 @@ export class StaticEvaluationSessionFork implements StaticEvaluationForkLineage 
     }
   }
 
+  private populateCallableEnvironment(
+    source: EvaluationFunctionValue | EvaluationClassValue,
+    target: ModuleEnvironmentRecord,
+  ): void {
+    if (this.callableEnvironmentPolicy === 'complete') {
+      this.populateEnvironment(source.environment, target);
+      return;
+    }
+    const references = staticLexicalReferences(source.declaration);
+    if (references.requiresCompleteEnvironment) {
+      this.populateEnvironment(source.environment, target);
+      return;
+    }
+    // Each callable can add captures to the same lexical shell. Retain the exact owning cell before descending so
+    // mutually recursive functions and aliases do not repeatedly populate it or flatten lexical shadowing.
+    for (const name of references.names) {
+      let environment: ModuleEnvironmentRecord | null = source.environment;
+      while (environment != null) {
+        const binding = environment.readOwnBinding(name);
+        if (binding != null) {
+          if (!this.capturedBindings.has(binding)) {
+            this.capturedBindings.add(binding);
+            this.environmentShell(environment).installBinding(new EvaluationBinding(
+              binding.name,
+              binding.bindingKind,
+              binding.mutable,
+              binding.declaration,
+              binding.state,
+              this.forkValue(binding.value),
+              binding.openSeams,
+            ));
+          }
+          break;
+        }
+        environment = environment.outer;
+      }
+    }
+  }
+
   private forkProperties(
     source: ReadonlyMap<string, EvaluationObjectProperty>,
     target: Map<string, EvaluationObjectProperty>,
@@ -380,10 +426,10 @@ export class StaticEvaluationSessionFork implements StaticEvaluationForkLineage 
     }
     this.populatingClasses.add(source);
     try {
-      this.populateEnvironment(
-        this.moduleEnvironment(source.environment),
-        this.moduleEnvironment(target.environment),
-      );
+      this.populateCallableEnvironment(source, target.environment);
+      if (source.baseClass != null && target.baseClass != null) {
+        this.populateClass(source.baseClass, target.baseClass);
+      }
       this.forkProperties(source.properties, target.properties);
       this.populatedClasses.add(source);
     } finally {
