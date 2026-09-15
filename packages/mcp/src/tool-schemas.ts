@@ -16,46 +16,46 @@ const appQueryKindSchema = z.string()
 
 const pageSchema = z.object({
   size: z.number().int().nonnegative().optional()
-    .describe('Rows to return. Omit for default; use 0 for summary rollup only; large values clamp to the MCP transport limit.'),
+    .describe('Rows per page; omit for default, use 0 for summary only. Large values clamp.'),
   cursor: z.string().nullable().optional()
-    .describe('Opaque cursor from the prior page; omit first, pass back unchanged.'),
+    .describe('Prior page cursor; omit first, then pass back unchanged.'),
 }).strict().describe('Paging envelope for row and summary-row queries.');
 
 const workspaceRootSchema = z.string()
   .describe('Absolute workspace root to boot.');
 
 const projectRootHintsSchema = z.array(z.string()).nullable().optional()
-  .describe('Existing project-root paths known by the host; semantic-runtime merges them into project-marker discovery.');
+  .describe('Known project-root paths to merge into project-marker discovery.');
 
 const excludedWorkspaceRootsSchema = z.array(z.string()).nullable().optional()
-  .describe('Hard descendant workspace roots excluded from authored project and source ownership.');
+  .describe('Descendant workspace roots to exclude from project and source ownership.');
 
 const projectKeySchema = z.string().nullable().optional()
-  .describe('Optional key from aurelia_workspace_overview; omit for default app.');
+  .describe('Key from aurelia_workspace_overview; omit for default app.');
 
 const sourceFilePathSchema = z.string().nullable().optional()
-  .describe('Top-level file selector. Unsupported query families return result=unsupported instead of ignoring it.');
+  .describe('File selector; queries that cannot scope by file return result=unsupported.');
 
 const analysisDepthSchema = z.enum(SEMANTIC_APP_ANALYSIS_DEPTHS).nullable().optional()
-  .describe('Optional analysis depth; omit for catalog-driven auto-depth.');
+  .describe('Analysis depth; omit for automatic selection.');
 
 const applicationEntrypointPolicySchema = z.enum(SEMANTIC_APPLICATION_ENTRYPOINT_POLICIES).nullable().optional()
-  .describe('Entrypoint admission policy; aggregate independent graphs only when that cross-entrypoint analysis is intentional.');
+  .describe('Aggregate independent app graphs only for intentional cross-entrypoint analysis.');
 
 const includeAuthoringTemplatesSchema = z.boolean().nullable().optional()
   .describe('Include standalone resource-library templates; omit normally.');
 
 const authoringTemplateSourceFilesSchema = z.array(z.string()).nullable().optional()
-  .describe('Optional files for standalone template compilation.');
+  .describe('Files for standalone template compilation.');
 
 const authoringTemplateLimitSchema = z.number().int().nonnegative().nullable().optional()
-  .describe('Optional cap for standalone template compilation.');
+  .describe('Cap for standalone template compilation.');
 
 const appRetentionSchema = z.enum(SEMANTIC_APP_RETENTION_POLICIES).nullable().optional()
-  .describe('App retention override; omit for query-profile policy, use retain-app when follow-up calls should share an epoch.');
+  .describe('Omit for query policy; use retain-app to share an app epoch across follow-up calls.');
 
 const continuationIntentSchema = z.array(z.enum(INQUIRY_CONTINUATION_INTENTS)).nullable().optional()
-  .describe('Optional continuation intent filter; omit for all truthful next moves.');
+  .describe('Filter follow-up intents; omit for all.');
 
 const detailSchema = z.enum(SEMANTIC_RUNTIME_DETAIL_VALUES).nullable().optional()
   .describe('Detail level; omit for compact, use handles for kernel handles.');
@@ -70,8 +70,8 @@ const frameworkCapabilitySchema = z.string()
 
 const sourceFileSchema = z.object({
   filePath: z.string()
-    .describe('Per-query file locus. Check supportsSourceFile in aurelia_app_query_catalog first.'),
-}).strict().describe('Per-query file locus for supportsSourceFile=true query families.');
+    .describe('Query file. Check supportsSourceFile in aurelia_app_query_catalog.'),
+}).strict().describe('File selector for queries with supportsSourceFile=true.');
 
 const cursorSchema = sourceFileSchema.extend({
   line: z.number().int().nonnegative()
@@ -79,7 +79,7 @@ const cursorSchema = sourceFileSchema.extend({
   character: z.number().int().nonnegative()
     .describe('Zero-based character; use member token for member-owner type answers.'),
   offset: z.number().int().nonnegative().nullable().optional()
-    .describe('Optional zero-based offset when the editor already has it.'),
+    .describe('Zero-based offset, if known.'),
 }).strict().describe('Source cursor for template cursor/completion queries.');
 
 const observedDependencyLocusSchema = z.discriminatedUnion('kind', [
@@ -144,7 +144,7 @@ const openAppShape = {
 
 const pageShape = {
   page: pageSchema.nullable().optional()
-    .describe('Optional page request; use page.size=0 for rollup-only summaries.'),
+    .describe('Page request; use size=0 for summary only.'),
 } as const;
 
 const detailShape = {

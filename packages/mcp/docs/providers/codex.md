@@ -3,7 +3,7 @@
 Install the MCP release tarball inside the Aurelia app:
 
 ```bash
-npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.2/aurelia-ls-mcp-0.3.2.tgz
+npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.3/aurelia-ls-mcp-0.3.3.tgz
 ```
 
 Add a project-local server entry to Codex `config.toml`. This can live in

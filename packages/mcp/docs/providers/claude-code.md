@@ -3,7 +3,7 @@
 Install the MCP release tarball inside the Aurelia app:
 
 ```bash
-npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.2/aurelia-ls-mcp-0.3.2.tgz
+npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.3/aurelia-ls-mcp-0.3.3.tgz
 ```
 
 For a team-shared project configuration, create `.mcp.json` in the Aurelia app:
