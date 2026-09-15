@@ -43,6 +43,7 @@ import {
 import { bindEvaluationValueLineage } from './value-relation.js';
 import { EvaluationValueEvidence } from './value-pressure.js';
 import { DefaultStaticEvaluationRuntimeHost } from './runtime-host.js';
+import { StaticDataSnapshotPool } from './data-snapshot.js';
 
 /** Result of evaluating a graph of local ECMAScript modules. */
 export class StaticModuleGraphEvaluationResult {
@@ -79,6 +80,8 @@ export class StaticModuleGraphEvaluator {
     readonly runtimeHost: StaticEvaluationRuntimeHost = DefaultStaticEvaluationRuntimeHost,
     /** Product-specific values for declaration/external imports that remain outside the local graph. */
     readonly externalValueResolver: StaticModuleExternalValueResolver | null = null,
+    /** Immutable data states shared by modules in this evaluation generation. */
+    private readonly dataSnapshots: StaticDataSnapshotPool = new StaticDataSnapshotPool(),
   ) {
     this.evaluatorRuntimeHost = {
       ...runtimeHost,
@@ -125,7 +128,7 @@ export class StaticModuleGraphEvaluator {
     const imports = dependencyCompletion == null
       ? this.resolveImportValues(record)
       : new Map();
-    const evaluator = new StaticEvaluator(this.policy, this.evaluatorRuntimeHost);
+    const evaluator = new StaticEvaluator(this.policy, this.evaluatorRuntimeHost, {}, this.dataSnapshots);
     const result = dependencyCompletion == null
       ? evaluator.evaluateSourceFile(record.sourceFile, moduleKey, imports)
       : evaluator.evaluateSourceFileAfterDependencyCompletion(

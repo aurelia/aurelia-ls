@@ -73,6 +73,7 @@ import {
   withStaticEvaluationAmbientGlobals,
 } from './ambient-globals.js';
 import { StaticEvaluationSessionFork } from './evaluation-session.js';
+import { StaticDataSnapshotPool } from './data-snapshot.js';
 import { DefaultStaticEvaluationRuntimeHost } from './runtime-host.js';
 import type { EvaluationUnknownValue } from './values.js';
 
@@ -175,6 +176,8 @@ export class StaticProjectEvaluationResult {
     private readonly inputReadScope: SemanticRuntimeProjectInputReadScope | null = null,
     /** Typed upstream products consumed while constructing this evaluator graph. */
     private readonly upstreamReads: readonly ComputationRead[] = [],
+    /** Generation-owned immutable states; each analysis fork still owns its writable views. */
+    private readonly dataSnapshots: StaticDataSnapshotPool = new StaticDataSnapshotPool(),
   ) {
     this.projectFrame = project;
     for (const source of sources) {
@@ -247,7 +250,7 @@ export class StaticProjectEvaluationResult {
   private forkSessionGraph(): StaticProjectEvaluationResult {
     const runtimeHost = this.readEvaluatedSources()[0]?.evaluation.runtimeHost
       ?? DefaultStaticEvaluationRuntimeHost;
-    const session = new StaticEvaluationSessionFork(runtimeHost);
+    const session = new StaticEvaluationSessionFork(runtimeHost, 'complete', this.dataSnapshots);
     return new StaticProjectEvaluationResult(
       this.project,
       this.sources.map((source) => isEvaluatedProjectSource(source)
@@ -266,6 +269,7 @@ export class StaticProjectEvaluationResult {
       this.graphOpenValues.map((value) => session.forkValue(value)),
       this.inputReadScope,
       this.upstreamReads,
+      this.dataSnapshots,
     );
   }
 }
@@ -1246,6 +1250,7 @@ export class StaticProjectEvaluationPass {
 }
 
 class StaticProjectEvaluationFrame {
+  private readonly dataSnapshots = new StaticDataSnapshotPool();
   private readonly phases: StaticProjectEvaluationPhaseTiming[] = [];
   private readonly host: FileSystemEvaluationModuleSourceHost;
   private readonly runtimeHost: StaticEvaluationRuntimeHost;
@@ -1313,6 +1318,7 @@ class StaticProjectEvaluationFrame {
         this.options.policy,
         this.runtimeHost,
         this.options.externalValueResolver,
+        this.dataSnapshots,
       ).evaluateEntries(entryModuleKeys),
       (result) => result.modules.size,
     );
@@ -1325,7 +1331,7 @@ class StaticProjectEvaluationFrame {
       sourceFiles: staticProjectEvaluationSourceFileStats(this.project.rootDir, this.sources),
     }, graphEvaluation.openValues, this.inputReadScope, this.ambientAccess == null
       ? []
-      : [this.ambientAccess.generation]);
+      : [this.ambientAccess.generation], this.dataSnapshots);
   }
 
   private indexProjectAdmissions(): void {

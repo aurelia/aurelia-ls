@@ -20,6 +20,7 @@ import {
   type StaticEvaluationPolicy,
 } from './policy.js';
 import { DefaultStaticEvaluationRuntimeHost } from './runtime-host.js';
+import { snapshotArrayElementsWhere, snapshotObjectPropertiesWhere } from './data-snapshot.js';
 import {
   compactEvaluationOpenSeams,
   EvaluationOpenSeam,
@@ -300,7 +301,8 @@ export class StaticInvocationEvidenceExpressionReader implements StaticExpressio
 
     switch (value.kind) {
       case EvaluationValueKind.Array:
-        for (const element of value.elements) {
+        for (const element of snapshotArrayElementsWhere(value, (expression) =>
+          expression != null && nodeBelongsTo(expression, owner)) ?? value.elements) {
           if (element.expression == null || !nodeBelongsTo(element.expression, owner)) {
             continue;
           }
@@ -353,7 +355,12 @@ export class StaticInvocationEvidenceExpressionReader implements StaticExpressio
       case EvaluationValueKind.Function:
       case EvaluationValueKind.Class:
       case EvaluationValueKind.Instance:
-        for (const property of value.properties.values()) {
+        for (const property of (value.kind === EvaluationValueKind.Object
+          ? snapshotObjectPropertiesWhere(value, (node) => {
+            const expression = propertyValueExpression(node);
+            return expression != null && nodeBelongsTo(expression, owner);
+          })
+          : null) ?? value.properties.values()) {
           const expression = propertyValueExpression(property.node);
           if (expression == null || !nodeBelongsTo(expression, owner)) {
             continue;

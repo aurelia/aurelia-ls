@@ -342,6 +342,43 @@ for (const statement of syntheticSource.statements) {
 }
 
 const aureliaStaticEvaluationRuntimeHostOperations: StaticEvaluationRuntimeHostOperations = {
+  canShareSnapshotValue(value: EvaluationValue): boolean {
+    // Eligibility is checked at each capture: previously plain values may acquire metadata.
+    if (
+      frameworkRegistrationEvaluationsByValue.has(value)
+      || frameworkRegistrationFactoryEvaluationsByValue.has(value)
+      || registrationFactoryEvaluationsByValue.has(value)
+      || appTaskEvaluationsByValue.has(value)
+      || aureliaResolverEvaluationsByValue.has(value)
+      || containerDefaultResolverPoliciesByValue.has(value)
+    ) {
+      return false;
+    }
+    switch (value.kind) {
+      case EvaluationValueKind.Function:
+        return !aureliaSyntheticCallsByFunction.has(value)
+          && !aureliaResolveFunctions.has(value)
+          && !aureliaInjectFactoryFunctions.has(value)
+          && !aureliaInjectDecoratorArgumentsByFunction.has(value)
+          && !aureliaResolverFactoryKindsByFunction.has(value)
+          && !aureliaFacadeModulesByConstructor.has(value);
+      case EvaluationValueKind.Class:
+        return !aureliaClassInjectionEvaluationsByValue.has(value);
+      case EvaluationValueKind.Object:
+        return !registryBodiesByObject.has(value)
+          && !resolverBuilderObjects.has(value)
+          && !consumedResolverBuilderObjects.has(value)
+          && !invalidResolverBuilderObjects.has(value)
+          && !resolverBuilderEffectsByObject.has(value)
+          && !resolverBuilderEffectsByResult.has(value)
+          && !interfaceEvaluationsByObject.has(value)
+          && !containerEvaluationsByObject.has(value)
+          && !aureliaFacadeEvaluationsByObject.has(value);
+      default:
+        return true;
+    }
+  },
+
   transferValueMetadata(source, target, transfer): void {
     const frameworkRegistration = frameworkRegistrationEvaluationsByValue.get(source);
     if (frameworkRegistration != null) {

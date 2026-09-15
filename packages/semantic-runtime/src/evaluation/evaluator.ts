@@ -51,6 +51,7 @@ import {
   type StaticEvaluationValueGraph,
 } from './evaluation-graph.js';
 import { StaticEvaluationSessionFork } from './evaluation-session.js';
+import { StaticDataSnapshotPool } from './data-snapshot.js';
 import { joinStaticEvaluationBranches } from './branch-state.js';
 import {
   mapEvaluationArgumentListValues,
@@ -258,6 +259,8 @@ export class StaticEvaluationRuntimeValueResult {
 }
 
 export interface StaticEvaluationRuntimeHostOperations {
+  /** Pure per-value proof that no host-owned metadata must be copied into shared data snapshot state. */
+  canShareSnapshotValue?(value: EvaluationValue): boolean;
   /** Transfer host-owned semantic identity when a speculative session clones an evaluator value. */
   transferValueMetadata?(
     source: EvaluationValue,
@@ -480,6 +483,7 @@ export class StaticEvaluator {
     readonly policy: StaticEvaluationPolicy = DefaultStaticEvaluationPolicy,
     readonly runtimeHost: StaticEvaluationRuntimeHost = DefaultStaticEvaluationRuntimeHost,
     readonly options: StaticEvaluatorOptions = {},
+    private readonly dataSnapshots: StaticDataSnapshotPool = new StaticDataSnapshotPool(),
   ) {}
 
   /** Evaluate one TypeScript source file as an ECMAScript module body. */
@@ -2235,7 +2239,7 @@ export class StaticEvaluator {
   private snapshotInvocationPreparation(
     frame: Pick<StaticInvocationFrame, 'identity' | 'reference' | 'argumentList'>,
   ): StaticInvocationPreparationEvidence {
-    const snapshot = new StaticEvaluationSessionFork(this.runtimeHost, 'referenced-bindings');
+    const snapshot = new StaticEvaluationSessionFork(this.runtimeHost, 'referenced-bindings', this.dataSnapshots);
     const mapValue = (value: EvaluationValue): EvaluationValue => snapshot.forkValue(value);
     return {
       identity: frame.identity,
@@ -2247,7 +2251,7 @@ export class StaticEvaluator {
   private snapshotInvocationCompletion(
     completion: EvaluationExpressionCompletion,
   ): EvaluationExpressionCompletion {
-    const snapshot = new StaticEvaluationSessionFork(this.runtimeHost, 'referenced-bindings');
+    const snapshot = new StaticEvaluationSessionFork(this.runtimeHost, 'referenced-bindings', this.dataSnapshots);
     return mapEvaluationExpressionCompletionValues(
       completion,
       (value) => snapshot.forkValue(value),
@@ -3042,7 +3046,7 @@ export class StaticEvaluator {
   }
 
   private branchEvaluator(runtimeHost: StaticEvaluationRuntimeHost): StaticEvaluator {
-    const evaluator = new StaticEvaluator(this.policy, runtimeHost, this.options);
+    const evaluator = new StaticEvaluator(this.policy, runtimeHost, this.options, this.dataSnapshots);
     evaluator.executionBudget = this.executionBudget;
     return evaluator;
   }

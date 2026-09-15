@@ -8,14 +8,14 @@ const FIXTURE_HOST = path.resolve(import.meta.dirname, "fixtures/heap-stress-hos
 const TEMP_PARENT = path.resolve(import.meta.dirname, "../../semantic-runtime/.temp");
 const TEMP_PREFIX = "vscode-worker-heap-";
 
-test("answers cold element hover and resource inventory within a constrained Worker heap", async () => {
+test.each(["unrelated", "captured"] as const)("answers cold hover with %s data within a constrained Worker heap", async (mode) => {
   // Keep framework module resolution inside the package while giving every run an independent project.
   await mkdir(TEMP_PARENT, { recursive: true });
   const workspace = await mkdtemp(path.join(TEMP_PARENT, TEMP_PREFIX));
   try {
     // NODE_OPTIONS in the host overrides Worker resourceLimits. The child also contains fatal V8 aborts so
     // a regression fails this test without terminating the test runner or preventing fixture cleanup.
-    const { stdout } = await promisify(execFile)(process.execPath, [FIXTURE_HOST, workspace], {
+    const { stdout } = await promisify(execFile)(process.execPath, [FIXTURE_HOST, workspace, mode], {
       env: { ...process.env, NODE_OPTIONS: "" },
       timeout: 60_000,
       windowsHide: true,

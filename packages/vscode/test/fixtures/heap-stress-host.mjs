@@ -8,6 +8,8 @@ import { AURELIA_WORKER_PROGRESS_SCHEMA } from '@aurelia-ls/language-server/prot
 import { createWorkerCancellationStrategy, createWorkerMessageTransports } from '../../out/worker-transport.js';
 
 const workspace = path.resolve(process.argv[2]);
+const mode = process.argv[3] ?? 'unrelated';
+if (mode !== 'unrelated' && mode !== 'captured') throw new Error('Unknown heap-stress workload.');
 const packageRoot = fileURLToPath(new URL('../../', import.meta.url));
 const temporaryParent = path.resolve(packageRoot, '../semantic-runtime/.temp');
 if (path.dirname(workspace) !== temporaryParent || !path.basename(workspace).startsWith('vscode-worker-heap-')) {
@@ -27,15 +29,23 @@ write('tsconfig.json', JSON.stringify({
   include: ['src'],
 }));
 write('src/assets.d.ts', "declare module '*.html' { const template: string; export default template; }\n");
-// The helper calls do not use registry. Previously each call still copied its complete lexical graph,
-// making this modest project exceed the Worker heap before its first custom-element hover could answer.
+// Both unrelated closure captures and genuinely used data previously grew with registry size times call count.
 write('src/data.ts', `export const registry = {\n${Array.from({ length: 2000 }, (_, index) =>
   `item${index}: { id: ${index}, name: 'Item ${index}', stats: { attack: ${index % 10}, defense: ${index % 5} } },`
 ).join('\n')}\n};\n`);
 write('src/helpers.ts', `import { registry } from './data';
 export function identity(value: number) { return value; }
 export const data = registry;
-${Array.from({ length: 100 }, (_, index) => `export const result${index} = identity(${index});`).join('\n')}
+${mode === 'captured' ? `const arrayRegistry = Object.values(registry);
+function lookup(value: number) { return registry.item0.id + value; }
+function argument(value: typeof registry) { return value.item0.id; }
+function envelope(value: number) { return { registry, value }; }
+function arrayLookup(value: number) { return arrayRegistry[0].id + value; }` : ''}
+${Array.from({ length: 100 }, (_, index) => {
+  const expression = mode === 'unrelated' ? `identity(${index})`
+    : [`lookup(${index})`, 'argument(registry)', `envelope(${index})`, `arrayLookup(${index})`][index % 4];
+  return `export const result${index} = ${expression};`;
+}).join('\n')}
 `);
 for (let index = 0; index < 5; index++) {
   write(`src/item-${index}.ts`, `import { customElement, bindable } from '@aurelia/runtime-html';

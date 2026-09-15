@@ -184,6 +184,12 @@ export class ResourceConventionToolingEvaluationContext {
   private readonly executedAureliaPluginCalls = new WeakSet<ts.CallExpression>();
 
   readonly runtimeHost: StaticEvaluationRuntimeHost = {
+    canShareSnapshotValue: (value: EvaluationValue) =>
+      (value.kind !== EvaluationValueKind.Object || !this.plugins.has(value))
+      && (!isConventionToolingFactoryValue(value) || (
+        !this.aureliaPluginFactories.has(value)
+        && !this.defineConfigFactories.has(value)
+      )),
     transferValueMetadata: (source, target, transfer) =>
       this.transferValueMetadata(source, target, transfer),
     evaluateInvocation: (frame, host) => this.evaluateInvocation(frame, host),
