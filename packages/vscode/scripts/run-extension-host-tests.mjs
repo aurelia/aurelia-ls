@@ -1037,12 +1037,36 @@ function validatePlannedResourceDiscoveryLane({
 }
 
 export const resourceDiscoveryGeneratedInputWriters = Object.freeze({
+  "alpha-entrypoint": generateAlphaEntrypointInput,
   "long-suffix-duplicates": generateLongSuffixDuplicateInputs,
   "open-coverage": generateOpenCoverageInputs,
   "package-origins": generatePackageOriginInputs,
   "page-drain": generatePageDrainInput,
   guardrail: generateGuardrailInput,
 });
+
+function generateAlphaEntrypointInput(context) {
+  requireGeneratedInputContract(
+    context.input,
+    "resource-discovery-alpha-entrypoint/1",
+    "host-corpus/entrypoints",
+    ["current-stable", "minimum"],
+  );
+  // The broad host app deliberately starts each corpus surface from one executable graph.
+  // Keep the guardrail and incomplete-source projects outside that graph.
+  const modules = [
+    "../../src/main",
+    "../duplicates/src/main",
+    "../effective-definitions/src/main",
+    "../local-templates/src/main",
+    "../long-scent/src/main",
+    "../overlap/src/main",
+    ...(context.lane.versionLane === "current-stable"
+      ? ["../package-origin/app/src/main", "../page-drain/src/main"]
+      : []),
+  ];
+  context.write("main.ts", `${modules.map((module) => `import '${module}';`).join("\n")}\n`);
+}
 
 function generateLongSuffixDuplicateInputs(context) {
   requireGeneratedInputContract(
@@ -2617,20 +2641,27 @@ function validateBaselineTreeFacts(value, context, label) {
   );
 
   const projectNodes = nodes.filter((record) => record.event.nodeKind === "project");
+  const completeProjects = projectNodes.filter((record) => (
+    record.event.answerResult === "answered"
+      && record.event.answerCoverage === "complete"
+      && record.event.answerRowCount > 0
+  ));
+  if (completeProjects.length === 0) {
+    throw new Error(`${label} must retain a complete, nonempty sibling workspace app.`);
+  }
+  for (const project of completeProjects) {
+    requireEqual(
+      descendantRecords(nodes, project.event.nodeId).filter((record) => record.event.nodeKind === "resource").length,
+      project.event.answerRowCount,
+      `${label}.complete sibling resource rows`,
+    );
+  }
   const expectedProjects = new Map([
     ["host-alpha", { coverage: "open", rowCount: context.versionLane === "current-stable"
       ? context.fixture.witnesses.pageDrain.rowCount
       : null }],
-    ["host-beta", { coverage: "complete", rowCount: null }],
-    [context.fixture.witnesses.guardrail.projectKey, {
-      coverage: context.fixture.witnesses.guardrail.coverage,
-      rowCount: context.fixture.witnesses.guardrail.rowCount,
-    }],
-    [context.fixture.witnesses.openCoverage.projectKey, {
-      coverage: context.fixture.witnesses.openCoverage.coverage,
-      rowCount: context.fixture.witnesses.openCoverage.rowCount,
-    }],
   ]);
+  validateDefaultAppPublicationProjects(nodes, context.fixture, "host-alpha", label);
   for (const [projectKey, expected] of expectedProjects) {
     const projectNode = projectNodeForKey(nodes, projectKey);
     requireEqual(projectNode.event.answerResult, "answered", `${label}.${projectKey}.answerResult`);
@@ -2828,16 +2859,6 @@ function validateBaselineWitnessRows(nodes, context, label) {
     const record = requireResource(row, "host-alpha", `headerOnlyMetadata.rows[${index}]`);
     requireRowState(record.event, "metadata-incomplete", `${label}.headerOnlyMetadata.rows[${index}]`);
   }
-  requireResource(
-    context.fixture.witnesses.openCoverage.appRow,
-    context.fixture.witnesses.openCoverage.projectKey,
-    "openCoverage.appRow",
-  );
-  requireResource(
-    context.fixture.witnesses.guardrail.appRow,
-    context.fixture.witnesses.guardrail.projectKey,
-    "guardrail.appRow",
-  );
   if (context.versionLane === "current-stable") {
     for (const [index, row] of context.fixture.witnesses.packageOrigins.rows.entries()) {
       const record = requireResource(row, "host-alpha", `packageOrigins.rows[${index}]`);
@@ -2977,10 +2998,12 @@ function validateOpenCoverageTreeFacts(value, context, label) {
     "unresolvedModules",
     "availabilityCoverage",
     "availabilityRowCount",
+    "published",
     "appPublished",
     "availabilityObserved",
   ], label);
   const witness = context.fixture.witnesses.openCoverage;
+  const nodes = validateScopedDefaultAppPublication(fact.published, context, witness, label);
   requireEqual(fact.projectKey, witness.projectKey, `${label}.projectKey`);
   requireEqual(fact.inventoryCoverage, witness.coverage, `${label}.inventoryCoverage`);
   requireEqual(fact.inventoryRowCount, witness.rowCount, `${label}.inventoryRowCount`);
@@ -3015,8 +3038,11 @@ function validateOpenCoverageTreeFacts(value, context, label) {
   requireEqual(published.event.answerResult, witness.result, `${label}.appPublished.answerResult`);
   requireEqual(published.event.answerCoverage, witness.coverage, `${label}.appPublished.answerCoverage`);
   requireEqual(published.event.answerRowCount, witness.rowCount, `${label}.appPublished.answerRowCount`);
+  if (!nodes.includes(published)) {
+    throw new Error(`${label}.appPublished must belong to its scoped default-app publication.`);
+  }
   requireEqual(
-    publicationResourceCountForProject(context.baseline.nodes, witness.projectKey),
+    publicationResourceCountForProject(nodes, witness.projectKey),
     witness.rowCount,
     `${label} computed inventory rowCount`,
   );
@@ -3051,10 +3077,12 @@ function validateGuardrailTreeFacts(value, context, label) {
     "projectKey",
     "coverage",
     "rowCount",
+    "published",
     "appPublished",
     "excludedDefinitionPublishCount",
   ], label);
   const witness = context.fixture.witnesses.guardrail;
+  const nodes = validateScopedDefaultAppPublication(fact.published, context, witness, label);
   requireEqual(fact.projectKey, witness.projectKey, `${label}.projectKey`);
   requireEqual(fact.coverage, witness.coverage, `${label}.coverage`);
   requireEqual(fact.rowCount, witness.rowCount, `${label}.rowCount`);
@@ -3079,14 +3107,17 @@ function validateGuardrailTreeFacts(value, context, label) {
   requireEqual(published.event.answerResult, witness.result, `${label}.appPublished.answerResult`);
   requireEqual(published.event.answerCoverage, witness.coverage, `${label}.appPublished.answerCoverage`);
   requireEqual(published.event.answerRowCount, witness.rowCount, `${label}.appPublished.answerRowCount`);
+  if (!nodes.includes(published)) {
+    throw new Error(`${label}.appPublished must belong to its scoped default-app publication.`);
+  }
   requireEqual(
-    publicationResourceCountForProject(context.baseline.nodes, witness.projectKey),
+    publicationResourceCountForProject(nodes, witness.projectKey),
     witness.rowCount,
     `${label} computed rowCount`,
   );
   requireRowState(published.event, "discovery-incomplete", `${label}.appPublished`);
   const excludedTokens = [witness.excludedDefinitionName];
-  const observedExcluded = context.baseline.nodes.filter((record) => (
+  const observedExcluded = nodes.filter((record) => (
     ["label", "description", "accessibilityLabel"].some((field) => (
       typeof record.event[field] === "string"
         && excludedTokens.some((token) => record.event[field].includes(token))
@@ -3098,6 +3129,54 @@ function validateGuardrailTreeFacts(value, context, label) {
     `${label} computed excluded definition rows`,
   );
   context.claims.add("truncated");
+}
+
+export function validateDefaultAppPublicationProjects(nodes, fixture, projectKey, label) {
+  projectNodeForKey(nodes, projectKey);
+  for (const project of fixture.projects) {
+    if (project.projectKey === projectKey) continue;
+    if (nodes.some((record) => (
+      record.event.navigationProjectKey === project.projectKey
+        || record.event.implementationProjectKey === project.projectKey
+        || (record.event.nodeKind === "project"
+          && projectLabelIncludesKey(record.event.label, project.projectKey))
+    ))) {
+      throw new Error(`${label} must exclude non-default corpus app '${project.projectKey}'.`);
+    }
+  }
+}
+
+export function validateScopedDefaultAppPublication(reference, context, witness, label) {
+  const published = resolveLedgerReference(
+    reference,
+    `${label}.published`,
+    context,
+    "resource-explorer",
+    "publish-complete",
+  );
+  requireEqual(published.event.publicationKind, "current", `${label}.published.publicationKind`);
+  requireStrictOrdinalOrder([published, context.baseline.published], `${label}.before baseline`);
+  const nodes = publicationNodes(context, published, label);
+  requireEqual(nodes.length, published.event.nodeCount, `${label}.published.nodeCount`);
+  validateDefaultAppPublicationProjects(nodes, context.fixture, witness.projectKey, label);
+  const project = projectNodeForKey(nodes, witness.projectKey);
+  requireEqual(project.event.answerResult, witness.result, `${label}.project.answerResult`);
+  requireEqual(project.event.answerCoverage, witness.coverage, `${label}.project.answerCoverage`);
+  requireEqual(project.event.answerRowCount, witness.rowCount, `${label}.project.answerRowCount`);
+  requireEqual(project.event.contextValue, "resourceProjectIssue", `${label}.project.contextValue`);
+  const resources = descendantRecords(nodes, project.event.nodeId)
+    .filter((record) => record.event.nodeKind === "resource");
+  requireEqual(
+    resources.length,
+    witness.rowCount,
+    `${label}.project resource rows`,
+  );
+  for (const [index, resource] of resources.entries()) {
+    requireEqual(resource.event.answerResult, witness.result, `${label}.resources[${index}].answerResult`);
+    requireEqual(resource.event.answerCoverage, witness.coverage, `${label}.resources[${index}].answerCoverage`);
+    requireEqual(resource.event.answerRowCount, witness.rowCount, `${label}.resources[${index}].answerRowCount`);
+  }
+  return nodes;
 }
 
 function validatePageDrainTreeFacts(value, context, label) {
@@ -3947,10 +4026,20 @@ function validateRecoveryFacts(value, context) {
     "failedPublication",
     "retry",
     "recoveredPublication",
+    "retainedWorkspaceKey",
     "retainedSiblingCount",
     "stableCodeVisibleCount",
   ], `${label}.partial`);
-  requireEqual(partial.projectKey, "host-beta", `${label}.partial.projectKey`);
+  requireEqual(partial.projectKey, "host-alpha", `${label}.partial.projectKey`);
+  if (!fileWorkspaceKeyMatches(partial.retainedWorkspaceKey, join(dirname(context.workspaceRoot), "hello-world"))) {
+    throw new Error(`${label}.partial.retainedWorkspaceKey does not authenticate the primary workspace.`);
+  }
+  const primaryWorkspaceIdentity = observedWorkspaceIdentity(partial.retainedWorkspaceKey);
+  const primaryProjects = context.baseline.projectNodes.map((record, index) => (
+    baselineProjectBoundary(record, context, `${label}.partial.baselineProjects[${index}]`)
+  )).filter((project) => project.workspaceIdentity === primaryWorkspaceIdentity);
+  requireEqual(primaryProjects.length, 1, `${label}.partial primary default app count`);
+  const retainedProject = primaryProjects[0];
   const partialFault = resolveLedgerReference(
     partial.faultApplied,
     `${label}.partial.faultApplied`,
@@ -3960,6 +4049,9 @@ function validateRecoveryFacts(value, context) {
   );
   requireEqual(partialFault.event.effect, "project-error-once", `${label}.partial.faultApplied.effect`);
   requireEqual(partialFault.event.projectKey, partial.projectKey, `${label}.partial.faultApplied.projectKey`);
+  if (!fileWorkspaceKeyMatches(partialFault.event.workspaceKey, context.workspaceRoot)) {
+    throw new Error(`${label}.partial.faultApplied.workspaceKey does not authenticate the routed workspace.`);
+  }
   const partialFailed = resolveLedgerReference(
     partial.failedPublication,
     `${label}.partial.failedPublication`,
@@ -3980,6 +4072,11 @@ function validateRecoveryFacts(value, context) {
   if (!partialIssue.event.description.includes("resources could not be loaded")) {
     throw new Error(`${label}.partial project row omits public failure copy.`);
   }
+  requireEqual(
+    JSON.stringify(projectPublicationDurableShape(partialNodes, retainedProject.projectKey)),
+    JSON.stringify(projectPublicationDurableShape(context.baseline.nodes, retainedProject.projectKey)),
+    `${label}.partial retained primary subtree`,
+  );
   const partialRetry = resolveLedgerReference(
     partial.retry,
     `${label}.partial.retry`,
@@ -4016,17 +4113,23 @@ function validateRecoveryFacts(value, context) {
     `${label}.partial.recoveredPublication`,
   );
   const recoveredFailedProject = projectNodeForKey(partialRecoveredNodes, partial.projectKey);
+  const baselineFailedProject = projectNodeForKey(context.baseline.nodes, partial.projectKey);
   requireEqual(
     recoveredFailedProject.event.contextValue,
-    "resourceProject",
+    baselineFailedProject.event.contextValue,
     `${label}.partial recovered project contextValue`,
   );
   requireEqual(
     recoveredFailedProject.event.answerResult,
-    "answered",
+    baselineFailedProject.event.answerResult,
     `${label}.partial recovered project answerResult`,
   );
-  for (const projectKey of [partial.projectKey, "host-alpha"]) {
+  requireEqual(
+    recoveredFailedProject.event.answerCoverage,
+    baselineFailedProject.event.answerCoverage,
+    `${label}.partial recovered project answerCoverage`,
+  );
+  for (const projectKey of [partial.projectKey, retainedProject.projectKey]) {
     requireEqual(
       JSON.stringify(projectPublicationDurableShape(partialRecoveredNodes, projectKey)),
       JSON.stringify(projectPublicationDurableShape(context.baseline.nodes, projectKey)),
@@ -4038,7 +4141,7 @@ function validateRecoveryFacts(value, context) {
     `${label}.partial`,
   );
   requirePositiveInteger(partial.retainedSiblingCount, `${label}.partial.retainedSiblingCount`);
-  const retainedSiblings = publicationResourceCountForProject(partialNodes, "host-alpha");
+  const retainedSiblings = publicationResourceCountForProject(partialNodes, retainedProject.projectKey);
   requireEqual(retainedSiblings, partial.retainedSiblingCount, `${label}.partial retained sibling count`);
   validateStableCodeVisibility(
     partial.stableCodeVisibleCount,

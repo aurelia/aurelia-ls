@@ -1293,7 +1293,10 @@ describe("Extension Host product-surface contracts", () => {
   test("accepts only the correlated current publication containing the intended project issue", () => {
     const frame = currentPublicationFrame("resource-explorer:1", 43, [
       projectPublicationNode("resource-explorer:1", 43, "host-alpha", "resourceProjectIssue"),
-      projectPublicationNode("resource-explorer:1", 43, "host-beta", "resourceProjectIssue"),
+      {
+        ...projectPublicationNode("resource-explorer:1", 43, "host-beta", "resourceProjectIssue"),
+        answerResult: null,
+      },
     ]);
     const observations: HostObservation[] = [
       projectPublicationNode("resource-explorer:other", 43, "host-beta", "resourceProjectIssue"),
@@ -1302,6 +1305,16 @@ describe("Extension Host product-surface contracts", () => {
     ];
 
     expect(publicationContainsProjectIssue(observations, frame.publication, "host-beta")).toBe(true);
+  });
+
+  test.each(["open", "truncated"])("rejects intentional %s coverage as a controlled project failure", (coverage) => {
+    const frame = currentPublicationFrame("resource-explorer:1", 44, [{
+      ...projectPublicationNode("resource-explorer:1", 44, "host-alpha", "resourceProjectIssue"),
+      answerResult: "answered",
+      answerCoverage: coverage,
+    }]);
+
+    expect(publicationContainsProjectIssue(frame.observations, frame.publication, "host-alpha")).toBe(false);
   });
 
   test("rejects a clean aggregate successor after the controlled all-error generation is discarded", () => {

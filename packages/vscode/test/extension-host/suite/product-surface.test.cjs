@@ -3058,8 +3058,10 @@ suite("extension-host product surface", () => {
   });
 
   test("authenticates the Resource Discovery corpus and publishes its exact product hierarchy", async function() {
-    this.timeout(300_000);
+    this.timeout(420_000);
     const fixture = resourceDiscoveryAcceptance.fixture;
+    const descriptorBaseline = readFileSync(resourceDiscoveryAcceptance.descriptorPath);
+    const scopedPublications = new Map();
     const originalFolders = [...(vscode.workspace.workspaceFolders ?? [])]
       .map((folder) => ({ uri: folder.uri, name: folder.name }));
     assert.deepStrictEqual(
@@ -3295,6 +3297,70 @@ suite("extension-host product surface", () => {
       }
       assert.strictEqual(plainDocument.languageId, "typescript");
 
+      // Automatic Explorer loading selects one default app per workspace. Exercise the
+      // incomplete-source witnesses as real defaults, then restore the broad corpus.
+      for (const witness of [fixture.witnesses.guardrail, fixture.witnesses.openCoverage]) {
+        const project = resourceDiscoveryAcceptance.descriptor.projectTopology.projects.find(
+          (candidate) => candidate.projectKey === witness.projectKey,
+        );
+        assert(project, `Expected the authenticated descriptor for ${witness.projectKey}.`);
+        writeFileSync(resourceDiscoveryAcceptance.descriptorPath, `${JSON.stringify({
+          ...resourceDiscoveryAcceptance.descriptor,
+          projectTopology: { kind: "explicit", projects: [project] },
+        }, null, 2)}\n`);
+        await applyWorkspaceFolderUpdate(
+          1,
+          0,
+          [{ uri: vscode.Uri.file(routedAureliaWorkspace), name: "routed-catalog-storefront" }],
+          `admitting ${witness.projectKey} as the corpus default app`,
+        );
+        const published = await refreshResourceExplorer(
+          `${witness.projectKey} should publish through automatic default-app loading`,
+          (_complete, scopedNodes) => scopedNodes.some((node) =>
+            node.navigationProjectKey === witness.projectKey
+              && node.navigationResourceIdentity === witness.appRow.identityKey
+          ),
+        );
+        const scopedNodes = observationsForPublication(published);
+        const projectNode = exactPublishedProjectNode(scopedNodes, witness.projectKey);
+        assert.strictEqual(projectNode.answerResult, witness.result);
+        assert.strictEqual(projectNode.answerCoverage, witness.coverage);
+        assert.strictEqual(projectNode.answerRowCount, witness.rowCount);
+        assert.strictEqual(
+          publishedDescendants(scopedNodes, projectNode.nodeId)
+            .filter((node) => node.nodeKind === "resource").length,
+          witness.rowCount,
+        );
+        for (const other of fixture.projects.filter((candidate) => candidate.projectKey !== witness.projectKey)) {
+          assert(!scopedNodes.some((node) =>
+            node.navigationProjectKey === other.projectKey
+              || (node.nodeKind === "project" && node.label.split(" · ").includes(other.projectKey))
+          ), `${witness.projectKey} must be the only corpus app loaded automatically.`);
+        }
+        const appRows = scopedNodes.filter((node) =>
+          node.nodeKind === "resource"
+            && node.navigationProjectKey === witness.projectKey
+            && node.navigationResourceIdentity === witness.appRow.identityKey
+        );
+        assert.strictEqual(appRows.length, 1);
+        assert(appRows[0].rowStates.split("|").includes("discovery-incomplete"));
+        scopedPublications.set(witness.projectKey, { published, nodes: scopedNodes, app: appRows[0] });
+        await applyWorkspaceFolderUpdate(
+          1,
+          1,
+          [],
+          `retiring the ${witness.projectKey} default-app session`,
+        );
+        await refreshResourceExplorer(
+          `the ${witness.projectKey} session should retire before changing the corpus descriptor`,
+          (_complete, retiredNodes) => !retiredNodes.some((node) =>
+            node.navigationProjectKey === witness.projectKey
+              || (node.nodeKind === "project" && node.label.split(" · ").includes(witness.projectKey))
+          ),
+        );
+      }
+      writeFileSync(resourceDiscoveryAcceptance.descriptorPath, descriptorBaseline);
+
       await applyWorkspaceFolderUpdate(
         1,
         0,
@@ -3387,7 +3453,12 @@ suite("extension-host product surface", () => {
       assert(resourceDiscoveryEvidence.facts.tree.lifecycle.retirement.retainedResourceCount > 0);
 
       const projectNodes = nodes.filter((node) => node.nodeKind === "project");
-      assert(projectNodes.length >= fixture.projects.length);
+      for (const project of fixture.projects.filter((candidate) => candidate.projectKey !== "host-alpha")) {
+        assert(!nodes.some((node) =>
+          node.navigationProjectKey === project.projectKey
+            || (node.nodeKind === "project" && node.label.split(" · ").includes(project.projectKey))
+        ), `Automatic Explorer loading must exclude non-default corpus app ${project.projectKey}.`);
+      }
       const descendantsOf = (ancestorId) => {
         const admitted = new Set([ancestorId]);
         return nodes.filter((node) => {
@@ -3396,22 +3467,13 @@ suite("extension-host product surface", () => {
           return true;
         });
       };
-      for (const project of fixture.projects) {
+      for (const project of fixture.projects.filter((candidate) => candidate.projectKey === "host-alpha")) {
         const matches = projectNodes.filter((node) => node.label.split(" · ").includes(project.projectKey));
         assert.strictEqual(matches.length, 1, `Expected one project root for ${project.projectKey}.`);
         const projectNode = matches[0];
-        const witness = project.projectKey === fixture.witnesses.guardrail.projectKey
-          ? fixture.witnesses.guardrail
-          : project.projectKey === fixture.witnesses.openCoverage.projectKey
-            ? fixture.witnesses.openCoverage
-            : null;
-        const expectedCoverage = project.projectKey === "host-alpha"
-          ? "open"
-          : witness?.coverage ?? "complete";
         assert.strictEqual(projectNode.answerResult, "answered");
-        assert.strictEqual(projectNode.answerCoverage, expectedCoverage);
+        assert.strictEqual(projectNode.answerCoverage, "open");
         assert(Number.isInteger(projectNode.answerRowCount) && projectNode.answerRowCount > 0);
-        if (witness != null) assert.strictEqual(projectNode.answerRowCount, witness.rowCount);
         if (project.projectKey === "host-alpha" && resourceDiscoveryAcceptance.versionLane === "current-stable") {
           assert.strictEqual(projectNode.answerRowCount, fixture.witnesses.pageDrain.rowCount);
         }
@@ -3452,16 +3514,8 @@ suite("extension-host product surface", () => {
       for (const receipt of headerOnlyPublished) {
         assert(receipt.published.rowStates.split("|").includes("metadata-incomplete"));
       }
-      const openApp = exactResourceNode(
-        fixture.witnesses.openCoverage.appRow.identityKey,
-        fixture.witnesses.openCoverage.projectKey,
-      );
-      const guardrailApp = exactResourceNode(
-        fixture.witnesses.guardrail.appRow.identityKey,
-        fixture.witnesses.guardrail.projectKey,
-      );
-      assert(openApp.rowStates.split("|").includes("discovery-incomplete"));
-      assert(guardrailApp.rowStates.split("|").includes("discovery-incomplete"));
+      const openPublication = scopedPublications.get(fixture.witnesses.openCoverage.projectKey);
+      const guardrailPublication = scopedPublications.get(fixture.witnesses.guardrail.projectKey);
       const pathlessWitness = fixture.witnesses.pathlessFramework;
       const expectedPathlessNodeId = resourceTreeNodeId(
         resourceDiscoveryAcceptance.workspaceKey,
@@ -3573,14 +3627,16 @@ suite("extension-host product surface", () => {
         unresolvedModules: fixture.witnesses.openCoverage.completeness.unresolvedModules,
         availabilityCoverage: fixture.witnesses.openCoverage.availability.coverage,
         availabilityRowCount: fixture.witnesses.openCoverage.availability.rowCount,
-        appPublished: openApp,
+        published: openPublication.published,
+        appPublished: openPublication.app,
       };
       resourceDiscoveryEvidence.facts.tree.guardrail = {
         projectKey: fixture.witnesses.guardrail.projectKey,
         coverage: fixture.witnesses.guardrail.coverage,
         rowCount: fixture.witnesses.guardrail.rowCount,
-        appPublished: guardrailApp,
-        excludedDefinitionPublishCount: nodes.filter((node) =>
+        published: guardrailPublication.published,
+        appPublished: guardrailPublication.app,
+        excludedDefinitionPublishCount: guardrailPublication.nodes.filter((node) =>
           node.label === fixture.witnesses.guardrail.excludedDefinitionName
         ).length,
       };
@@ -3611,6 +3667,15 @@ suite("extension-host product surface", () => {
         };
       }
     } finally {
+      if (!readFileSync(resourceDiscoveryAcceptance.descriptorPath).equals(descriptorBaseline)) {
+        const scopedFolder = (vscode.workspace.workspaceFolders ?? []).findIndex((folder) =>
+          normalize(folder.uri.fsPath) === normalize(routedAureliaWorkspace)
+        );
+        if (scopedFolder >= 0) {
+          await applyWorkspaceFolderUpdate(scopedFolder, 1, [], "retiring the scoped corpus during cleanup");
+        }
+        writeFileSync(resourceDiscoveryAcceptance.descriptorPath, descriptorBaseline);
+      }
       const current = [...(vscode.workspace.workspaceFolders ?? [])];
       if (
         current.length !== originalFolders.length
@@ -4559,47 +4624,72 @@ suite("extension-host product surface", () => {
 
   test("keeps recovery actionable across partial, stale, and admitted total failures", async function() {
     this.timeout(300_000);
+    const partialBaselineNodes = authenticatedBaselineNodes("partial recovery conservation");
+    const retainedWorkspaceKey = findWorkspaceFolder(aureliaWorkspace).uri.toString();
+    const primaryWorkspaceIdentity = observedWorkspaceIdentity(retainedWorkspaceKey);
+    const primaryProjects = partialBaselineNodes.filter((node) => node.nodeKind === "project")
+      .map((node) => ({ node, ...publishedProjectBoundary(partialBaselineNodes, node) }))
+      .filter((project) => project.workspaceIdentity === primaryWorkspaceIdentity);
+    assert.strictEqual(primaryProjects.length, 1, "The primary workspace should publish its one default app.");
+    const retainedBaselineProject = primaryProjects[0];
+    const retainedBaselineNodes = [
+      retainedBaselineProject.node,
+      ...publishedDescendants(partialBaselineNodes, retainedBaselineProject.node.nodeId),
+    ];
     const partial = await publishControlledTreeFault({
-      controlId: "c2-partial-host-beta",
+      controlId: "c2-partial-host-alpha",
       effect: "project-error-once",
-      projectKey: "host-beta",
+      projectKey: "host-alpha",
       stableCode: "AURELIA_RD_C2_PARTIAL",
     });
     const partialNodes = observationsForPublication(partial.publication);
     const partialTarget = partialNodes.find((node) =>
       node.nodeKind === "project"
-        && node.label.includes("host-beta")
+        && node.label.split(" · ").includes("host-alpha")
         && node.contextValue === "resourceProjectIssue"
+        && node.answerResult === null
     );
-    assert(partialTarget, "Partial failure should retain an actionable host-beta project row.");
-    const retainedProject = exactPublishedProjectNode(partialNodes, "host-alpha");
+    assert(partialTarget, "Partial failure should retain an actionable host-alpha failure row.");
+    const retainedProject = exactPublishedProjectNode(partialNodes, retainedBaselineProject.projectKey);
     const retainedSiblingNodes = publishedDescendants(partialNodes, retainedProject.nodeId)
       .filter((node) => node.nodeKind === "resource");
     const retainedSiblingCount = retainedSiblingNodes.length;
-    assert(retainedSiblingCount > 0, "Partial failure must retain host-alpha resources.");
-    const navigationAttributedSiblingCount = retainedSiblingNodes.filter((node) =>
-      node.navigationProjectKey === "host-alpha"
-    ).length;
-    assert(
-      retainedSiblingCount > navigationAttributedSiblingCount,
-      "The host-alpha ancestry count must retain external-catalog rows without navigation project metadata.",
+    assert(retainedSiblingCount > 0, "Partial failure must retain the primary workspace's resources.");
+    assert.deepStrictEqual(
+      [retainedProject, ...publishedDescendants(partialNodes, retainedProject.nodeId)]
+        .map(publicationNodeDurableShape),
+      retainedBaselineNodes.map(publicationNodeDurableShape),
+      "Partial failure must preserve the complete primary subtree, including rows without navigation metadata.",
     );
-    assert(retainedSiblingNodes.some((node) =>
-      node.navigationProjectKey == null && node.rowStates.split("|").includes("non-navigable")
-    ), "The retained host-alpha subtree must include its exact nonnavigable external-catalog row population.");
     const partialOutput = await invokeTreeOutputAction(partialTarget);
-    const partialRetry = await retryTreeTarget(partialTarget, "partial host-beta recovery");
+    const partialRetry = await retryTreeTarget(
+      partialTarget,
+      "partial host-alpha recovery",
+      observedWorkspaceIdentity(resourceDiscoveryAcceptance.workspaceKey),
+    );
+    assert.strictEqual(
+      normalizeFileWorkspaceKey(partialRetry.retry.workspaceKey),
+      normalize(routedAureliaWorkspace),
+      "Partial recovery must retry the failed routed workspace, not the retained primary workspace.",
+    );
+    const partialRecoveredNodes = observationsForPublication(partialRetry.recoveredPublication);
     assertScopedPublicationFingerprintCoherence(
       partialRetry.recoveredPublication,
-      observationsForPublication(partialRetry.recoveredPublication),
-      "partial host-beta recovery",
+      partialRecoveredNodes,
+      "partial host-alpha recovery",
+    );
+    assert.deepStrictEqual(
+      partialRecoveredNodes.map(publicationNodeDurableShape),
+      partialBaselineNodes.map(publicationNodeDurableShape),
+      "Partial recovery must restore the exact baseline, including host-alpha's intentional open coverage.",
     );
     resourceDiscoveryEvidence.facts.recovery.partial = {
-      projectKey: "host-beta",
+      projectKey: "host-alpha",
       faultApplied: partial.faultApplied,
       failedPublication: partial.publication,
       retry: partialRetry.retry,
       recoveredPublication: partialRetry.recoveredPublication,
+      retainedWorkspaceKey,
       retainedSiblingCount,
       stableCodeVisibleCount: visibleStableCodeCount("AURELIA_RD_C2_PARTIAL"),
     };

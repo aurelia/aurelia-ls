@@ -353,6 +353,7 @@ function publicationContainsProjectIssue(observations, publication, projectKey) 
   return nodes != null && nodes.some((event) =>
     event.nodeKind === "project"
       && event.contextValue === "resourceProjectIssue"
+      && event.answerResult === null
       && typeof event.label === "string"
       && event.label.split(" · ").includes(projectKey)
   );
