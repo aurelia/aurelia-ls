@@ -29,6 +29,151 @@ import { TemplateCompilerElementOccurrence, TemplateCompilerOccurrenceForest } f
 import { BrowserEffectiveTemplateFixture } from './browser-effective-template-fixture.js';
 
 describe('interpreted compiler DOM host', () => {
+  test('stages text and comment writes through every read alias and copies the current value', () => {
+    const run = new DomHookRun('<div>original<!--note--><b>nested</b></div>');
+    try {
+      const text = run.root.readChildren()[0]!;
+      const comment = run.root.readChildren()[1]!;
+      const result = run.invoke(`function hook(node) {
+        const text=node.firstChild,comment=node.childNodes[1],children=node.childNodes;
+        text.data='changed';comment.nodeValue='edited-note';
+        const snapshot=text.cloneNode();
+        text.textContent='final';node.appendChild(snapshot);
+        return text===children[0]&&comment===children[1]&&text.data==='final'&&text.nodeValue==='final'
+          &&text.textContent==='final'&&text.length===5&&comment.data==='edited-note'&&comment.length===11
+          &&node.textContent==='finalnestedchanged'&&snapshot.data==='changed';
+      }`);
+      expect(result.kind, run.host.refusal?.summary).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+      expect(run.root.readChildren().slice(0, 2)).toEqual([text, comment]);
+      run.execution.forest.assertCoherentTopology();
+    } finally { run.dispose(); }
+  });
+
+  test.each([
+    ['data', 'null', ''], ['data', 'undefined', 'undefined'], ['data', 'false', 'false'],
+    ['nodeValue', 'null', ''], ['nodeValue', 'undefined', ''], ['nodeValue', '0x10n', '16'],
+    ['textContent', 'null', ''], ['textContent', 'undefined', ''], ['textContent', '42', '42'],
+  ] as const)('converts CharacterData %s = %s with native nullability', (member, expression, expected) => {
+    const run = new DomHookRun('<div>original<!--original--></div>');
+    try {
+      const result = run.invoke(`function hook(node) {
+        node.firstChild.${member}=${expression};node.lastChild.${member}=${expression};
+        return node.firstChild.data===${JSON.stringify(expected)}&&node.lastChild.data===${JSON.stringify(expected)};
+      }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+    } finally { run.dispose(); }
+  });
+
+  test('replaces element and fragment text with fresh nodes while retaining detached references', () => {
+    const run = new DomHookRun('<div><section><b>old</b><!--note--></section><template><i>inert</i></template></div>');
+    try {
+      const result = run.invoke(`function hook(node) {
+        const section=node.firstChild,children=section.childNodes,old=section.firstChild;
+        section.textContent='replacement';
+        const text=section.firstChild;
+        const detached=old.parentNode===null&&children.length===1&&text.nodeType===3;
+        old.firstChild.data='retained';node.appendChild(old);
+        section.textContent='';
+        const cleared=children.length===0&&text.parentNode===null;
+        const carrier=node.children[1],inert=carrier.content.ownerDocument;
+        carrier.textContent='';carrier.content.textContent='fragment';
+        return detached&&cleared&&old.textContent==='retained'&&node.lastChild===old
+          &&carrier.textContent===''&&carrier.content.childNodes.length===1
+          &&carrier.content.firstChild.data==='fragment'&&carrier.content.firstChild.ownerDocument===inert;
+      }`);
+      expect(result.kind, run.host.refusal?.summary).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+      run.execution.forest.assertCoherentTopology();
+      run.execution.mutationAuthority.assertGeneratedInventory();
+    } finally { run.dispose(); }
+  });
+
+  test('keeps non-character nodeValue and document textContent setters as converted no-ops', () => {
+    const run = new DomHookRun('<div><template><b>retained</b></template></div>');
+    try {
+      const result = run.invoke(`function hook(node) {
+        const carrier=node.firstChild,content=carrier.content;
+        node.nodeValue='ignored';content.nodeValue=42;
+        node.ownerDocument.nodeValue='ignored';node.ownerDocument.textContent=undefined;
+        return node.nodeValue===null&&content.nodeValue===null&&content.textContent==='retained'
+          &&node.ownerDocument.nodeValue===null&&node.ownerDocument.textContent===null;
+      }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+    } finally { run.dispose(); }
+  });
+
+  test.each(['node.firstChild', 'node.children[1].content'])(
+    'keeps browser-dependent same-value child identity explicit: %s', (target) => {
+      const run = new DomHookRun('<div><p>same</p><template>same</template></div>');
+      try {
+        const result = run.invoke(`function hook(node){${target}.textContent='same';}`);
+        expect(result.kind).toBe(StaticCallableCompletionKind.Open);
+        expect(run.host.refusal).toMatchObject({ kind: 'browser-dependent-node-identity' });
+        run.complete(result.kind);
+      } finally { run.dispose(); }
+    },
+  );
+
+  test('empty replace-all removes even an already empty Text', () => {
+    const run = new DomHookRun('<div></div>');
+    try {
+      const result = run.invoke(`function hook(node){
+        const empty=node.ownerDocument.createTextNode('');node.appendChild(empty);
+        node.textContent='';return empty.parentNode===null&&node.childNodes.length===0;
+      }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+    } finally { run.dispose(); }
+  });
+
+  test.each([
+    ['unknown coercion', 'node.firstChild.data={toString(){return "value";}};', 'runtime-dependent-input'],
+    ['no-op still coerces', 'node.nodeValue={toString(){return "value";}};', 'runtime-dependent-input'],
+    ['ordinary template children', 'node.children[0].textContent="ordinary";', 'template-element-children'],
+    ['radio children removed', 'node.children[1].textContent="";', 'native-control-state'],
+    ['later unsupported call', 'node.getBoundingClientRect();', 'unsupported-dom-member'],
+  ] as const)('rolls back text edits and replace-all on %s', (_label, body, kind) => {
+    const run = new DomHookRun('<div>original<template><b>inert</b></template><section><input type="radio" checked></section><p>old</p></div>');
+    try {
+      const before = [...run.execution.forest.readNodes()];
+      const result = run.invoke(`function hook(node) {
+        node.firstChild.data='tentative';node.children[2].textContent='replaced';
+        try{${body}}catch(error){return true;}
+      }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Open);
+      expect(run.host.refusal).toMatchObject({ kind });
+      run.complete(result.kind);
+      expect(run.execution.forest.readNodes()).toEqual(before);
+      expect(run.root.readChildren()[0]).toHaveProperty('text', 'original');
+      expect(run.root.readChildren()[3]!.readChildren()[0]).toHaveProperty('text', 'old');
+      run.execution.forest.assertCoherentTopology();
+      run.execution.mutationAuthority.assertGeneratedInventory();
+    } finally { run.dispose(); }
+  });
+
+  test('refuses active script CharacterData writes but preserves parsed-script inertness', () => {
+    const run = new DomHookRun('<div><script>parsed</script></div>', true);
+    try {
+      const result = run.invoke(`function hook(node,platform) {
+        node.firstChild.firstChild.data='still inert';
+        const script=platform.document.createElement('script');
+        script.textContent='active';
+      }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Open);
+      expect(run.host.refusal).toMatchObject({ kind: 'native-resource-effects' });
+      run.complete(result.kind);
+      expect(run.root.readChildren()[0]!.readChildren()[0]).toHaveProperty('text', 'parsed');
+    } finally { run.dispose(); }
+  });
+
   test('copies current attributes and children with fresh identities and independent later edits', () => {
     const run = new DomHookRun('<div><section title="before"><b>text</b><!--note--></section></div>');
     try {
@@ -935,7 +1080,6 @@ describe('interpreted compiler DOM host', () => {
     ['explicit document adoption', 'node.ownerDocument.adoptNode(node);', 'adoptNode', 'unsupported-dom-member'],
     ['dataset', 'node.dataset.key = "x";', 'dataset', 'unsupported-dom-member'],
     ['markup write', 'node.innerHTML = "<b></b>";', 'innerHTML', 'unsupported-dom-member'],
-    ['text write', 'node.textContent = "changed";', 'textContent', 'unsupported-dom-member'],
     ['metadata', 'metadata.name = "changed";', 'name', 'unsupported-dom-member'],
     ['selector', 'node.querySelector("i");', 'querySelector', 'unsupported-dom-member'],
   ])('refuses %s and rolls back earlier supported writes and removals', (_label, body, member, kind) => {

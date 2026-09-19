@@ -598,7 +598,7 @@ function structuralDerivationOperations(
   return execution.attachment.execution.sequence.readLaneOperations(lane).filter((operation) => {
     if (
       !targetOperations.has(operation)
-      && operation.mutationBatch.attributeValueMutations.length === 0
+      && operation.mutationBatch.scalarMutationCount === 0
       && operation.mutationBatch.occurrenceGenerationReservations.length === 0
       && operation.mutationBatch.topologyMutations.length === 0
     ) return false;
@@ -667,6 +667,10 @@ export function createTemplateCompilerStructuralDerivationVisitor(
     for (const mutation of operation.mutationBatch.attributeValueMutations) {
       visitInput(mutation.attribute);
       visitOutput(mutation.attribute);
+    }
+    for (const mutation of operation.mutationBatch.characterDataMutations) {
+      visitInput(mutation.node);
+      visitOutput(mutation.node);
     }
     for (const generation of operation.mutationBatch.occurrenceGenerationReservations) {
       const occurrence = generated.get(generation);

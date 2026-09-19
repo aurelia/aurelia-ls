@@ -502,11 +502,15 @@ export class TemplateCompilerSiteCursorTextEvent extends TemplateCompilerSiteCur
     if (this.bundle != null && this.authoredText !== this.bundle.text) return false;
     if (this.liveParse != null) {
       const staging = this.instructionStaging;
-      return this.bundle == null
-        && this.authoredText == null
-        && this.spend == null
-        && this.occurrenceOnlyRow?.occurrence === this.text
-        && this.occurrenceOnlyRow.disposition === TemplateCompilerOccurrenceOnlyDisposition.LiveTextAssembled
+      const accounted = this.bundle == null
+        ? this.spend == null
+          && this.occurrenceOnlyRow?.occurrence === this.text
+          && this.occurrenceOnlyRow.disposition === TemplateCompilerOccurrenceOnlyDisposition.LiveTextAssembled
+        : this.text.scalarWriteRevision > 0
+          && this.spend?.bundle === this.bundle
+          && this.spend.disposition === TemplateCompilerSiteSpendDisposition.BrowserReloweringRequired
+          && this.occurrenceOnlyRow == null;
+      return accounted
         && this.siteOutcome === TemplateCompilerSiteCursorSiteOutcome.Complete
         && staging != null
         && staging.isModuleConstructed()

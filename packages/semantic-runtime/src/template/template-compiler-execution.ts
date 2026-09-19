@@ -182,6 +182,15 @@ export class TemplateCompilerAttributeValueMutation {
   }
 }
 
+/** A source hook changed character data; equal endpoints still record intervening writes. */
+export class TemplateCompilerCharacterDataMutation {
+  constructor(
+    readonly node: TemplateCompilerTextOccurrence | TemplateCompilerCommentOccurrence,
+    readonly previousValue: string,
+    readonly nextValue: string,
+  ) {}
+}
+
 /** Exact live node edge removed by one compiler operation. */
 export class TemplateCompilerNodeDetachmentMutation {
   constructor(
@@ -301,6 +310,7 @@ export class TemplateCompilerOperationMutationBatch {
     readonly occurrenceGenerationReservations: readonly TemplateCompilerOccurrenceGeneration[] = [],
     readonly topologyMutations: readonly TemplateCompilerTopologyMutation[] = [],
     readonly nodeDocumentMutations: readonly TemplateCompilerNodeDocumentChange[] = [],
+    readonly characterDataMutations: readonly TemplateCompilerCharacterDataMutation[] = [],
   ) {
     const nodeDetachmentMutations = this.nodeDetachmentMutations;
     const attributeDetachmentMutations = this.attributeDetachmentMutations;
@@ -322,6 +332,10 @@ export class TemplateCompilerOperationMutationBatch {
     return this.topologyMutations.filter((mutation): mutation is TemplateCompilerNodeDetachmentMutation =>
       mutation instanceof TemplateCompilerNodeDetachmentMutation
     );
+  }
+
+  get scalarMutationCount(): number {
+    return this.attributeValueMutations.length + this.characterDataMutations.length;
   }
 
   get attributeDetachmentMutations(): readonly TemplateCompilerAttributeDetachmentMutation[] {
@@ -377,6 +391,10 @@ export class TemplateCompilerOperationMutationBatch {
 }
 
 class TemplateCompilerPendingMutationOverlay {
+  private readonly characterDataMutations = new Map<
+    TemplateCompilerTextOccurrence | TemplateCompilerCommentOccurrence,
+    TemplateCompilerCharacterDataMutation
+  >();
   private readonly attributeValueMutations = new Map<
     TemplateCompilerAttributeOccurrence,
     TemplateCompilerAttributeValueMutation
@@ -389,6 +407,18 @@ class TemplateCompilerPendingMutationOverlay {
 
   readAttributeValue(attribute: TemplateCompilerAttributeOccurrence): string {
     return this.attributeValueMutations.get(attribute)?.nextValue ?? attribute.value;
+  }
+
+  readCharacterData(node: TemplateCompilerTextOccurrence | TemplateCompilerCommentOccurrence): string {
+    return this.characterDataMutations.get(node)?.nextValue ?? node.text;
+  }
+
+  rewriteCharacterData(node: TemplateCompilerTextOccurrence | TemplateCompilerCommentOccurrence, value: string): void {
+    const existing = this.characterDataMutations.get(node);
+    if (existing == null && node.text === value) return;
+    // A→B→A is still compiler-authored text, not restored authority for an authored expression span.
+    this.characterDataMutations.set(node,
+      new TemplateCompilerCharacterDataMutation(node, existing?.previousValue ?? node.text, value));
   }
 
   containsDetachedNode(node: TemplateCompilerNodeOccurrence): boolean {
@@ -478,6 +508,7 @@ class TemplateCompilerPendingMutationOverlay {
       [...occurrenceGenerationReservations],
       [...this.topologyMutations],
       [...this.nodeDocumentMutations],
+      [...this.characterDataMutations.values()],
     );
   }
 }
@@ -1963,6 +1994,23 @@ export class TemplateCompilerExecutionSession {
     return overlay.readAttributeValue(attribute);
   }
 
+  readCharacterData(
+    attempt: TemplateCompilerPendingOperationAttempt,
+    node: TemplateCompilerTextOccurrence | TemplateCompilerCommentOccurrence,
+  ): string {
+    this.requireOwnedProcessContentNode(attempt, node, true);
+    return this.requirePendingMutationOverlay(attempt).readCharacterData(node);
+  }
+
+  rewriteProcessContentCharacterData(
+    attempt: TemplateCompilerPendingOperationAttempt,
+    node: TemplateCompilerTextOccurrence | TemplateCompilerCommentOccurrence,
+    value: string,
+  ): void {
+    this.requireOwnedProcessContentNode(attempt, node, true);
+    this.requirePendingMutationOverlay(attempt).rewriteCharacterData(node, value);
+  }
+
   rewriteAttributeValue(
     attempt: TemplateCompilerPendingOperationAttempt,
     attribute: TemplateCompilerAttributeOccurrence,
@@ -2126,9 +2174,9 @@ export class TemplateCompilerExecutionSession {
       }
       copy = element;
     } else if (source instanceof TemplateCompilerTextOccurrence) {
-      return this.createProcessContentText(attempt, source.text, document, source);
+      return this.createProcessContentText(attempt, this.readCharacterData(attempt, source), document, source);
     } else if (source instanceof TemplateCompilerCommentOccurrence) {
-      return this.createProcessContentComment(attempt, source.text, document, source);
+      return this.createProcessContentComment(attempt, this.readCharacterData(attempt, source), document, source);
     } else if (source instanceof TemplateCompilerFragmentOccurrence) {
       copy = this.createProcessContentFragment(attempt, document, null, source);
     } else {
@@ -2536,7 +2584,7 @@ export class TemplateCompilerExecutionSession {
       || extraction.operationKind !== TemplateCompilerOperationKind.LocalTemplateExtraction
       || extraction.completion.completionKind !== TemplateCompilerOperationCompletionKind.Complete
       || extraction.mutationBatch.state !== TemplateCompilerMutationBatchState.Committed
-      || extraction.mutationBatch.attributeValueMutations.length !== 0
+      || extraction.mutationBatch.scalarMutationCount !== 0
       || extraction.mutationBatch.occurrenceGenerationReservations.length !== 0
       || extraction.mutationBatch.topologyMutations.length !== 1
       || !(extraction.target instanceof TemplateCompilerOccurrenceOperationTarget)
@@ -3251,7 +3299,7 @@ export class TemplateCompilerExecutionSession {
     const siteTopologyIsExact = attempt.operationKind === TemplateCompilerOperationKind.ProjectionSlotConsumption
       ? attempt.executionMechanism === TemplateCompilerOperationExecutionMechanism.BuiltIn
         && mutationBatch.topologyMutations.length === mutationBatch.attributeDetachmentMutations.length
-        && mutationBatch.occurrenceGenerationReservations.length === 0 && mutationBatch.attributeValueMutations.length === 0
+        && mutationBatch.occurrenceGenerationReservations.length === 0 && mutationBatch.scalarMutationCount === 0
       : mutationBatch.isSourceHookTopology()
         && (attempt.executionMechanism === TemplateCompilerOperationExecutionMechanism.StaticCallable
           || (mutationBatch.topologyMutations.length === siteNodeDetachments.length
@@ -3262,7 +3310,7 @@ export class TemplateCompilerExecutionSession {
         && mutationBatch.nodeDocumentMutations.length > 0
         && mutationBatch.topologyMutations.length === 0
         && mutationBatch.occurrenceGenerationReservations.length === 0
-        && mutationBatch.attributeValueMutations.length === 0
+        && mutationBatch.scalarMutationCount === 0
       : mutationBatch.nodeDocumentMutations.length === 0 && siteTopologyIsExact;
     const siteEagerMutationDelta = mutationBatch.siteTopologyMutationDelta + mutationBatch.nodeDocumentMutations.length;
     if (
@@ -3292,12 +3340,15 @@ export class TemplateCompilerExecutionSession {
       for (const mutation of mutationBatch.attributeValueMutations) {
         this.forest.rewriteAttributeValue(mutation.attribute, mutation.nextValue);
       }
+      for (const mutation of mutationBatch.characterDataMutations) {
+        this.forest.rewriteCharacterData(mutation.node, mutation.nextValue);
+      }
     }
     if (
       isSiteExecution
       && mutationBatch.state === TemplateCompilerMutationBatchState.Committed
       && this.forest.mutationRevision !== attempt.startForestMutationRevision + siteEagerMutationDelta
-        + mutationBatch.attributeValueMutations.length
+        + mutationBatch.scalarMutationCount
     ) {
       throw new Error(
         `Compiler site operation '${attempt.operationKey}' lost exact mutation currentness after scalar commit.`,
@@ -3641,6 +3692,8 @@ export class TemplateCompilerExecutionSession {
     const operationKeys = new Set<string>();
     const producedProducts = new Map<ProductHandle, TemplateCompilerOperation>();
     const replayedAttributeValues = new Map<TemplateCompilerAttributeOccurrence, string>();
+    const replayedCharacterData = new Map<TemplateCompilerTextOccurrence | TemplateCompilerCommentOccurrence, string>();
+    const characterDataWriteCounts = new Map<TemplateCompilerTextOccurrence | TemplateCompilerCommentOccurrence, number>();
     const expectedAttributeValueTransitionCounts = new Map<TemplateCompilerAttributeOccurrence, number>();
     let expectedAttributeValueTransitionCount = 0;
     const terminalOperations = new Map<TemplateCompilerExecutionLaneReference, TemplateCompilerOperation>();
@@ -3715,7 +3768,7 @@ export class TemplateCompilerExecutionSession {
       if (isSiteDocumentAdoption && (
         operation.executionMechanism !== TemplateCompilerOperationExecutionMechanism.BuiltIn
         || operation.completion.completionKind !== TemplateCompilerOperationCompletionKind.Complete
-        || operation.mutationBatch.attributeValueMutations.length > 0
+        || operation.mutationBatch.scalarMutationCount > 0
         || operation.mutationBatch.occurrenceGenerationReservations.length > 0
         || operation.mutationBatch.topologyMutations.length > 0
         || operation.mutationBatch.nodeDocumentMutations.length === 0
@@ -3733,7 +3786,7 @@ export class TemplateCompilerExecutionSession {
       if (isSiteProjectionSlots && (
         operation.executionMechanism !== TemplateCompilerOperationExecutionMechanism.BuiltIn
         || operation.completion.completionKind !== TemplateCompilerOperationCompletionKind.Complete
-        || operation.mutationBatch.attributeValueMutations.length > 0
+        || operation.mutationBatch.scalarMutationCount > 0
         || operation.mutationBatch.occurrenceGenerationReservations.length > 0
         || operation.mutationBatch.topologyMutations.length !== operation.mutationBatch.attributeDetachmentMutations.length
         || operation.endForestMutationRevision !== operation.startForestMutationRevision + operation.mutationBatch.topologyMutations.length
@@ -3785,7 +3838,7 @@ export class TemplateCompilerExecutionSession {
           || operation.endForestMutationRevision !== operation.startForestMutationRevision
             + operation.mutationBatch.siteTopologyMutationDelta
             + (operation.mutationBatch.state === TemplateCompilerMutationBatchState.Committed
-              ? operation.mutationBatch.attributeValueMutations.length
+              ? operation.mutationBatch.scalarMutationCount
               : operation.mutationBatch.siteTopologyMutationDelta > 0 ? 1 : 0)
         )
       ) {
@@ -3865,6 +3918,19 @@ export class TemplateCompilerExecutionSession {
           replayedAttributeValues.set(mutation.attribute, mutation.nextValue);
         }
       }
+      for (const mutation of operation.mutationBatch.characterDataMutations) {
+        if (!isSiteProcessContent || operation.executionMechanism !== TemplateCompilerOperationExecutionMechanism.StaticCallable
+          || mutation.previousValue !== (replayedCharacterData.get(mutation.node) ?? mutation.node.initialText)) {
+          throw new Error(`Compiler operation '${operation.operationKey}' has incoherent character-data history.`);
+        }
+        if (operation.mutationBatch.state === TemplateCompilerMutationBatchState.Committed) {
+          if (this.forest.nodeForOccurrenceKey(mutation.node.occurrenceKey) !== mutation.node) {
+            throw new Error(`Compiler operation '${operation.operationKey}' rewrites a node from another forest.`);
+          }
+          replayedCharacterData.set(mutation.node, mutation.nextValue);
+          characterDataWriteCounts.set(mutation.node, (characterDataWriteCounts.get(mutation.node) ?? 0) + 1);
+        }
+      }
       this.requireRecordedTarget(operation.context, operation.operationKind, operation.target);
       operationKeys.add(operation.operationKey);
       expectedLaneOperations.get(operation.lane)!.push(operation);
@@ -3914,6 +3980,13 @@ export class TemplateCompilerExecutionSession {
         throw new Error(
           `Compiler attribute '${attribute.occurrenceKey}' does not match its committed scalar mutation history.`,
         );
+      }
+    }
+    for (const node of this.forest.readNodes()) {
+      if (!(node instanceof TemplateCompilerTextOccurrence || node instanceof TemplateCompilerCommentOccurrence)) continue;
+      if (node.scalarWriteRevision !== (characterDataWriteCounts.get(node) ?? 0)
+        || node.text !== (replayedCharacterData.get(node) ?? node.initialText)) {
+        throw new Error(`Compiler character data '${node.occurrenceKey}' does not match its committed scalar mutation history.`);
       }
     }
   }
@@ -4458,7 +4531,7 @@ export class TemplateCompilerExecutionSession {
           || operation.executionMechanism !== TemplateCompilerOperationExecutionMechanism.BuiltIn
           || operation.completion.completionKind !== TemplateCompilerOperationCompletionKind.Complete
           || operation.mutationBatch.state !== TemplateCompilerMutationBatchState.Committed
-          || operation.mutationBatch.attributeValueMutations.length !== 0
+          || operation.mutationBatch.scalarMutationCount !== 0
           || operation.producedProductHandles.length !== 0
           || !sameOccurrences(operation.causeHandles, entry.causeHandles)
           || operation.sourceAddressHandle !== entry.sourceAddressHandle
@@ -4487,7 +4560,7 @@ export class TemplateCompilerExecutionSession {
       : null;
     return disposition != null
       && sameOccurrences(disposition.causeHandles, operation.causeHandles)
-      && batch.attributeValueMutations.length === 0
+      && batch.scalarMutationCount === 0
       && batch.topologyMutations.length === 1
       && batch.nodeDetachmentMutations.length === 0
       && batch.occurrenceGenerationReservations.length === 0
@@ -4505,7 +4578,7 @@ export class TemplateCompilerExecutionSession {
     operation: TemplateCompilerOperation,
   ): boolean {
     const batch = operation.mutationBatch;
-    if (batch.attributeValueMutations.length !== 0) return false;
+    if (batch.scalarMutationCount !== 0) return false;
     const geometry = structural.readTargetGeometry(row);
     if (row.placement instanceof TemplateCompilerContainerlessReplacementPlacement) {
       if (geometry?.geometryKind !== TemplateCompilerTargetGeometryKind.RenderLocation) return false;
@@ -4549,7 +4622,7 @@ export class TemplateCompilerExecutionSession {
     if (
       expansion == null
       || !sameOccurrences(expansion.causeHandles, operation.causeHandles)
-      || batch.attributeValueMutations.length !== 0
+      || batch.scalarMutationCount !== 0
     ) return false;
     const markerGenerations = rows.map((row) =>
       structural.readTargetGeometry(row)?.marker.generation ?? null
@@ -4582,7 +4655,7 @@ export class TemplateCompilerExecutionSession {
     const structural = attachment.structuralExecution;
     const batch = operation.mutationBatch;
     const forestDelta = operation.endForestMutationRevision - operation.startForestMutationRevision;
-    if (batch.attributeValueMutations.length !== 0) return false;
+    if (batch.scalarMutationCount !== 0) return false;
 
     if (expected instanceof TemplateCompilerFamilyGeneratedContextOperationScheduleEntry) {
       const structure = structural.readContextStructure(expected.context.targetContext);

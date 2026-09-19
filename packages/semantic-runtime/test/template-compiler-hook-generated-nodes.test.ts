@@ -7,6 +7,7 @@ import { NodeSemanticRuntimeProjectInputHost, SemanticRuntimeProjectInputAuthori
 import { materializeSemanticAppTemplateCompilerHandoffs, TemplateCompilerCompiledHandoffState } from '../src/template/browser-template.js';
 import * as nativeSlotProjection from '../src/template/template-compiler-native-slot-outlet-value.js';
 import { TemplateCompilerSiteCursorFrontierKind } from '../src/template/template-compiler-site-cursor-event.js';
+import { TemplateCompilerFrameworkInstructionType } from '../src/template/template-instruction-runtime-value.js';
 import { MutableProjectSourceOverlay } from './support/incremental-conformance.js';
 
 const fixtureRoot = path.resolve(import.meta.dirname, '../fixtures/pressure/app-pattern-convention-minimal-app');
@@ -140,7 +141,29 @@ class SlotMaker {
 class ShadowView { title = 'hello'; boundName = 'bound'; interpolatedName = 'other'; items = [1, 2]; }
 @customElement({ name: 'slot-invalid-view', dependencies: [SlotMaker], template: '<slot-maker></slot-maker>' })
 class SlotInvalidView {}
-@customElement({ name: 'my-app', template: '', dependencies: [GeneratedView, InvalidView, LetView, MarkerView, NativeView, ResourceView, ControlView, ShadowView, SlotInvalidView] })
+@customElement({ name: 'text-editor', template: '<au-slot></au-slot>' })
+class TextEditor {
+  static processContent(el: HTMLElement) {
+    el.children[0].firstChild!.data = 'Changed \\u0024{title}';
+    el.children[1].firstChild!.nodeValue = 'Inserted \\u0024{added}';
+    el.children[2].firstChild!.textContent = 'now static';
+    const restored = el.children[3].firstChild!;
+    const original = restored.nodeValue;
+    restored.nodeValue = 'temporary \\u0024{discarded}';
+    restored.nodeValue = original;
+    el.children[4].firstChild!.data = 'Item \\u0024{item}';
+    el.children[5].textContent = 'Replaced \\u0024{replacement}';
+  }
+}
+@customElement({ name: 'edited-text-view', dependencies: [TextEditor], template: '<text-editor><p>Old \\u0024{old}</p><p>static</p><p>Removed \\u0024{removed}</p><p>Restored \\u0024{restored}</p><p repeat.for="item of items">Old \\u0024{oldRepeat}</p><p><b>Removed \\u0024{removedChild}</b><!--replaced--></p></text-editor>' })
+class EditedTextView { title = 'new'; added = 'added'; restored = 'restored'; replacement = 'replacement'; items = [1, 2]; }
+@customElement({ name: 'comment-editor', template: '' })
+class CommentEditor {
+  static processContent(el: HTMLElement) { el.firstChild!.data = 'au'; }
+}
+@customElement({ name: 'edited-marker-view', dependencies: [CommentEditor], template: '<comment-editor><!--ordinary--></comment-editor>' })
+class EditedMarkerView {}
+@customElement({ name: 'my-app', template: '', dependencies: [GeneratedView, InvalidView, LetView, MarkerView, NativeView, ResourceView, ControlView, ShadowView, SlotInvalidView, EditedTextView, EditedMarkerView] })
 export class MyApp {}
 `);
   const runtime = await createSemanticRuntime({
@@ -195,6 +218,27 @@ export class MyApp {}
     const reservedMarker = batch.resources.find(resource => resource.resourceName === 'marker-view');
     expect(reservedMarker?.value).toBeNull();
     expect(reservedMarker?.reasons.some(reason => reason.frontierCause?.frontierKind === TemplateCompilerSiteCursorFrontierKind.AuthoredCompilerMarkerReserved))
+      .toBe(true);
+    const edited = batch.resources.find(resource => resource.resourceName === 'edited-text-view');
+    expect(edited?.state, edited?.reasons.map(reason => `${reason.reasonKind}: ${reason.summary}`).join('\n'))
+      .toBe(TemplateCompilerCompiledHandoffState.Exact);
+    if (edited?.value == null) throw new Error('Missing edited text definition.');
+    const editedTextBindings = edited.value.definitions.flatMap(definition => definition.rows.flat())
+      .filter(instruction => instruction.value.type === TemplateCompilerFrameworkInstructionType.TextBinding);
+    expect(editedTextBindings).toHaveLength(5);
+    expect(editedTextBindings.every(instruction => instruction.source == null)).toBe(true);
+    const editedRows = JSON.stringify(edited.value.definitions.flatMap(definition => definition.rows));
+    for (const name of ['title', 'added', 'restored', 'item', 'replacement']) expect(editedRows).toContain(name);
+    for (const name of ['old', 'removed', 'discarded', 'oldRepeat', 'removedChild']) {
+      expect(editedRows).not.toContain(`"name":"${name}"`);
+    }
+    const editedTrees = JSON.stringify(edited.value.definitions.map(definition => definition.tree));
+    expect(editedTrees).toContain('now static');
+    expect(editedTrees).not.toContain('Removed');
+    expect(edited.value.definitions.filter(definition => definition.owner.ownerKind === 'template-controller')).toHaveLength(1);
+    const editedMarker = batch.resources.find(resource => resource.resourceName === 'edited-marker-view');
+    expect(editedMarker?.value).toBeNull();
+    expect(editedMarker?.reasons.some(reason => reason.frontierCause?.frontierKind === TemplateCompilerSiteCursorFrontierKind.AuthoredCompilerMarkerReserved))
       .toBe(true);
     const shadow = batch.resources.find(resource => resource.resourceName === 'shadow-view');
     expect(shadow?.state, shadow?.reasons.map(reason => `${reason.reasonKind}: ${reason.summary}`).join('\n'))

@@ -1,4 +1,4 @@
-/* global HTMLElement, Document, HTMLTemplateElement */
+/* global HTMLElement, Document, HTMLTemplateElement, Text, Comment */
 import { customElement } from 'aurelia';
 
 @customElement({ name: 'move-lab', template: '<au-slot></au-slot>' })
@@ -46,6 +46,15 @@ export class MoveLab {
     el.setAttribute('data-order', `${target.firstElementChild === replacement}:${replacement.nextElementSibling === first}:${first.nextElementSibling === card}:${card.nextElementSibling === adopted}`);
     el.setAttribute('data-document-adoption', `${el.ownerDocument === platform.document}:${initialDocument === platform.document}:${adopted.ownerDocument === platform.document}:${donor.content.ownerDocument === initialDocument}`);
 
+    // Text edits change compiler expressions, not just the literal text around the old expression.
+    const firstText = first.firstChild as Text;
+    firstText.data = 'first:${message.toUpperCase()}';
+    const movedText = textMoves.firstChild as Text;
+    movedText.nodeValue = 'after:${message.length}';
+    const replacedText = replacement.firstChild!;
+    replacement.appendChild(discarded);
+    replacement.textContent = 'replacement:${message.length}';
+
     // Generated native content joins existing authored nodes before the compiler visits the transformed subtree.
     const wrapper = platform.document.createElement('section');
     wrapper.id = 'generated-wrapper';
@@ -61,7 +70,9 @@ export class MoveLab {
     const row = inert.createElement('p');
     row.className = 'generated-row';
     row.setAttribute('stamp.bind', 'message');
-    row.appendChild(inert.createTextNode('generated:${item}:${message}'));
+    const generatedText = inert.createTextNode('draft row');
+    generatedText.data = 'generated:${item}:${message.toUpperCase()}';
+    row.appendChild(generatedText);
     repeated.content.appendChild(row);
     conditional.content.appendChild(repeated);
     wrapper.appendChild(conditional);
@@ -116,9 +127,24 @@ export class MoveLab {
     wrapper.appendChild(slot);
 
     const fragment = platform.document.createDocumentFragment();
-    fragment.appendChild(platform.document.createComment('generated-content'));
-    fragment.appendChild(platform.document.createTextNode('fragment:${message}'));
+    const fragmentPrevious = platform.document.createElement('b');
+    fragmentPrevious.setAttribute('stamp.bind', 'message');
+    fragmentPrevious.textContent = 'obsolete:${message}';
+    fragment.appendChild(fragmentPrevious);
+    fragment.textContent = 'fragment:${message.length}';
+    const fragmentReadback = fragment.textContent === 'fragment:${message.length}'
+      && fragmentPrevious.parentNode === null;
+    const generatedComment = platform.document.createComment('draft comment');
+    generatedComment.data = 'generated-content';
+    fragment.appendChild(generatedComment);
     const fragmentReturned = wrapper.appendChild(fragment) === fragment;
+
+    const cleared = inert.createElement('output');
+    cleared.id = 'generated-cleared';
+    const clearedText = inert.createTextNode('clear:${message}');
+    cleared.appendChild(clearedText);
+    cleared.textContent = '';
+    wrapper.appendChild(cleared);
     const unused = inert.createElement('p');
     unused.id = 'generated-discarded';
     unused.setAttribute('stamp.bind', 'message');
@@ -150,8 +176,11 @@ export class MoveLab {
     const copiedCardWasInert = copiedCard.ownerDocument === inert;
     copies.appendChild(copiedCard);
     copies.appendChild(textMoves.firstChild!.cloneNode());
-    copies.appendChild(platform.document.createComment('copied-content').cloneNode());
+    const copiedComment = generatedComment.cloneNode() as Comment;
+    copiedComment.nodeValue = 'copied-content';
+    copies.appendChild(copiedComment);
     target.appendChild(copies);
     el.setAttribute('data-copies', `${shallow !== first}:${shallowWasEmpty}:${shallow.getAttribute('data-copy-state') === 'before'}:${first.getAttribute('data-copy-state') === 'after'}:${copiedConditional !== conditional}:${copiedConditional.content !== conditional.content}:${copiedConditional.ownerDocument === platform.document}:${copiedConditional.content.ownerDocument === inert}:${copiedCardWasInert}:${copiedCard.ownerDocument === platform.document}:${card.ownerDocument === platform.document}`);
+    el.setAttribute('data-text-edits', `${first.firstChild === firstText && firstText.textContent === 'first:${message.toUpperCase()}' && firstText.length === firstText.data.length}:${textMoves.firstChild === movedText && movedText.data === 'after:${message.length}'}:${replacedText.parentNode === null && discarded.parentNode === null}:${fragmentReadback}:${cleared.firstChild === null && clearedText.parentNode === null}:${generatedComment.data === 'generated-content' && copiedComment.data === 'copied-content' && copiedComment !== generatedComment}`);
   }
 }

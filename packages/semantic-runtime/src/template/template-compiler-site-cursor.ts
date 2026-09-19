@@ -57,7 +57,7 @@ import {
   TemplateCompilerOccurrenceOnlyDisposition,
 } from './template-compiler-site-spend-ledger.js';
 import type { TemplateCompilerAuthoredSiteRemainderEvidence } from './template-compiler-site-spend-ledger.js';
-import { HtmlAttributeReference, HtmlNodeReference, type HtmlElement } from './html-ir.js';
+import { HtmlAttributeReference, HtmlNodeReference, type HtmlElement, type HtmlText } from './html-ir.js';
 import {
   TemplateInstructionKind,
   type TemplateInstruction,
@@ -1705,6 +1705,10 @@ class TemplateCompilerRootSiteCursor {
       this.visitLiveText(text, parent, parentOrdinal, successor);
       return;
     }
+    if (text.scalarWriteRevision > 0 && originState === TemplateCompilerPreWalkBrowserOriginState.Singular) {
+      this.visitLiveText(text, parent, parentOrdinal, successor, bundle, authoredText, originState);
+      return;
+    }
     if (text.generation != null || originState === TemplateCompilerPreWalkBrowserOriginState.Absent) {
       const row = this.recordOccurrenceOnly(text, TemplateCompilerOccurrenceOnlyDisposition.GeneratedSiteNeedsLowering);
       this.appendEvent(new TemplateCompilerSiteCursorTextEvent(
@@ -1919,6 +1923,9 @@ class TemplateCompilerRootSiteCursor {
     parent: TemplateCompilerParentOccurrence,
     parentOrdinal: number,
     successor: TemplateCompilerNodeOccurrence | null,
+    bundle: TemplateCompilerNormalizedTextSite | null = null,
+    authoredText: HtmlText | null = null,
+    originState = TemplateCompilerPreWalkBrowserOriginState.Absent,
   ): void {
     const read = this.compilerReads.readParsedExpression(text.text, 'Interpolation');
     const result = read.value;
@@ -1926,12 +1933,14 @@ class TemplateCompilerRootSiteCursor {
       && read.observation.validate().isCurrent;
     const staticText = closed && result.kind === ExpressionParseResultKind.InterpolationAbsent;
     const interpolated = closed && result.kind === ExpressionParseResultKind.InterpolationSuccess;
-    const row = this.recordOccurrenceOnly(text, staticText
+    const spend = bundle == null ? null : this.bindSpend(bundle, text,
+      TemplateCompilerSiteSpendDisposition.BrowserReloweringRequired);
+    const row = bundle != null ? null : this.recordOccurrenceOnly(text, staticText
       ? TemplateCompilerOccurrenceOnlyDisposition.StaticTextPassThrough
       : TemplateCompilerOccurrenceOnlyDisposition.LiveTextAssembled);
-    if (row == null) {
+    if (bundle == null ? row == null : spend == null) {
       this.stop(TemplateCompilerSiteCursorFrontierKind.AccountingMismatch, text, null, null, successor,
-        'Hook-created text accounting conflicted with the site ledger.');
+        'Live text accounting conflicted with the site ledger.');
       return;
     }
     let staging: TemplateCompilerTextInstructionStaging | null = null;
@@ -1958,13 +1967,13 @@ class TemplateCompilerRootSiteCursor {
       : TemplateCompilerSiteCursorSiteOutcome.Open;
     this.appendEvent(new TemplateCompilerSiteCursorTextEvent(
       siteCursorConstructionAuthority, this.transcriptOrdinal++, text, parent, parentOrdinal, successor,
-      TemplateCompilerPreWalkBrowserOriginState.Absent, null, null, null, row, outcome, staging, liveParse,
+      originState, authoredText, bundle, spend, row, outcome, staging, liveParse,
     ));
     if (!staticText && !interpolated) {
       this.stop(outcome === TemplateCompilerSiteCursorSiteOutcome.Invalid
         ? TemplateCompilerSiteCursorFrontierKind.ReachedNormalizedInvalid
         : TemplateCompilerSiteCursorFrontierKind.ReachedNormalizedOpen,
-      text, null, null, successor, 'Hook-created text interpolation has no closed completed parse.');
+      text, null, null, successor, 'Live text interpolation has no closed completed parse.');
     }
   }
 

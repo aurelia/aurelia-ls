@@ -106,6 +106,7 @@ type CompilerDomReference = CompilerDomNodeReference | CompilerDomCollectionRefe
  *
  * Traversal, document factories, copies, attributes, class tokens, and node relocation/removal use one pending operation.
  * Native resource effects are not confined DOM mutations: platform-owned resource mutations remain explicit refusals.
+ * CharacterData and replace-all text writes share that transaction; browser-dependent identity remains explicit.
  * Native control history, markup/metadata writes, and dataset remain unsupported until their owned lowering lanes exist.
  */
 export class TemplateCompilerDomHost {
@@ -208,6 +209,7 @@ export class TemplateCompilerDomHost {
       if (member === 'nodeType') return new EvaluationNumberValue(9);
       if (member === 'nodeName') return new EvaluationStringValue('#document');
       if (member === 'ownerDocument') return new EvaluationNullValue();
+      if (member === 'nodeValue' || member === 'textContent') return new EvaluationNullValue();
       if (['createElement', 'createElementNS', 'createTextNode', 'createComment', 'createDocumentFragment', 'importNode'].includes(member)) {
         return this.method(`document:${member}`);
       }
@@ -282,12 +284,17 @@ export class TemplateCompilerDomHost {
       case 'nodeValue':
       case 'data':
         if (occurrence instanceof TemplateCompilerTextOccurrence || occurrence instanceof TemplateCompilerCommentOccurrence) {
-          return new EvaluationStringValue(occurrence.text);
+          return new EvaluationStringValue(this.execution.readCharacterData(this.attempt, occurrence));
         }
         if (member === 'nodeValue') return new EvaluationNullValue();
         break;
       case 'textContent': return occurrence instanceof TemplateCompilerDoctypeOccurrence
-        ? new EvaluationNullValue() : new EvaluationStringValue(textContent(occurrence));
+        ? new EvaluationNullValue() : new EvaluationStringValue(this.textContent(occurrence));
+      case 'length':
+        if (occurrence instanceof TemplateCompilerTextOccurrence || occurrence instanceof TemplateCompilerCommentOccurrence) {
+          return new EvaluationNumberValue(this.execution.readCharacterData(this.attempt, occurrence).length);
+        }
+        break;
       case 'hasChildNodes':
       case 'cloneNode':
       case 'contains':
@@ -341,6 +348,10 @@ export class TemplateCompilerDomHost {
     moduleKey: string,
     host: StaticIntrinsicEvaluationHost,
   ): EvaluationValue {
+    if (this.refusal == null && (reference.kind === 'node' || reference.kind === 'document')
+      && (member === 'textContent' || member === 'nodeValue' || member === 'data')) {
+      return this.writeText(reference, member, value, node, moduleKey, host);
+    }
     if (this.refusal == null && reference.kind === 'tokens' && member === 'value') {
       return this.setReflectedAttribute(reference.element, 'class', value, member, node, moduleKey, host);
     }
@@ -350,6 +361,68 @@ export class TemplateCompilerDomHost {
       if (name != null) return this.setReflectedAttribute(reference.occurrence, name, value, member, node, moduleKey, host);
     }
     return this.unsupported(member, node, moduleKey, host);
+  }
+
+  private textContent(node: TemplateCompilerNodeOccurrence): string {
+    if (node instanceof TemplateCompilerTextOccurrence || node instanceof TemplateCompilerCommentOccurrence) {
+      return this.execution.readCharacterData(this.attempt, node);
+    }
+    let text = '';
+    for (const child of node.readChildren()) {
+      if (!(child instanceof TemplateCompilerCommentOccurrence)) text += this.textContent(child);
+    }
+    return text;
+  }
+
+  private writeText(
+    reference: CompilerDomNodeReference | CompilerDomOpaqueReference,
+    member: string,
+    value: EvaluationValue,
+    node: ts.Node,
+    moduleKey: string,
+    host: StaticIntrinsicEvaluationHost,
+  ): EvaluationValue {
+    const occurrence = reference.kind === 'node' ? reference.occurrence : null;
+    const characterData = occurrence instanceof TemplateCompilerTextOccurrence || occurrence instanceof TemplateCompilerCommentOccurrence;
+    if (member === 'data' && !characterData) return this.unsupported(member, node, moduleKey, host);
+    // nodeValue/textContent are nullable DOMString; CharacterData.data converts undefined but treats null as empty.
+    const text = value.kind === EvaluationValueKind.Null || member !== 'data' && value.kind === EvaluationValueKind.Undefined
+      ? '' : domPrimitiveString(value);
+    if (text == null) return this.unsupported(member, node, moduleKey, host, 'runtime-dependent-input');
+    if (occurrence == null || occurrence instanceof TemplateCompilerDoctypeOccurrence) return EvaluationUndefined;
+    if (characterData) {
+      if (this.hasNativeResourceTreeEffect(occurrence, null)) {
+        return this.unsupported(member, node, moduleKey, host, 'native-resource-effects');
+      }
+      this.execution.rewriteProcessContentCharacterData(this.attempt, occurrence, text);
+      return EvaluationUndefined;
+    }
+    if (member === 'nodeValue') return EvaluationUndefined;
+    if (!isParent(occurrence)) return this.unsupported(member, node, moduleKey, host);
+    if (occurrence instanceof TemplateCompilerElementOccurrence && occurrence.templateContent != null && text !== '') {
+      // textContent affects a template element's ordinary children, not its .content fragment.
+      return this.unsupported(member, node, moduleKey, host, 'template-element-children');
+    }
+    const children = occurrence.readChildren();
+    if (text !== '' && children.length === 1 && children[0] instanceof TemplateCompilerTextOccurrence
+      && this.execution.readCharacterData(this.attempt, children[0]) === text) {
+      // Chromium preserves this Text identity; DOM string-replace-all specifies a fresh node (whatwg/dom#1106).
+      return this.unsupported(member, node, moduleKey, host, 'browser-dependent-node-identity');
+    }
+    if (occurrence instanceof TemplateCompilerElementOccurrence && this.hasNativeResourceAttributeEffect(occurrence)
+      || children.some(child => this.hasNativeResourceTreeEffect(child, null))) {
+      return this.unsupported(member, node, moduleKey, host, 'native-resource-effects');
+    }
+    if (children.some(child => this.hasNativeControlTreeState(child))) {
+      return this.unsupported(member, node, moduleKey, host, 'native-control-state');
+    }
+    for (const child of [...children]) this.execution.detachProcessContentNode(this.attempt, child);
+    if (text !== '') {
+      const replacement = this.execution.createProcessContentText(this.attempt, text, this.execution.forest.ownerDocumentFor(occurrence));
+      this.ownedNodes.add(replacement);
+      this.execution.placeProcessContentNode(this.attempt, replacement, occurrence, 0);
+    }
+    return EvaluationUndefined;
   }
 
   private invoke(frame: StaticInvocationFrame, member: string, host: StaticIntrinsicEvaluationHost): StaticInvocationDispatch {
@@ -1120,15 +1193,6 @@ function nodeName(node: TemplateCompilerNodeOccurrence): string {
   if (node instanceof TemplateCompilerCommentOccurrence) return '#comment';
   if (node instanceof TemplateCompilerDoctypeOccurrence) return node.name;
   return '#document-fragment';
-}
-
-function textContent(node: TemplateCompilerNodeOccurrence): string {
-  if (node instanceof TemplateCompilerTextOccurrence || node instanceof TemplateCompilerCommentOccurrence) return node.text;
-  let text = '';
-  for (const child of node.readChildren()) {
-    if (!(child instanceof TemplateCompilerCommentOccurrence)) text += textContent(child);
-  }
-  return text;
 }
 
 function attributeName(attribute: TemplateCompilerAttributeOccurrence): string {

@@ -258,8 +258,8 @@ classification, expression parsing, and instruction lowering converge on the sam
   historical inventory remains available for later structural derivations. Input-origin indexes are one-to-many;
   forest-owned generated factories admit pure generated outputs as well as clones/text splits that independently retain
   an input origin. Every generated occurrence carries its generation context, semantic operation key, ordered nonempty
-  causes, output role, and ordinal. Scalar text/comment/attribute values remain read-only until their mutation can
-  travel through the ordered compiler-effect owner rather than bypassing provenance.
+  causes, output role, and ordinal. Scalar text/comment/attribute values are written through the ordered
+  compiler-effect owner rather than bypassing provenance.
   Elements also retain their native creation-time `customElementIs` from immutable browser input, independently of
   subsequent attribute edits. Generated-element factories require that creation input explicitly; input-reference
   lineage alone does not mean the new node is a clone with identical native identity.
@@ -345,7 +345,16 @@ classification, expression parsing, and instruction lowering converge on the sam
   occurrences. Existing creation/insertion records retain copy lineage without transferring authored input ownership;
   copy-of-copy provenance resolves through those records. Copies preserve native creation-time is and parsed-script
   state, use the clone source/import destination document, and give copied templates fresh inert content fragments.
-  Markup/text writes, selectors, dataset and metadata effects remain explicit unsupported operations until their
+  Text/comment data, nodeValue and textContent writes stage in the same pending operation; subsequent reads, aggregate
+  textContent, length and clones see pending values. Element/fragment textContent replacement reuses owned child
+  detachment and HookText creation, preserving detached references and live collections. Rewritten singular authored
+  text uses the existing live interpolation parser and spends its old authored bundle as relowered; expression ranges
+  refer to the new scalar, not fabricated authored spans. Even A→B→A retains its rewrite origin. Existing non-singular
+  authored accounting remains a separate boundary. CharacterData identity is retained; replacing nonempty textContent
+  with identical single-Text content refuses as browser-dependent-node-identity because Chromium's identity-preserving
+  optimization differs from the standard replacement semantics. Empty replacement is supported. Template element
+  textContent affects ordinary children rather than .content and remains subject to that existing nonempty-child bound.
+  Markup writes, CharacterData methods, selectors, dataset and metadata effects remain explicit unsupported operations until their
   complete lowering paths are admitted. Namespace-duplicate qualified names and
   browser-version-sensitive name spellings remain explicit compatibility boundaries, not invented DOM exceptions.
   Projection removes original au-slot attributes through one ordered site operation before projected hooks execute.

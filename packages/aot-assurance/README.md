@@ -18,7 +18,9 @@ The default package assurance runs thirteen complementary scenarios:
   an empty wrapper, reorders siblings, repeatedly removes/reinserts the same node, replaces across parents, and
   permanently removes bound content. Moved custom elements retain named projections, custom attributes, `if`/`repeat`,
   and updates after hide/restore. A retained template contributes a child through inert-to-platform document adoption;
-  reordered original interpolation text siblings become adjacent and compile in the resulting order. Five checkpoints
+  reordered original interpolation text siblings become adjacent and compile in the resulting order. Authored and
+  generated text edits replace interpolation expressions; element/fragment `textContent` removes prior bound subtrees,
+  and edited text/comment/template copies preserve independent identities and reactive behavior. Five checkpoints
   and teardown check explicit JIT-grounded outcomes. All three compiler-final definitions are required.
 - `content-attributes` is strict AOT for ordinary source-hook attribute transforms. It creates, removes and readds
   attributes; generates input bindings, custom attributes, `as-element` components, `if`/`repeat` controllers, and a

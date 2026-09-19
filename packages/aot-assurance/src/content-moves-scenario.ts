@@ -12,6 +12,7 @@ export interface ContentMovesApplicationObservation {
     readonly returns: string | null;
     readonly order: string | null;
     readonly documents: string | null;
+    readonly textEdits: string | null;
     readonly source: readonly string[];
     readonly target: readonly string[];
     readonly values: readonly { readonly id: string; readonly text: string; readonly stamp: string | null }[];
@@ -47,6 +48,7 @@ export interface ContentMovesApplicationObservation {
       readonly fragmentText: readonly string[];
       readonly comments: number;
       readonly discarded: number;
+      readonly clearedChildren: number;
     };
   };
 }
@@ -118,6 +120,7 @@ async function capture(page: Page): Promise<ContentMovesApplicationObservation> 
         returns: lab.getAttribute('data-return-values'),
         order: lab.getAttribute('data-order'),
         documents: lab.getAttribute('data-document-adoption'),
+        textEdits: lab.getAttribute('data-text-edits'),
         source: Array.from(root.querySelector('#source')!.children, (element) => element.id),
         target: Array.from(root.querySelector('#target')!.children, (element) => element.id),
         values: ['replacement', 'first', 'second', 'adopted', 'text-moves'].map((id) => {
@@ -160,6 +163,7 @@ async function capture(page: Page): Promise<ContentMovesApplicationObservation> 
           fragmentText: Array.from(generated.childNodes).filter((node) => node.nodeType === 3).map((node) => node.textContent!),
           comments: Array.from(generated.childNodes).filter((node) => node.nodeType === 8 && node.textContent === 'generated-content').length,
           discarded: root.querySelectorAll('#generated-discarded').length,
+          clearedChildren: root.querySelector('#generated-cleared')!.childNodes.length,
         },
       },
     };
@@ -199,14 +203,15 @@ export function assertContentMovesExpectations(transcript: LaneTranscript): void
           returns: 'true:true:true:true',
           order: 'true:true:true:true',
           documents: 'true:false:true:true',
+          textEdits: 'true:true:true:true:true:true',
           source: ['second'],
           target: ['replacement', 'first', 'moved-card', 'adopted', 'text-moves', 'moved-script', 'void-parent', 'generated-wrapper', 'copied-wrapper'],
           values: [
-            { id: 'replacement', text: `replacement:${message}`, stamp: null },
-            { id: 'first', text: `first:${message}`, stamp: message },
+            { id: 'replacement', text: `replacement:${message.length}`, stamp: null },
+            { id: 'first', text: `first:${message.toUpperCase()}`, stamp: message },
             { id: 'second', text: `second:${message}`, stamp: null },
             { id: 'adopted', text: `adopted:${message}`, stamp: message },
-            { id: 'text-moves', text: `after:${message}before:${message}separator`, stamp: null },
+            { id: 'text-moves', text: `after:${message.length}before:${message}separator`, stamp: null },
           ],
           cards: [`card:${message}`, `card:${message}`, `card:${message}`, `card:${message}`],
           title: { text: `title:${message}`, stamp: message },
@@ -220,10 +225,10 @@ export function assertContentMovesExpectations(transcript: LaneTranscript): void
             identities: 'true:true:true:true:true:true:true:true:true:true:true',
             shallow: { text: `shallow:${message}`, stamp: message, snapshot: 'before' },
             sourceSnapshot: 'after',
-            templateRows: active ? ['one', 'two', 'three'].slice(0, count).map((item) => ({ text: `generated:${item}:${message}`, stamp: message })) : [],
+            templateRows: active ? ['one', 'two', 'three'].slice(0, count).map((item) => ({ text: `generated:${item}:${message.toUpperCase()}`, stamp: message })) : [],
             title: { text: `title:${message}`, stamp: message },
             rows: active ? ['one', 'two', 'three'].slice(0, count).map((item) => ({ text: `${item}:${message}`, stamp: message })) : [],
-            text: ['after:', message],
+            text: ['after:', String(message.length)],
             comments: 1,
           },
           generated: {
@@ -231,15 +236,16 @@ export function assertContentMovesExpectations(transcript: LaneTranscript): void
             title: message,
             stamp: message,
             authored: { parent: 'generated-wrapper', text: `authored:${message}`, stamp: message },
-            rows: active ? ['one', 'two', 'three'].slice(0, count).map((item) => ({ text: `generated:${item}:${message}`, stamp: message })) : [],
+            rows: active ? ['one', 'two', 'three'].slice(0, count).map((item) => ({ text: `generated:${item}:${message.toUpperCase()}`, stamp: message })) : [],
             projectionTitle: { text: `generated-title:${message}`, stamp: message },
             projectionBody: active ? [{ text: `generated-body:${message}`, stamp: message }] : [],
             local: { text: `let:${message}-local`, stamp: `${message}-local` },
             slotFallback: { text: `fallback:${message}`, stamp: message },
             slotRejected: 0,
-            fragmentText: ['fragment:', message],
+            fragmentText: ['fragment:', String(message.length)],
             comments: 1,
             discarded: 0,
+            clearedChildren: 0,
           },
         },
       },

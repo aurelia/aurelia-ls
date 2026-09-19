@@ -20,6 +20,9 @@ and complete teardown. There are no selectors, ambient accesses, markup setters,
   survive compiled-carrier construction and runtime cloning; the script never executes when connected.
 - Move a bound child under an authored input. The DOM permits children under HTML void elements even though HTML
   serialization cannot represent that tree; emitted construction must retain the child's binding and custom attribute.
+- Change authored interpolation expressions through Text `data` and `nodeValue` while retaining the same Text objects.
+  Uppercasing and string-length expressions must replace the authored expression, then react independently to later updates.
+- Replace an element's prior text and bound child subtree through `textContent`; removed bindings do not survive.
 
 The same hook then builds compiler input using `createElement`, `createTextNode`, `createComment`, and
 `createDocumentFragment`:
@@ -33,8 +36,11 @@ The same hook then builds compiler input using `createElement`, `createTextNode`
   own generated `if` template, so projection extraction and controller compilation must compose for new nodes.
 - A generated `let` binds a derived local used by both generated interpolation and a custom attribute. A generated
   named `au-slot` exercises reactive fallback and removes two distinct generated children carrying `au-slot` attributes.
-- A generated fragment carries a static comment and reactive interpolation text, returns the fragment from
-  `appendChild`, and becomes empty after insertion. Expectations retain JIT's distinct static and bound text nodes.
+- A generated fragment replaces a stamped subtree through `textContent`, then receives a comment edited through `data`.
+  It carries reactive string-length interpolation text, returns the fragment from `appendChild`, and becomes empty after
+  insertion. Expectations retain JIT's distinct static and bound text nodes.
+- Generated row Text is edited before template cloning, and an empty `textContent` write removes another generated
+  interpolation Text entirely. Readback checks retain CharacterData identity and expose detached old children.
 - A generated but never inserted bound/stamped paragraph remains absent. Factory allocation alone is not compiler reach.
 
 Finally, source `cloneNode` / `importNode` create additional independently reactive compiler input:
@@ -45,7 +51,9 @@ Finally, source `cloneNode` / `importNode` create additional independently react
   documents. Both copies follow the same five hide/update/restore checkpoints without sharing occurrences or row ownership.
 - An authored custom-element subtree is imported from the platform document into the inert document, then inserted normally.
   Its input binding, named title projection and conditional repeated body must lower from copied, addressless syntax.
-- Authored interpolation text and a generated static comment are cloned independently, retaining JIT's text-node boundaries.
+- Previously edited authored interpolation text and a generated comment are cloned independently. The comment copy is
+  edited without changing its source; template copies retain the generated row's edited expression. JIT's distinct
+  static/bound text nodes and all copied expression updates remain observable in the existing checkpoints.
 
 Custom element names and templates are created using the authored donor template content's inert owner document;
 ordinary native nodes can use the platform document. Insertion adopts generated content in the same way as original

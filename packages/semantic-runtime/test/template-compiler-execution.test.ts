@@ -428,6 +428,82 @@ describe('template compiler execution sequence', () => {
   );
 
   test.each([TemplateCompilerOperationCompletionKind.Complete, TemplateCompilerOperationCompletionKind.Unsupported])(
+    'stages identity-preserving character data, including restored values and pending copies: %s', (completionKind) => {
+      const browser = new BrowserEffectiveTemplateFixture('compiler-execution-character-data');
+      try {
+        const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(browser.materialize('root',
+          '<div>${original}<!--note--></div><p>outside</p>',
+        ).emission);
+        const execution = TemplateCompilerExecutionSession.createForForest('character-data:family', forest);
+        const lane = execution.admitRootInvocation('character-data:lane');
+        const closure = closeExactNoLocalBootstrap(browser, execution, lane, 'character-data');
+        const driver = execution.beginSiteExecutionDriver(execution.captureSiteExecutionFrontier(closure));
+        const root = forest.compilerContent.readChildren()[0] as TemplateCompilerElementOccurrence;
+        const text = root.readChildren()[0] as TemplateCompilerTextOccurrence;
+        const comment = root.readChildren()[1] as TemplateCompilerCommentOccurrence;
+        const outside = forest.compilerContent.readChildren()[1]!.readChildren()[0] as TemplateCompilerTextOccurrence;
+        const attempt = execution.beginOperation({
+          operationKey: 'character-data:process', context: driver.context,
+          operationKind: TemplateCompilerOperationKind.ProcessContent,
+          executionMechanism: TemplateCompilerOperationExecutionMechanism.StaticCallable,
+          target: execution.callableEffectTarget(driver.context, new TemplateCompilerCallableReference(
+            null, null, browser.run.handles.address('character-data:hook'),
+          ), root),
+          causeHandles: [browser.run.handles.product('character-data:definition')], siteExecutionDriver: driver,
+        });
+        execution.rewriteProcessContentCharacterData(attempt, text, '${changed}');
+        execution.rewriteProcessContentCharacterData(attempt, comment, 'edited');
+        expect(text.text).toBe('${original}');
+        expect(execution.readCharacterData(attempt, text)).toBe('${changed}');
+        const copy = execution.cloneProcessContentNode(attempt, text, false, 'platform') as TemplateCompilerTextOccurrence;
+        expect(copy.text).toBe('${changed}');
+        execution.rewriteProcessContentCharacterData(attempt, text, '${original}');
+        expect(execution.readCharacterData(attempt, text)).toBe('${original}');
+        execution.detachProcessContentNode(attempt, comment);
+        execution.rewriteProcessContentCharacterData(attempt, comment, 'detached');
+        execution.placeProcessContentNode(attempt, copy, root, root.readChildren().length);
+        expect(() => execution.rewriteProcessContentCharacterData(attempt, outside, 'no'))
+          .toThrow(/outside its owned subtree/);
+        const operation = execution.completeOperation(attempt, completionKind === TemplateCompilerOperationCompletionKind.Complete
+          ? new TemplateCompilerOperationCompletion(completionKind)
+          : new TemplateCompilerOperationCompletion(completionKind, [], 'Later unsupported operation.'));
+        expect(operation.mutationBatch.characterDataMutations).toMatchObject([
+          { node: text, previousValue: '${original}', nextValue: '${original}' },
+          { node: comment, previousValue: 'note', nextValue: 'detached' },
+        ]);
+        expect(text.text).toBe('${original}');
+        expect(text.inputReference).not.toBeNull();
+        if (completionKind === TemplateCompilerOperationCompletionKind.Complete) {
+          expect(text.scalarWriteRevision).toBe(1);
+          expect(comment.text).toBe('detached');
+          expect(comment.scalarWriteRevision).toBe(1);
+          expect(root.readChildren()).toEqual([text, copy]);
+          const terminal = execution.beginOperation({
+            operationKey: 'character-data:terminal', context: driver.context,
+            operationKind: TemplateCompilerOperationKind.ProcessContent,
+            executionMechanism: TemplateCompilerOperationExecutionMechanism.StaticCallable,
+            target: execution.callableEffectTarget(driver.context, new TemplateCompilerCallableReference(
+              null, null, browser.run.handles.address('character-data:terminal-hook'),
+            ), root),
+            causeHandles: [browser.run.handles.product('character-data:definition')], siteExecutionDriver: driver,
+          });
+          execution.completeOperation(terminal, new TemplateCompilerOperationCompletion(
+            TemplateCompilerOperationCompletionKind.Unsupported, [], 'No target planning in this execution-only test.',
+          ));
+        } else {
+          expect(text.scalarWriteRevision).toBe(0);
+          expect(comment.text).toBe('note');
+          expect(comment.scalarWriteRevision).toBe(0);
+          expect(root.readChildren()).toEqual([text, comment]);
+          expect(forest.nodeForOccurrenceKey(copy.occurrenceKey)).toBeNull();
+        }
+        execution.finishSiteExecutionDriver(driver);
+        execution.seal();
+      } finally { browser.dispose(); }
+    },
+  );
+
+  test.each([TemplateCompilerOperationCompletionKind.Complete, TemplateCompilerOperationCompletionKind.Unsupported])(
     'copies owned current DOM with fresh identities and source lineage: %s', (completionKind) => {
       const browser = new BrowserEffectiveTemplateFixture('compiler-execution-source-copy');
       try {
