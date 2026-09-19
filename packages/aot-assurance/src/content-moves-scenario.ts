@@ -23,6 +23,16 @@ export interface ContentMovesApplicationObservation {
     readonly titleFallbacks: number;
     readonly scriptExecutions: number;
     readonly voidChild: { readonly parent: string; readonly text: string; readonly stamp: string | null };
+    readonly copies: {
+      readonly identities: string | null;
+      readonly shallow: { readonly text: string; readonly stamp: string | null; readonly snapshot: string | null };
+      readonly sourceSnapshot: string | null;
+      readonly templateRows: readonly { readonly text: string; readonly stamp: string | null }[];
+      readonly title: { readonly text: string; readonly stamp: string | null };
+      readonly rows: readonly { readonly text: string; readonly stamp: string | null }[];
+      readonly text: readonly string[];
+      readonly comments: number;
+    };
     readonly generated: {
       readonly factories: string | null;
       readonly title: string | null;
@@ -96,6 +106,9 @@ async function capture(page: Page): Promise<ContentMovesApplicationObservation> 
     const generatedTitle = root.querySelector('#generated-card header b')!;
     const generatedLocal = root.querySelector('#generated-let-value')!;
     const generatedFallback = root.querySelector('#generated-slot-fallback')!;
+    const copies = root.querySelector('#copied-wrapper')!;
+    const shallow = copies.querySelector('#shallow-copy')!;
+    const copiedTitle = copies.querySelector('.copied-title')!;
     return {
       kind: 'content-moves',
       live: [{ id: input.id, value: input.value }],
@@ -122,6 +135,16 @@ async function capture(page: Page): Promise<ContentMovesApplicationObservation> 
           parent: root.querySelector('#void-child')!.parentElement!.id,
           text: root.querySelector('#void-child')!.textContent,
           stamp: root.querySelector('#void-child')!.getAttribute('data-stamped'),
+        },
+        copies: {
+          identities: lab.getAttribute('data-copies'),
+          shallow: { text: shallow.textContent, stamp: shallow.getAttribute('data-stamped'), snapshot: shallow.getAttribute('data-copy-state') },
+          sourceSnapshot: root.querySelector('#first')!.getAttribute('data-copy-state'),
+          templateRows: Array.from(copies.querySelectorAll('.copied-template-row'), (element) => ({ text: element.textContent, stamp: element.getAttribute('data-stamped') })),
+          title: { text: copiedTitle.textContent, stamp: copiedTitle.getAttribute('data-stamped') },
+          rows: Array.from(copies.querySelectorAll('.copied-row'), (element) => ({ text: element.textContent, stamp: element.getAttribute('data-stamped') })),
+          text: Array.from(copies.childNodes).filter((node) => node.nodeType === 3).map((node) => node.textContent!),
+          comments: Array.from(copies.childNodes).filter((node) => node.nodeType === 8 && node.textContent === 'copied-content').length,
         },
         generated: {
           factories: lab.getAttribute('data-factories'),
@@ -177,7 +200,7 @@ export function assertContentMovesExpectations(transcript: LaneTranscript): void
           order: 'true:true:true:true',
           documents: 'true:false:true:true',
           source: ['second'],
-          target: ['replacement', 'first', 'moved-card', 'adopted', 'text-moves', 'moved-script', 'void-parent', 'generated-wrapper'],
+          target: ['replacement', 'first', 'moved-card', 'adopted', 'text-moves', 'moved-script', 'void-parent', 'generated-wrapper', 'copied-wrapper'],
           values: [
             { id: 'replacement', text: `replacement:${message}`, stamp: null },
             { id: 'first', text: `first:${message}`, stamp: message },
@@ -185,7 +208,7 @@ export function assertContentMovesExpectations(transcript: LaneTranscript): void
             { id: 'adopted', text: `adopted:${message}`, stamp: message },
             { id: 'text-moves', text: `after:${message}before:${message}separator`, stamp: null },
           ],
-          cards: [`card:${message}`, `card:${message}`, `card:${message}`],
+          cards: [`card:${message}`, `card:${message}`, `card:${message}`, `card:${message}`],
           title: { text: `title:${message}`, stamp: message },
           rows: active ? ['one', 'two', 'three'].slice(0, count).map((item) => ({ text: `${item}:${message}`, stamp: message })) : [],
           discarded: 0,
@@ -193,6 +216,16 @@ export function assertContentMovesExpectations(transcript: LaneTranscript): void
           titleFallbacks: 1,
           scriptExecutions: 0,
           voidChild: { parent: 'void-parent', text: `void:${message}`, stamp: message },
+          copies: {
+            identities: 'true:true:true:true:true:true:true:true:true:true:true',
+            shallow: { text: `shallow:${message}`, stamp: message, snapshot: 'before' },
+            sourceSnapshot: 'after',
+            templateRows: active ? ['one', 'two', 'three'].slice(0, count).map((item) => ({ text: `generated:${item}:${message}`, stamp: message })) : [],
+            title: { text: `title:${message}`, stamp: message },
+            rows: active ? ['one', 'two', 'three'].slice(0, count).map((item) => ({ text: `${item}:${message}`, stamp: message })) : [],
+            text: ['after:', message],
+            comments: 1,
+          },
           generated: {
             factories: 'true:true:true:true',
             title: message,

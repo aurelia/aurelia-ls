@@ -1,10 +1,11 @@
 import path from 'node:path';
 
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
 import { NodeSemanticRuntimeProjectInputHost, SemanticRuntimeProjectInputAuthority } from '../src/kernel/project-input.js';
 import { materializeSemanticAppTemplateCompilerHandoffs, TemplateCompilerCompiledHandoffState } from '../src/template/browser-template.js';
+import * as nativeSlotProjection from '../src/template/template-compiler-native-slot-outlet-value.js';
 import { TemplateCompilerSiteCursorFrontierKind } from '../src/template/template-compiler-site-cursor-event.js';
 import { MutableProjectSourceOverlay } from './support/incremental-conformance.js';
 
@@ -104,7 +105,42 @@ class ResourceMaker {
 }
 @customElement({ name: 'resource-view', dependencies: [ResourceMaker], template: '<resource-maker data-authored="resource"></resource-maker>' })
 class ResourceView {}
-@customElement({ name: 'my-app', template: '', dependencies: [GeneratedView, InvalidView, LetView, MarkerView, NativeView, ResourceView] })
+@customElement({ name: 'control-maker', template: '' })
+class ControlMaker {
+  static processContent(el: HTMLElement) {
+    el.setAttribute('data-tentative', 'discarded');
+    el.firstElementChild!.setAttribute('type', 'text');
+  }
+}
+@customElement({ name: 'control-view', dependencies: [ControlMaker], template: '<control-maker><input type="number" value="invalid"></control-maker>' })
+class ControlView {}
+@customElement({ name: 'slot-maker', template: '' })
+class SlotMaker {
+  static processContent(el: HTMLElement) {
+    const doc = el.ownerDocument;
+    el.appendChild(doc.createElement('slot'));
+    const named = doc.createElement('slot');
+    named.setAttribute('name', 'generated-static');
+    // A different generated interpolation must not make the static slot name dynamic through null product handles.
+    named.setAttribute('title', 'Title \\u0024{title}');
+    el.appendChild(named);
+    const bound = doc.createElement('slot');
+    bound.setAttribute('name.bind', 'boundName');
+    el.appendChild(bound);
+    const interpolated = doc.createElement('slot');
+    interpolated.setAttribute('name', 'prefix-\\u0024{interpolatedName}');
+    el.appendChild(interpolated);
+    const repeated = doc.createElement('slot');
+    repeated.setAttribute('name', 'repeated-\\u0024{item}');
+    repeated.setAttribute('repeat.for', 'item of items');
+    el.appendChild(repeated);
+  }
+}
+@customElement({ name: 'shadow-view', shadowOptions: { mode: 'open' }, dependencies: [SlotMaker], template: '<slot-maker></slot-maker>' })
+class ShadowView { title = 'hello'; boundName = 'bound'; interpolatedName = 'other'; items = [1, 2]; }
+@customElement({ name: 'slot-invalid-view', dependencies: [SlotMaker], template: '<slot-maker></slot-maker>' })
+class SlotInvalidView {}
+@customElement({ name: 'my-app', template: '', dependencies: [GeneratedView, InvalidView, LetView, MarkerView, NativeView, ResourceView, ControlView, ShadowView, SlotInvalidView] })
 export class MyApp {}
 `);
   const runtime = await createSemanticRuntime({
@@ -113,6 +149,7 @@ export class MyApp {}
     storeKey: 'template-compiler-hook-generated-nodes',
     projectInputAuthority: new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost(overlay)),
   });
+  const nativeOutlets = vi.spyOn(nativeSlotProjection, 'projectTemplateCompilerNativeSlotOutlets');
   try {
     const app = await runtime.openApp({ telemetry: { inquiryProfile: 'aot' } });
     const batch = materializeSemanticAppTemplateCompilerHandoffs({ app });
@@ -159,9 +196,47 @@ export class MyApp {}
     expect(reservedMarker?.value).toBeNull();
     expect(reservedMarker?.reasons.some(reason => reason.frontierCause?.frontierKind === TemplateCompilerSiteCursorFrontierKind.AuthoredCompilerMarkerReserved))
       .toBe(true);
+    const shadow = batch.resources.find(resource => resource.resourceName === 'shadow-view');
+    expect(shadow?.state, shadow?.reasons.map(reason => `${reason.reasonKind}: ${reason.summary}`).join('\n'))
+      .toBe(TemplateCompilerCompiledHandoffState.Exact);
+    if (shadow?.value == null) throw new Error('Missing generated native-slot definition.');
+    expect(shadow.value.definitions[0]?.header.hasSlots).toBe(true);
+    expect(shadow.value.definitions.slice(1).every(definition => !definition.header.hasSlots)).toBe(true);
+    const outlets = nativeOutlets.mock.results.find(result => result.type === 'return'
+      && result.value.value?.outlets.some(outlet => outlet.name === 'generated-static'))?.value?.value?.outlets;
+    expect(outlets?.map(outlet => [outlet.nameKind, outlet.name, outlet.nameSourceAddressHandle])).toEqual([
+      ['default', '', null],
+      ['static', 'generated-static', null],
+      ['dynamic', null, null],
+      ['dynamic', null, null],
+      ['dynamic', null, null],
+    ]);
+    expect(outlets?.every(outlet => outlet.node.productHandle == null
+      && outlet.node.identityHandle == null && outlet.node.addressHandle == null)).toBe(true);
+    const slotDefinitions = shadow.value.definitions;
+    expect(slotDefinitions.flatMap(definition => definition.tree.nodes)
+      .filter(node => node.nodeKind === 'element' && node.tagName === 'slot')).toHaveLength(5);
+    expect(slotDefinitions.flatMap(definition => definition.tree.attributes)
+      .filter(attribute => attribute.name === 'name')).toEqual([
+        expect.objectContaining({ value: 'generated-static', source: null }),
+      ]);
+    const slotRows = JSON.stringify(slotDefinitions.flatMap(definition => definition.rows));
+    for (const name of ['title', 'boundName', 'interpolatedName', 'items', 'item']) expect(slotRows).toContain(name);
+    const invalidSlot = batch.resources.find(resource => resource.resourceName === 'slot-invalid-view');
+    expect(invalidSlot?.value).toBeNull();
+    expect(invalidSlot?.runtimeFallback).toBeNull();
+    expect(invalidSlot?.reasons).toContainEqual(expect.objectContaining({
+      summary: "Native <slot> requires Shadow DOM on root custom element 'slot-invalid-view'.",
+      frontierCause: expect.objectContaining({
+        frontierKind: TemplateCompilerSiteCursorFrontierKind.NativeSlotWithoutShadowDomInvalid,
+        issue: null,
+        source: null,
+      }),
+    }));
     for (const [name, refusal, template] of [
       ['native-view', 'native-custom-element-construction', '<native-maker data-authored="native"></native-maker>'],
       ['resource-view', 'native-resource-effects', '<resource-maker data-authored="resource"></resource-maker>'],
+      ['control-view', 'native-control-state', '<control-maker><input type="number" value="invalid"></control-maker>'],
     ] as const) {
       const unsupported = batch.resources.find(resource => resource.resourceName === name);
       expect(unsupported?.state, unsupported?.reasons.map(reason => reason.summary).join('\n'))
@@ -178,6 +253,7 @@ export class MyApp {}
       expect(unsupported?.address?.sourceAttachment?.templateSource?.oldText).toBe(template);
     }
   } finally {
+    nativeOutlets.mockRestore();
     runtime.retireWorkspaceIncarnation();
   }
 }, 30_000);

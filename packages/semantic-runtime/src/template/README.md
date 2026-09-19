@@ -341,8 +341,12 @@ classification, expression parsing, and instruction lowering converge on the sam
   parser and hole staging, not authored-text placeholders. Let and named AuSlot metadata allow absent authored spans.
   The funded source-reference-to-occurrence map preserves distinct addressless HE/TC/projection nodes through target
   planning and structural execution. Creation followed by removal can have no final structural derivation while its
-  execution remains recorded. Cloning/import, markup/text writes, selectors, dataset and metadata effects remain explicit
-  unsupported operations until their complete lowering paths are admitted. Namespace-duplicate qualified names and
+  execution remains recorded. cloneNode and document importNode snapshot current attributes/children into fresh Hook*
+  occurrences. Existing creation/insertion records retain copy lineage without transferring authored input ownership;
+  copy-of-copy provenance resolves through those records. Copies preserve native creation-time is and parsed-script
+  state, use the clone source/import destination document, and give copied templates fresh inert content fragments.
+  Markup/text writes, selectors, dataset and metadata effects remain explicit unsupported operations until their
+  complete lowering paths are admitted. Namespace-duplicate qualified names and
   browser-version-sensitive name spellings remain explicit compatibility boundaries, not invented DOM exceptions.
   Projection removes original au-slot attributes through one ordered site operation before projected hooks execute.
   Hooks and the ordinary attribute owner read that same physical state; no projection suppression mask remains.
@@ -360,8 +364,14 @@ classification, expression parsing, and instruction lowering converge on the sam
   Source mutations/placements affecting platform-owned native resource elements also refuse as native-resource-effects:
   a disconnected image/media element can fetch, so mutation ownership alone does not prove effect confinement. This
   conservative boundary includes existing projected nodes, not only fresh factory outputs; it is not an exhaustive
-  browser effects model. The existing whole-app compatible fallback retains valid dynamic behavior.
-  Generated native <slot> outlets still have a separate source-node admission gap and remain typed Pending.
+  browser effects model. Copy preflight uses the destination document, so copying from P into I does not falsely
+  imply native construction/fetch; nested template content resets that destination to I. Object-valued importNode
+  options remain unsupported instead of being mistaken for Boolean deep flags. Native radio copying/movement/attribute
+  changes and input type changes refuse as native-control-state: checkedness and sanitized values can survive cloning
+  without being reconstructible from final attributes. Untouched static controls remain admitted. The existing whole-app
+  compatible fallback retains valid dynamic behavior; unsupported does not mean invalid author code.
+  Generated native <slot> outlets use the existing slot-name product with absent authored references and spans.
+  Dynamic interpolation joins through exact expression handles, not ambiguous null source-attribute handles.
   Ordinary forest child insertion includes document adoption within its existing mutation operation; structural
   root/template-content ownership edges do not imply DOM insertion. The same journal restores affiliation on rollback.
   Parser-created HTML scripts separately retain their inert execution state as immutable creation metadata. A source
@@ -391,8 +401,10 @@ classification, expression parsing, and instruction lowering converge on the sam
   `TemplateRenderTarget`, `TemplateInstructionSequence`, and `CompiledTemplate` products in final structural order.
   Effective captured syntax remains an independent typed Pending gate. Reached native slots now join the root-global
   accumulator to their completed live owners, share the existing default/static/dynamic name decision, and freeze
-  source-grounded `CompiledNativeSlotOutlet` values only on the root definition; browser-only/non-singular names and
-  unbounded spread writers remain Pending. Wire funding keeps
+  `CompiledNativeSlotOutlet` values only on the root definition. Hook-generated outlets and names use the same
+  completed live facts without fabricated authored references; dynamic names join their exact expression allocation
+  even when the attribute has no authored product. Non-singular name contributions and unbounded spread writers remain
+  Pending. Wire funding keeps
   exact lexical/source carrier identity separate from structural correspondence posture: paragraph auto-close can
   leave extent provenance Open while its uniquely grounded template-controller node/attribute wire remains Exact.
   Pre-attachment adoption merges processContent removals and projection slot consumption in their actual operation/

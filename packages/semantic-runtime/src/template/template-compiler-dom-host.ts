@@ -39,6 +39,7 @@ import {
   type EvaluationValue,
 } from '../evaluation/values.js';
 import { HtmlNamespaceKind } from './html-ir.js';
+import type { TemplateContentOwnerDocument } from './template-structure.js';
 import type {
   TemplateCompilerExecutionSession,
   TemplateCompilerPendingOperationAttempt,
@@ -103,9 +104,9 @@ type CompilerDomReference = CompilerDomNodeReference | CompilerDomCollectionRefe
 /**
  * Source-callable DOM operations over the existing compiler forest and pending operation overlay.
  *
- * Traversal, document factories, attributes, class tokens, and node relocation/removal use one pending operation.
+ * Traversal, document factories, copies, attributes, class tokens, and node relocation/removal use one pending operation.
  * Native resource effects are not confined DOM mutations: platform-owned resource mutations remain explicit refusals.
- * Cloning, markup/metadata writes, and dataset remain unsupported until their owned evaluator/lowering lanes exist.
+ * Native control history, markup/metadata writes, and dataset remain unsupported until their owned lowering lanes exist.
  */
 export class TemplateCompilerDomHost {
   readonly argumentValues: readonly EvaluationValue[];
@@ -207,7 +208,7 @@ export class TemplateCompilerDomHost {
       if (member === 'nodeType') return new EvaluationNumberValue(9);
       if (member === 'nodeName') return new EvaluationStringValue('#document');
       if (member === 'ownerDocument') return new EvaluationNullValue();
-      if (['createElement', 'createElementNS', 'createTextNode', 'createComment', 'createDocumentFragment'].includes(member)) {
+      if (['createElement', 'createElementNS', 'createTextNode', 'createComment', 'createDocumentFragment', 'importNode'].includes(member)) {
         return this.method(`document:${member}`);
       }
       return this.unsupported(member, node, moduleKey, host);
@@ -288,6 +289,7 @@ export class TemplateCompilerDomHost {
       case 'textContent': return occurrence instanceof TemplateCompilerDoctypeOccurrence
         ? new EvaluationNullValue() : new EvaluationStringValue(textContent(occurrence));
       case 'hasChildNodes':
+      case 'cloneNode':
       case 'contains':
       case 'appendChild':
       case 'insertBefore':
@@ -411,6 +413,9 @@ export class TemplateCompilerDomHost {
     }
     if (reference.kind !== 'node') return domThrow('TypeError', 'Illegal DOM invocation.');
     const occurrence = reference.occurrence;
+    if (member === 'cloneNode') {
+      return this.invokeNodeCopy(occurrence, args[0], this.execution.forest.ownerDocumentFor(occurrence), member, frame, host);
+    }
     if (member === 'appendChild' || member === 'insertBefore' || member === 'replaceChild') {
       return this.invokeNodePlacement(occurrence, member, args, frame, host);
     }
@@ -440,6 +445,9 @@ export class TemplateCompilerDomHost {
       if (child.parent == null) return staticInvocationValue(EvaluationUndefined);
       if (this.hasNativeResourceTreeEffect(child, null)) {
         return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-resource-effects'));
+      }
+      if (this.hasNativeControlTreeState(child)) {
+        return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-control-state'));
       }
       this.execution.detachProcessContentNode(this.attempt, child);
       return staticInvocationValue(member === 'remove' ? EvaluationUndefined : this.nodeValue(child));
@@ -476,6 +484,17 @@ export class TemplateCompilerDomHost {
     host: StaticIntrinsicEvaluationHost,
   ): StaticInvocationDispatch {
     const document = reference === this.document ? 'platform' : 'template-contents';
+    if (member === 'importNode') {
+      if (args.length === 0) return domThrow('TypeError', 'importNode requires a node.');
+      const source = this.references.read(args[0]!);
+      if (source?.kind === 'document') return domThrow('NotSupportedError', 'A document cannot be imported.');
+      if (source?.kind !== 'node') return domThrow('TypeError', 'importNode requires a node.');
+      // Newer browsers accept an options dictionary here; it is not Boolean(object), unlike cloneNode.
+      if (args[1] != null && domPrimitiveString(args[1]) == null) {
+        return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'dom-import-options'));
+      }
+      return this.invokeNodeCopy(source.occurrence, args[1], document, member, frame, host);
+    }
     const expose = (node: TemplateCompilerNodeOccurrence): StaticInvocationDispatch => {
       this.ownedNodes.add(node);
       if (node instanceof TemplateCompilerElementOccurrence && node.templateContent != null) {
@@ -532,6 +551,56 @@ export class TemplateCompilerDomHost {
     return expose(this.execution.createProcessContentElement(this.attempt, name, namespace, namespaceUri, null, document));
   }
 
+  private invokeNodeCopy(
+    source: TemplateCompilerNodeOccurrence,
+    deepValue: EvaluationValue | undefined,
+    document: TemplateContentOwnerDocument,
+    member: string,
+    frame: StaticInvocationFrame,
+    host: StaticIntrinsicEvaluationHost,
+  ): StaticInvocationDispatch {
+    const deep = deepValue == null ? false : readEvaluationTruthiness(deepValue);
+    if (deep == null) return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'runtime-dependent-input'));
+    const pending = [{ node: source, document }];
+    while (pending.length > 0) {
+      const current = pending.pop()!;
+      if (current.node instanceof TemplateCompilerDoctypeOccurrence) {
+        return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'dom-copy-node-kind'));
+      }
+      if (current.node instanceof TemplateCompilerElementOccurrence) {
+        const element = current.node;
+        // Copying does not mutate the original: reactions depend on the destination, not the source document.
+        if (current.document === 'platform') {
+          if (element.namespace === HtmlNamespaceKind.Html && (element.tagName.includes('-') || element.customElementIs != null)) {
+            return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-custom-element-construction'));
+          }
+          if (this.isNativeResourceElement(element)) {
+            return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-resource-effects'));
+          }
+        }
+        if (this.isNativeRadio(element)) {
+          return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-control-state'));
+        }
+        if (deep && element.templateContent != null) {
+          if (element.readChildren().length > 0) {
+            return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'template-element-children'));
+          }
+          pending.push({ node: element.templateContent, document: 'template-contents' });
+        }
+      }
+      if (deep) for (const child of current.node.readChildren()) pending.push({ node: child, document: current.document });
+    }
+    const copy = this.execution.cloneProcessContentNode(this.attempt, source, deep, document);
+    const owned = [copy];
+    while (owned.length > 0) {
+      const node = owned.pop()!;
+      this.ownedNodes.add(node);
+      owned.push(...node.readChildren());
+      if (node instanceof TemplateCompilerElementOccurrence && node.templateContent != null) owned.push(node.templateContent);
+    }
+    return staticInvocationValue(this.nodeValue(copy));
+  }
+
   private invokeNodePlacement(
     parent: TemplateCompilerNodeOccurrence,
     member: 'appendChild' | 'insertBefore' | 'replaceChild',
@@ -579,6 +648,10 @@ export class TemplateCompilerDomHost {
     if (inputs.some(inputNode => this.hasNativeResourceTreeEffect(inputNode, parent))
       || replacing && this.hasNativeResourceTreeEffect(child!, null)) {
       return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-resource-effects'));
+    }
+    if (inputs.some(inputNode => this.hasNativeControlTreeState(inputNode))
+      || replacing && this.hasNativeControlTreeState(child!)) {
+      return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-control-state'));
     }
     if (replacing) this.execution.detachProcessContentNode(this.attempt, child!);
     for (const inputNode of inputs) {
@@ -633,6 +706,9 @@ export class TemplateCompilerDomHost {
       if (attribute != null && this.hasNativeResourceAttributeEffect(element)) {
         return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-resource-effects'));
       }
+      if (attribute != null && this.hasNativeControlAttributeState(element, attribute, null)) {
+        return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-control-state'));
+      }
       if (attribute != null) this.execution.removeProcessContentAttribute(this.attempt, attribute);
       return staticInvocationValue(EvaluationUndefined);
     }
@@ -653,6 +729,9 @@ export class TemplateCompilerDomHost {
         if (this.hasNativeResourceAttributeEffect(element, attribute, value)) {
           return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-resource-effects'));
         }
+        if (this.hasNativeControlAttributeState(element, attribute, value)) {
+          return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-control-state'));
+        }
         this.execution.rewriteAttributeValue(this.attempt, attribute, value);
       }
       else return staticInvocationValue(this.setAttributeDescriptor(
@@ -663,6 +742,9 @@ export class TemplateCompilerDomHost {
     if (member === 'removeAttribute') {
       if (attribute != null && this.hasNativeResourceAttributeEffect(element)) {
         return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-resource-effects'));
+      }
+      if (attribute != null && this.hasNativeControlAttributeState(element, attribute, null)) {
+        return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-control-state'));
       }
       if (attribute != null) this.execution.removeProcessContentAttribute(this.attempt, attribute);
       return staticInvocationValue(EvaluationUndefined);
@@ -676,6 +758,9 @@ export class TemplateCompilerDomHost {
     } else if (!present && attribute != null) {
       if (this.hasNativeResourceAttributeEffect(element)) {
         return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-resource-effects'));
+      }
+      if (this.hasNativeControlAttributeState(element, attribute, null)) {
+        return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-control-state'));
       }
       this.execution.removeProcessContentAttribute(this.attempt, attribute);
     }
@@ -840,8 +925,39 @@ export class TemplateCompilerDomHost {
     if (this.hasNativeResourceAttributeEffect(element, descriptor, value)) {
       return this.unsupported(member, node, moduleKey, host, 'native-resource-effects');
     }
+    if (this.hasNativeControlAttributeState(element, descriptor, value)) {
+      return this.unsupported(member, node, moduleKey, host, 'native-control-state');
+    }
     this.execution.setProcessContentAttribute(this.attempt, element, descriptor, value);
     return EvaluationUndefined;
+  }
+
+  private isNativeRadio(element: TemplateCompilerElementOccurrence): boolean {
+    return element.namespace === HtmlNamespaceKind.Html && element.tagName === 'input'
+      && asciiLower(this.reflectedAttributeValue(element, 'type')) === 'radio';
+  }
+
+  /** Native input state can survive cloning but is not determined by final attributes alone. */
+  private hasNativeControlAttributeState(
+    element: TemplateCompilerElementOccurrence,
+    attribute: Pick<CompilerDomAttributeName, 'name' | 'namespaceUri'>,
+    value: string | null,
+  ): boolean {
+    if (element.namespace !== HtmlNamespaceKind.Html || element.tagName !== 'input') return false;
+    if (this.isNativeRadio(element)) return true;
+    return attribute.namespaceUri == null && attribute.name === 'type'
+      && (asciiLower(value ?? '') || 'text') !== (asciiLower(this.reflectedAttributeValue(element, 'type')) || 'text');
+  }
+
+  private hasNativeControlTreeState(node: TemplateCompilerNodeOccurrence): boolean {
+    const pending = [node];
+    while (pending.length > 0) {
+      const current = pending.pop()!;
+      if (current instanceof TemplateCompilerElementOccurrence && this.isNativeRadio(current)) return true;
+      // Ordinary movement does not reparent a nested template's inert content tree.
+      pending.push(...current.readChildren());
+    }
+    return false;
   }
 
   /** Conservative owned-effect boundary, not a model of resource fetching or a claim to exhaust browser effects. */

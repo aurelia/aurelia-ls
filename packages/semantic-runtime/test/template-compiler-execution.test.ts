@@ -45,7 +45,9 @@ import {
 } from '../src/template/template-compiler-local-extraction.js';
 import {
   TemplateCompilerAttributeOccurrence,
+  TemplateCompilerCommentOccurrence,
   TemplateCompilerElementOccurrence,
+  TemplateCompilerFragmentOccurrence,
   TemplateCompilerGeneratedOccurrenceRole,
   TemplateCompilerOccurrenceEdgeKind,
   TemplateCompilerOccurrenceForest,
@@ -416,6 +418,128 @@ describe('template compiler execution sequence', () => {
           for (const mutation of operation.mutationBatch.nodeCreationMutations) {
             expect(forest.nodeForOccurrenceKey(mutation.node.occurrenceKey)).toBeNull();
           }
+        }
+        execution.finishSiteExecutionDriver(driver);
+        execution.seal();
+        execution.mutationAuthority.assertGeneratedInventory();
+        forest.assertCoherentTopology();
+      } finally { browser.dispose(); }
+    },
+  );
+
+  test.each([TemplateCompilerOperationCompletionKind.Complete, TemplateCompilerOperationCompletionKind.Unsupported])(
+    'copies owned current DOM with fresh identities and source lineage: %s', (completionKind) => {
+      const browser = new BrowserEffectiveTemplateFixture('compiler-execution-source-copy');
+      try {
+        const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(browser.materialize('root',
+          '<div title="original"><button is="native-button">text<!--note--></button><template><script>inert</script><b>nested</b></template></div><p>outside</p>',
+        ).emission);
+        const execution = TemplateCompilerExecutionSession.createForForest('copy:family', forest);
+        const lane = execution.admitRootInvocation('copy:plan');
+        const closure = closeExactNoLocalBootstrap(browser, execution, lane, 'copy');
+        const driver = execution.beginSiteExecutionDriver(execution.captureSiteExecutionFrontier(closure));
+        const root = forest.compilerContent.readChildren()[0] as TemplateCompilerElementOccurrence;
+        const button = root.readChildren()[0] as TemplateCompilerElementOccurrence;
+        const template = root.readChildren()[1] as TemplateCompilerElementOccurrence;
+        const script = template.templateContent!.readChildren()[0] as TemplateCompilerElementOccurrence;
+        const outside = forest.compilerContent.readChildren()[1]!;
+        const title = root.readAttributes()[0]!;
+        const isAttribute = button.readAttributes()[0]!;
+        const originalNodes = [...forest.readNodes()];
+        const originalAttributes = [...forest.readAttributes()];
+        const causes = [browser.run.handles.product('copy:definition')];
+        execution.adoptSiteNodeDocuments(driver, [template.templateContent!], causes, null);
+        expect(forest.ownerDocumentFor(template.templateContent!)).toBe('platform');
+        const attempt = execution.beginOperation({
+          operationKey: 'copy:process', context: driver.context,
+          operationKind: TemplateCompilerOperationKind.ProcessContent,
+          executionMechanism: TemplateCompilerOperationExecutionMechanism.StaticCallable,
+          target: execution.callableEffectTarget(driver.context, new TemplateCompilerCallableReference(
+            null, null, browser.run.handles.address('copy:hook'),
+          ), root),
+          causeHandles: causes, siteExecutionDriver: driver,
+        });
+        execution.rewriteAttributeValue(attempt, title, 'pending');
+        execution.removeProcessContentAttribute(attempt, isAttribute);
+        const namespaced = execution.setProcessContentAttribute(attempt, button,
+          { name: 'kind', namespaceUri: 'urn:copy', prefix: 'probe' }, 'ordered');
+        expect(() => execution.cloneProcessContentNode(attempt, outside, true, 'platform'))
+          .toThrow(/outside its owned subtree/);
+        const copy = execution.cloneProcessContentNode(attempt, root, true, 'platform') as TemplateCompilerElementOccurrence;
+        const copiedButton = copy.readChildren()[0] as TemplateCompilerElementOccurrence;
+        const copiedAttribute = copiedButton.readAttributes()[0]!;
+        const copiedTemplate = copy.readChildren()[1] as TemplateCompilerElementOccurrence;
+        const copiedTemplateContent = copiedTemplate.templateContent!;
+        const copiedScript = copiedTemplate.templateContent!.readChildren()[0] as TemplateCompilerElementOccurrence;
+        expect(copy.parent).toBeNull();
+        expect(copy.inputReference).toBeNull();
+        expect(copy.readAttributes()[0]!.value).toBe('pending');
+        expect(copiedButton.customElementIs).toBe('native-button');
+        expect(copiedButton.readAttributes()).toHaveLength(1);
+        expect(copiedButton.readAttributes()[0]).toMatchObject({ name: 'kind', namespaceUri: 'urn:copy', prefix: 'probe', value: 'ordered', inputReference: null });
+        expect(copiedButton.readChildren()[0]).toBeInstanceOf(TemplateCompilerTextOccurrence);
+        expect(copiedButton.readChildren()[1]).toBeInstanceOf(TemplateCompilerCommentOccurrence);
+        expect((copiedButton.readChildren()[1] as TemplateCompilerCommentOccurrence).text).toBe('note');
+        expect(copiedScript.parserInertScript).toBe(true);
+        expect(copiedScript.parserInertScript).toBe(script.parserInertScript);
+        expect(forest.ownerDocumentFor(copy)).toBe('platform');
+        expect(forest.ownerDocumentFor(copiedButton)).toBe('platform');
+        expect(forest.ownerDocumentFor(copiedTemplate)).toBe('platform');
+        expect(forest.ownerDocumentFor(copiedTemplate.templateContent!)).toBe('template-contents');
+        expect(forest.ownerDocumentFor(copiedScript)).toBe('template-contents');
+        const shallow = execution.cloneProcessContentNode(attempt, template, false, 'platform') as TemplateCompilerElementOccurrence;
+        expect(shallow.readChildren()).toEqual([]);
+        expect(shallow.templateContent).toBeInstanceOf(TemplateCompilerFragmentOccurrence);
+        expect(shallow.templateContent!.readChildren()).toEqual([]);
+        expect(forest.ownerDocumentFor(shallow.templateContent!)).toBe('template-contents');
+        const copiedContent = execution.cloneProcessContentNode(attempt, template.templateContent!, true, 'platform');
+        expect(forest.ownerDocumentFor(copiedContent)).toBe('platform');
+        expect(forest.ownerDocumentFor(copiedContent.readChildren()[0]!)).toBe('platform');
+        const shallowContent = execution.cloneProcessContentNode(attempt, template.templateContent!, false, 'platform');
+        expect(shallowContent.readChildren()).toEqual([]);
+        const copiedTwice = execution.cloneProcessContentNode(attempt, copiedButton, true, 'template-contents') as TemplateCompilerElementOccurrence;
+        expect(copiedTwice.customElementIs).toBe('native-button');
+        execution.setProcessContentAttribute(attempt, copiedTwice, { name: 'title', namespaceUri: null, prefix: null }, 'independent');
+        expect(copiedButton.readAttributes()).toHaveLength(1);
+        execution.placeProcessContentNode(attempt, copiedTwice, root, root.readChildren().length);
+        const operation = execution.completeOperation(attempt, completionKind === TemplateCompilerOperationCompletionKind.Complete
+          ? new TemplateCompilerOperationCompletion(completionKind)
+          : new TemplateCompilerOperationCompletion(completionKind, [], 'A later unsupported operation.'));
+        const creations = operation.mutationBatch.nodeCreationMutations;
+        expect(creations.find(mutation => mutation.node === copy)?.sourceNode).toBe(root);
+        expect(creations.find(mutation => mutation.node === copiedTwice)?.sourceNode).toBe(copiedButton);
+        expect(creations.find(mutation => mutation.node === copiedTemplateContent)?.sourceNode).toBe(template.templateContent);
+        expect(operation.mutationBatch.attributeInsertionMutations.find(mutation => mutation.attribute === copiedAttribute)?.sourceAttribute).toBe(namespaced);
+        expect(creations.every(mutation => mutation.node.inputReference == null && mutation.sourceNode != null)).toBe(true);
+        if (completionKind === TemplateCompilerOperationCompletionKind.Complete) {
+          expect(root.readChildren()).toEqual([button, template, copiedTwice]);
+          expect(root.readAttributes()[0]!.value).toBe('pending');
+          expect(button.readAttributes()).toEqual([namespaced]);
+          const later = execution.beginOperation({
+            operationKey: 'copy:later', context: driver.context,
+            operationKind: TemplateCompilerOperationKind.ProcessContent,
+            executionMechanism: TemplateCompilerOperationExecutionMechanism.StaticCallable,
+            target: execution.callableEffectTarget(driver.context, new TemplateCompilerCallableReference(
+              null, null, browser.run.handles.address('copy:later-hook'),
+            ), root),
+            causeHandles: causes, siteExecutionDriver: driver,
+          });
+          expect(() => execution.cloneProcessContentNode(later, copy, true, 'platform'))
+            .toThrow(/outside its owned subtree/);
+          const laterCopy = execution.cloneProcessContentNode(later, copiedTwice, true, 'platform');
+          execution.placeProcessContentNode(later, laterCopy, root, 0);
+          execution.completeOperation(later, new TemplateCompilerOperationCompletion(
+            TemplateCompilerOperationCompletionKind.Unsupported, [], 'A later unsupported operation.',
+          ));
+          expect(root.readChildren()).toEqual([button, template, copiedTwice]);
+          expect(forest.nodeForOccurrenceKey(laterCopy.occurrenceKey)).toBeNull();
+        } else {
+          expect(root.readChildren()).toEqual([button, template]);
+          expect(forest.readNodes()).toEqual(originalNodes);
+          expect(forest.readAttributes()).toEqual(originalAttributes);
+          expect(title.value).toBe('original');
+          expect(button.readAttributes()).toEqual([isAttribute]);
+          for (const mutation of creations) expect(forest.nodeForOccurrenceKey(mutation.node.occurrenceKey)).toBeNull();
         }
         execution.finishSiteExecutionDriver(driver);
         execution.seal();

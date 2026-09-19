@@ -99,9 +99,9 @@ export class TemplateRenderTarget {
 
 /** Compiler-reachable native Shadow DOM `<slot>` outlet retained behind the framework `hasSlots` flag. */
 export const enum CompiledNativeSlotNameKind {
-  /** No authored name target; this is the browser's default slot. */
+  /** No retained name target; this is the browser's default slot. */
   Default = 'default',
-  /** One authored static name value determines the outlet. */
+  /** One retained static name value determines the outlet. */
   Static = 'static',
   /** A binding or interpolation can change the outlet name at runtime. */
   Dynamic = 'dynamic',
@@ -109,7 +109,7 @@ export const enum CompiledNativeSlotNameKind {
 
 export class CompiledNativeSlotOutlet {
   constructor(
-    /** Authored native slot element. */
+    /** Native slot's authored reference, or an addressless element reference for hook-generated structure. */
     readonly node: HtmlNodeReference,
     /** Whether the name is default, static, or runtime-controlled. */
     readonly nameKind: CompiledNativeSlotNameKind,

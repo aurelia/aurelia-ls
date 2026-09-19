@@ -4,7 +4,6 @@
     <button class="increment" click.trigger="count = count + 1">Increment ${label}</button>
     <header><au-slot name="heading"><b class="heading-fallback">${label}:heading-fallback</b></au-slot></header>
     <nav><au-slot name="actions"><i class="actions-fallback">${label}:actions-fallback</i></au-slot></nav>
-    <section class="native"><slot name="native"><mark>${label}:native-fallback</mark></slot></section>
-    <section class="default"><slot><mark>${label}:default-fallback</mark></slot></section>
+    <native-outlets></native-outlets>
   </article>
 </template>

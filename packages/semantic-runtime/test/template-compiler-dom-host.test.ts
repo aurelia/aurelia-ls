@@ -29,6 +29,172 @@ import { TemplateCompilerElementOccurrence, TemplateCompilerOccurrenceForest } f
 import { BrowserEffectiveTemplateFixture } from './browser-effective-template-fixture.js';
 
 describe('interpreted compiler DOM host', () => {
+  test('copies current attributes and children with fresh identities and independent later edits', () => {
+    const run = new DomHookRun('<div><section title="before"><b>text</b><!--note--></section></div>');
+    try {
+      const result = run.invoke(`function hook(node) {
+        const original=node.firstChild;
+        original.setAttribute('title','snapshot');original.setAttributeNS('urn:test','p:key','namespaced');
+        const shallow=original.cloneNode(),deep=original.cloneNode(true);
+        original.setAttribute('title','after');deep.firstChild.id='copy-child';
+        const second=deep.cloneNode(true);
+        node.appendChild(shallow);node.appendChild(deep);node.appendChild(second);
+        return shallow!==original&&shallow.childNodes.length===0&&shallow.getAttribute('title')==='snapshot'
+          &&deep!==second&&deep.firstChild!==original.firstChild&&deep.firstChild!==second.firstChild
+          &&original.firstChild.id===''&&second.firstChild.id==='copy-child'
+          &&deep.getAttributeNames().join(',')==='title,p:key'&&deep.getAttributeNS('urn:test','key')==='namespaced'
+          &&deep.childNodes[1].nodeType===8&&deep.childNodes[1].data==='note'
+          &&deep.textContent==='text'&&deep.ownerDocument===original.ownerDocument;
+      }`);
+      expect(result.kind, run.host.refusal?.summary).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+      expect(run.root.readChildren()).toHaveLength(4);
+      expect(run.root.readChildren().slice(1).every(node => node.inputReference == null)).toBe(true);
+      run.execution.forest.assertCoherentTopology();
+      run.execution.mutationAuthority.assertGeneratedInventory();
+    } finally { run.dispose(); }
+  });
+
+  test('clones template contents and imports fragments into the destination document', () => {
+    const run = new DomHookRun('<div><template><b>template text</b></template></div>', true);
+    try {
+      const result = run.invoke(`function hook(node,platform) {
+        const original=node.firstChild,deep=original.cloneNode(true),shallow=original.cloneNode(false);
+        const inert=original.content.ownerDocument;
+        const imported=platform.document.importNode(original.content,true);
+        const returned=inert.importNode(imported,true);
+        const rootCopy=node.cloneNode(false);
+        deep.content.firstChild.id='edited';
+        node.appendChild(deep);node.appendChild(shallow);node.appendChild(imported);
+        return deep.content!==original.content&&deep.content.ownerDocument===inert
+          &&deep.ownerDocument===platform.document&&deep.content.firstChild.id==='edited'
+          &&original.content.firstChild.id===''&&shallow.content.childNodes.length===0
+          &&imported.ownerDocument===platform.document&&imported.childNodes.length===0
+          &&returned.ownerDocument===inert&&returned.firstChild.ownerDocument===inert
+          &&returned.firstChild.textContent==='template text'&&rootCopy.parentNode===null;
+      }`);
+      expect(result.kind, run.host.refusal?.summary).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+      run.execution.forest.assertCoherentTopology();
+      run.execution.mutationAuthority.assertGeneratedInventory();
+    } finally { run.dispose(); }
+  });
+
+  test('imports into inert documents without activating source custom elements or resources', () => {
+    const run = new DomHookRun('<div><native-widget><img src="image.png"></native-widget><button is="native-button"></button><script>never()</script><template><native-nested></native-nested></template></div>', true);
+    try {
+      const result = run.invoke(`function hook(node,platform) {
+        const inert=node.children[3].content.ownerDocument;
+        const custom=inert.importNode(node.firstChild,true);
+        const button=inert.importNode(node.children[1],true);
+        const script=platform.document.importNode(node.children[2],true);
+        const template=platform.document.importNode(node.children[3],true);
+        button.removeAttribute('is');
+        const buttonCopy=button.cloneNode();
+        node.appendChild(script);
+        return custom.ownerDocument===inert&&custom.firstChild.ownerDocument===inert
+          &&buttonCopy.ownerDocument===inert&&buttonCopy.getAttribute('is')===null
+          &&template.ownerDocument===platform.document&&template.content.firstChild.ownerDocument===inert;
+      }`);
+      expect(result.kind, run.host.refusal?.summary).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+      const scripts = run.root.readChildren().filter(node => node instanceof TemplateCompilerElementOccurrence && node.tagName === 'script');
+      expect(scripts).toHaveLength(2);
+      expect(scripts.every(node => (node as TemplateCompilerElementOccurrence).parserInertScript)).toBe(true);
+      const copiedButtons = run.execution.forest.readNodes().filter(node => node instanceof TemplateCompilerElementOccurrence
+        && node.inputReference == null && node.tagName === 'button') as TemplateCompilerElementOccurrence[];
+      expect(copiedButtons).toHaveLength(2);
+      expect(copiedButtons.map(node => node.customElementIs)).toEqual(['native-button', 'native-button']);
+    } finally { run.dispose(); }
+  });
+
+  test.each([
+    ['platform custom clone', '<native-widget></native-widget>', 'node.firstChild.cloneNode();', 'native-custom-element-construction'],
+    ['platform custom import', '<native-widget></native-widget>', 'platform.document.importNode(node.firstChild,true);', 'native-custom-element-construction'],
+    ['platform customized import', '<button is="native-button"></button>', 'platform.document.importNode(node.firstChild);', 'native-custom-element-construction'],
+    ['platform resource clone', '<img src="image.png">', 'node.firstChild.cloneNode();', 'native-resource-effects'],
+    ['platform nested resource import', '<section><img src="image.png"></section>', 'platform.document.importNode(node.firstChild,true);', 'native-resource-effects'],
+    ['dictionary import', '<b></b>', 'node.ownerDocument.importNode(node.firstChild,{deep:true});', 'dom-import-options'],
+    ['array import options', '<b></b>', 'node.ownerDocument.importNode(node.firstChild,[]);', 'dom-import-options'],
+  ] as const)('refuses %s and discards earlier copies atomically', (_label, markup, body, kind) => {
+    const run = new DomHookRun(`<div>${markup}</div>`, true);
+    try {
+      const before = [...run.execution.forest.readNodes()];
+      const result = run.invoke(`function hook(node,platform) {
+        const copy=node.cloneNode();copy.id='pending';node.appendChild(copy);
+        try{${body}}catch(error){return true;}
+      }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Open);
+      expect(run.host.refusal).toMatchObject({ kind });
+      run.complete(result.kind);
+      expect(run.execution.forest.readNodes()).toEqual(before);
+      expect(run.root.readChildren()).toHaveLength(1);
+      run.execution.forest.assertCoherentTopology();
+      run.execution.mutationAuthority.assertGeneratedInventory();
+    } finally { run.dispose(); }
+  });
+
+  test.each([
+    ['node.ownerDocument.importNode()', 'TypeError'],
+    ['node.ownerDocument.importNode(null)', 'TypeError'],
+    ['node.ownerDocument.importNode({})', 'TypeError'],
+    ['node.ownerDocument.importNode(node.ownerDocument)', 'NotSupportedError'],
+  ] as const)('keeps native copy argument errors catchable: %s', (body, name) => {
+    const run = new DomHookRun('<div></div>');
+    try {
+      const result = run.invoke(`function hook(node){try{${body};}catch(error){return error.name==='${name}';}}`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      expect(run.host.refusal).toBeNull();
+      run.complete(result.kind);
+    } finally { run.dispose(); }
+  });
+
+  test.each([
+    ['radio copy', '<input type="radio" checked>', 'input.cloneNode();'],
+    ['radio import', '<input type="radio" checked>', 'node.ownerDocument.importNode(input,true);'],
+    ['radio relocation', '<input type="radio" checked>', 'node.appendChild(input);'],
+    ['radio removal', '<input type="radio" checked>', 'input.remove();'],
+    ['radio checkedness', '<input type="radio" checked>', 'input.removeAttribute("checked");'],
+    ['radio regrouping', '<input type="radio" name="a">', 'input.setAttribute("name","b");'],
+    ['number value history', '<input type="number" value="invalid">', 'input.setAttribute("type","text");'],
+    ['range value history', '<input type="range">', 'input.removeAttribute("type");'],
+    ['color value history', '<input type="color">', 'input.removeAttributeNS(null,"type");'],
+    ['type toggle', '<input type="number">', 'input.toggleAttribute("type",false);'],
+    ['namespaced type setter', '<input type="number">', 'input.setAttributeNS(null,"type","text");'],
+  ] as const)('refuses unmodeled native control state: %s', (_label, markup, body) => {
+    const run = new DomHookRun(`<div>${markup}</div>`);
+    try {
+      const input = run.root.readChildren()[0] as TemplateCompilerElementOccurrence;
+      const attributes = [...input.readAttributes()];
+      const result = run.invoke(`function hook(node){const input=node.firstChild;node.id='pending';try{${body}}catch(error){return true;}}`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Open);
+      expect(run.host.refusal).toMatchObject({ kind: 'native-control-state' });
+      run.complete(result.kind);
+      expect(run.root.readAttributes()).toHaveLength(0);
+      expect(input.readAttributes()).toEqual(attributes);
+      run.execution.forest.assertCoherentTopology();
+    } finally { run.dispose(); }
+  });
+
+  test('retains attribute-determined ordinary input behavior and inert template-carrier moves', () => {
+    const run = new DomHookRun('<div><input type="number" value="2"><template><input type="radio" checked></template></div>');
+    try {
+      const result = run.invoke(`function hook(node) {
+        const input=node.firstChild;
+        input.setAttribute('type','NUMBER');input.setAttribute('value','3');input.classList.add('ordinary');
+        const copy=input.cloneNode();node.appendChild(copy);node.appendChild(node.children[1]);
+        return copy.getAttribute('value')==='3'&&copy.className==='ordinary';
+      }`);
+      expect(result.kind, run.host.refusal?.summary).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+    } finally { run.dispose(); }
+  });
+
   test.each([
     ['authored source write', 'target.setAttribute("src", "changed.png");', 'setAttribute'],
     ['namespaced write', 'target.setAttributeNS(null, "src", "changed.png");', 'setAttributeNS'],
@@ -766,7 +932,7 @@ describe('interpreted compiler DOM host', () => {
     ['geometry', 'node.getBoundingClientRect();', 'getBoundingClientRect', 'unsupported-dom-member'],
     ['outside parent', 'node.parentNode;', 'parentNode', 'outside-compiler-root'],
     ['ambient document', 'platform.document.body;', 'body', 'unsupported-dom-member'],
-    ['owner document import', 'node.ownerDocument.importNode(node,true);', 'importNode', 'unsupported-dom-member'],
+    ['explicit document adoption', 'node.ownerDocument.adoptNode(node);', 'adoptNode', 'unsupported-dom-member'],
     ['dataset', 'node.dataset.key = "x";', 'dataset', 'unsupported-dom-member'],
     ['markup write', 'node.innerHTML = "<b></b>";', 'innerHTML', 'unsupported-dom-member'],
     ['text write', 'node.textContent = "changed";', 'textContent', 'unsupported-dom-member'],

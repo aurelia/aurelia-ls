@@ -1,6 +1,7 @@
 import {
   CompiledNativeSlotOutlet,
 } from './compiled-template.js';
+import { HtmlIrNodeKind, HtmlNodeReference } from './html-ir.js';
 import {
   AttributeBindingInstruction,
   HydrateAttributeInstruction,
@@ -46,9 +47,8 @@ export const enum TemplateCompilerNativeSlotOutletReasonKind {
   ForeignTranscript = 'foreign-transcript',
   RootStateUnavailable = 'root-state-unavailable',
   ReachedSlotOwnerUnavailable = 'reached-slot-owner-unavailable',
-  AuthoredSlotNodeUnavailable = 'authored-slot-node-unavailable',
   NameContributionNonSingular = 'name-contribution-non-singular',
-  NameSourceUnavailable = 'name-source-unavailable',
+  NameSyntaxUnavailable = 'name-syntax-unavailable',
   NameRuntimeControlOpen = 'name-runtime-control-open',
   CurrentnessLost = 'currentness-lost',
 }
@@ -75,7 +75,7 @@ export class TemplateCompilerNativeSlotOutletValue {
       authority !== nativeSlotOutletValueAuthority
       || outlets.length !== transcript.rootState.nativeSlots.length
     ) {
-      throw new Error('Native-slot outlet value lost transcript, slot, or source-node coverage.');
+      throw new Error('Native-slot outlet value lost transcript or reached-slot coverage.');
     }
     this.#authority = authority;
   }
@@ -157,15 +157,6 @@ export function projectTemplateCompilerNativeSlotOutlets(
       ));
       return [];
     }
-    if (owner.authoredElement == null) {
-      reasons.push(new TemplateCompilerNativeSlotOutletReason(
-        TemplateCompilerNativeSlotOutletReasonKind.AuthoredSlotNodeUnavailable,
-        slot.element.occurrenceKey,
-        'Reached native slot has no singular authored node reference for the current outlet model.',
-        true,
-      ));
-      return [];
-    }
     if (owner.instructionStaging.instructions.some((instruction) =>
       instruction instanceof SpreadTransferedBindingInstruction
       || instruction instanceof SpreadElementPropBindingInstruction
@@ -193,7 +184,7 @@ export function projectTemplateCompilerNativeSlotOutlets(
     const nameDecision = projectNameDecision(owner, nameContribution, reasons);
     if (nameDecision == null) return [];
     return [new CompiledNativeSlotOutlet(
-      owner.authoredElement.toReference(),
+      owner.authoredElement?.toReference() ?? new HtmlNodeReference(HtmlIrNodeKind.Element, null, null, null),
       nameDecision.nameKind,
       nameDecision.name,
       nameDecision.sourceAddressHandle,
@@ -233,12 +224,14 @@ function projectNameDecision(
   }
   const syntax = contribution.syntax;
   const source = contribution.frame.source;
-  const sourceAddressHandle = source.authoredAttribute?.valueAddressHandle ?? null;
-  if (syntax == null || source.sourceKind !== TemplateCompilerLiveAttributeSourceKind.AuthoredExact) {
+  const sourceAddressHandle = source.sourceKind === TemplateCompilerLiveAttributeSourceKind.AuthoredExact
+    ? source.authoredAttribute?.valueAddressHandle ?? null
+    : null;
+  if (syntax == null) {
     reasons.push(new TemplateCompilerNativeSlotOutletReason(
-      TemplateCompilerNativeSlotOutletReasonKind.NameSourceUnavailable,
+      TemplateCompilerNativeSlotOutletReasonKind.NameSyntaxUnavailable,
       owner.element.occurrenceKey,
-      'Reached native slot name has no exact authored value source.',
+      'Reached native slot name has no completed attribute syntax.',
       true,
     ));
     return null;
@@ -309,11 +302,15 @@ function instructionsForContribution(
   contribution: TemplateCompilerLiveAttributeContribution,
 ) {
   const authoredAttributeHandle = contribution.frame.source.authoredAttribute?.productHandle ?? null;
-  const staged = authoredAttributeHandle == null
-    ? []
-    : owner.instructionStaging.instructions.filter((instruction) =>
-        'attribute' in instruction && instruction.attribute?.productHandle === authoredAttributeHandle
-      );
+  const expressionHandle = contribution.valueParse?.expressionProductHandle ?? null;
+  // Interpolations are staged after the contribution. Their parser allocation supplies exact identity even when a
+  // hook-created attribute has no authored product; comparing nullable attribute handles would join unrelated sites.
+  const staged = owner.instructionStaging.instructions.filter((instruction) =>
+    (authoredAttributeHandle != null
+      && 'attribute' in instruction && instruction.attribute?.productHandle === authoredAttributeHandle)
+    || (expressionHandle != null
+      && instruction instanceof InterpolationInstruction && instruction.expressionProductHandles.includes(expressionHandle))
+  );
   return [...new Set([...contribution.instructions, ...staged])];
 }
 

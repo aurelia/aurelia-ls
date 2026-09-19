@@ -125,5 +125,33 @@ export class MoveLab {
     unused.appendChild(inert.createTextNode('discarded:${message}'));
     target.appendChild(wrapper);
     el.setAttribute('data-factories', `${fragmentReturned}:${fragment.firstChild === null}:${unused.parentNode === null}:${generatedCard.ownerDocument === platform.document}`);
+
+    // Copies are snapshots with fresh identities; their bindings still enter the ordinary compiler pipeline.
+    const copies = platform.document.createElement('section');
+    copies.id = 'copied-wrapper';
+    first.setAttribute('data-copy-state', 'before');
+    const shallow = first.cloneNode(false) as HTMLElement;
+    first.setAttribute('data-copy-state', 'after');
+    const shallowWasEmpty = shallow.firstChild === null;
+    shallow.id = 'shallow-copy';
+    shallow.appendChild(platform.document.createTextNode('shallow:${message}'));
+    copies.appendChild(shallow);
+
+    const copiedConditional = conditional.cloneNode(true) as HTMLTemplateElement;
+    const copiedRepeated = copiedConditional.content.firstElementChild as HTMLTemplateElement;
+    copiedRepeated.content.firstElementChild!.className = 'copied-template-row';
+    copies.appendChild(copiedConditional);
+
+    // The source CE has already joined P; importing into I does not construct native custom elements.
+    const copiedCard = inert.importNode(card, true);
+    copiedCard.id = 'copied-card';
+    copiedCard.children[0]!.className = 'copied-title';
+    (copiedCard.children[1] as HTMLTemplateElement).content.firstElementChild!.className = 'copied-row';
+    const copiedCardWasInert = copiedCard.ownerDocument === inert;
+    copies.appendChild(copiedCard);
+    copies.appendChild(textMoves.firstChild!.cloneNode());
+    copies.appendChild(platform.document.createComment('copied-content').cloneNode());
+    target.appendChild(copies);
+    el.setAttribute('data-copies', `${shallow !== first}:${shallowWasEmpty}:${shallow.getAttribute('data-copy-state') === 'before'}:${first.getAttribute('data-copy-state') === 'after'}:${copiedConditional !== conditional}:${copiedConditional.content !== conditional.content}:${copiedConditional.ownerDocument === platform.document}:${copiedConditional.content.ownerDocument === inert}:${copiedCardWasInert}:${copiedCard.ownerDocument === platform.document}:${card.ownerDocument === platform.document}`);
   }
 }

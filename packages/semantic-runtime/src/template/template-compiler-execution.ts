@@ -56,15 +56,15 @@ import {
   TemplateCompilerOccurrenceEdgeKind,
   isTemplateCompilerHookGeneratedNode,
   type TemplateCompilerAttributeOccurrence,
-  type TemplateCompilerCommentOccurrence,
-  type TemplateCompilerElementOccurrence,
-  type TemplateCompilerFragmentOccurrence,
+  TemplateCompilerCommentOccurrence,
+  TemplateCompilerElementOccurrence,
+  TemplateCompilerFragmentOccurrence,
   type TemplateCompilerNodeOccurrence,
   type TemplateCompilerNodeDocumentChange,
   type TemplateCompilerOccurrenceGeneration,
   type TemplateCompilerOccurrenceForest,
   type TemplateCompilerParentOccurrence,
-  type TemplateCompilerTextOccurrence,
+  TemplateCompilerTextOccurrence,
 } from './template-compiler-occurrence.js';
 import {
   TemplateCompilerStructuralExecutionSession,
@@ -264,6 +264,8 @@ export class TemplateCompilerAttributeInsertionMutation {
     readonly attribute: TemplateCompilerAttributeOccurrence,
     readonly owner: TemplateCompilerElementOccurrence,
     readonly ordinal: number,
+    /** Copy lineage is independent of the fresh attribute's browser-input ownership. */
+    readonly sourceAttribute: TemplateCompilerAttributeOccurrence | null = null,
   ) {}
 }
 
@@ -275,6 +277,8 @@ export class TemplateCompilerNodeCreationMutation {
     readonly document: TemplateContentOwnerDocument,
     /** Only template-content creation starts attached; every explicit factory output starts detached. */
     readonly templateOwner: TemplateCompilerElementOccurrence | null = null,
+    /** Copy lineage is independent of the fresh node's browser-input ownership. */
+    readonly sourceNode: TemplateCompilerNodeOccurrence | null = null,
   ) {}
 
   get forestMutationDelta(): number {
@@ -2001,6 +2005,7 @@ export class TemplateCompilerExecutionSession {
     element: TemplateCompilerElementOccurrence,
     descriptor: { readonly name: string; readonly namespaceUri: string | null; readonly prefix: string | null },
     value: string,
+    sourceAttribute: TemplateCompilerAttributeOccurrence | null = null,
   ): TemplateCompilerAttributeOccurrence {
     this.requireOwnedProcessContentElement(attempt, element);
     const existing = element.readAttributes().find(attribute =>
@@ -2019,7 +2024,7 @@ export class TemplateCompilerExecutionSession {
     );
     const ordinal = element.readAttributes().length;
     this.forest.insertDetachedAttribute(attribute, element, ordinal);
-    overlay.recordAttributeInsertion(new TemplateCompilerAttributeInsertionMutation(eventOrdinal, attribute, element, ordinal));
+    overlay.recordAttributeInsertion(new TemplateCompilerAttributeInsertionMutation(eventOrdinal, attribute, element, ordinal, sourceAttribute));
     return attribute;
   }
 
@@ -2030,16 +2035,17 @@ export class TemplateCompilerExecutionSession {
     namespaceUri: string,
     customElementIs: string | null,
     document: TemplateContentOwnerDocument,
+    sourceNode: TemplateCompilerElementOccurrence | null = null,
   ): TemplateCompilerElementOccurrence {
     this.requireSourceProcessContentAttempt(attempt);
     const overlay = this.requirePendingMutationOverlay(attempt);
     const generation = this.createGeneration(attempt, TemplateCompilerGeneratedOccurrenceRole.HookElement,
       overlay.nextTopologyMutationOrdinal);
     const element = this.forest.createGeneratedElement(generation, tagName, namespace, namespaceUri, customElementIs,
-      false, null, document);
-    overlay.recordNodeCreation(new TemplateCompilerNodeCreationMutation(overlay.nextTopologyMutationOrdinal, element, document));
+      sourceNode?.parserInertScript ?? false, null, document);
+    overlay.recordNodeCreation(new TemplateCompilerNodeCreationMutation(overlay.nextTopologyMutationOrdinal, element, document, null, sourceNode));
     if (namespace === HtmlNamespaceKind.Html && tagName === 'template') {
-      this.createProcessContentFragment(attempt, 'template-contents', element);
+      this.createProcessContentFragment(attempt, 'template-contents', element, sourceNode?.templateContent ?? null);
     }
     return element;
   }
@@ -2048,13 +2054,14 @@ export class TemplateCompilerExecutionSession {
     attempt: TemplateCompilerPendingOperationAttempt,
     text: string,
     document: TemplateContentOwnerDocument,
+    sourceNode: TemplateCompilerTextOccurrence | null = null,
   ): TemplateCompilerTextOccurrence {
     this.requireSourceProcessContentAttempt(attempt);
     const overlay = this.requirePendingMutationOverlay(attempt);
     const generation = this.createGeneration(attempt, TemplateCompilerGeneratedOccurrenceRole.HookText,
       overlay.nextTopologyMutationOrdinal);
     const node = this.forest.createGeneratedText(generation, text, null, document);
-    overlay.recordNodeCreation(new TemplateCompilerNodeCreationMutation(overlay.nextTopologyMutationOrdinal, node, document));
+    overlay.recordNodeCreation(new TemplateCompilerNodeCreationMutation(overlay.nextTopologyMutationOrdinal, node, document, null, sourceNode));
     return node;
   }
 
@@ -2062,13 +2069,14 @@ export class TemplateCompilerExecutionSession {
     attempt: TemplateCompilerPendingOperationAttempt,
     text: string,
     document: TemplateContentOwnerDocument,
+    sourceNode: TemplateCompilerCommentOccurrence | null = null,
   ): TemplateCompilerCommentOccurrence {
     this.requireSourceProcessContentAttempt(attempt);
     const overlay = this.requirePendingMutationOverlay(attempt);
     const generation = this.createGeneration(attempt, TemplateCompilerGeneratedOccurrenceRole.HookComment,
       overlay.nextTopologyMutationOrdinal);
     const node = this.forest.createGeneratedComment(generation, text, HtmlCommentSemanticKind.Plain, null, document);
-    overlay.recordNodeCreation(new TemplateCompilerNodeCreationMutation(overlay.nextTopologyMutationOrdinal, node, document));
+    overlay.recordNodeCreation(new TemplateCompilerNodeCreationMutation(overlay.nextTopologyMutationOrdinal, node, document, null, sourceNode));
     return node;
   }
 
@@ -2076,6 +2084,7 @@ export class TemplateCompilerExecutionSession {
     attempt: TemplateCompilerPendingOperationAttempt,
     document: TemplateContentOwnerDocument,
     templateOwner: TemplateCompilerElementOccurrence | null = null,
+    sourceNode: TemplateCompilerFragmentOccurrence | null = null,
   ): TemplateCompilerFragmentOccurrence {
     this.requireSourceProcessContentAttempt(attempt);
     const overlay = this.requirePendingMutationOverlay(attempt);
@@ -2090,8 +2099,48 @@ export class TemplateCompilerExecutionSession {
     if (templateOwner != null) {
       this.forest.insertDetachedNode(node, templateOwner, TemplateCompilerOccurrenceEdgeKind.TemplateContent, 0);
     }
-    overlay.recordNodeCreation(new TemplateCompilerNodeCreationMutation(overlay.nextTopologyMutationOrdinal, node, document, templateOwner));
+    overlay.recordNodeCreation(new TemplateCompilerNodeCreationMutation(overlay.nextTopologyMutationOrdinal, node, document, templateOwner, sourceNode));
     return node;
+  }
+
+  /** Copy the current owned subtree; new Hook* identities retain source lineage, never input ownership. */
+  cloneProcessContentNode(
+    attempt: TemplateCompilerPendingOperationAttempt,
+    source: TemplateCompilerNodeOccurrence,
+    deep: boolean,
+    document: TemplateContentOwnerDocument,
+  ): TemplateCompilerNodeOccurrence {
+    this.requireOwnedProcessContentNode(attempt, source, true);
+    let copy: TemplateCompilerParentOccurrence;
+    if (source instanceof TemplateCompilerElementOccurrence) {
+      const element = this.createProcessContentElement(attempt, source.tagName, source.namespace, source.namespaceUri,
+        source.customElementIs, document, source);
+      for (const attribute of source.readAttributes()) {
+        this.setProcessContentAttribute(attempt, element, attribute, this.readAttributeValue(attempt, attribute), attribute);
+      }
+      if (deep && source.templateContent != null) {
+        for (const child of source.templateContent.readChildren()) {
+          const cloned = this.cloneProcessContentNode(attempt, child, true, 'template-contents');
+          this.placeProcessContentNode(attempt, cloned, element.templateContent!, element.templateContent!.readChildren().length);
+        }
+      }
+      copy = element;
+    } else if (source instanceof TemplateCompilerTextOccurrence) {
+      return this.createProcessContentText(attempt, source.text, document, source);
+    } else if (source instanceof TemplateCompilerCommentOccurrence) {
+      return this.createProcessContentComment(attempt, source.text, document, source);
+    } else if (source instanceof TemplateCompilerFragmentOccurrence) {
+      copy = this.createProcessContentFragment(attempt, document, null, source);
+    } else {
+      throw new Error('Source hook copying requires an owned element, text, comment or fragment.');
+    }
+    if (deep) {
+      for (const child of source.readChildren()) {
+        const cloned = this.cloneProcessContentNode(attempt, child, true, document);
+        this.placeProcessContentNode(attempt, cloned, copy, copy.readChildren().length);
+      }
+    }
+    return copy;
   }
 
   removeProcessContentAttribute(

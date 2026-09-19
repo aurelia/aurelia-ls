@@ -16,6 +16,11 @@ interface ShadowCardObservation {
   readonly default: readonly string[];
   readonly nativeFlattened: readonly string[];
   readonly defaultFlattened: readonly string[];
+  readonly generated: readonly {
+    readonly name: string;
+    readonly assigned: readonly string[];
+    readonly flattened: readonly string[];
+  }[];
   readonly boundTitles: readonly string[];
   readonly ownership: boolean;
 }
@@ -129,6 +134,10 @@ async function capture(page: Page): Promise<ExplicitShadowApplicationObservation
           if (shadow == null) throw new Error(`Missing shadow root on '${host.id}'.`);
           const native = shadow.querySelector<HTMLSlotElement>('slot[name="native"]')!;
           const defaultSlot = shadow.querySelector<HTMLSlotElement>('slot:not([name])')!;
+          const generatedSlots = [
+            shadow.querySelector<HTMLSlotElement>('.generated-binding slot')!,
+            shadow.querySelector<HTMLSlotElement>('.generated-interpolation slot')!,
+          ];
           const projected = [...shadow.querySelector('header')!.children, ...shadow.querySelector('nav')!.children];
           const nativeNodes = native.assignedNodes();
           const defaultNodes = defaultSlot.assignedNodes();
@@ -146,8 +155,14 @@ async function capture(page: Page): Promise<ExplicitShadowApplicationObservation
             native: nodes(nativeNodes), default: nodes(defaultNodes),
             nativeFlattened: nodes(native.assignedNodes({ flatten: true })),
             defaultFlattened: nodes(defaultSlot.assignedNodes({ flatten: true })),
+            generated: generatedSlots.map(slot => ({
+              name: slot.name,
+              assigned: nodes(slot.assignedNodes()),
+              flattened: nodes(slot.assignedNodes({ flatten: true })),
+            })),
             boundTitles: Array.from(host.querySelectorAll('[title]'), node => node.getAttribute('title')!),
-            ownership: [...nativeNodes, ...defaultNodes].every(node => node.parentNode === host && node.getRootNode() === document)
+            ownership: [...nativeNodes, ...defaultNodes, ...generatedSlots.flatMap(slot => slot.assignedNodes())]
+              .every(node => node.parentNode === host && node.getRootNode() === document)
               && native.assignedElements().every((node, index) => node === nativeNodes.filter(node => node instanceof Element)[index]
                 && node.getAttribute('slot') === 'native')
               && projected.every(node => node.getRootNode() === shadow && !host.contains(node)),
@@ -159,7 +174,7 @@ async function capture(page: Page): Promise<ExplicitShadowApplicationObservation
 }
 
 export function assertExplicitShadowBuildEvidence(evidence: AotBuildEvidence): void {
-  assert.deepEqual(evidence.artifacts.map(artifact => artifact.definitionName).sort(), ['explicit-shadow-app', 'shadow-card']);
+  assert.deepEqual(evidence.artifacts.map(artifact => artifact.definitionName).sort(), ['explicit-shadow-app', 'native-outlets', 'shadow-card']);
 }
 
 export function assertExplicitShadowExpectations(transcript: LaneTranscript): void {
@@ -221,6 +236,22 @@ export function assertExplicitShadowExpectations(transcript: LaneTranscript): vo
 
 type ExpectedCard = Omit<ShadowCardObservation, 'lightTextNodes'>;
 
+const generatedLight = [
+  'em:generated-binding-zero', 'em:generated-binding-one',
+  'em:generated-interpolation-zero', 'em:generated-interpolation-one',
+];
+
+function generatedSlots(label: string, count: number, provided = true): ExpectedCard['generated'] {
+  return ['binding', 'interpolation'].map(kind => {
+    const content = `em:generated-${kind}-${count === 0 ? 'zero' : 'one'}`;
+    return {
+      name: kind === 'binding' ? `generated-${count === 0 ? 'zero' : 'one'}` : `generated-interpolation-${count}`,
+      assigned: provided ? [content] : [],
+      flattened: provided ? [content] : [`mark:${label}:${kind}-fallback`],
+    };
+  });
+}
+
 function ordinaryCard(message: string, suffix: string, count: number, lightVisible: boolean,
   projectionVisible: boolean, items: readonly string[], reordered: boolean): ExpectedCard {
   const leading = [`#text:${message}`, '#text::direct'];
@@ -230,12 +261,13 @@ function ordinaryCard(message: string, suffix: string, count: number, lightVisib
   const defaultSlot = [...leading, ...adjacent, `span:${message}:default`, `small:${message}:tail`];
   return {
     id: 'ordinary', heading: `${message}:${count}`,
-    light: [...leading, native[0]!, ...adjacent, `span:${message}:default`, ...native.slice(1), `small:${message}:tail`],
+    light: [...leading, native[0]!, ...adjacent, `span:${message}:default`, ...native.slice(1), `small:${message}:tail`, ...generatedLight],
     authoredComments: ['retained-light'],
     projection: [`b:${message}:projected:${message}:${count}`,
       ...(projectionVisible ? [`i:conditional:${message}:${message}`] : []), `u:${message}:last`],
     actions: (reordered ? ['cancel', 'accept'] : ['accept', 'cancel']).map(action => `button:${action}:${message}:${count}`),
     native, default: defaultSlot, nativeFlattened: native, defaultFlattened: defaultSlot,
+    generated: generatedSlots(message, count),
     boundTitles: [message, message], ownership: true,
   };
 }
@@ -244,9 +276,10 @@ function conditionalCard(message: string, count: number): ExpectedCard {
   const native = [`span:${message}:conditional-native`];
   const defaultSlot = [`small:${message}:conditional-default`];
   return {
-    id: 'conditional', heading: `conditional-${message}:${count}`, light: [...native, ...defaultSlot], authoredComments: [],
+    id: 'conditional', heading: `conditional-${message}:${count}`, light: [...native, ...defaultSlot, ...generatedLight], authoredComments: [],
     projection: [`b:${message}:conditional:conditional-${message}`], actions: [`i:conditional-${message}:actions-fallback`],
     native, default: defaultSlot, nativeFlattened: native, defaultFlattened: defaultSlot, boundTitles: [], ownership: true,
+    generated: generatedSlots(`conditional-${message}`, count),
   };
 }
 
@@ -255,9 +288,10 @@ function repeatedCard(id: string, index: number, message: string, count: number)
   const native = [`span:${index}:${label}:${message}`];
   const defaultSlot = [`em:${id}:default`];
   return {
-    id: `card-${id}`, heading: `${label}:${count}`, light: [...native, ...defaultSlot], authoredComments: [],
+    id: `card-${id}`, heading: `${label}:${count}`, light: [...native, ...defaultSlot, ...generatedLight], authoredComments: [],
     projection: [`strong:${label}:${label}:${count}`], actions: [`i:${label}:actions-fallback`],
     native, default: defaultSlot, nativeFlattened: native, defaultFlattened: defaultSlot, boundTitles: [], ownership: true,
+    generated: generatedSlots(label, count),
   };
 }
 
@@ -265,4 +299,5 @@ const fallbackCard: ExpectedCard = {
   id: 'fallback', heading: 'empty:0', light: [], authoredComments: [], projection: ['b:empty:heading-fallback'],
   actions: ['i:empty:actions-fallback'], native: [], default: [], nativeFlattened: ['mark:empty:native-fallback'],
   defaultFlattened: ['mark:empty:default-fallback'], boundTitles: [], ownership: true,
+  generated: generatedSlots('empty', 0, false),
 };

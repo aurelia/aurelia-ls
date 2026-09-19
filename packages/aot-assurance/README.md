@@ -80,11 +80,13 @@ The default package assurance runs thirteen complementary scenarios:
   and numeric-model form channels, async review loading and creation, and object-model selection through a matcher.
   Its AOT build must emit exactly the shell plus its eight route resources. Registration breadth remains provisional.
 - `explicit-shadow` combines explicit open shadow roots with native named/default slots and Aurelia `au-slot`
-  projections. It checks retained light-child order, native assignment identities and parentage, adjacent text bindings
+  projections. Its source hook constructs the native static/default outlets and binding/interpolation-named outlets
+  with DOM factories; existing host-count updates switch their assigned light children. It checks retained light-child order,
+  native assignment identities and parentage, adjacent text bindings
   separated by extracted contributors, authored whitespace/comment retention, `$host` versus source scope, projected
   events, independent retained/projected controllers, and shadow-host if/repeat lifecycle with keyed DOM reuse. Both
   native and Aurelia fallbacks are checked. Containerless shadow hosts and implicit `hasSlots` policy are outside this
-  scenario. Its AOT build must emit exactly `explicit-shadow-app` and `shadow-card`.
+  scenario. Its AOT build must emit exactly `explicit-shadow-app`, `shadow-card`, and `native-outlets`.
 - `compiler-hooks` combines literal/helper/receiver-based `processContent` decisions, a root pure `compiling` hook,
   and owner-local, child, and local-template CSS Modules. False leaves child interpolations, controller/resource attributes, and inert templates
   uncompiled while host bindables, attributes, its own template, and outer controllers still work. True and undefined

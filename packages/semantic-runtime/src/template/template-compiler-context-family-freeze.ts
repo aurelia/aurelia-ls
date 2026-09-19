@@ -12,6 +12,7 @@ import type { TemplateCompilerContextFamilyTargetExecution } from './template-co
 import {
   TemplateCompilerAttributeDetachmentMutation,
   TemplateCompilerAttributeInsertionMutation,
+  TemplateCompilerNodeCreationMutation,
   TemplateCompilerNodeDetachmentMutation,
   TemplateCompilerNodePlacementMutation,
   type TemplateCompilerOperation,
@@ -632,6 +633,20 @@ export function createTemplateCompilerStructuralDerivationVisitor(
   for (const attribute of forest.readAttributes()) {
     if (attribute.generation != null) generated.set(attribute.generation, attribute);
   }
+  const copySources = new Map<
+    TemplateCompilerNodeOccurrence | TemplateCompilerAttributeOccurrence,
+    TemplateCompilerNodeOccurrence | TemplateCompilerAttributeOccurrence
+  >();
+  // Operations are chronological and every copy has a fresh identity: resolve only already-recorded ancestry.
+  for (const operation of execution.attachment.execution.sequence.readOperations()) {
+    for (const mutation of operation.mutationBatch.topologyMutations) {
+      if (mutation instanceof TemplateCompilerNodeCreationMutation && mutation.sourceNode != null) {
+        copySources.set(mutation.node, copySources.get(mutation.sourceNode) ?? mutation.sourceNode);
+      } else if (mutation instanceof TemplateCompilerAttributeInsertionMutation && mutation.sourceAttribute != null) {
+        copySources.set(mutation.attribute, copySources.get(mutation.sourceAttribute) ?? mutation.sourceAttribute);
+      }
+    }
+  }
   const transfers = execution.attachment.structuralExecution.readInputNodeTransfers();
   return (operation, visitInput, visitOutput) => {
     for (const mutation of operation.mutationBatch.topologyMutations) {
@@ -643,7 +658,10 @@ export function createTemplateCompilerStructuralDerivationVisitor(
       } else if (mutation instanceof TemplateCompilerAttributeDetachmentMutation) {
         visitInput(mutation.attribute);
       } else if (mutation instanceof TemplateCompilerAttributeInsertionMutation) {
+        if (mutation.sourceAttribute != null) visitInput(copySources.get(mutation.attribute)!);
         visitOutput(mutation.attribute);
+      } else if (mutation instanceof TemplateCompilerNodeCreationMutation) {
+        if (mutation.sourceNode != null) visitInput(copySources.get(mutation.node)!);
       }
     }
     for (const mutation of operation.mutationBatch.attributeValueMutations) {

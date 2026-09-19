@@ -2,7 +2,7 @@
 
 The same source runs through production JIT and strict AOT builds. Five ordered browser checkpoints check
 the resulting structure, reactive updates, projected-controller removal, updates while hidden, restoration,
-and complete teardown. There are no selectors, ambient accesses, markup setters, cloning, or cross-host edits in the hook.
+and complete teardown. There are no selectors, ambient accesses, markup setters, or cross-host edits in the hook.
 
 `MoveLab.processContent` first transforms original descendants:
 
@@ -36,6 +36,16 @@ The same hook then builds compiler input using `createElement`, `createTextNode`
 - A generated fragment carries a static comment and reactive interpolation text, returns the fragment from
   `appendChild`, and becomes empty after insertion. Expectations retain JIT's distinct static and bound text nodes.
 - A generated but never inserted bound/stamped paragraph remains absent. Factory allocation alone is not compiler reach.
+
+Finally, source `cloneNode` / `importNode` create additional independently reactive compiler input:
+
+- A shallow copy of an authored paragraph captures its current attribute values but no children. The original is
+  subsequently changed, proving snapshot independence; generated interpolation and the copied custom attribute bind normally.
+- A deep copy of the generated conditional/repeat template keeps distinct template-content identities and inert content
+  documents. Both copies follow the same five hide/update/restore checkpoints without sharing occurrences or row ownership.
+- An authored custom-element subtree is imported from the platform document into the inert document, then inserted normally.
+  Its input binding, named title projection and conditional repeated body must lower from copied, addressless syntax.
+- Authored interpolation text and a generated static comment are cloned independently, retaining JIT's text-node boundaries.
 
 Custom element names and templates are created using the authored donor template content's inert owner document;
 ordinary native nodes can use the platform document. Insertion adopts generated content in the same way as original
