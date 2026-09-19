@@ -1,10 +1,10 @@
-# Existing-node content transforms
+# Content transforms with existing and generated nodes
 
 The same source runs through production JIT and strict AOT builds. Five ordered browser checkpoints check
 the resulting structure, reactive updates, projected-controller removal, updates while hidden, restoration,
-and complete teardown. There are no factory calls, selectors, ambient accesses, or cross-host edits in the hook.
+and complete teardown. There are no selectors, ambient accesses, markup setters, cloning, or cross-host edits in the hook.
 
-`MoveLab.processContent` transforms only original descendants:
+`MoveLab.processContent` first transforms original descendants:
 
 - Append authored nodes into an initially empty wrapper and reorder siblings with `insertBefore`.
 - Remove and reinsert the same node twice, checking return values and identity-based sibling relationships.
@@ -21,7 +21,25 @@ and complete teardown. There are no factory calls, selectors, ambient accesses, 
 - Move a bound child under an authored input. The DOM permits children under HTML void elements even though HTML
   serialization cannot represent that tree; emitted construction must retain the child's binding and custom attribute.
 
-The hook never moves its own host or inserts a new node. Its original source, target, and donor hosts all remain
-under the same scope. Expectations were first checked independently against JIT using the ordinary browser runner;
-lane equality alone is not the oracle. Strict AOT must emit `content-moves-app`, `move-card`, and `move-lab` and cannot
-satisfy this scenario by preserving runtime compilation.
+The same hook then builds compiler input using `createElement`, `createTextNode`, `createComment`, and
+`createDocumentFragment`:
+
+- A generated native wrapper carries `title.bind` and the existing `stamp` custom attribute, and receives an
+  authored bound paragraph without losing its original bindings or custom attribute.
+- Generated `template if.bind` and nested `template repeat.for` introduce the `item` local for a generated
+  interpolated and stamped paragraph. Hiding, changing the collection while hidden, and restoring exercise the
+  same scope/lifecycle path as the authored controller content.
+- A generated `move-card` binds its input and receives generated named title/body projections. The body has its
+  own generated `if` template, so projection extraction and controller compilation must compose for new nodes.
+- A generated `let` binds a derived local used by both generated interpolation and a custom attribute. A generated
+  named `au-slot` exercises reactive fallback and removes two distinct generated children carrying `au-slot` attributes.
+- A generated fragment carries a static comment and reactive interpolation text, returns the fragment from
+  `appendChild`, and becomes empty after insertion. Expectations retain JIT's distinct static and bound text nodes.
+- A generated but never inserted bound/stamped paragraph remains absent. Factory allocation alone is not compiler reach.
+
+Custom element names and templates are created using the authored donor template content's inert owner document;
+ordinary native nodes can use the platform document. Insertion adopts generated content in the same way as original
+content. The hook never moves its own host. Its original source, target, and donor hosts all remain under the same
+scope. Expectations were checked independently against JIT using the existing scratch entry and ordinary browser
+runner; lane equality alone is not the oracle. Strict AOT must emit `content-moves-app`, `move-card`, and `move-lab`
+and cannot satisfy this scenario by preserving runtime compilation.

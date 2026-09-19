@@ -99,6 +99,11 @@ The effective configuration mode becomes `preserve` even when replacement was re
 links cannot apply: `allow-c0-fallback` keeps the original graph, while `require-applied` remains an explicit conflict.
 Strict remains the default, and compatible builds with no fallback trigger still compile normally.
 
+Shared hook support now includes owned document factories and generated binding/controller/projection lowering.
+Native custom-element construction and unclosed resource effects in the platform document remain explicit unsupported
+hook results; they follow the same compatible policy, not a separate partial-template fallback. Generated native
+`<slot>` outlet admission is still a distinct Pending compiler boundary and is not silently converted to JIT.
+
 `src/testing` contains two retained low-level characterization lanes:
 
 - the direct JIT oracle batches compiler worlds in one process and supports filters, shards, repetition, timing, and

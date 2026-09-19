@@ -3,6 +3,7 @@ import {
   TemplateCompilerRootContextStructuralAuthority,
   TemplateCompilerTargetContextRole,
   TemplateCompilerTemplateControllerContextStructuralAuthority,
+  type TemplateCompilerTargetPlan,
 } from './compiler-target-plan.js';
 import { TemplateCompilerCompletedTemplateControllerLeafRehoming } from './template-compiler-context-family-completion.js';
 import {
@@ -184,12 +185,11 @@ export class TemplateCompilerFamilyProcessContentAdoptionEntry {
     readonly result: TemplateCompilerProcessContentResult,
     readonly removal: TemplateCompilerProcessContentRemoval | TemplateCompilerAttributeDetachmentMutation,
     readonly removalOrdinal: number,
+    sourceNodes: TemplateCompilerTargetPlan['sourceNodes'],
   ) {
     const attributeRemoval = removal instanceof TemplateCompilerAttributeDetachmentMutation;
     const occurrence = attributeRemoval ? removal.attribute : removal.occurrence;
     const reference = hydrateElement.instruction.auSlotProcessContentRemovedChildNodes[removalOrdinal] ?? null;
-    const exactOrigin = removal instanceof TemplateCompilerAttributeDetachmentMutation
-      ? null : result.plan.execution.forest.exactAuthoredNodeOrigin(removal.occurrence)?.authored ?? null;
     const reach = disposition.reach;
     if (
       disposition.loweringContext !== contextMapping.cursorContext
@@ -207,9 +207,7 @@ export class TemplateCompilerFamilyProcessContentAdoptionEntry {
         ? hydrateElement.draft.auSlotProcessContent != null || reference != null
         : hydrateElement.draft.auSlotProcessContent?.name !== result.metadata.name
           || reference == null
-          || reference.productHandle !== exactOrigin?.productHandle
-          || reference.identityHandle !== exactOrigin?.identityHandle
-          || reference.addressHandle !== exactOrigin?.addressHandle)
+          || sourceNodes.get(reference) !== occurrence)
     ) {
       throw new Error(`Family processContent removal '${occurrence.occurrenceKey}' lost funded HE order.`);
     }
@@ -246,11 +244,12 @@ export class TemplateCompilerFamilyProjectionContributorScheduleEntry {
   constructor(
     readonly receipt: TemplateCompilerProjectionContributorReceipt,
     readonly contributor: TemplateCompilerProjectionContextStructuralAuthority['projection']['contributors'][number],
+    sourceNodes: TemplateCompilerTargetPlan['sourceNodes'],
   ) {
     if (
       contributor.slotName !== receipt.contributor.slotName
       || contributor.disposition !== receipt.contributor.disposition
-      || contributor.node.productHandle !== receipt.source.origin.exactAuthoredOrigin?.authored.productHandle
+      || sourceNodes.get(contributor.node) !== receipt.source.node
     ) {
       throw new Error(`Projection contributor '${receipt.source.node.occurrenceKey}' lost wire/receipt ownership.`);
     }
@@ -264,11 +263,13 @@ export class TemplateCompilerFamilyProjectionGroupSchedule {
     readonly band: TemplateCompilerProjectionRealizedEntrantBand,
     readonly contextMapping: TemplateCompilerContextFamilyTargetContextMapping,
     readonly projection: TemplateCompilerProjectionContextStructuralAuthority['projection'],
+    sourceNodes: TemplateCompilerTargetPlan['sourceNodes'],
   ) {
     this.contributors = band.planned.contributors.map((receipt, ordinal) =>
       new TemplateCompilerFamilyProjectionContributorScheduleEntry(
         receipt,
         projection.contributors[ordinal]!,
+        sourceNodes,
       )
     );
     const authority = contextMapping.targetContext.structuralAuthority;
@@ -300,6 +301,7 @@ export class TemplateCompilerFamilyProjectionScheduleEntry {
       TemplateCompilerProjectionRealizedEntrantBand['context'],
       TemplateCompilerContextFamilyTargetContextMapping
     >,
+    sourceNodes: TemplateCompilerTargetPlan['sourceNodes'],
   ) {
     this.groups = event.realization.entrantBands.map((band, ordinal) => {
       const contextMapping = contextByCursor.get(band.context) ?? null;
@@ -307,7 +309,7 @@ export class TemplateCompilerFamilyProjectionScheduleEntry {
       if (contextMapping == null || projection == null) {
         throw new Error(`Projection group '${band.planned.group.slotName}' lost funded context definition.`);
       }
-      return new TemplateCompilerFamilyProjectionGroupSchedule(band, contextMapping, projection);
+      return new TemplateCompilerFamilyProjectionGroupSchedule(band, contextMapping, projection, sourceNodes);
     });
     this.discardedContributors = event.preparation.discardedWhitespace.map((discarded, ordinal) => {
       const receipt = event.preparation.contributorReceiptFor(discarded.contributor);
@@ -315,7 +317,7 @@ export class TemplateCompilerFamilyProjectionScheduleEntry {
       if (receipt == null || contributor == null) {
         throw new Error('Discarded projection input lost funded contributor order.');
       }
-      return new TemplateCompilerFamilyProjectionContributorScheduleEntry(receipt, contributor);
+      return new TemplateCompilerFamilyProjectionContributorScheduleEntry(receipt, contributor, sourceNodes);
     });
     const scheduledContributors = [
       ...this.groups.flatMap((group) => group.contributors),
@@ -805,6 +807,7 @@ export function prepareTemplateCompilerContextFamilyStructuralSchedule(
           removal instanceof TemplateCompilerAttributeDetachmentMutation
             ? result.operation.mutationBatch.attributeDetachmentMutations.indexOf(removal)
             : result.removals.indexOf(removal),
+          target.targetPlan.sourceNodes,
         ));
     const projectionEvent = reach.hydrateElement.projectionExtraction;
     const projection = projectionEvent == null || head == null
@@ -814,6 +817,7 @@ export function prepareTemplateCompilerContextFamilyStructuralSchedule(
           contextMapping,
           head,
           target.contextByCursor,
+          target.targetPlan.sourceNodes,
         );
     return new TemplateCompilerFamilyLoweredElementScheduleEntry(
       disposition,

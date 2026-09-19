@@ -1,4 +1,4 @@
-/** Attribute local names and namespace prefixes accepted by the current DOM name-validation algorithms. */
+/** DOM names with an explicit cross-version admission boundary. */
 const invalidAttributeLocalName = /[\0\t\n\f\r />=]/;
 const invalidNamespacePrefix = /[\0\t\n\f\r />]/;
 
@@ -24,6 +24,13 @@ export interface CompilerDomAttributeName {
  */
 export function compilerDomAttributeNameIssue(name: string): CompilerDomAttributeNameIssue | null {
   if (name.length === 0 || invalidAttributeLocalName.test(name)) return 'InvalidCharacterError';
+  return legacyName.test(name) ? null : 'dom-name-compatibility';
+}
+
+/** Element validation is distinct from attribute validation: modern element names can contain `=`. */
+export function compilerDomElementNameIssue(name: string): CompilerDomAttributeNameIssue | null {
+  if (name.length === 0 || /[\0\t\n\f\r />]/u.test(name)) return 'InvalidCharacterError';
+  if (!/^[A-Za-z:_\u0080-\u{10FFFF}]/u.test(name)) return 'InvalidCharacterError';
   return legacyName.test(name) ? null : 'dom-name-compatibility';
 }
 

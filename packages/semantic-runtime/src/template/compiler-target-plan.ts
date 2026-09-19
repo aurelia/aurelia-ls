@@ -14,6 +14,7 @@ import {
 } from './compiled-template.js';
 import type {
   HtmlElement,
+  HtmlNodeReference,
   HtmlText,
 } from './html-ir.js';
 import {
@@ -700,6 +701,8 @@ export class TemplateCompilerTargetPlan {
     readonly localKey: string,
     rootContext: TemplateCompilationContextReference,
     rootCompiledTemplate: CompiledTemplateReference,
+    /** Funded source wires retain exact occurrence identity even when no authored HTML product exists. */
+    readonly sourceNodes: ReadonlyMap<HtmlNodeReference, TemplateCompilerNodeOccurrence> = new Map(),
   ) {
     const rootOwner = new TemplateCompilerTargetContextOwner(
       rootContext.productHandle,
@@ -871,7 +874,7 @@ export class TemplateCompilerTargetPlan {
           throw new Error(`Compiler occurrence membership '${membership.stableSlotKey}' is incoherent.`);
         }
       }
-      if (!contextStructuralAuthorityIsCoherent(context)) {
+      if (!contextStructuralAuthorityIsCoherent(context, this.sourceNodes)) {
         throw new Error(`Compiler target context '${context.localKey}' has incoherent structural authority.`);
       }
       const rowInstructionProducts = new Set(context.readRows().flatMap((row) =>
@@ -1147,7 +1150,10 @@ function rowHasElementSource(row: TemplateCompilerTargetRowPlan): boolean {
     || (row.occurrence != null && 'tagName' in row.occurrence);
 }
 
-function contextStructuralAuthorityIsCoherent(context: TemplateCompilerTargetContextPlan): boolean {
+function contextStructuralAuthorityIsCoherent(
+  context: TemplateCompilerTargetContextPlan,
+  sourceNodes: ReadonlyMap<HtmlNodeReference, TemplateCompilerNodeOccurrence>,
+): boolean {
   const authority = context.structuralAuthority;
   switch (context.role) {
     case TemplateCompilerTargetContextRole.Root:
@@ -1159,7 +1165,7 @@ function contextStructuralAuthorityIsCoherent(context: TemplateCompilerTargetCon
         && authority.instruction.productHandle === context.owner.productHandle
         && authority.instruction.identityHandle === context.owner.identityHandle
         && context.sourceAddressHandle === authority.instruction.sourceAddressHandle
-        && authority.instruction.node.productHandle != null
+        && (authority.instruction.node.productHandle != null || sourceNodes.has(authority.instruction.node))
         && authority.instruction.childCompiledTemplate?.productHandle === context.compiledTemplate.productHandle
         && context.slotName === null;
     case TemplateCompilerTargetContextRole.Projection:
@@ -1169,13 +1175,13 @@ function contextStructuralAuthorityIsCoherent(context: TemplateCompilerTargetCon
         && context.sourceAddressHandle === (
           authority.projection.sourceAddressHandle ?? authority.instruction.sourceAddressHandle
         )
-        && authority.instruction.node.productHandle != null
+        && (authority.instruction.node.productHandle != null || sourceNodes.has(authority.instruction.node))
         && authority.projection.compiledTemplate.productHandle === context.compiledTemplate.productHandle
         && authority.projection.slotName === context.slotName
         && authority.instruction.projections.includes(authority.projection)
         && authority.projection.contributors.length > 0
         && authority.projection.contributors.every((contributor) =>
-          contributor.node.productHandle != null
+          (contributor.node.productHandle != null || sourceNodes.has(contributor.node))
           && contributor.slotName === authority.projection.slotName
           && contributor.disposition !== HydrateElementProjectionContributorDisposition.DiscardedWhitespace
         );

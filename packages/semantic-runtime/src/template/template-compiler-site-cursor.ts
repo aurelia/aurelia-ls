@@ -28,6 +28,7 @@ import {
 } from './template-compiler-instruction-staging.js';
 import {
   TemplateCompilerAttributeOccurrence,
+  isTemplateCompilerHookGeneratedNode,
   TemplateCompilerGeneratedOccurrenceRole,
   TemplateCompilerCommentOccurrence,
   TemplateCompilerDoctypeOccurrence,
@@ -56,7 +57,7 @@ import {
   TemplateCompilerOccurrenceOnlyDisposition,
 } from './template-compiler-site-spend-ledger.js';
 import type { TemplateCompilerAuthoredSiteRemainderEvidence } from './template-compiler-site-spend-ledger.js';
-import { HtmlAttributeReference, type HtmlElement } from './html-ir.js';
+import { HtmlAttributeReference, HtmlNodeReference, type HtmlElement } from './html-ir.js';
 import {
   TemplateInstructionKind,
   type TemplateInstruction,
@@ -675,7 +676,7 @@ class TemplateCompilerRootSiteCursor {
       : null;
     let elementOccurrenceRow: TemplateCompilerOccurrenceOnlyRow | null = null;
 
-    if (element.generation != null) {
+    if (element.generation != null && element.generation.role !== TemplateCompilerGeneratedOccurrenceRole.HookElement) {
       const row = this.recordOccurrenceOnly(
         element,
         TemplateCompilerOccurrenceOnlyDisposition.GeneratedSiteNeedsLowering,
@@ -708,6 +709,15 @@ class TemplateCompilerRootSiteCursor {
           : 'Compiler-generated element requires live semantic lowering.',
       );
       return null;
+    }
+    if (element.generation?.role === TemplateCompilerGeneratedOccurrenceRole.HookElement) {
+      this.binding.execution.mutationAuthority.assertRegisteredGeneration(element.generation);
+      elementOccurrenceRow = this.recordOccurrenceOnly(element, TemplateCompilerOccurrenceOnlyDisposition.LiveElementAssembled);
+      if (elementOccurrenceRow == null) {
+        this.stop(TemplateCompilerSiteCursorFrontierKind.AccountingMismatch, element, null, null, successor,
+          'Hook-created element accounting conflicted with the site ledger.');
+        return null;
+      }
     }
     if (originState === TemplateCompilerPreWalkBrowserOriginState.NonSingular) {
       elementOccurrenceRow = this.recordOccurrenceOnly(
@@ -800,7 +810,7 @@ class TemplateCompilerRootSiteCursor {
       return null;
     }
     if (
-      originState === TemplateCompilerPreWalkBrowserOriginState.Absent
+      originState === TemplateCompilerPreWalkBrowserOriginState.Absent && element.generation == null
     ) {
       elementOccurrenceRow = this.recordOccurrenceOnly(
         element,
@@ -887,7 +897,7 @@ class TemplateCompilerRootSiteCursor {
           element.readChildren(),
         );
       }
-      if (authoredElement == null) {
+      if (authoredElement == null && !isTemplateCompilerHookGeneratedNode(element)) {
         this.stop(
           TemplateCompilerSiteCursorFrontierKind.AuthoredPrecedentMismatch,
           element,
@@ -1690,6 +1700,11 @@ class TemplateCompilerRootSiteCursor {
     const bundle = route?.routeKind === TemplateCompilerBrowserOriginRouteKind.Singular
       ? this.binding.index.siteForText(route.exactOrigin!.authored.productHandle)
       : null;
+    if (text.generation?.role === TemplateCompilerGeneratedOccurrenceRole.HookText) {
+      this.binding.execution.mutationAuthority.assertRegisteredGeneration(text.generation);
+      this.visitLiveText(text, parent, parentOrdinal, successor);
+      return;
+    }
     if (text.generation != null || originState === TemplateCompilerPreWalkBrowserOriginState.Absent) {
       const row = this.recordOccurrenceOnly(text, TemplateCompilerOccurrenceOnlyDisposition.GeneratedSiteNeedsLowering);
       this.appendEvent(new TemplateCompilerSiteCursorTextEvent(
@@ -1899,6 +1914,60 @@ class TemplateCompilerRootSiteCursor {
     }
   }
 
+  private visitLiveText(
+    text: TemplateCompilerTextOccurrence,
+    parent: TemplateCompilerParentOccurrence,
+    parentOrdinal: number,
+    successor: TemplateCompilerNodeOccurrence | null,
+  ): void {
+    const read = this.compilerReads.readParsedExpression(text.text, 'Interpolation');
+    const result = read.value;
+    const closed = read.observation.closure.state === TemplateCompilerScopeClosureState.Closed
+      && read.observation.validate().isCurrent;
+    const staticText = closed && result.kind === ExpressionParseResultKind.InterpolationAbsent;
+    const interpolated = closed && result.kind === ExpressionParseResultKind.InterpolationSuccess;
+    const row = this.recordOccurrenceOnly(text, staticText
+      ? TemplateCompilerOccurrenceOnlyDisposition.StaticTextPassThrough
+      : TemplateCompilerOccurrenceOnlyDisposition.LiveTextAssembled);
+    if (row == null) {
+      this.stop(TemplateCompilerSiteCursorFrontierKind.AccountingMismatch, text, null, null, successor,
+        'Hook-created text accounting conflicted with the site ledger.');
+      return;
+    }
+    let staging: TemplateCompilerTextInstructionStaging | null = null;
+    let liveParse: TemplateCompilerSiteCursorTextEvent['liveParse'] = null;
+    if (interpolated) {
+      const siteKey = `${this.binding.lane.localKey}:live-text:${text.occurrenceKey}`;
+      const allocation = this.allocations.allocateExpression(siteKey, `${siteKey}:expression`, 'Interpolation', text.text, 0);
+      this.allocations.bindExpression(allocation.productHandle, read.observation, result, null);
+      liveParse = { expressionProductHandle: allocation.productHandle, read };
+      staging = stageTemplateCompilerTextInstructions(new TemplateCompilerTextInstructionStagingRequest(
+        new CursorTextInstructionStagingAuthority(this.allocations),
+        siteKey,
+        text.occurrenceKey,
+        new HtmlNodeReference(text.nodeKind, null, null, null),
+        allocation.productHandle,
+        result,
+        result.ast.expressions.map((expression, ordinal) =>
+          new TemplateCompilerTextHoleSourceRange(ordinal, expression.span, null, null)),
+      ));
+    }
+    const outcome = staticText ? TemplateCompilerSiteCursorSiteOutcome.NotApplicable
+      : interpolated ? TemplateCompilerSiteCursorSiteOutcome.Complete
+      : result.kind === ExpressionParseResultKind.CompleteInputParseError ? TemplateCompilerSiteCursorSiteOutcome.Invalid
+      : TemplateCompilerSiteCursorSiteOutcome.Open;
+    this.appendEvent(new TemplateCompilerSiteCursorTextEvent(
+      siteCursorConstructionAuthority, this.transcriptOrdinal++, text, parent, parentOrdinal, successor,
+      TemplateCompilerPreWalkBrowserOriginState.Absent, null, null, null, row, outcome, staging, liveParse,
+    ));
+    if (!staticText && !interpolated) {
+      this.stop(outcome === TemplateCompilerSiteCursorSiteOutcome.Invalid
+        ? TemplateCompilerSiteCursorFrontierKind.ReachedNormalizedInvalid
+        : TemplateCompilerSiteCursorFrontierKind.ReachedNormalizedOpen,
+      text, null, null, successor, 'Hook-created text interpolation has no closed completed parse.');
+    }
+  }
+
   private stageTextInstructions(
     text: TemplateCompilerTextOccurrence,
     bundle: TemplateCompilerNormalizedTextSite,
@@ -1937,7 +2006,7 @@ class TemplateCompilerRootSiteCursor {
 
   private stageLetElement(
     element: TemplateCompilerElementOccurrence,
-    authoredElement: HtmlElement,
+    authoredElement: HtmlElement | null,
   ): {
     readonly state: TemplateCompilerLetElementStagingState;
     readonly staging: ReturnType<typeof stageTemplateCompilerLetElement>['staging'];
@@ -1993,7 +2062,7 @@ class TemplateCompilerRootSiteCursor {
         );
         return reached;
       }
-      const compatible = this.semantics.letAttributeIsCompatible(
+      const compatible = authoredElement != null && this.semantics.letAttributeIsCompatible(
         element,
         authoredElement,
         bundle,
@@ -2057,7 +2126,7 @@ class TemplateCompilerRootSiteCursor {
     parentOrdinal: number,
     successor: TemplateCompilerNodeOccurrence | null,
   ): void {
-    if (node.generation != null) {
+    if (node.generation != null && node.generation.role !== TemplateCompilerGeneratedOccurrenceRole.HookComment) {
       const row = this.recordOccurrenceOnly(node, TemplateCompilerOccurrenceOnlyDisposition.GeneratedSiteNeedsLowering);
       if (row != null) {
         this.appendEvent(new TemplateCompilerSiteCursorIgnoredNodeEvent(
@@ -2082,6 +2151,7 @@ class TemplateCompilerRootSiteCursor {
       );
       return;
     }
+    if (node.generation != null) this.binding.execution.mutationAuthority.assertRegisteredGeneration(node.generation);
     const row = this.recordOccurrenceOnly(
       node,
       node instanceof TemplateCompilerCommentOccurrence
@@ -2115,7 +2185,7 @@ class TemplateCompilerRootSiteCursor {
         null,
         null,
         successor,
-        'Authored <!--au--> collides with the compiler-reserved hydration marker spelling.',
+        `${node.generation == null ? 'Authored' : 'Hook-created'} <!--au--> collides with the compiler-reserved hydration marker spelling.`,
       );
     }
   }
@@ -2141,7 +2211,7 @@ class TemplateCompilerRootSiteCursor {
     const pending = [...roots].reverse();
     while (pending.length > 0) {
       const node = pending.pop()!;
-      if (node.generation != null) {
+      if (node.generation != null && !isTemplateCompilerHookGeneratedNode(node)) {
         this.stop(
           TemplateCompilerSiteCursorFrontierKind.GeneratedSiteNeedsLowering,
           node,
@@ -2152,6 +2222,7 @@ class TemplateCompilerRootSiteCursor {
         );
         break;
       }
+      if (node.generation != null) this.binding.execution.mutationAuthority.assertRegisteredGeneration(node.generation);
       if (node instanceof TemplateCompilerTextOccurrence) {
         const originState = this.semantics.originState(node);
         if (
@@ -2778,6 +2849,10 @@ function liveAllocationSnapshotIsCoherent(
   }
   for (const event of events) {
     if (event instanceof TemplateCompilerSiteCursorTextEvent) {
+      if (event.liveParse != null) {
+        retainExpression(event.liveParse.expressionProductHandle, event.liveParse.read.observation,
+          event.liveParse.read.value, null);
+      }
       for (const hole of event.instructionStaging?.holes ?? []) {
         expectedInstructions.set(hole.instruction.productHandle, hole.instruction);
         const sourceAddressHandle = hole.source.sourceAddressHandle;

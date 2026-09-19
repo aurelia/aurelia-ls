@@ -23,6 +23,21 @@ export interface ContentMovesApplicationObservation {
     readonly titleFallbacks: number;
     readonly scriptExecutions: number;
     readonly voidChild: { readonly parent: string; readonly text: string; readonly stamp: string | null };
+    readonly generated: {
+      readonly factories: string | null;
+      readonly title: string | null;
+      readonly stamp: string | null;
+      readonly authored: { readonly parent: string; readonly text: string; readonly stamp: string | null };
+      readonly rows: readonly { readonly text: string; readonly stamp: string | null }[];
+      readonly projectionTitle: { readonly text: string; readonly stamp: string | null };
+      readonly projectionBody: readonly { readonly text: string; readonly stamp: string | null }[];
+      readonly local: { readonly text: string; readonly stamp: string | null };
+      readonly slotFallback: { readonly text: string; readonly stamp: string | null };
+      readonly slotRejected: number;
+      readonly fragmentText: readonly string[];
+      readonly comments: number;
+      readonly discarded: number;
+    };
   };
 }
 
@@ -76,6 +91,11 @@ async function capture(page: Page): Promise<ContentMovesApplicationObservation> 
     const lab = root.querySelector('#lab')!;
     const title = root.querySelector('#moved-card header b')!;
     const input = root.querySelector<HTMLInputElement>('#message-input')!;
+    const generated = root.querySelector('#generated-wrapper')!;
+    const authored = root.querySelector('#generated-authored')!;
+    const generatedTitle = root.querySelector('#generated-card header b')!;
+    const generatedLocal = root.querySelector('#generated-let-value')!;
+    const generatedFallback = root.querySelector('#generated-slot-fallback')!;
     return {
       kind: 'content-moves',
       live: [{ id: input.id, value: input.value }],
@@ -102,6 +122,21 @@ async function capture(page: Page): Promise<ContentMovesApplicationObservation> 
           parent: root.querySelector('#void-child')!.parentElement!.id,
           text: root.querySelector('#void-child')!.textContent,
           stamp: root.querySelector('#void-child')!.getAttribute('data-stamped'),
+        },
+        generated: {
+          factories: lab.getAttribute('data-factories'),
+          title: generated.getAttribute('title'),
+          stamp: generated.getAttribute('data-stamped'),
+          authored: { parent: authored.parentElement!.id, text: authored.textContent, stamp: authored.getAttribute('data-stamped') },
+          rows: Array.from(generated.querySelectorAll('.generated-row'), (element) => ({ text: element.textContent, stamp: element.getAttribute('data-stamped') })),
+          projectionTitle: { text: generatedTitle.textContent, stamp: generatedTitle.getAttribute('data-stamped') },
+          projectionBody: Array.from(generated.querySelectorAll('.generated-body'), (element) => ({ text: element.textContent, stamp: element.getAttribute('data-stamped') })),
+          local: { text: generatedLocal.textContent, stamp: generatedLocal.getAttribute('data-stamped') },
+          slotFallback: { text: generatedFallback.textContent, stamp: generatedFallback.getAttribute('data-stamped') },
+          slotRejected: generated.querySelectorAll('#generated-slot-rejected-first, #generated-slot-rejected-second').length,
+          fragmentText: Array.from(generated.childNodes).filter((node) => node.nodeType === 3).map((node) => node.textContent!),
+          comments: Array.from(generated.childNodes).filter((node) => node.nodeType === 8 && node.textContent === 'generated-content').length,
+          discarded: root.querySelectorAll('#generated-discarded').length,
         },
       },
     };
@@ -142,7 +177,7 @@ export function assertContentMovesExpectations(transcript: LaneTranscript): void
           order: 'true:true:true:true',
           documents: 'true:false:true:true',
           source: ['second'],
-          target: ['replacement', 'first', 'moved-card', 'adopted', 'text-moves', 'moved-script', 'void-parent'],
+          target: ['replacement', 'first', 'moved-card', 'adopted', 'text-moves', 'moved-script', 'void-parent', 'generated-wrapper'],
           values: [
             { id: 'replacement', text: `replacement:${message}`, stamp: null },
             { id: 'first', text: `first:${message}`, stamp: message },
@@ -150,7 +185,7 @@ export function assertContentMovesExpectations(transcript: LaneTranscript): void
             { id: 'adopted', text: `adopted:${message}`, stamp: message },
             { id: 'text-moves', text: `after:${message}before:${message}separator`, stamp: null },
           ],
-          cards: [`card:${message}`, `card:${message}`],
+          cards: [`card:${message}`, `card:${message}`, `card:${message}`],
           title: { text: `title:${message}`, stamp: message },
           rows: active ? ['one', 'two', 'three'].slice(0, count).map((item) => ({ text: `${item}:${message}`, stamp: message })) : [],
           discarded: 0,
@@ -158,6 +193,21 @@ export function assertContentMovesExpectations(transcript: LaneTranscript): void
           titleFallbacks: 1,
           scriptExecutions: 0,
           voidChild: { parent: 'void-parent', text: `void:${message}`, stamp: message },
+          generated: {
+            factories: 'true:true:true:true',
+            title: message,
+            stamp: message,
+            authored: { parent: 'generated-wrapper', text: `authored:${message}`, stamp: message },
+            rows: active ? ['one', 'two', 'three'].slice(0, count).map((item) => ({ text: `generated:${item}:${message}`, stamp: message })) : [],
+            projectionTitle: { text: `generated-title:${message}`, stamp: message },
+            projectionBody: active ? [{ text: `generated-body:${message}`, stamp: message }] : [],
+            local: { text: `let:${message}-local`, stamp: `${message}-local` },
+            slotFallback: { text: `fallback:${message}`, stamp: message },
+            slotRejected: 0,
+            fragmentText: ['fragment:', message],
+            comments: 1,
+            discarded: 0,
+          },
         },
       },
     }, `${transcript.lane} ${label}`);

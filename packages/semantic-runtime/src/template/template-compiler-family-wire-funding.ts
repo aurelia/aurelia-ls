@@ -10,13 +10,14 @@ import {
   HtmlAttributeReference,
   HtmlDocument,
   type HtmlIrNode,
-  type HtmlNodeReference,
+  HtmlNodeReference,
 } from './html-ir.js';
-import type {
+import {
   TemplateCompilerAttributeOccurrence,
-  TemplateCompilerNodeOccurrence,
+  type TemplateCompilerNodeOccurrence,
+  TemplateCompilerGeneratedOccurrenceRole,
+  isTemplateCompilerHookGeneratedNode,
 } from './template-compiler-occurrence.js';
-import { TemplateCompilerGeneratedOccurrenceRole } from './template-compiler-occurrence.js';
 import { TemplateCompilerOperationMutationBatch, TemplateCompilerMutationBatchState } from './template-compiler-execution.js';
 import { TemplateCompilerPreWalkBrowserOriginState } from './template-compiler-prewalk-remainder.js';
 import type {
@@ -116,8 +117,8 @@ export class TemplateCompilerFamilyWireFundingDraft {
       || (!nodeKind && !valueSpanRequired && valueAddressHandle != null)
       || (nodeKind && (valueSpanRequired || valueAddressHandle != null))
       || (resolution === TemplateCompilerFamilyWireResolution.HookGenerated && (
-        nodeKind
-        || occurrence.generation?.role !== TemplateCompilerGeneratedOccurrenceRole.HookAttribute
+        (nodeKind ? occurrence instanceof TemplateCompilerAttributeOccurrence || !isTemplateCompilerHookGeneratedNode(occurrence)
+          : occurrence.generation?.role !== TemplateCompilerGeneratedOccurrenceRole.HookAttribute)
         || exactOrigin != null
         || authoredObject != null
         || wireReference == null
@@ -293,7 +294,7 @@ export function prepareTemplateCompilerFamilyWireFunding(
     expectedOrigin: TemplateCompilerProjectionLogicalOriginReceipt | null = null,
     expectedWire: HtmlNodeReference | null = null,
   ): void => {
-    const resolved = resolveNode(assembly, basis, occurrence, expectedOrigin);
+    const resolved = resolveNode(assembly, basis, occurrence, expectedOrigin, expectedWire);
     const browserOriginState = expectedOrigin?.browserOriginState ?? occurrenceOriginState(assembly, occurrence);
     const stagingMismatch = resolved.resolution === TemplateCompilerFamilyWireResolution.ExactAuthored
       && expectedWire != null
@@ -488,6 +489,7 @@ function resolveNode(
   basis: AuthoredWireBasis,
   occurrence: TemplateCompilerNodeOccurrence,
   expectedOrigin: TemplateCompilerProjectionLogicalOriginReceipt | null,
+  expectedWire: HtmlNodeReference | null,
 ): ResolvedWire {
   const forest = assembly.receipt.traversal.audit.transcript.binding.forest;
   const exactOrigin = forest.exactAuthoredNodeOrigin(occurrence);
@@ -496,6 +498,28 @@ function resolveNode(
     || !sameExactOrigin(expectedOrigin.exactAuthoredOrigin, exactOrigin)
   );
   if (mismatch) return mismatchWire('Projection node origin diverges from the current occurrence forest.');
+  if (isTemplateCompilerHookGeneratedNode(occurrence) && occurrence.inputReference == null) {
+    const authority = assembly.receipt.traversal.audit.transcript.binding.execution.mutationAuthority;
+    const generation = occurrence.generation!;
+    const batch = authority.completedBatchForGeneration(generation)?.sourceBatch;
+    if (!authority.ownsGeneration(generation)
+      || !(batch instanceof TemplateCompilerOperationMutationBatch)
+      || batch.state !== TemplateCompilerMutationBatchState.Committed
+      || !batch.occurrenceGenerationReservations.includes(generation)) {
+      return mismatchWire('Generated hook node has no committed creation authority.');
+    }
+    if (expectedWire != null && (expectedWire.nodeKind !== occurrence.nodeKind
+      || expectedWire.productHandle != null || expectedWire.identityHandle != null || expectedWire.addressHandle != null)) {
+      return mismatchWire('Generated hook node staging claims an authored wire.');
+    }
+    return {
+      exactOrigin: null,
+      authoredObject: null,
+      wireReference: expectedWire ?? new HtmlNodeReference(occurrence.nodeKind, null, null, null),
+      resolution: TemplateCompilerFamilyWireResolution.HookGenerated,
+      summary: `Node '${occurrence.occurrenceKey}' has a committed hook-generated wire without an authored span.`,
+    };
+  }
   let posture = resolutionPosture(assembly, occurrence, expectedOrigin, exactOrigin);
   if (exactOrigin == null) return unresolvedWire(posture, occurrence.occurrenceKey);
   const originState = expectedOrigin?.browserOriginState ?? occurrenceOriginState(assembly, occurrence);

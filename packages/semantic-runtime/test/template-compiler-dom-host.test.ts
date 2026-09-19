@@ -30,6 +30,201 @@ import { BrowserEffectiveTemplateFixture } from './browser-effective-template-fi
 
 describe('interpreted compiler DOM host', () => {
   test.each([
+    ['authored source write', 'target.setAttribute("src", "changed.png");', 'setAttribute'],
+    ['namespaced write', 'target.setAttributeNS(null, "src", "changed.png");', 'setAttributeNS'],
+    ['source removal', 'target.removeAttribute("src");', 'removeAttribute'],
+    ['namespaced removal', 'target.removeAttributeNS(null, "src");', 'removeAttributeNS'],
+    ['attribute toggle', 'target.toggleAttribute("src", false);', 'toggleAttribute'],
+    ['reflection', 'target.id = "changed";', 'id'],
+    ['class tokens', 'target.classList.add("changed");', 'add'],
+    ['class value', 'target.classList.value = "changed";', 'value'],
+    ['subtree removal', 'target.remove();', 'remove'],
+    ['resource relocation', 'wrapper.appendChild(target);', 'appendChild'],
+    ['new unused platform image', 'const resource=platform.document.createElement("img");resource.setAttribute("src","new.png");', 'setAttribute'],
+    ['inert resource adoption', `const carrier=platform.document.createElement('template');
+      const resource=carrier.content.ownerDocument.createElement('img');resource.setAttribute('src','new.png');
+      wrapper.appendChild(resource);`, 'appendChild'],
+    ['resource in generated wrapper', `const carrier=platform.document.createElement('template');
+      const group=carrier.content.ownerDocument.createElement('section');
+      const resource=group.ownerDocument.createElement('img');resource.setAttribute('src','new.png');
+      group.appendChild(resource);wrapper.appendChild(group);`, 'appendChild'],
+    ['dynamic script child insertion', `const script=platform.document.createElement('script');
+      script.appendChild(platform.document.createTextNode('sideEffect()'));`, 'appendChild'],
+  ] as const)('refuses unclosed native resource effects and rolls back prior generated wrappers: %s', (_name, body, member) => {
+    const run = new DomHookRun('<div><img src="original.png" class="before"><i></i></div>', true);
+    try {
+      const children = [...run.root.readChildren()];
+      const nodeCount = run.execution.forest.readNodes().length;
+      const attributeCount = run.execution.forest.readAttributes().length;
+      const result = run.invoke(`function hook(node,platform) {
+        const target=node.firstChild;
+        const wrapper=node.ownerDocument.createElement('section');
+        node.appendChild(wrapper);wrapper.appendChild(node.children[1]);
+        try { ${body} } catch(error) { return true; }
+        return true;
+      }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Open);
+      expect(run.host.refusal).toMatchObject({ kind: 'native-resource-effects', member });
+      run.complete(result.kind);
+      expect(run.root.readChildren()).toEqual(children);
+      expect((children[0] as TemplateCompilerElementOccurrence).readAttributes().map(attribute => attribute.value))
+        .toEqual(['original.png', 'before']);
+      expect(run.execution.forest.readNodes()).toHaveLength(nodeCount);
+      expect(run.execution.forest.readAttributes()).toHaveLength(attributeCount);
+      run.execution.forest.assertCoherentTopology();
+      run.execution.mutationAuthority.assertGeneratedInventory();
+    } finally { run.dispose(); }
+  });
+
+  test.each([
+    ['audio', `const resource=platform.document.createElement('audio');resource.id='changed';`],
+    ['video', `const resource=platform.document.createElement('video');resource.setAttribute('preload','auto');`],
+    ['source', `const resource=platform.document.createElement('source');resource.setAttribute('src','media');`],
+    ['track', `const resource=platform.document.createElement('track');resource.setAttribute('src','captions');`],
+    ['object', `const resource=platform.document.createElement('object');resource.setAttribute('data','object');`],
+    ['embed', `const resource=platform.document.createElement('embed');resource.setAttribute('src','embed');`],
+    ['iframe', `const resource=platform.document.createElement('iframe');resource.setAttribute('src','frame');`],
+    ['link', `const resource=platform.document.createElement('link');resource.setAttribute('href','sheet');`],
+    ['input src', `const resource=platform.document.createElement('input');resource.setAttribute('src','image');`],
+    ['input type', `const resource=platform.document.createElement('input');resource.setAttribute('type','IMAGE');`],
+    ['SVG image', `const resource=platform.document.createElementNS('http://www.w3.org/2000/svg','image');resource.setAttributeNS('http://www.w3.org/1999/xlink','xlink:href','image');`],
+    ['SVG use', `const resource=platform.document.createElementNS('http://www.w3.org/2000/svg','use');resource.setAttribute('href','external.svg#id');`],
+    ['SVG feImage', `const resource=platform.document.createElementNS('http://www.w3.org/2000/svg','feImage');resource.setAttribute('href','filter.png');`],
+  ] as const)('keeps the current native resource envelope conservative for %s', (_name, body) => {
+    const run = new DomHookRun('<div></div>');
+    try {
+      const result = run.invoke(`function hook(node,platform) { ${body} }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Open);
+      expect(run.host.refusal?.kind).toBe('native-resource-effects');
+      run.complete(result.kind);
+    } finally { run.dispose(); }
+  });
+
+  test('keeps inert resource edits, parsed scripts, ordinary inputs, and inert nested template content admitted', () => {
+    const run = new DomHookRun('<div><script></script><template><img></template></div>', true);
+    try {
+      const result = run.invoke(`function hook(node,platform) {
+        const carrier=node.children[1];
+        const image=carrier.content.firstChild;
+        image.setAttribute('src','before.png');image.removeAttribute('src');
+        image.setAttributeNS(null,'src','after.png');image.classList.add('inert');
+        const created=image.ownerDocument.createElement('img');created.setAttribute('src','created.png');
+        carrier.content.appendChild(created);
+        node.appendChild(carrier);
+        node.firstChild.appendChild(platform.document.createTextNode('parsed script stays inert'));
+        const input=platform.document.createElement('input');input.setAttribute('type','text');input.className='plain';
+        input.setAttributeNS('urn:not-native','p:type','image');node.appendChild(input);
+        return image.getAttribute('src')==='after.png' && image.className==='inert'
+          && created.ownerDocument===image.ownerDocument && image.ownerDocument!==platform.document;
+      }`);
+      expect(result.kind, run.host.refusal?.summary).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      expect(run.host.refusal).toBeNull();
+      run.complete(result.kind);
+    } finally { run.dispose(); }
+  });
+
+  test('validates native arguments before the resource-effect boundary and permits actual no-ops', () => {
+    const run = new DomHookRun('<div><img src="existing.png" class="before"></div>', true);
+    try {
+      const result = run.invoke(`function hook(node) {
+        const image=node.firstChild;
+        let invalidName=false,invalidToken=false,invalidChild=false;
+        try{image.setAttribute('bad name','x');}catch(error){invalidName=error.name==='InvalidCharacterError';}
+        try{image.classList.add('bad token');}catch(error){invalidToken=error.name==='InvalidCharacterError';}
+        try{image.removeChild(node);}catch(error){invalidChild=error.name==='NotFoundError';}
+        image.removeAttribute('absent');image.classList.toggle('before',true);
+        return invalidName&&invalidToken&&invalidChild&&image.hasAttribute('src');
+      }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      expect(run.host.refusal).toBeNull();
+      run.complete(result.kind);
+    } finally { run.dispose(); }
+  });
+
+  test('creates detached nodes with native names, document affiliation and template contents', () => {
+    const run = new DomHookRun('<div></div>');
+    try {
+      const result = run.invoke(`function hook(node,platform){
+        const doc=node.ownerDocument, wrapper=doc.createElement('SECTION');
+        wrapper.setAttribute('title.bind','message');
+        const text=doc.createTextNode(0x10n),comment=doc.createComment('static--comment');
+        const fragment=platform.document.createDocumentFragment();
+        const template=platform.document.createElement('template');
+        const custom=template.content.ownerDocument.createElement('generated-card');
+        const svg=doc.createElementNS('http://www.w3.org/2000/svg','linearGradient');
+        svg.setAttribute('id','gradient');
+        fragment.appendChild(text);fragment.appendChild(comment);
+        wrapper.appendChild(fragment);wrapper.appendChild(svg);template.content.appendChild(custom);
+        node.appendChild(wrapper);node.appendChild(template);
+        return wrapper.nodeName==='SECTION'&&wrapper.localName==='section'&&wrapper.parentNode===node
+          &&text.data==='16'&&comment.data==='static--comment'&&fragment.childNodes.length===0
+          &&fragment.ownerDocument===platform.document&&text.ownerDocument===doc
+          &&template.ownerDocument===doc&&template.content.ownerDocument===doc
+          &&custom.ownerDocument===doc&&custom.parentNode===template.content
+          &&svg.nodeName==='linearGradient'&&svg.namespaceURI==='http://www.w3.org/2000/svg';
+      }`);
+      expect(result.kind, run.host.refusal?.summary ?? result.evaluation?.auditOpenSeams.map(seam => seam.summary).join('\n'))
+        .toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+      expect(run.root.readChildren()).toHaveLength(2);
+      run.execution.forest.assertCoherentTopology();
+    } finally { run.dispose(); }
+  });
+
+  test.each([
+    ['node.ownerDocument.createElement("bad name")', 'InvalidCharacterError'],
+    ['node.ownerDocument.createElement("")', 'InvalidCharacterError'],
+    ['node.ownerDocument.createElement("1x")', 'InvalidCharacterError'],
+    ['node.ownerDocument.createElementNS(null,"p:x")', 'NamespaceError'],
+    ['node.ownerDocument.createElementNS("urn:wrong","xml:x")', 'NamespaceError'],
+    ['node.ownerDocument.createTextNode()', 'TypeError'],
+    ['node.ownerDocument.createComment()', 'TypeError'],
+    ['node.ownerDocument.createElementNS("http://www.w3.org/2000/svg")', 'TypeError'],
+  ] as const)('keeps native factory failure catchable: %s', (body, name) => {
+    const run = new DomHookRun('<div></div>');
+    try {
+      const count = run.execution.forest.readNodes().length;
+      const result = run.invoke(`function hook(node){try{${body};}catch(error){return error.name==='${name}';}}`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      expect(run.host.refusal).toBeNull();
+      run.complete(result.kind);
+      expect(run.execution.forest.readNodes()).toHaveLength(count);
+    } finally { run.dispose(); }
+  });
+
+  test.each([
+    ['platform.document.createElement("native-widget")', 'native-custom-element-construction'],
+    ['platform.document.createElement("button",{is:"native-button"})', 'dom-creation-options'],
+    ['node.ownerDocument.createElement("x",{})', 'dom-creation-options'],
+    ['node.ownerDocument.createElementNS("urn:x","thing")', 'dom-element-namespace'],
+    ['node.ownerDocument.createElementNS("http://www.w3.org/2000/svg","svg:path")', 'dom-element-prefix'],
+    ['node.ownerDocument.createElementNS("http://www.w3.org/1999/xhtml","DIV")', 'dom-html-name-case'],
+    ['node.ownerDocument.createElement("a=b")', 'dom-name-compatibility'],
+  ] as const)('refuses unsupported factory behavior and rolls back generated inventory: %s', (body, kind) => {
+    const run = new DomHookRun('<div><i></i></div>');
+    try {
+      const original = [...run.execution.forest.readNodes()];
+      const child = run.root.readChildren()[0]!;
+      const result = run.invoke(`function hook(node,platform){
+        const wrapper=node.ownerDocument.createElement('section');
+        wrapper.appendChild(node.firstChild);node.appendChild(wrapper);wrapper.setAttribute('data-created','yes');
+        try{${body};}catch(error){return false;}
+      }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Open);
+      expect(run.host.refusal).toMatchObject({ kind });
+      run.complete(result.kind);
+      expect(run.execution.forest.readNodes()).toEqual(original);
+      expect(run.root.readChildren()).toEqual([child]);
+      run.execution.forest.assertCoherentTopology();
+      run.execution.mutationAuthority.assertGeneratedInventory();
+    } finally { run.dispose(); }
+  });
+
+  test.each([
     ['<button is="native-original"></button>', 'node.removeAttribute("is");', 'native-original', null],
     ['<button is="native-original"></button>', 'node.setAttribute("is", "native-rewritten");', 'native-original', 'native-rewritten'],
     ['<button></button>', 'node.setAttribute("is", "native-added");', null, 'native-added'],
@@ -571,7 +766,7 @@ describe('interpreted compiler DOM host', () => {
     ['geometry', 'node.getBoundingClientRect();', 'getBoundingClientRect', 'unsupported-dom-member'],
     ['outside parent', 'node.parentNode;', 'parentNode', 'outside-compiler-root'],
     ['ambient document', 'platform.document.body;', 'body', 'unsupported-dom-member'],
-    ['owner document factory', 'node.ownerDocument.createElement("i");', 'createElement', 'unsupported-dom-member'],
+    ['owner document import', 'node.ownerDocument.importNode(node,true);', 'importNode', 'unsupported-dom-member'],
     ['dataset', 'node.dataset.key = "x";', 'dataset', 'unsupported-dom-member'],
     ['markup write', 'node.innerHTML = "<b></b>";', 'innerHTML', 'unsupported-dom-member'],
     ['text write', 'node.textContent = "changed";', 'textContent', 'unsupported-dom-member'],

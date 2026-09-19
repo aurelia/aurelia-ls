@@ -46,9 +46,10 @@ import type {
 import { snapshotTemplateCompilerDescendantElements } from './template-compiler-dom-query.js';
 import {
   compilerDomAttributeNameIssue,
+  compilerDomElementNameIssue,
   compilerDomNamespacedAttributeName,
   type CompilerDomAttributeName,
-} from './template-compiler-dom-attribute-name.js';
+} from './template-compiler-dom-name.js';
 import {
   TemplateCompilerCommentOccurrence,
   TemplateCompilerDoctypeOccurrence,
@@ -102,9 +103,9 @@ type CompilerDomReference = CompilerDomNodeReference | CompilerDomCollectionRefe
 /**
  * Source-callable DOM operations over the existing compiler forest and pending operation overlay.
  *
- * Traversal, attributes, class tokens, and existing-node relocation/removal use one pending operation.
- * Node creation, cloning, markup writes, and metadata writes remain explicit refusals until generated sites enter
- * ordinary compiler lowering. Dataset remains unsupported until deletion and enumeration have owned evaluator lanes.
+ * Traversal, document factories, attributes, class tokens, and node relocation/removal use one pending operation.
+ * Native resource effects are not confined DOM mutations: platform-owned resource mutations remain explicit refusals.
+ * Cloning, markup/metadata writes, and dataset remain unsupported until their owned evaluator/lowering lanes exist.
  */
 export class TemplateCompilerDomHost {
   readonly argumentValues: readonly EvaluationValue[];
@@ -206,6 +207,9 @@ export class TemplateCompilerDomHost {
       if (member === 'nodeType') return new EvaluationNumberValue(9);
       if (member === 'nodeName') return new EvaluationStringValue('#document');
       if (member === 'ownerDocument') return new EvaluationNullValue();
+      if (['createElement', 'createElementNS', 'createTextNode', 'createComment', 'createDocumentFragment'].includes(member)) {
+        return this.method(`document:${member}`);
+      }
       return this.unsupported(member, node, moduleKey, host);
     }
     if (reference.kind === 'token-iterator') return member === 'next'
@@ -352,6 +356,11 @@ export class TemplateCompilerDomHost {
     const reference = this.references.read(frame.thisValue.value);
     const args = frame.argumentList.elements.map((entry) => entry.value);
     if (reference == null) return domThrow('TypeError', 'Illegal DOM invocation.');
+    if (member.startsWith('document:')) {
+      return reference.kind === 'document'
+        ? this.invokeDocumentFactory(reference, member.slice(9), args, frame, host)
+        : domThrow('TypeError', 'Illegal Document invocation.');
+    }
     if (member === 'token-iterator:next') {
       if (reference.kind !== 'token-iterator') return domThrow('TypeError', 'Illegal DOMTokenList iterator invocation.');
       const step = reference.iterator.next();
@@ -429,6 +438,9 @@ export class TemplateCompilerDomHost {
       }
       if (child === this.rootElement) return staticInvocationValue(this.outside(member, frame.node, frame.moduleKey, host));
       if (child.parent == null) return staticInvocationValue(EvaluationUndefined);
+      if (this.hasNativeResourceTreeEffect(child, null)) {
+        return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-resource-effects'));
+      }
       this.execution.detachProcessContentNode(this.attempt, child);
       return staticInvocationValue(member === 'remove' ? EvaluationUndefined : this.nodeValue(child));
     }
@@ -454,6 +466,70 @@ export class TemplateCompilerDomHost {
       }
       default: return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host));
     }
+  }
+
+  private invokeDocumentFactory(
+    reference: CompilerDomOpaqueReference,
+    member: string,
+    args: readonly EvaluationValue[],
+    frame: StaticInvocationFrame,
+    host: StaticIntrinsicEvaluationHost,
+  ): StaticInvocationDispatch {
+    const document = reference === this.document ? 'platform' : 'template-contents';
+    const expose = (node: TemplateCompilerNodeOccurrence): StaticInvocationDispatch => {
+      this.ownedNodes.add(node);
+      if (node instanceof TemplateCompilerElementOccurrence && node.templateContent != null) {
+        this.ownedNodes.add(node.templateContent);
+      }
+      return staticInvocationValue(this.nodeValue(node));
+    };
+    if (member === 'createDocumentFragment') {
+      return expose(this.execution.createProcessContentFragment(this.attempt, document));
+    }
+    const namespaced = member === 'createElementNS';
+    if (args.length < (namespaced ? 2 : 1)) return domThrow('TypeError', `${member} is missing a required argument.`);
+    const text = domPrimitiveString(args[namespaced ? 1 : 0]!);
+    if (text == null) return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'runtime-dependent-input'));
+    if (member === 'createTextNode') return expose(this.execution.createProcessContentText(this.attempt, text, document));
+    if (member === 'createComment') return expose(this.execution.createProcessContentComment(this.attempt, text, document));
+    const option = args[namespaced ? 2 : 1];
+    if (option != null && option.kind !== EvaluationValueKind.Undefined && option.kind !== EvaluationValueKind.Null) {
+      return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'dom-creation-options'));
+    }
+    let namespaceUri = 'http://www.w3.org/1999/xhtml';
+    let namespace = HtmlNamespaceKind.Html;
+    let name = asciiLower(text);
+    const issue = compilerDomElementNameIssue(text);
+    if (issue != null) return issue === 'dom-name-compatibility'
+      ? staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, issue))
+      : domThrow(issue, 'The element name is invalid.');
+    if (namespaced) {
+      const nsValue = args[0]!;
+      const ns = nsValue.kind === EvaluationValueKind.Null || nsValue.kind === EvaluationValueKind.Undefined
+        ? '' : domPrimitiveString(nsValue);
+      if (ns == null) return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'runtime-dependent-input'));
+      // The common QName subset shares XML namespace constraints with attributes; newer names remain explicit.
+      const descriptor = compilerDomNamespacedAttributeName(ns === '' ? null : ns, text);
+      if (typeof descriptor === 'string') return descriptor === 'dom-name-compatibility'
+        ? staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, descriptor))
+        : domThrow(descriptor, 'The element name and namespace are not valid together.');
+      if (descriptor.prefix != null) return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'dom-element-prefix'));
+      namespaceUri = ns;
+      namespace = ns === 'http://www.w3.org/1999/xhtml' ? HtmlNamespaceKind.Html
+        : ns === 'http://www.w3.org/2000/svg' ? HtmlNamespaceKind.Svg
+        : ns === 'http://www.w3.org/1998/Math/MathML' ? HtmlNamespaceKind.Math : HtmlNamespaceKind.Unknown;
+      if (namespace === HtmlNamespaceKind.Unknown) {
+        return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'dom-element-namespace'));
+      }
+      name = descriptor.name;
+      if (namespace === HtmlNamespaceKind.Html && /[A-Z]/u.test(name)) {
+        return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'dom-html-name-case'));
+      }
+    }
+    if (namespace === HtmlNamespaceKind.Html && document === 'platform' && name.includes('-')) {
+      return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-custom-element-construction'));
+    }
+    return expose(this.execution.createProcessContentElement(this.attempt, name, namespace, namespaceUri, null, document));
   }
 
   private invokeNodePlacement(
@@ -500,6 +576,10 @@ export class TemplateCompilerDomHost {
     // Insertion drains a fragment's children; its own template-content ownership and identity do not move.
     const inputs = node instanceof TemplateCompilerFragmentOccurrence ? [...node.readChildren()] : [node];
     if (replacing && node === child) return staticInvocationValue(this.nodeValue(child));
+    if (inputs.some(inputNode => this.hasNativeResourceTreeEffect(inputNode, parent))
+      || replacing && this.hasNativeResourceTreeEffect(child!, null)) {
+      return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-resource-effects'));
+    }
     if (replacing) this.execution.detachProcessContentNode(this.attempt, child!);
     for (const inputNode of inputs) {
       const currentChildren = parent.readChildren();
@@ -550,6 +630,9 @@ export class TemplateCompilerDomHost {
       if (member === 'getAttributeNS') return staticInvocationValue(attribute == null ? new EvaluationNullValue()
         : new EvaluationStringValue(this.execution.readAttributeValue(this.attempt, attribute)));
       if (member === 'hasAttributeNS') return staticInvocationValue(new EvaluationBooleanValue(attribute != null));
+      if (attribute != null && this.hasNativeResourceAttributeEffect(element)) {
+        return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-resource-effects'));
+      }
       if (attribute != null) this.execution.removeProcessContentAttribute(this.attempt, attribute);
       return staticInvocationValue(EvaluationUndefined);
     }
@@ -566,13 +649,21 @@ export class TemplateCompilerDomHost {
     if (member === 'hasAttribute') return staticInvocationValue(new EvaluationBooleanValue(attribute != null));
     if (member === 'setAttribute') {
       // Non-namespace setters target the first qualified-name match, even if that attribute has a namespace.
-      if (attribute != null) this.execution.rewriteAttributeValue(this.attempt, attribute, value);
+      if (attribute != null) {
+        if (this.hasNativeResourceAttributeEffect(element, attribute, value)) {
+          return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-resource-effects'));
+        }
+        this.execution.rewriteAttributeValue(this.attempt, attribute, value);
+      }
       else return staticInvocationValue(this.setAttributeDescriptor(
         element, { name, namespaceUri: null, prefix: null }, value, member, frame.node, frame.moduleKey, host,
       ));
       return staticInvocationValue(EvaluationUndefined);
     }
     if (member === 'removeAttribute') {
+      if (attribute != null && this.hasNativeResourceAttributeEffect(element)) {
+        return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-resource-effects'));
+      }
       if (attribute != null) this.execution.removeProcessContentAttribute(this.attempt, attribute);
       return staticInvocationValue(EvaluationUndefined);
     }
@@ -583,6 +674,9 @@ export class TemplateCompilerDomHost {
       const result = this.setAttributeDescriptor(element, { name, namespaceUri: null, prefix: null }, '', member, frame.node, frame.moduleKey, host);
       if (this.refusal != null) return staticInvocationValue(result);
     } else if (!present && attribute != null) {
+      if (this.hasNativeResourceAttributeEffect(element)) {
+        return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-resource-effects'));
+      }
       this.execution.removeProcessContentAttribute(this.attempt, attribute);
     }
     return staticInvocationValue(new EvaluationBooleanValue(present));
@@ -743,8 +837,63 @@ export class TemplateCompilerDomHost {
     if (existing == null && this.attribute(element, qualifiedName) != null) {
       return this.unsupported(member, node, moduleKey, host, 'duplicate-qualified-attribute-lowering');
     }
+    if (this.hasNativeResourceAttributeEffect(element, descriptor, value)) {
+      return this.unsupported(member, node, moduleKey, host, 'native-resource-effects');
+    }
     this.execution.setProcessContentAttribute(this.attempt, element, descriptor, value);
     return EvaluationUndefined;
+  }
+
+  /** Conservative owned-effect boundary, not a model of resource fetching or a claim to exhaust browser effects. */
+  private hasNativeResourceAttributeEffect(
+    element: TemplateCompilerElementOccurrence,
+    incoming?: Pick<CompilerDomAttributeName, 'name' | 'namespaceUri'>,
+    value?: string,
+  ): boolean {
+    return this.execution.forest.ownerDocumentFor(element) === 'platform'
+      && this.isNativeResourceElement(element, incoming, value);
+  }
+
+  private isNativeResourceElement(
+    element: TemplateCompilerElementOccurrence,
+    incoming?: Pick<CompilerDomAttributeName, 'name' | 'namespaceUri'>,
+    value?: string,
+  ): boolean {
+    if (element.namespace === HtmlNamespaceKind.Html) {
+      switch (element.tagName) {
+        case 'img': case 'audio': case 'video': case 'source': case 'track':
+        case 'object': case 'embed': case 'iframe': case 'link':
+          return true;
+        case 'script': return !element.parserInertScript;
+        case 'input':
+          return this.namespacedAttribute(element, null, 'src') != null
+            || asciiLower(this.reflectedAttributeValue(element, 'type')) === 'image'
+            || incoming?.namespaceUri === null && (incoming.name === 'src'
+              || incoming.name === 'type' && asciiLower(value ?? '') === 'image');
+      }
+    }
+    return element.namespace === HtmlNamespaceKind.Svg
+      && (element.tagName === 'image' || element.tagName === 'use' || element.tagName === 'feImage');
+  }
+
+  private hasNativeResourceTreeEffect(
+    node: TemplateCompilerNodeOccurrence,
+    destination: TemplateCompilerElementOccurrence | TemplateCompilerFragmentOccurrence | null,
+  ): boolean {
+    const forest = this.execution.forest;
+    const platformDestination = destination != null && forest.ownerDocumentFor(destination) === 'platform';
+    if (destination instanceof TemplateCompilerElementOccurrence && this.hasNativeResourceAttributeEffect(destination)
+      || node.parent instanceof TemplateCompilerElementOccurrence && this.hasNativeResourceAttributeEffect(node.parent)) return true;
+    const pending = [node];
+    while (pending.length > 0) {
+      const current = pending.pop()!;
+      if (current instanceof TemplateCompilerElementOccurrence
+        && (platformDestination || forest.ownerDocumentFor(current) === 'platform')
+        && this.isNativeResourceElement(current)) return true;
+      // Moving a template does not insert its inert .content; an explicit content insertion drains its children above.
+      pending.push(...current.readChildren());
+    }
+    return false;
   }
 
   private attribute(element: TemplateCompilerElementOccurrence, name: string): TemplateCompilerAttributeOccurrence | null {

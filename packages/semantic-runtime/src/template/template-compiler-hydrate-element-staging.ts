@@ -33,6 +33,7 @@ import type {
 } from './template-compiler-process-content.js';
 import {
   TemplateCompilerElementOccurrence,
+  TemplateCompilerGeneratedOccurrenceRole,
   TemplateCompilerTextOccurrence,
   type TemplateCompilerAttributeOccurrence,
   type TemplateCompilerNodeOccurrence,
@@ -648,7 +649,14 @@ function processContentDraft(
     : request.owner.contributions.find((contribution) =>
       contribution.frame.attribute === result.nameCarrier
     )?.frame.source.authoredAttribute?.valueAddressHandle ?? null;
-  if (result.nameCarrier != null && nameSourceAddressHandle == null) {
+  // Exact reached scalar history already validates a generated Attr against its committed creation batch.
+  // Its metadata value is known even though there is deliberately no authored value span.
+  const hookGeneratedName = result.nameCarrier?.generation?.role === TemplateCompilerGeneratedOccurrenceRole.HookAttribute
+    && result.nameCarrier.inputReference == null
+    && result.nameScalar?.isExact() === true
+    && result.nameScalar.attribute === result.nameCarrier
+    && result.nameScalar.generation === result.nameCarrier.generation;
+  if (result.nameCarrier != null && nameSourceAddressHandle == null && !hookGeneratedName) {
     blockers.push(envelopeBlocker(
       TemplateCompilerHydrateElementBlockerKind.ProcessContentNameSourceAuthorityOpen,
       'AuSlot name metadata is exact, but its live attribute has no singular authored value source.',

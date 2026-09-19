@@ -1,4 +1,5 @@
 import type { ClaimEndpointHandle } from '../kernel/claim.js';
+import { HtmlNodeReference } from './html-ir.js';
 import {
   TemplateCompilerContainerlessReplacementPlacement,
   TemplateCompilerMarkerTargetPlacement,
@@ -565,6 +566,8 @@ export function prepareTemplateCompilerContextFamilyTargetPlan(
     rows.receipt.endpoint.lane.localKey,
     rows.receipt.traversal.audit.transcript.binding.unit.rootContext,
     allocation.rootDefinition.compiledTemplate,
+    new Map(allocation.wires.drafts.flatMap(draft => draft.wireReference instanceof HtmlNodeReference
+      && 'nodeKind' in draft.occurrence ? [[draft.wireReference, draft.occurrence] as const] : [])),
   );
   const contextMappings: TemplateCompilerContextFamilyTargetContextMapping[] = [];
   const targetByCursor = new Map<TemplateCompilerSiteCursorContextReference, TemplateCompilerTargetContextPlan>();

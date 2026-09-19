@@ -47,6 +47,10 @@ export const enum TemplateCompilerGeneratedOccurrenceRole {
   StaticTextSegment = 'static-text-segment',
   Clone = 'clone',
   HookAttribute = 'hook-attribute',
+  HookElement = 'hook-element',
+  HookText = 'hook-text',
+  HookComment = 'hook-comment',
+  HookFragment = 'hook-fragment',
 }
 
 /** Path-independent cause of one compiler-created output occurrence. */
@@ -204,6 +208,17 @@ export abstract class TemplateCompilerNodeOccurrence {
 
 export class TemplateCompilerFragmentOccurrence extends TemplateCompilerNodeOccurrence {
   readonly nodeKind = HtmlIrNodeKind.Fragment;
+}
+
+/** Identifies source DOM factory outputs, distinct from later compiler markers and lowering-generated structure. */
+export function isTemplateCompilerHookGeneratedNode(node: TemplateCompilerNodeOccurrence): boolean {
+  switch (node.nodeKind) {
+    case HtmlIrNodeKind.Element: return node.generation?.role === TemplateCompilerGeneratedOccurrenceRole.HookElement;
+    case HtmlIrNodeKind.Text: return node.generation?.role === TemplateCompilerGeneratedOccurrenceRole.HookText;
+    case HtmlIrNodeKind.Comment: return node.generation?.role === TemplateCompilerGeneratedOccurrenceRole.HookComment;
+    case HtmlIrNodeKind.Fragment: return node.generation?.role === TemplateCompilerGeneratedOccurrenceRole.HookFragment;
+    default: return false;
+  }
 }
 
 export class TemplateCompilerElementOccurrence extends TemplateCompilerNodeOccurrence {
@@ -642,6 +657,7 @@ export class TemplateCompilerOccurrenceForest {
   createGeneratedFragment(
     generation: TemplateCompilerOccurrenceGeneration,
     inputReference: TemplateStructuralNodeReference | null = null,
+    document: TemplateContentOwnerDocument = 'platform',
   ): TemplateCompilerFragmentOccurrence {
     const canonicalInput = this.canonicalGeneratedNodeInput(inputReference, HtmlIrNodeKind.Fragment);
     return this.recordGeneratedNode(new TemplateCompilerFragmentOccurrence(
@@ -651,7 +667,7 @@ export class TemplateCompilerOccurrenceForest {
       null,
       TemplateCompilerOccurrenceEdgeKind.Detached,
       generation,
-    ));
+    ), document);
   }
 
   /** Create one detached element output under compiler authority. */
@@ -663,6 +679,7 @@ export class TemplateCompilerOccurrenceForest {
     customElementIs: string | null,
     parserInertScript: boolean,
     inputReference: TemplateStructuralNodeReference | null = null,
+    document: TemplateContentOwnerDocument = 'platform',
   ): TemplateCompilerElementOccurrence {
     const canonicalInput = this.canonicalGeneratedNodeInput(inputReference, HtmlIrNodeKind.Element);
     return this.recordGeneratedNode(new TemplateCompilerElementOccurrence(
@@ -677,7 +694,7 @@ export class TemplateCompilerOccurrenceForest {
       customElementIs,
       parserInertScript,
       generation,
-    ));
+    ), document);
   }
 
   /** Create one detached text output; an input reference preserves 1→N text or clone lineage. */
@@ -685,6 +702,7 @@ export class TemplateCompilerOccurrenceForest {
     generation: TemplateCompilerOccurrenceGeneration,
     text: string,
     inputReference: TemplateStructuralNodeReference | null = null,
+    document: TemplateContentOwnerDocument = 'platform',
   ): TemplateCompilerTextOccurrence {
     const canonicalInput = this.canonicalGeneratedNodeInput(inputReference, HtmlIrNodeKind.Text);
     return this.recordGeneratedNode(new TemplateCompilerTextOccurrence(
@@ -695,7 +713,7 @@ export class TemplateCompilerOccurrenceForest {
       TemplateCompilerOccurrenceEdgeKind.Detached,
       text,
       generation,
-    ));
+    ), document);
   }
 
   /** Create one detached comment output; semantic kind, never text spelling, determines compiler-marker meaning. */
@@ -704,6 +722,7 @@ export class TemplateCompilerOccurrenceForest {
     text: string,
     semanticKind: HtmlCommentSemanticKind,
     inputReference: TemplateStructuralNodeReference | null = null,
+    document: TemplateContentOwnerDocument = 'platform',
   ): TemplateCompilerCommentOccurrence {
     const canonicalInput = this.canonicalGeneratedNodeInput(inputReference, HtmlIrNodeKind.Comment);
     return this.recordGeneratedNode(new TemplateCompilerCommentOccurrence(
@@ -715,7 +734,7 @@ export class TemplateCompilerOccurrenceForest {
       text,
       semanticKind,
       generation,
-    ));
+    ), document);
   }
 
   /** Create one detached attribute output; an input reference preserves clone/rewrite lineage. */
@@ -1161,7 +1180,10 @@ export class TemplateCompilerOccurrenceForest {
     }
   }
 
-  private recordGeneratedNode<TNode extends TemplateCompilerNodeOccurrence>(node: TNode): TNode {
+  private recordGeneratedNode<TNode extends TemplateCompilerNodeOccurrence>(
+    node: TNode,
+    document: TemplateContentOwnerDocument,
+  ): TNode {
     if (node.generation == null) {
       throw new Error(`Generated compiler occurrence '${node.occurrenceKey}' has no generation authority.`);
     }
@@ -1170,7 +1192,7 @@ export class TemplateCompilerOccurrenceForest {
     }
     this.claimGeneration(node.generation, node);
     this.nodes.push(node);
-    this.nodeDocuments.set(node, 'platform');
+    this.nodeDocuments.set(node, document);
     this.nodesByOccurrenceKey.set(node.occurrenceKey, node);
     if (node.inputReference != null) {
       appendMap(this.nodesByInputProduct, node.inputReference.productHandle, node);

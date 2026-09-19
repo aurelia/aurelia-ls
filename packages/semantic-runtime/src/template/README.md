@@ -329,16 +329,19 @@ classification, expression parsing, and instruction lowering converge on the sam
   through the same event/context forest.
   `template-compiler-dom-host.ts` exposes that forest to isolated source hooks through the evaluator's owned-operation
   lane. The surface includes node/element navigation, live collections and iteration, attribute creation/removal/value
-  writes (including namespaces), ordered live classList operations, and owned existing-node appendChild/insertBefore/
+  writes (including namespaces), ordered live classList operations, and owned-node appendChild/insertBefore/
   replaceChild/removeChild. Repeated removal/reinsertion and moves through an existing template content fragment keep
   the original node identity. Ordered source placements distinguish temporary detachment from final removed roots;
   only final removal excludes compiler sites. Structural input order is folded from committed hook effects while
   immutable browser seed placement remains provenance. Ordinary template-element children (not .content) still
   require unsupported fallback until both compiler traversal and emission can preserve that distinct edge.
-  Generated attributes enter
-  the ordinary live classifier/lowerer; committed HookAttribute insertion supplies provenance when no authored HTML
-  attribute exists. Creation followed by removal can have no final structural derivation while its execution remains
-  recorded. New-node factories/cloning, markup/text writes, selectors, dataset and metadata effects remain explicit
+  Document createElement/createElementNS, createTextNode/createComment and createDocumentFragment supply Hook*
+  creation occurrences in the same journal; HTML template content is an explicit inert fragment. Generated attributes
+  and elements enter the ordinary classifier/lowerer. Generated text uses the existing compiler-world interpolation
+  parser and hole staging, not authored-text placeholders. Let and named AuSlot metadata allow absent authored spans.
+  The funded source-reference-to-occurrence map preserves distinct addressless HE/TC/projection nodes through target
+  planning and structural execution. Creation followed by removal can have no final structural derivation while its
+  execution remains recorded. Cloning/import, markup/text writes, selectors, dataset and metadata effects remain explicit
   unsupported operations until their complete lowering paths are admitted. Namespace-duplicate qualified names and
   browser-version-sensitive name spellings remain explicit compatibility boundaries, not invented DOM exceptions.
   Projection removes original au-slot attributes through one ordered site operation before projected hooks execute.
@@ -349,8 +352,16 @@ classification, expression parsing, and instruction lowering converge on the sam
   hook runs before wrapping adoption; its child hooks run afterward. Projection entrants are adopted group-by-group
   immediately before that group's traversal. Retained template content remains inert, and flattened-template children
   move without adopting the emptied source fragment. Document identities survive evaluator forks and detached node
-  reads. Document nodeType/nodeName/ownerDocument are known; factories, ambient document content and other unmodeled
-  members remain explicit unsupported boundaries. Source-hook rollback preserves prior compiler adoption.
+  reads. Document nodeType/nodeName/ownerDocument are known; ambient document content and unmodeled members remain
+  explicit unsupported boundaries. Source-hook rollback preserves prior compiler adoption.
+  Factories admit plain HTML and unprefixed HTML/SVG/Math namespaces. Non-null creation options, prefixed/unknown
+  namespaces and case-preserving HTML NS names remain unsupported. Potential native custom-element construction in
+  the platform document refuses; an inert-document custom name does not run that constructor and can be compiled.
+  Source mutations/placements affecting platform-owned native resource elements also refuse as native-resource-effects:
+  a disconnected image/media element can fetch, so mutation ownership alone does not prove effect confinement. This
+  conservative boundary includes existing projected nodes, not only fresh factory outputs; it is not an exhaustive
+  browser effects model. The existing whole-app compatible fallback retains valid dynamic behavior.
+  Generated native <slot> outlets still have a separate source-node admission gap and remain typed Pending.
   Ordinary forest child insertion includes document adoption within its existing mutation operation; structural
   root/template-content ownership edges do not imply DOM insertion. The same journal restores affiliation on rollback.
   Parser-created HTML scripts separately retain their inert execution state as immutable creation metadata. A source

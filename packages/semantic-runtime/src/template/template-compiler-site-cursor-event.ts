@@ -1,6 +1,6 @@
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
-import type { AddressHandle } from '../kernel/handles.js';
-import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
+import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
+import { ExpressionParseResultKind, type ExpressionParseResult } from '../expression/parse-result-algebra.js';
 import type { AttributeParserParseResult } from './attribute-syntax.js';
 import type { TemplateCompilerAttributeOwnerProgressionSite } from './attribute-owner-progression.js';
 import type { TemplateResolvedResource } from './compiler-world.js';
@@ -487,6 +487,10 @@ export class TemplateCompilerSiteCursorTextEvent extends TemplateCompilerSiteCur
     readonly occurrenceOnlyRow: TemplateCompilerOccurrenceOnlyRow | null,
     readonly siteOutcome: TemplateCompilerSiteCursorSiteOutcome,
     readonly instructionStaging: TemplateCompilerTextInstructionStaging | null = null,
+    readonly liveParse: {
+      readonly expressionProductHandle: ProductHandle;
+      readonly read: TemplateCompilerObservedValue<ExpressionParseResult>;
+    } | null = null,
   ) {
     super(authority, ordinal, TemplateCompilerSiteCursorEventKind.Text);
     if (!this.isCoherent()) {
@@ -496,6 +500,22 @@ export class TemplateCompilerSiteCursorTextEvent extends TemplateCompilerSiteCur
 
   isCoherent(): boolean {
     if (this.bundle != null && this.authoredText !== this.bundle.text) return false;
+    if (this.liveParse != null) {
+      const staging = this.instructionStaging;
+      return this.bundle == null
+        && this.authoredText == null
+        && this.spend == null
+        && this.occurrenceOnlyRow?.occurrence === this.text
+        && this.occurrenceOnlyRow.disposition === TemplateCompilerOccurrenceOnlyDisposition.LiveTextAssembled
+        && this.siteOutcome === TemplateCompilerSiteCursorSiteOutcome.Complete
+        && staging != null
+        && staging.isModuleConstructed()
+        && staging.occurrenceKey === this.text.occurrenceKey
+        && staging.node.productHandle == null
+        && staging.node.addressHandle == null
+        && staging.expressionProductHandle === this.liveParse.expressionProductHandle
+        && staging.parseResult === this.liveParse.read.value;
+    }
     const expectsStaging = this.siteOutcome === TemplateCompilerSiteCursorSiteOutcome.Complete
       && this.spend?.disposition === TemplateCompilerSiteSpendDisposition.BrowserCompatible
       && this.bundle?.expressionParse.result.kind === ExpressionParseResultKind.InterpolationSuccess;

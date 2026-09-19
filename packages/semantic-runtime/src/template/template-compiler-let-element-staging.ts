@@ -2,7 +2,7 @@ import { ExpressionParseResultKind, type ExpressionParseResult } from '../expres
 import type { AddressHandle } from '../kernel/handles.js';
 import { AttributeSyntaxKind } from './attribute-syntax.js';
 import { TemplateCompilerScopeClosureState, type TemplateCompilerReadObservation, type TemplateCompilerReadView } from './compiler-read-view.js';
-import type { HtmlAttributeReference, HtmlElement } from './html-ir.js';
+import { HtmlNodeReference, type HtmlAttributeReference, type HtmlElement } from './html-ir.js';
 import {
   HydrateLetElementInstruction,
   LetBindingInstruction,
@@ -96,7 +96,7 @@ export class TemplateCompilerLetElementStaging {
   constructor(
     authority: object,
     readonly element: TemplateCompilerElementOccurrence,
-    readonly authoredElement: HtmlElement,
+    readonly authoredElement: HtmlElement | null,
     readonly reachedAttributes: readonly TemplateCompilerLetReachedAttribute[],
     readonly bindings: readonly TemplateCompilerLetBindingStaging[],
     readonly instruction: HydrateLetElementInstruction,
@@ -139,7 +139,7 @@ export class TemplateCompilerLetElementStagingResult {
 export interface TemplateCompilerLetElementStagingRequest {
   readonly siteKey: string;
   readonly element: TemplateCompilerElementOccurrence;
-  readonly authoredElement: HtmlElement;
+  readonly authoredElement: HtmlElement | null;
   readonly attributeCount: number;
   readonly reachAttribute: (ordinal: number) => TemplateCompilerLetReachedAttribute | null;
   readonly compilerReads: TemplateCompilerReadView;
@@ -278,16 +278,16 @@ export function stageTemplateCompilerLetElement(
     request.siteKey,
     'hydrate-let',
     TemplateInstructionKind.HydrateLetElement,
-    request.authoredElement.sourceAddressHandle,
+    request.authoredElement?.sourceAddressHandle ?? null,
     outerLocal,
   );
   const instruction = new HydrateLetElementInstruction(
     outerAllocation.productHandle,
     outerAllocation.identityHandle,
-    request.authoredElement.toReference(),
+    request.authoredElement?.toReference() ?? new HtmlNodeReference(request.element.nodeKind, null, null, null),
     bindings.map((binding) => binding.instruction.productHandle),
     toBindingContext,
-    request.authoredElement.sourceAddressHandle,
+    request.authoredElement?.sourceAddressHandle ?? null,
     [],
   );
   request.allocations.bindInstruction(instruction);
@@ -347,7 +347,7 @@ function materializeLetBinding(
   const instruction = new LetBindingInstruction(
     allocation.productHandle,
     allocation.identityHandle,
-    request.authoredElement.toReference(),
+    request.authoredElement?.toReference() ?? new HtmlNodeReference(request.element.nodeKind, null, null, null),
     plan.reached.attributeReference,
     plan.decision.target!,
     expressionHandle,

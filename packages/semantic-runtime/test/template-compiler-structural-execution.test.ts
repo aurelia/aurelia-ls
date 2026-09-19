@@ -1888,6 +1888,21 @@ describe('template compiler structural execution mechanics', () => {
 
     try {
       {
+        const input = fixture.materialize('uncommitted-hook-node', '');
+        const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(input.emission);
+        const targetPlan = createTargetPlan(fixture, 'uncommitted-hook-node');
+        const session = TemplateCompilerStructuralExecutionSession.create(forest, targetPlan);
+        forest.createGeneratedText(session.createGeneration(
+          targetPlan.root,
+          'uncommitted-hook-node:factory',
+          TemplateCompilerGeneratedOccurrenceRole.HookText,
+          [fixture.run.handles.product('uncommitted-hook-node:cause')],
+          0,
+        ), 'not created by a content hook');
+        expect(() => session.assertCoherent()).toThrow(/lost its committed creation/);
+      }
+
+      {
         const input = fixture.materialize('forged-origin', '<div title="x"></div>');
         const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(input.emission);
         const targetPlan = createTargetPlan(fixture, 'forged-origin');

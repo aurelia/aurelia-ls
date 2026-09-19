@@ -54,6 +54,7 @@ import {
 import { TemplateCompilerCompletedMutationBatchKind } from '../src/template/template-compiler-mutation-authority.js';
 import { TemplateCompilerStructuralExecutionSession } from '../src/template/template-compiler-structural-execution.js';
 import { BrowserEffectiveTemplateFixture } from './browser-effective-template-fixture.js';
+import { HtmlNamespaceKind } from '../src/template/html-ir.js';
 
 describe('template compiler execution sequence', () => {
   test('opens and commits a pending mutation batch without scanning forest inventory', () => {
@@ -322,6 +323,107 @@ describe('template compiler execution sequence', () => {
       browser.dispose();
     }
   });
+
+  test.each([TemplateCompilerOperationCompletionKind.Complete, TemplateCompilerOperationCompletionKind.Unsupported])(
+    'owns factory generation, template content, placements and rollback in one pending hook: %s', (completionKind) => {
+      const browser = new BrowserEffectiveTemplateFixture('compiler-execution-source-factories');
+      try {
+        const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(
+          browser.materialize('root', '<div><i title="original"></i></div>').emission,
+        );
+        const execution = TemplateCompilerExecutionSession.createForForest('factories:family', forest);
+        const lane = execution.admitRootInvocation('factories:plan');
+        const closure = closeExactNoLocalBootstrap(browser, execution, lane, 'factories');
+        const driver = execution.beginSiteExecutionDriver(execution.captureSiteExecutionFrontier(closure));
+        const root = forest.compilerContent.readChildren()[0] as TemplateCompilerElementOccurrence;
+        const existing = root.readChildren()[0] as TemplateCompilerElementOccurrence;
+        const originalNodeCount = forest.readNodes().length;
+        const originalAttributeCount = forest.readAttributes().length;
+        const attempt = execution.beginOperation({
+          operationKey: 'factories:process', context: driver.context,
+          operationKind: TemplateCompilerOperationKind.ProcessContent,
+          executionMechanism: TemplateCompilerOperationExecutionMechanism.StaticCallable,
+          target: execution.callableEffectTarget(driver.context, new TemplateCompilerCallableReference(
+            null, null, browser.run.handles.address('hook'),
+          ), root),
+          causeHandles: [browser.run.handles.product('definition')], siteExecutionDriver: driver,
+        });
+        const template = execution.createProcessContentElement(attempt, 'template', HtmlNamespaceKind.Html,
+          'http://www.w3.org/1999/xhtml', null, 'platform');
+        const content = template.templateContent!;
+        const fragment = execution.createProcessContentFragment(attempt, 'platform');
+        const text = execution.createProcessContentText(attempt, 'generated ${message}', 'platform');
+        const comment = execution.createProcessContentComment(attempt, 'au', 'template-contents');
+        const unused = execution.createProcessContentElement(attempt, 'script', HtmlNamespaceKind.Html,
+          'http://www.w3.org/1999/xhtml', null, 'template-contents');
+        const attr = execution.setProcessContentAttribute(attempt, template,
+          { name: 'data-factory', namespaceUri: null, prefix: null }, 'initial');
+        execution.rewriteAttributeValue(attempt, attr, 'rewritten');
+        execution.placeProcessContentNode(attempt, text, fragment, 0);
+        execution.placeProcessContentNode(attempt, text, template.templateContent!, 0);
+        execution.placeProcessContentNode(attempt, existing, template.templateContent!, 1);
+        execution.placeProcessContentNode(attempt, comment, root, 0);
+        execution.placeProcessContentNode(attempt, template, root, 1);
+        expect(template.inputReference).toBeNull();
+        expect(unused.parserInertScript).toBe(false);
+        expect(comment.semanticKind).toBe('plain');
+        expect(forest.ownerDocumentFor(template)).toBe('template-contents');
+        expect(forest.ownerDocumentFor(template.templateContent!)).toBe('template-contents');
+        expect(forest.ownerDocumentFor(text)).toBe('template-contents');
+        expect(template.templateContent!.parentEdgeKind).toBe(TemplateCompilerOccurrenceEdgeKind.TemplateContent);
+        const operation = execution.completeOperation(attempt, completionKind === TemplateCompilerOperationCompletionKind.Complete
+          ? new TemplateCompilerOperationCompletion(completionKind)
+          : new TemplateCompilerOperationCompletion(completionKind, [], 'A later unsupported operation.'));
+        expect(operation.mutationBatch.nodeCreationMutations.map(mutation => mutation.node)).toEqual([
+          template, content, fragment, text, comment, unused,
+        ]);
+        expect(operation.mutationBatch.nodeCreationMutations[1]).toMatchObject({ templateOwner: template, document: 'template-contents' });
+        expect(operation.mutationBatch.isSourceHookTopology()).toBe(true);
+        expect(operation.mutationBatch.occurrenceGenerationReservations).toHaveLength(7);
+        expect(operation.endForestMutationRevision - operation.startForestMutationRevision)
+          .toBe(operation.mutationBatch.siteTopologyMutationDelta + 1);
+        if (completionKind === TemplateCompilerOperationCompletionKind.Complete) {
+          expect(root.readChildren()).toEqual([comment, template]);
+          expect(template.templateContent!.readChildren()).toEqual([text, existing]);
+          expect(attr.value).toBe('rewritten');
+          expect(unused.parentEdgeKind).toBe(TemplateCompilerOccurrenceEdgeKind.Detached);
+          expect(forest.readNodes()).toHaveLength(originalNodeCount + 6);
+          const secondAttempt = execution.beginOperation({
+            operationKey: 'factories:second-process', context: driver.context,
+            operationKind: TemplateCompilerOperationKind.ProcessContent,
+            executionMechanism: TemplateCompilerOperationExecutionMechanism.StaticCallable,
+            target: execution.callableEffectTarget(driver.context, new TemplateCompilerCallableReference(
+              null, null, browser.run.handles.address('second-hook'),
+            ), root),
+            causeHandles: [browser.run.handles.product('definition')], siteExecutionDriver: driver,
+          });
+          expect(() => execution.placeProcessContentNode(secondAttempt, unused, root, 0))
+            .toThrow(/outside its owned subtree/);
+          execution.placeProcessContentNode(secondAttempt, text, root, 0);
+          execution.setProcessContentAttribute(secondAttempt, template,
+            { name: 'data-factory', namespaceUri: null, prefix: null }, 'later');
+          execution.completeOperation(secondAttempt, new TemplateCompilerOperationCompletion(
+            TemplateCompilerOperationCompletionKind.Unsupported, [], 'A later unsupported operation.',
+          ));
+          expect(root.readChildren()).toEqual([comment, template]);
+          expect(content.readChildren()).toEqual([text, existing]);
+          expect(attr.value).toBe('rewritten');
+        } else {
+          expect(root.readChildren()).toEqual([existing]);
+          expect(existing.parent).toBe(root);
+          expect(forest.readNodes()).toHaveLength(originalNodeCount);
+          expect(forest.readAttributes()).toHaveLength(originalAttributeCount);
+          for (const mutation of operation.mutationBatch.nodeCreationMutations) {
+            expect(forest.nodeForOccurrenceKey(mutation.node.occurrenceKey)).toBeNull();
+          }
+        }
+        execution.finishSiteExecutionDriver(driver);
+        execution.seal();
+        execution.mutationAuthority.assertGeneratedInventory();
+        forest.assertCoherentTopology();
+      } finally { browser.dispose(); }
+    },
+  );
 
   test('records site document adoption without structural mutations or repeated no-op operations', () => {
     const browser = new BrowserEffectiveTemplateFixture('compiler-execution-site-document');

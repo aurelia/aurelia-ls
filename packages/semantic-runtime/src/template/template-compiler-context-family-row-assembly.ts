@@ -16,6 +16,7 @@ import {
 import type { HtmlElement, HtmlText } from './html-ir.js';
 import {
   TemplateCompilerGeneratedOccurrenceRole,
+  isTemplateCompilerHookGeneratedNode,
   type TemplateCompilerElementOccurrence,
   type TemplateCompilerTextOccurrence,
 } from './template-compiler-occurrence.js';
@@ -807,7 +808,10 @@ export function assembleTemplateCompilerContextFamilyRows(
         TemplateCompilerContextFamilyRowAssemblyReasonKind.InstructionWirePending,
         `Template-controller draft '${row.draft.localKey}' still requires its HTC instruction wire.`,
       ));
-      if (row.draft.node.productHandle == null || row.draft.attribute.productHandle == null) {
+      if ((row.draft.node.productHandle == null && !isTemplateCompilerHookGeneratedNode(row.edge.preparation.host))
+        || (row.draft.attribute.productHandle == null && !row.edge.preparation.request.owner.contributions.some(
+          contribution => contribution.frame.attribute.occurrenceKey === row.draft.localKey
+            && contribution.frame.attribute.generation?.role === TemplateCompilerGeneratedOccurrenceRole.HookAttribute))) {
         pendingReasons.push(new TemplateCompilerContextFamilyRowAssemblyReason(
           TemplateCompilerContextFamilyRowAssemblyReasonKind.SourceWireReferencePending,
           `Template-controller draft '${row.draft.localKey}' lacks an exact authored node or attribute wire.`,
@@ -820,7 +824,7 @@ export function assembleTemplateCompilerContextFamilyRows(
           TemplateCompilerContextFamilyRowAssemblyReasonKind.InstructionWirePending,
           `HydrateElement row '${row.stableSlotKey}' still requires its instruction wire.`,
         ));
-        if (row.hydrateElement.instructionNode.productHandle == null) {
+        if (row.hydrateElement.instructionNode.productHandle == null && !isTemplateCompilerHookGeneratedNode(row.occurrence)) {
           pendingReasons.push(new TemplateCompilerContextFamilyRowAssemblyReason(
             TemplateCompilerContextFamilyRowAssemblyReasonKind.SourceWireReferencePending,
             `HydrateElement row '${row.stableSlotKey}' lacks an exact authored instruction-node wire.`,
@@ -856,7 +860,7 @@ export function assembleTemplateCompilerContextFamilyRows(
         // Family wire funding validates the committed insertion of addressless hook-created slots.
         const hookGeneratedSlot = slot?.generation?.role === TemplateCompilerGeneratedOccurrenceRole.HookAttribute
           && slot.inputReference == null;
-        if (contributor.source.origin.exactAuthoredOrigin == null) {
+        if (contributor.source.origin.exactAuthoredOrigin == null && !isTemplateCompilerHookGeneratedNode(contributor.source.node)) {
           pendingReasons.push(new TemplateCompilerContextFamilyRowAssemblyReason(
             TemplateCompilerContextFamilyRowAssemblyReasonKind.SourceWireReferencePending,
             `Projection contributor '${contributor.source.node.occurrenceKey}' lacks an exact authored node wire.`,
@@ -886,7 +890,7 @@ export function assembleTemplateCompilerContextFamilyRows(
       }
     }
     for (const removed of hydrateElement.staging.draft?.processContent.result?.removedOccurrences ?? []) {
-      if (receipt.traversal.audit.transcript.binding.forest.exactAuthoredNodeOrigin(removed) == null) {
+      if (receipt.traversal.audit.transcript.binding.forest.exactAuthoredNodeOrigin(removed) == null && !isTemplateCompilerHookGeneratedNode(removed)) {
         pendingReasons.push(new TemplateCompilerContextFamilyRowAssemblyReason(
           TemplateCompilerContextFamilyRowAssemblyReasonKind.SourceWireReferencePending,
           `processContent removal '${removed.occurrenceKey}' lacks an exact authored audit wire.`,

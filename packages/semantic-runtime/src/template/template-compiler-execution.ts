@@ -37,6 +37,8 @@ import type {
 } from './template-compiler-projection-logical-extraction.js';
 import { HydrateElementProjectionContributorDisposition } from './instruction-ir.js';
 import { TemplateCompilerOperationKind } from './template-compiler-operation.js';
+import { HtmlCommentSemanticKind, HtmlIrNodeKind, HtmlNamespaceKind } from './html-ir.js';
+import type { TemplateContentOwnerDocument } from './template-structure.js';
 import {
   TemplateCompilerTextExpansionOutputKind,
   type TemplateCompilerOccurrenceTargetRowDraft,
@@ -52,7 +54,9 @@ import {
 import {
   TemplateCompilerGeneratedOccurrenceRole,
   TemplateCompilerOccurrenceEdgeKind,
+  isTemplateCompilerHookGeneratedNode,
   type TemplateCompilerAttributeOccurrence,
+  type TemplateCompilerCommentOccurrence,
   type TemplateCompilerElementOccurrence,
   type TemplateCompilerFragmentOccurrence,
   type TemplateCompilerNodeOccurrence,
@@ -263,9 +267,25 @@ export class TemplateCompilerAttributeInsertionMutation {
   ) {}
 }
 
+/** One source factory output, including the implicit content fragment of an HTML template. */
+export class TemplateCompilerNodeCreationMutation {
+  constructor(
+    readonly eventOrdinal: number,
+    readonly node: TemplateCompilerNodeOccurrence,
+    readonly document: TemplateContentOwnerDocument,
+    /** Only template-content creation starts attached; every explicit factory output starts detached. */
+    readonly templateOwner: TemplateCompilerElementOccurrence | null = null,
+  ) {}
+
+  get forestMutationDelta(): number {
+    return this.templateOwner == null ? 1 : 2;
+  }
+}
+
 export type TemplateCompilerTopologyMutation =
   | TemplateCompilerNodeDetachmentMutation
   | TemplateCompilerNodePlacementMutation
+  | TemplateCompilerNodeCreationMutation
   | TemplateCompilerAttributeDetachmentMutation
   | TemplateCompilerAttributeInsertionMutation;
 
@@ -318,21 +338,37 @@ export class TemplateCompilerOperationMutationBatch {
     );
   }
 
+  get nodeCreationMutations(): readonly TemplateCompilerNodeCreationMutation[] {
+    return this.topologyMutations.filter((mutation): mutation is TemplateCompilerNodeCreationMutation =>
+      mutation instanceof TemplateCompilerNodeCreationMutation
+    );
+  }
+
   /** Site hooks create+attach each new attribute; scalar writes remain staged until completion. */
   get siteTopologyMutationDelta(): number {
     return this.topologyMutations.reduce((total, mutation) =>
       total + (mutation instanceof TemplateCompilerAttributeInsertionMutation ? 2
-        : mutation instanceof TemplateCompilerNodePlacementMutation ? mutation.forestMutationDelta : 1), 0);
+        : mutation instanceof TemplateCompilerNodePlacementMutation || mutation instanceof TemplateCompilerNodeCreationMutation
+          ? mutation.forestMutationDelta : 1), 0);
   }
 
   isSourceHookTopology(): boolean {
-    const inserted = this.attributeInsertionMutations;
+    const creations = this.topologyMutations.filter(mutation =>
+      mutation instanceof TemplateCompilerAttributeInsertionMutation || mutation instanceof TemplateCompilerNodeCreationMutation);
     return this.nodeDetachmentMutations.every(mutation =>
       mutation.previousParent != null && mutation.previousEdgeKind === TemplateCompilerOccurrenceEdgeKind.Child
-    ) && this.occurrenceGenerationReservations.length === inserted.length
-      && inserted.every((mutation, ordinal) => mutation.attribute.generation === this.occurrenceGenerationReservations[ordinal]
-        && mutation.attribute.generation?.role === TemplateCompilerGeneratedOccurrenceRole.HookAttribute
-        && mutation.attribute.inputReference == null);
+    ) && this.occurrenceGenerationReservations.length === creations.length
+      && creations.every((mutation, ordinal) => {
+        const occurrence = mutation instanceof TemplateCompilerAttributeInsertionMutation ? mutation.attribute : mutation.node;
+        if (occurrence.generation !== this.occurrenceGenerationReservations[ordinal] || occurrence.inputReference != null) return false;
+        if (mutation instanceof TemplateCompilerAttributeInsertionMutation) {
+          return occurrence.generation?.role === TemplateCompilerGeneratedOccurrenceRole.HookAttribute;
+        }
+        return isTemplateCompilerHookGeneratedNode(mutation.node)
+          && (mutation.templateOwner == null || (mutation.node.nodeKind === HtmlIrNodeKind.Fragment
+            && mutation.templateOwner.namespace === HtmlNamespaceKind.Html && mutation.templateOwner.tagName === 'template'
+            && mutation.document === 'template-contents'));
+      });
   }
 }
 
@@ -345,6 +381,7 @@ class TemplateCompilerPendingMutationOverlay {
   private readonly nodeDocumentMutations: TemplateCompilerNodeDocumentChange[] = [];
   private readonly detachedNodes = new Set<TemplateCompilerNodeOccurrence>();
   private readonly detachedAttributes = new Set<TemplateCompilerAttributeOccurrence>();
+  private readonly createdNodes = new Set<TemplateCompilerNodeOccurrence>();
 
   readAttributeValue(attribute: TemplateCompilerAttributeOccurrence): string {
     return this.attributeValueMutations.get(attribute)?.nextValue ?? attribute.value;
@@ -356,6 +393,10 @@ class TemplateCompilerPendingMutationOverlay {
 
   containsDetachedAttribute(attribute: TemplateCompilerAttributeOccurrence): boolean {
     return this.detachedAttributes.has(attribute);
+  }
+
+  containsCreatedNode(node: TemplateCompilerNodeOccurrence): boolean {
+    return this.createdNodes.has(node);
   }
 
   rewriteAttributeValue(attribute: TemplateCompilerAttributeOccurrence, value: string): void {
@@ -404,6 +445,14 @@ class TemplateCompilerPendingMutationOverlay {
       throw new Error('Source hook placement lost global topology mutation order.');
     }
     if (mutation.nextParent == null) this.detachedNodes.add(mutation.node);
+    this.topologyMutations.push(mutation);
+  }
+
+  recordNodeCreation(mutation: TemplateCompilerNodeCreationMutation): void {
+    if (mutation.eventOrdinal !== this.topologyMutations.length || this.createdNodes.has(mutation.node)) {
+      throw new Error('Source hook creation lost global topology mutation order or repeated its output.');
+    }
+    this.createdNodes.add(mutation.node);
     this.topologyMutations.push(mutation);
   }
 
@@ -1460,6 +1509,7 @@ export class TemplateCompilerExecutionSession {
       this.mutationAuthority,
       receipt.traversal.contexts.flatMap((context) => context.exclusions),
       this.sequence.readLaneOperations(lane),
+      targetPlan.sourceNodes,
     );
     structuralExecution.admitCompilerExtractedDetachedNodes(
       receipt.traversal.audit.transcript.binding.bootstrapClosure.localExtraction.operations.flatMap((operation) =>
@@ -1596,7 +1646,7 @@ export class TemplateCompilerExecutionSession {
         operation.mutationBatch.attributeDetachmentMutations.map((mutation) => mutation.attribute)
       ),
     );
-    structuralExecution.admitCompilerSourceOperations(this.sequence.readLaneOperations(lane));
+    structuralExecution.admitCompilerSourceOperations(this.sequence.readLaneOperations(lane), targetPlan.sourceNodes);
     structuralExecution.assertCanAdmitTargetPlan(targetPlan);
     structuralExecution.assertCanAdoptExtractedInvocationContextStructure(
       targetPlan.root,
@@ -1939,7 +1989,7 @@ export class TemplateCompilerExecutionSession {
       let node: TemplateCompilerNodeOccurrence | null = attribute.owner;
       while (node != null) {
         // This attempt proved ownership before detaching the ancestor. Retained references still address that subtree.
-        if (overlay.containsDetachedNode(node)) return;
+        if (overlay.containsDetachedNode(node) || overlay.containsCreatedNode(node)) return;
         node = node.parent;
       }
     }
@@ -1973,6 +2023,77 @@ export class TemplateCompilerExecutionSession {
     return attribute;
   }
 
+  createProcessContentElement(
+    attempt: TemplateCompilerPendingOperationAttempt,
+    tagName: string,
+    namespace: HtmlNamespaceKind,
+    namespaceUri: string,
+    customElementIs: string | null,
+    document: TemplateContentOwnerDocument,
+  ): TemplateCompilerElementOccurrence {
+    this.requireSourceProcessContentAttempt(attempt);
+    const overlay = this.requirePendingMutationOverlay(attempt);
+    const generation = this.createGeneration(attempt, TemplateCompilerGeneratedOccurrenceRole.HookElement,
+      overlay.nextTopologyMutationOrdinal);
+    const element = this.forest.createGeneratedElement(generation, tagName, namespace, namespaceUri, customElementIs,
+      false, null, document);
+    overlay.recordNodeCreation(new TemplateCompilerNodeCreationMutation(overlay.nextTopologyMutationOrdinal, element, document));
+    if (namespace === HtmlNamespaceKind.Html && tagName === 'template') {
+      this.createProcessContentFragment(attempt, 'template-contents', element);
+    }
+    return element;
+  }
+
+  createProcessContentText(
+    attempt: TemplateCompilerPendingOperationAttempt,
+    text: string,
+    document: TemplateContentOwnerDocument,
+  ): TemplateCompilerTextOccurrence {
+    this.requireSourceProcessContentAttempt(attempt);
+    const overlay = this.requirePendingMutationOverlay(attempt);
+    const generation = this.createGeneration(attempt, TemplateCompilerGeneratedOccurrenceRole.HookText,
+      overlay.nextTopologyMutationOrdinal);
+    const node = this.forest.createGeneratedText(generation, text, null, document);
+    overlay.recordNodeCreation(new TemplateCompilerNodeCreationMutation(overlay.nextTopologyMutationOrdinal, node, document));
+    return node;
+  }
+
+  createProcessContentComment(
+    attempt: TemplateCompilerPendingOperationAttempt,
+    text: string,
+    document: TemplateContentOwnerDocument,
+  ): TemplateCompilerCommentOccurrence {
+    this.requireSourceProcessContentAttempt(attempt);
+    const overlay = this.requirePendingMutationOverlay(attempt);
+    const generation = this.createGeneration(attempt, TemplateCompilerGeneratedOccurrenceRole.HookComment,
+      overlay.nextTopologyMutationOrdinal);
+    const node = this.forest.createGeneratedComment(generation, text, HtmlCommentSemanticKind.Plain, null, document);
+    overlay.recordNodeCreation(new TemplateCompilerNodeCreationMutation(overlay.nextTopologyMutationOrdinal, node, document));
+    return node;
+  }
+
+  createProcessContentFragment(
+    attempt: TemplateCompilerPendingOperationAttempt,
+    document: TemplateContentOwnerDocument,
+    templateOwner: TemplateCompilerElementOccurrence | null = null,
+  ): TemplateCompilerFragmentOccurrence {
+    this.requireSourceProcessContentAttempt(attempt);
+    const overlay = this.requirePendingMutationOverlay(attempt);
+    if (templateOwner != null && (!overlay.containsCreatedNode(templateOwner)
+      || templateOwner.namespace !== HtmlNamespaceKind.Html || templateOwner.tagName !== 'template'
+      || templateOwner.templateContent != null || document !== 'template-contents')) {
+      throw new Error('Source factory template content requires its newly created HTML template owner.');
+    }
+    const generation = this.createGeneration(attempt, TemplateCompilerGeneratedOccurrenceRole.HookFragment,
+      overlay.nextTopologyMutationOrdinal);
+    const node = this.forest.createGeneratedFragment(generation, null, document);
+    if (templateOwner != null) {
+      this.forest.insertDetachedNode(node, templateOwner, TemplateCompilerOccurrenceEdgeKind.TemplateContent, 0);
+    }
+    overlay.recordNodeCreation(new TemplateCompilerNodeCreationMutation(overlay.nextTopologyMutationOrdinal, node, document, templateOwner));
+    return node;
+  }
+
   removeProcessContentAttribute(
     attempt: TemplateCompilerPendingOperationAttempt,
     attribute: TemplateCompilerAttributeOccurrence,
@@ -1992,18 +2113,7 @@ export class TemplateCompilerExecutionSession {
     attempt: TemplateCompilerPendingOperationAttempt,
     element: TemplateCompilerElementOccurrence,
   ): void {
-    const overlay = this.requirePendingMutationOverlay(attempt);
-    if (attempt.operationKind !== TemplateCompilerOperationKind.ProcessContent
-      || attempt.executionMechanism !== TemplateCompilerOperationExecutionMechanism.StaticCallable
-      || !(attempt.target instanceof TemplateCompilerCallableEffectOperationTarget)) {
-      throw new Error('Attribute mutation requires the current source processContent invocation.');
-    }
-    let node: TemplateCompilerNodeOccurrence | null = element;
-    while (node != null) {
-      if (node === attempt.target.actedOn.occurrence || overlay.containsDetachedNode(node)) return;
-      node = node.parent;
-    }
-    throw new Error('Attribute mutation is outside the source hook subtree.');
+    this.requireOwnedProcessContentNode(attempt, element, true);
   }
 
   /** Detach one live node during local-template extraction while retaining its exact event-time edge. */
@@ -2101,7 +2211,7 @@ export class TemplateCompilerExecutionSession {
     overlay.recordNodePlacement(mutation);
   }
 
-  /** Place one existing owned node at its post-removal destination index, preserving its browser origin. */
+  /** Place one owned node at its post-removal destination index, preserving its input or hook generation origin. */
   placeProcessContentNode(
     attempt: TemplateCompilerPendingOperationAttempt,
     node: TemplateCompilerNodeOccurrence,
@@ -2129,6 +2239,27 @@ export class TemplateCompilerExecutionSession {
     allowHost: boolean,
   ): void {
     const overlay = this.requirePendingMutationOverlay(attempt);
+    const root = this.requireSourceProcessContentAttempt(attempt);
+    const generation = node.generation;
+    const isHookOutput = generation != null && isTemplateCompilerHookGeneratedNode(node)
+      && (overlay.containsCreatedNode(node) || this.mutationAuthority.completedBatchForGeneration(generation) != null);
+    if (this.forest.nodeForOccurrenceKey(node.occurrenceKey) !== node
+      || (generation == null ? this.forest.seededNodePlacement(node) == null : !isHookOutput)
+      || (node === root && !allowHost)) {
+      throw new Error('Source hook placement requires an owned browser or hook-created node, not its host.');
+    }
+    let ancestor: TemplateCompilerNodeOccurrence | null = node;
+    while (ancestor != null) {
+      if (ancestor === root || overlay.containsDetachedNode(ancestor) || overlay.containsCreatedNode(ancestor)) return;
+      ancestor = ancestor.parent;
+    }
+    throw new Error('Source hook placement is outside its owned subtree.');
+  }
+
+  private requireSourceProcessContentAttempt(
+    attempt: TemplateCompilerPendingOperationAttempt,
+  ): TemplateCompilerNodeOccurrence | TemplateCompilerAttributeOccurrence {
+    this.requirePendingMutationOverlay(attempt);
     if (
       !(attempt.context instanceof TemplateCompilerSiteExecutionContextReference)
       || attempt.operationKind !== TemplateCompilerOperationKind.ProcessContent
@@ -2139,18 +2270,7 @@ export class TemplateCompilerExecutionSession {
     ) {
       throw new Error('Owned DOM placement requires the active source processContent invocation.');
     }
-    const root = attempt.target.actedOn.occurrence;
-    if (this.forest.nodeForOccurrenceKey(node.occurrenceKey) !== node
-      || this.forest.seededNodePlacement(node) == null || node.generation != null
-      || (node === root && !allowHost)) {
-      throw new Error('Source hook placement requires an existing owned browser node, not its host.');
-    }
-    let ancestor: TemplateCompilerNodeOccurrence | null = node;
-    while (ancestor != null) {
-      if (ancestor === root || overlay.containsDetachedNode(ancestor)) return;
-      ancestor = ancestor.parent;
-    }
-    throw new Error('Source hook placement is outside its owned subtree.');
+    return attempt.target.actedOn.occurrence;
   }
 
   /** Detach one live attribute during local-template extraction while retaining its exact owner slot. */
@@ -3229,7 +3349,11 @@ export class TemplateCompilerExecutionSession {
     if (attempt.context instanceof TemplateCompilerSiteExecutionContextReference
       && !(attempt.operationKind === TemplateCompilerOperationKind.ProcessContent
         && attempt.executionMechanism === TemplateCompilerOperationExecutionMechanism.StaticCallable
-        && role === TemplateCompilerGeneratedOccurrenceRole.HookAttribute)) {
+        && (role === TemplateCompilerGeneratedOccurrenceRole.HookAttribute
+          || role === TemplateCompilerGeneratedOccurrenceRole.HookElement
+          || role === TemplateCompilerGeneratedOccurrenceRole.HookText
+          || role === TemplateCompilerGeneratedOccurrenceRole.HookComment
+          || role === TemplateCompilerGeneratedOccurrenceRole.HookFragment))) {
       throw new Error(
         `Compiler site operation '${attempt.operationKey}' does not admit generated structure before typed site topology exists.`,
       );
@@ -3638,12 +3762,24 @@ export class TemplateCompilerExecutionSession {
         );
       }
       for (const mutation of operation.mutationBatch.topologyMutations) {
+        if (mutation instanceof TemplateCompilerNodeCreationMutation) {
+          if (!isSiteProcessContent || operation.executionMechanism !== TemplateCompilerOperationExecutionMechanism.StaticCallable
+            || mutation.node.generation == null
+            || !operation.mutationBatch.occurrenceGenerationReservations.includes(mutation.node.generation)
+            || (operation.mutationBatch.state === TemplateCompilerMutationBatchState.Committed
+              && this.forest.nodeForOccurrenceKey(mutation.node.occurrenceKey) !== mutation.node)) {
+            throw new Error(`Compiler operation '${operation.operationKey}' has a foreign source factory output.`);
+          }
+          continue;
+        }
         if (operation.mutationBatch.state === TemplateCompilerMutationBatchState.Discarded
           && !(mutation instanceof TemplateCompilerNodeDetachmentMutation)
           && !(mutation instanceof TemplateCompilerNodePlacementMutation)
           && mutation.attribute.generation != null
           && operation.mutationBatch.occurrenceGenerationReservations.includes(mutation.attribute.generation)) continue;
         if (mutation instanceof TemplateCompilerNodeDetachmentMutation || mutation instanceof TemplateCompilerNodePlacementMutation) {
+          if (operation.mutationBatch.state === TemplateCompilerMutationBatchState.Discarded
+            && operation.mutationBatch.nodeCreationMutations.some(creation => creation.node === mutation.node)) continue;
           if (this.forest.nodeForOccurrenceKey(mutation.node.occurrenceKey) !== mutation.node) {
             throw new Error(
               `Compiler operation '${operation.operationKey}' detached a node from another forest.`,
@@ -4753,6 +4889,7 @@ export class TemplateCompilerExecutionSession {
     return false;
   }
 }
+
 
 function contextFamilyOperationTargetIsExact(
   entry: TemplateCompilerFamilyOperationScheduleEntry,

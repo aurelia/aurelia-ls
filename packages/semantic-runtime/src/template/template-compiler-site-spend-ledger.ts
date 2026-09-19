@@ -72,6 +72,7 @@ export const enum TemplateCompilerOccurrenceOnlyDisposition {
   LiveAttributeAssembled = 'live-attribute-assembled',
   /** Reached browser element compiled by live identity despite open or non-authored structural lineage. */
   LiveElementAssembled = 'live-element-assembled',
+  LiveTextAssembled = 'live-text-assembled',
   /** Explicit live `[au-slot]` excluded before a projected logical owner walk without one authored bundle. */
   ProjectionSlotAttributeConsumed = 'projection-slot-attribute-consumed',
 }
@@ -968,6 +969,7 @@ export class TemplateCompilerSiteSpendLedger {
   ): boolean {
     switch (disposition) {
       case TemplateCompilerOccurrenceOnlyDisposition.StaticTextPassThrough:
+      case TemplateCompilerOccurrenceOnlyDisposition.LiveTextAssembled:
         return occurrence instanceof TemplateCompilerTextOccurrence;
       case TemplateCompilerOccurrenceOnlyDisposition.BrowserImpliedElementPassThrough:
         return occurrence instanceof TemplateCompilerElementOccurrence;
