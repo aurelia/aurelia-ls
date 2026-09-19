@@ -170,8 +170,12 @@ beforeAll(async () => {
 }, 45_000);
 
 describe('AOT compiler patch module emitter', () => {
-  for (const contentOwnerDocument of ['template-contents', 'platform'] as const) {
-    it(`constructs native elements inertly before publishing ${contentOwnerDocument} content`, async () => {
+  for (const [carrierOwnerDocument, contentOwnerDocument] of [
+    ['template-contents', 'template-contents'],
+    ['platform', 'template-contents'],
+    ['platform', 'platform'],
+  ] as const) {
+    it(`constructs native elements inertly with ${carrierOwnerDocument} carrier and ${contentOwnerDocument} content`, async () => {
       const dom = new JSDOM('<!doctype html><html><body></body></html>');
       const document = dom.window.document;
       const constructed: string[] = [];
@@ -196,7 +200,7 @@ describe('AOT compiler patch module emitter', () => {
       document.defaultView!.customElements.define('aot-native-button', NativeButton, { extends: 'button' });
       try {
         const artifact = new AotCompilerPatchModuleEmitter().emit({
-          handoff: withNativeConstructionTree(contentOwnerDocument),
+          handoff: withNativeConstructionTree(carrierOwnerDocument, contentOwnerDocument),
           projectRoot: fixtureRoot,
           sourcePath: templatePath,
           sourceText,
@@ -206,6 +210,7 @@ describe('AOT compiler patch module emitter', () => {
         expect(reactions).toEqual([]);
         const content = imported.template.content;
         const inertDocument = document.createElement('template').content.ownerDocument;
+        expect(imported.template.ownerDocument).toBe(carrierOwnerDocument === 'platform' ? document : inertDocument);
         expect(content.ownerDocument).toBe(contentOwnerDocument === 'platform' ? document : inertDocument);
         expect(content.querySelector('template')!.content.ownerDocument).toBe(inertDocument);
         const probe = content.querySelector('aot-native-probe')!;
@@ -236,10 +241,10 @@ describe('AOT compiler patch module emitter', () => {
   }
 
   it('rejects a compiled tree without document affiliation or native creation inputs', () => {
-    for (const field of ['contentOwnerDocument', 'customElementIs'] as const) {
-      const value = withNativeConstructionTree('template-contents');
+    for (const field of ['carrierOwnerDocument', 'contentOwnerDocument', 'customElementIs'] as const) {
+      const value = withNativeConstructionTree('platform', 'template-contents');
       const tree = value.definitions.find(definition => definition.definitionId === value.rootDefinitionId)!.tree;
-      if (field === 'contentOwnerDocument') Reflect.deleteProperty(tree, field);
+      if (field !== 'customElementIs') Reflect.deleteProperty(tree, field);
       else Reflect.deleteProperty(tree.nodes.find(node => node.nodeKind === 'element')!, field);
       expect(() => new AotCompilerPatchModuleEmitter().emit({
         handoff: value, projectRoot: fixtureRoot, sourcePath: templatePath, sourceText,
@@ -608,6 +613,7 @@ async function importPatchModule(code: string, digest: string, suppliedDom?: JSD
 }
 
 function withNativeConstructionTree(
+  carrierOwnerDocument: TemplateCompilerCompiledHandoffTree['carrierOwnerDocument'],
   contentOwnerDocument: TemplateCompilerCompiledHandoffTree['contentOwnerDocument'],
 ): TemplateCompilerCompiledHandoffValue {
   const common = { source: null, fieldProvenance: [] };
@@ -618,7 +624,7 @@ function withNativeConstructionTree(
   });
   const tree: TemplateCompilerCompiledHandoffTree = {
     ...common,
-    compilerCarrierNodeId: 'carrier', compilerContentNodeId: 'content', contentOwnerDocument,
+    compilerCarrierNodeId: 'carrier', compilerContentNodeId: 'content', carrierOwnerDocument, contentOwnerDocument,
     nodes: [
       { ...element('carrier', 'template'), templateContentNodeId: 'content' },
       { ...common, nodeId: 'content', nodeKind: 'fragment', children: ['probe', 'changed', 'removed', 'added', 'retained'] },

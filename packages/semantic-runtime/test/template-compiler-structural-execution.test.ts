@@ -677,10 +677,10 @@ describe('template compiler structural execution mechanics', () => {
         TemplateCompilerOccurrenceEdgeKind.TemplateContent,
         0,
       );
-      expect(() => session.bindContextStructure(contexts[1]!, firstCarrier, firstContent, 'platform'))
+      expect(() => session.bindContextStructure(contexts[1]!, firstCarrier, firstContent))
         .toThrow(/incoherent generated carrier pair/);
       const structures = [
-        session.bindContextStructure(contexts[0]!, firstCarrier, firstContent, 'platform'),
+        session.bindContextStructure(contexts[0]!, firstCarrier, firstContent),
         ...contexts.slice(1).map((context) => session.createGeneratedContextStructure(context)),
       ];
       const rootGeometries: TemplateCompilerRenderLocationTargetGeometry[] = [];
@@ -2005,7 +2005,7 @@ describe('template compiler structural execution mechanics', () => {
         ));
         forest.insertDetachedNode(carrier, null, TemplateCompilerOccurrenceEdgeKind.Root, forest.readRoots().length);
         forest.insertDetachedNode(content, carrier, TemplateCompilerOccurrenceEdgeKind.TemplateContent, 0);
-        expect(() => session.bindContextStructure(context, carrier, content, 'platform'))
+        expect(() => session.bindContextStructure(context, carrier, content))
           .toThrow(/incoherent generated carrier pair/);
       }
 
@@ -2041,7 +2041,7 @@ describe('template compiler structural execution mechanics', () => {
         ));
         forest.insertDetachedNode(carrier, null, TemplateCompilerOccurrenceEdgeKind.Root, forest.readRoots().length);
         forest.insertDetachedNode(content, carrier, TemplateCompilerOccurrenceEdgeKind.TemplateContent, 0);
-        expect(() => session.bindContextStructure(context, carrier, content, 'platform'))
+        expect(() => session.bindContextStructure(context, carrier, content))
           .toThrow(/exact template-content carrier/);
       }
 

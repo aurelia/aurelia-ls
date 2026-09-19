@@ -4,7 +4,10 @@ import {
   type TemplateCompilerTraversalCompletionAudit,
   type TemplateCompilerTraversalCompletionAuditReasonKind,
 } from './template-compiler-completion-audit.js';
-import type { TemplateCompilerSiteExecutionEndpointReceipt } from './template-compiler-execution.js';
+import {
+  TemplateCompilerOccurrenceOperationTarget,
+  type TemplateCompilerSiteExecutionEndpointReceipt,
+} from './template-compiler-execution.js';
 import { TemplateCompilerTargetRowPlacementKind } from './compiler-target-plan.js';
 import {
   isTemplateCompilerProcessContentSettledForHost,
@@ -17,6 +20,7 @@ import {
 } from './template-compiler-hydrate-element-staging.js';
 import {
   TemplateCompilerSiteCursorContainerlessPlacementEvent,
+  TemplateCompilerSiteCursorDocumentAdoptionEvent,
   TemplateCompilerSiteCursorElementEvent,
   type TemplateCompilerSiteCursorEvent,
   TemplateCompilerSiteCursorIgnoredNodeEvent,
@@ -947,6 +951,16 @@ function validateContainerlessPlacements(
       contextSubtreeEvents(audit.transcript.taskSnapshot, entry.band.context)
     ) ?? [];
     const templateController = templateControllerEventByHydrateElement.get(staging) ?? null;
+    // A non-template TC host is adopted after its transition/extraction decision, before child contexts run.
+    // Only that exact host operation may intervene between the completed prerequisites and placement.
+    const followingEvent = templateController == null ? null
+      : audit.transcript.events[(projection ?? templateController).ordinal + 1];
+    const hostAdoption = followingEvent instanceof TemplateCompilerSiteCursorDocumentAdoptionEvent
+      && followingEvent.operation.target instanceof TemplateCompilerOccurrenceOperationTarget
+      && followingEvent.operation.target.occurrence === staging.element
+      && audit.transcript.taskSnapshot.contextForEvent(followingEvent)
+        === audit.transcript.taskSnapshot.contextForEvent(templateController!)
+      ? followingEvent : null;
     const prerequisites = [
       ...audit.attributeEvents.filter((event) => event.owner === staging.element),
       ...audit.processContentEvents.filter((event) => event.host === staging.element),
@@ -955,6 +969,7 @@ function validateContainerlessPlacements(
         && event.disposition === TemplateCompilerSiteSpendDisposition.ProcessContentSuppressed),
       ...(templateController == null ? [] : [templateController]),
       ...(projection == null ? [] : [projection]),
+      ...(hostAdoption == null ? [] : [hostAdoption]),
       ...projectionContextEvents,
     ];
     const lastPrerequisite = Math.max(

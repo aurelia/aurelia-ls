@@ -43,5 +43,7 @@ function observation(
   nestedValue: string | null,
   conventionValue: string,
 ): LocalTemplatesObservation {
-  return { message, cardValues, ownedDependencyCount, peerCardValue, nestedValue, conventionValue };
+  return { message, cardValues, ownedDependencyCount, peerCardValue, nestedValue, conventionValue,
+    ownedDependencyHookDocuments: Array.from({ length: ownedDependencyCount }, () => 'false'),
+  };
 }

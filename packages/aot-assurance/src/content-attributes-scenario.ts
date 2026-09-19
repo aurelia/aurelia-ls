@@ -49,6 +49,8 @@ export interface ContentAttributesApplicationObservation {
       readonly readback: string | null;
       readonly beforeNames: string | null;
       readonly childSlotBefore: string | null;
+      readonly documentView: string | null;
+      readonly initialDocument: string | null;
       readonly title: string | null;
       readonly child: { readonly slot: string | null; readonly stamped: string | null; readonly text: string };
     }[];
@@ -187,6 +189,8 @@ async function capture(page: Page): Promise<ContentAttributesApplicationObservat
             readback: host.getAttribute('data-projection-read'),
             beforeNames: host.getAttribute('data-before-names'),
             childSlotBefore: host.getAttribute('data-child-slot-before'),
+            documentView: host.getAttribute('data-document-view'),
+            initialDocument: host.getAttribute('data-initial-document'),
             title: host.getAttribute('title'),
             child: { slot: child.getAttribute('au-slot'), stamped: child.getAttribute('data-stamped'), text: child.textContent },
           };
@@ -237,7 +241,7 @@ export function assertContentAttributesExpectations(transcript: LaneTranscript):
         model: {
           message,
           native: expectedNativeConstruction(count, active),
-          host: [['id', 'lab'], ['data-host-created', 'yes'], ['class', 'generated-host']],
+          host: [['id', 'lab'], ['data-host-created', 'yes'], ['class', 'generated-host'], ['data-document-view', 'false:true']],
           order: [
             ['id', 'order-case'], ['data-case', 'order'], ['data-second', 'replaced'], ['data-first', 'readded'],
             ['data-forced', ''], ['data-toggle-result', 'true:false:true'],
@@ -260,10 +264,18 @@ export function assertContentAttributesExpectations(transcript: LaneTranscript):
             ['projection-first', 'projected-flat', 'flat'],
             ['projection-second', 'projected-second', 'second'],
             ...(active ? ['one', 'two', 'three'].slice(0, count).filter((item) => item !== 'two').map((item) => ['projection-second', '', item] as const) : []),
+            ...(active ? [
+              ['document-transitions', 'tc-own', 'tc-own'],
+              ['tc-parent', 'tc-descendant', 'tc-descendant'],
+              ['document-transitions', 'retained-tc-descendant', 'retained-tc-descendant'],
+            ] as const : []),
           ] as const).map(([group, id, value]) => ({
             group, id, slot: 'hook-created', readback: 'null:false:null:false',
-            beforeNames: `${id === '' ? 'class' : 'id'}|data-projection-read`,
+            beforeNames: `${id === '' ? 'class' : 'id'}${id === 'tc-own' ? '|if.bind' : ''}${group.startsWith('projection-') ? '|data-initial-document' : ''}|data-projection-read`,
             childSlotBefore: 'authored', title: message,
+            initialDocument: group.startsWith('projection-') ? 'false' : null,
+            documentView: id === '' || id === 'tc-own' || id === 'retained-tc-descendant'
+              ? 'false:true:true:false:true:true' : 'true:true:true:false:false:true',
             child: { slot: null, stamped: message, text: `${value}:${message}` },
           })),
           projectionFallbacks: 0,

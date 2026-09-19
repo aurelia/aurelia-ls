@@ -182,6 +182,7 @@ function compareCompilerTransformedNodeVariant(
       break;
     case HtmlIrNodeKind.Element:
       semantic = next.nodeKind === HtmlIrNodeKind.Element
+        && previous.customElementIs === next.customElementIs
         && sameValues(
           previous.tagName,
           next.tagName,
@@ -367,6 +368,8 @@ function sameStructuralTreeVariantSemantics(
     case TemplateStructuralTreeKind.CompilerTransformed: {
       if (next.treeKind !== TemplateStructuralTreeKind.CompilerTransformed) return false;
       return sameStructuralTreeReferenceSemantics(previous.inputTree, next.inputTree)
+        && previous.carrierOwnerDocument === next.carrierOwnerDocument
+        && previous.contentOwnerDocument === next.contentOwnerDocument
         && sameStructuralNodeReferenceSemantics(previous.compilerCarrier, next.compilerCarrier)
         && sameStructuralNodeReferenceSemantics(previous.compilerContent, next.compilerContent);
     }

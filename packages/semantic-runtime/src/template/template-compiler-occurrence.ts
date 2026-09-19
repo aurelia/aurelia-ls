@@ -10,10 +10,12 @@ import {
   HtmlNamespaceKind,
 } from './html-ir.js';
 import type { BrowserEffectiveTemplateEmission } from './browser-effective-template-materializer.js';
+import { BrowserTemplateCarrierKind } from './browser-template-selection.js';
 import type {
   BrowserEffectiveTemplateAttribute,
   BrowserEffectiveTemplateElement,
   BrowserEffectiveTemplateNode,
+  TemplateContentOwnerDocument,
   TemplateStructuralAttributeReference,
   TemplateStructuralNodeReference,
   TemplateStructuralTreeReference,
@@ -360,6 +362,7 @@ interface TemplateCompilerOccurrenceSeed {
   readonly inputTree: TemplateStructuralTreeReference;
   readonly roots: TemplateCompilerNodeOccurrence[];
   readonly compilerCarrier: TemplateCompilerElementOccurrence;
+  readonly compilerCarrierOwnerDocument: TemplateContentOwnerDocument;
   readonly compilerContent: TemplateCompilerFragmentOccurrence;
   readonly nodes: TemplateCompilerNodeOccurrence[];
   readonly attributes: TemplateCompilerAttributeOccurrence[];
@@ -371,6 +374,13 @@ interface TemplateCompilerOccurrenceSeed {
   readonly attributesByInputIdentity: Map<IdentityHandle, TemplateCompilerAttributeOccurrence[]>;
   readonly exactNodeOriginsByInputProduct: Map<ProductHandle, TemplateCompilerExactAuthoredOrigin>;
   readonly exactAttributeOriginsByInputProduct: Map<ProductHandle, TemplateCompilerExactAuthoredOrigin>;
+}
+
+/** One actual node-document change during a compiler-owned DOM adoption. */
+export interface TemplateCompilerNodeDocumentChange {
+  readonly node: TemplateCompilerNodeOccurrence;
+  readonly previousDocument: TemplateContentOwnerDocument;
+  readonly nextDocument: TemplateContentOwnerDocument;
 }
 
 /** One pending compiler operation's in-place undo boundary, not a second occurrence forest. */
@@ -396,6 +406,7 @@ export class TemplateCompilerOccurrenceForest {
   private readonly rootOccurrences: TemplateCompilerNodeOccurrence[];
   private readonly nodes: TemplateCompilerNodeOccurrence[];
   private readonly attributes: TemplateCompilerAttributeOccurrence[];
+  private readonly nodeDocuments = new Map<TemplateCompilerNodeOccurrence, TemplateContentOwnerDocument>();
   private readonly nodesByOccurrenceKey: Map<string, TemplateCompilerNodeOccurrence>;
   private readonly attributesByOccurrenceKey: Map<string, TemplateCompilerAttributeOccurrence>;
   private readonly nodesByInputProduct: Map<ProductHandle, TemplateCompilerNodeOccurrence[]>;
@@ -440,6 +451,10 @@ export class TemplateCompilerOccurrenceForest {
     const seededAttributeOrdinals = new Map<TemplateCompilerAttributeOccurrence, number>();
     this.rootOccurrences.forEach((root, ordinal) => seededNodeOrdinals.set(root, ordinal));
     for (const owner of this.nodes) {
+      // String input is parsed in inert template content. Only the factory's synthesized carrier is platform-owned.
+      this.nodeDocuments.set(owner, owner === this.compilerCarrier
+        ? seed.compilerCarrierOwnerDocument
+        : 'template-contents');
       owner.readChildren().forEach((child, ordinal) => seededNodeOrdinals.set(child, ordinal));
       if (owner instanceof TemplateCompilerElementOccurrence) {
         owner.readAttributes().forEach((attribute, ordinal) => seededAttributeOrdinals.set(attribute, ordinal));
@@ -487,7 +502,7 @@ export class TemplateCompilerOccurrenceForest {
     return this.attributes;
   }
 
-  /** O(1) conservative epoch for inventory, topology, ownership, ordering, and scalar forest mutation. */
+  /** O(1) conservative epoch for inventory, topology, document ownership, ordering, and scalar forest mutation. */
   get mutationRevision(): number {
     return this._mutationRevision;
   }
@@ -521,6 +536,56 @@ export class TemplateCompilerOccurrenceForest {
 
   attributeForOccurrenceKey(occurrenceKey: string): TemplateCompilerAttributeOccurrence | null {
     return this.attributesByOccurrenceKey.get(occurrenceKey) ?? null;
+  }
+
+  /** Live document affiliation, independent of parent edges and retained after detachment. */
+  ownerDocumentFor(node: TemplateCompilerNodeOccurrence): TemplateContentOwnerDocument {
+    this.requireNode(node);
+    return this.nodeDocuments.get(node)!;
+  }
+
+  /**
+   * Apply the document portion of DOM adoption without changing structural ownership.
+   *
+   * A same-document adoption does not run adopting steps: notably, it must preserve a template content fragment
+   * explicitly adopted into the platform document by CompilationContext.h. A cross-document adoption changes the
+   * ordinary inclusive subtree, then HTML template adopting steps return their contents to the inert document.
+   */
+  adoptNodeDocument(
+    node: TemplateCompilerNodeOccurrence,
+    document: TemplateContentOwnerDocument,
+  ): readonly TemplateCompilerNodeDocumentChange[] {
+    this.requireNode(node);
+    const changes: TemplateCompilerNodeDocumentChange[] = [];
+    this.adoptNodeDocumentInto(node, document, changes, true);
+    return changes;
+  }
+
+  private adoptNodeDocumentInto(
+    node: TemplateCompilerNodeOccurrence,
+    document: TemplateContentOwnerDocument,
+    changes: TemplateCompilerNodeDocumentChange[] | null,
+    recordEpoch: boolean,
+  ): void {
+    if (this.nodeDocuments.get(node) === document) return;
+    const templateContents: TemplateCompilerFragmentOccurrence[] = [];
+    const visit = (current: TemplateCompilerNodeOccurrence): void => {
+      const previousDocument = this.nodeDocuments.get(current)!;
+      if (previousDocument !== document) {
+        this.nodeDocuments.set(current, document);
+        this.mutationUndoJournal?.push(() => this.nodeDocuments.set(current, previousDocument));
+        if (recordEpoch) this._mutationRevision += 1;
+        changes?.push({ node: current, previousDocument, nextDocument: document });
+      }
+      if (current instanceof TemplateCompilerElementOccurrence && current.templateContent != null) {
+        templateContents.push(current.templateContent);
+      }
+      for (const child of current.readChildren()) visit(child);
+    };
+    visit(node);
+    for (const content of templateContents) {
+      this.adoptNodeDocumentInto(content, 'template-contents', changes, recordEpoch);
+    }
   }
 
   nodesForInputProduct(productHandle: ProductHandle): readonly TemplateCompilerNodeOccurrence[] {
@@ -777,6 +842,11 @@ export class TemplateCompilerOccurrenceForest {
     this.validateNodeInsertion(node, parent, edgeKind, ordinal);
     this.insertNodeUnchecked(node, parent, edgeKind, ordinal);
     this.mutationUndoJournal?.push(() => this.detachNodeUnchecked(node));
+    // Ordinary DOM insertion adopts the inserted subtree. Template-content and forest-root edges are structural
+    // ownership links, not DOM insertion operations; their document affiliation is established explicitly.
+    if (edgeKind === TemplateCompilerOccurrenceEdgeKind.Child) {
+      this.adoptNodeDocumentInto(node, this.nodeDocuments.get(parent!)!, null, false);
+    }
     this._mutationRevision += 1;
   }
 
@@ -1096,6 +1166,7 @@ export class TemplateCompilerOccurrenceForest {
     }
     this.claimGeneration(node.generation, node);
     this.nodes.push(node);
+    this.nodeDocuments.set(node, 'platform');
     this.nodesByOccurrenceKey.set(node.occurrenceKey, node);
     if (node.inputReference != null) {
       appendMap(this.nodesByInputProduct, node.inputReference.productHandle, node);
@@ -1104,6 +1175,7 @@ export class TemplateCompilerOccurrenceForest {
     this.mutationUndoJournal?.push(() => {
       removeLastExact(this.nodes, node, `generated compiler node '${node.occurrenceKey}'`);
       this.nodesByOccurrenceKey.delete(node.occurrenceKey);
+      this.nodeDocuments.delete(node);
       if (node.inputReference != null) {
         removeMapOccurrence(this.nodesByInputProduct, node.inputReference.productHandle, node);
         removeMapOccurrence(this.nodesByInputIdentity, node.inputReference.identityHandle, node);
@@ -1284,6 +1356,9 @@ class TemplateCompilerOccurrenceForestBuilder {
       inputTree: this.input.tree.toReference(),
       roots: [carrier],
       compilerCarrier: carrier,
+      compilerCarrierOwnerDocument: this.input.tree.carrierKind === BrowserTemplateCarrierKind.SynthesizedWrapper
+        ? 'platform'
+        : 'template-contents',
       compilerContent: content,
       nodes: this.nodes,
       attributes: this.attributes,

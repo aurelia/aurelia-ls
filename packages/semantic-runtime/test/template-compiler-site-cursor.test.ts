@@ -154,6 +154,7 @@ import {
   executeTemplateCompilerRootSiteCursor,
   TemplateCompilerSiteCursorAttributeEvent,
   TemplateCompilerSiteCursorContainerlessPlacementEvent,
+  TemplateCompilerSiteCursorDocumentAdoptionEvent,
   TemplateCompilerSiteCursorContextKind,
   TemplateCompilerSiteCursorContextTaskState,
   TemplateCompilerSiteCursorElementEvent,
@@ -1728,22 +1729,31 @@ describe('template compiler root site cursor', () => {
     }
   });
 
-  test('places a TC-wrapped containerless host after its transition event', () => {
+  test('places a TC-wrapped containerless host after its transition and document adoption', () => {
     const result = fixture.freshRun('cursor-context-family-containerless-tc').execute(
       TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
     );
     const transcript = requireTranscript(result);
     const completion = completeTemplateCompilerContextFamily(transcript, result.siteEndpoint);
     const transition = eventsOf(transcript, TemplateCompilerSiteCursorTemplateControllerTransitionEvent)[0];
+    const adoption = eventsOf(transcript, TemplateCompilerSiteCursorDocumentAdoptionEvent)[0];
     const placement = eventsOf(transcript, TemplateCompilerSiteCursorContainerlessPlacementEvent)[0];
-    if (transition == null || placement == null) {
-      throw new Error('Expected one TC transition followed by one containerless placement.');
+    if (transition == null || adoption == null || placement == null) {
+      throw new Error('Expected TC transition, document adoption, and containerless placement.');
     }
 
     expect(completion.state).toBe(TemplateCompilerContextFamilyCompletionState.Complete);
     expect(transcript.taskSnapshot.contexts).toHaveLength(2);
     expect(transition.host).toBe(placement.element);
-    expect(placement.ordinal).toBe(transition.ordinal + 1);
+    expect(adoption.ordinal).toBe(transition.ordinal + 1);
+    expect(placement.ordinal).toBe(adoption.ordinal + 1);
+    expect(adoption.operation.mutationBatch.topologyMutations).toEqual([]);
+    expect(adoption.operation.mutationBatch.nodeDocumentMutations[0]).toEqual({
+      node: transition.host,
+      previousDocument: 'template-contents',
+      nextDocument: 'platform',
+    });
+    expect(transcript.taskSnapshot.contextForEvent(adoption)).toBe(transcript.taskSnapshot.rootContext);
     expect(transcript.taskSnapshot.contextForEvent(transition)).toBe(transcript.taskSnapshot.rootContext);
     expect(transcript.taskSnapshot.contextForEvent(placement)?.contextKind)
       .toBe(TemplateCompilerSiteCursorContextKind.TemplateController);

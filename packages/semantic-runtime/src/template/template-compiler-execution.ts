@@ -56,6 +56,7 @@ import {
   type TemplateCompilerElementOccurrence,
   type TemplateCompilerFragmentOccurrence,
   type TemplateCompilerNodeOccurrence,
+  type TemplateCompilerNodeDocumentChange,
   type TemplateCompilerOccurrenceGeneration,
   type TemplateCompilerOccurrenceForest,
   type TemplateCompilerParentOccurrence,
@@ -247,6 +248,7 @@ export class TemplateCompilerOperationMutationBatch {
     readonly attributeValueMutations: readonly TemplateCompilerAttributeValueMutation[],
     readonly occurrenceGenerationReservations: readonly TemplateCompilerOccurrenceGeneration[] = [],
     readonly topologyMutations: readonly TemplateCompilerTopologyMutation[] = [],
+    readonly nodeDocumentMutations: readonly TemplateCompilerNodeDocumentChange[] = [],
   ) {
     const nodeDetachmentMutations = this.nodeDetachmentMutations;
     const attributeDetachmentMutations = this.attributeDetachmentMutations;
@@ -258,6 +260,9 @@ export class TemplateCompilerOperationMutationBatch {
         !== attributeDetachmentMutations.length
     ) {
       throw new Error('Compiler mutation batch repeats a topology detachment occurrence.');
+    }
+    if (nodeDocumentMutations.some(mutation => mutation.previousDocument === mutation.nextDocument)) {
+      throw new Error('Compiler document adoption records an unchanged node document.');
     }
   }
 
@@ -302,6 +307,7 @@ class TemplateCompilerPendingMutationOverlay {
     TemplateCompilerAttributeValueMutation
   >();
   private readonly topologyMutations: TemplateCompilerTopologyMutation[] = [];
+  private readonly nodeDocumentMutations: TemplateCompilerNodeDocumentChange[] = [];
   private readonly detachedNodes = new Set<TemplateCompilerNodeOccurrence>();
   private readonly detachedAttributes = new Set<TemplateCompilerAttributeOccurrence>();
 
@@ -358,6 +364,10 @@ class TemplateCompilerPendingMutationOverlay {
     this.topologyMutations.push(mutation);
   }
 
+  recordNodeDocumentChanges(changes: readonly TemplateCompilerNodeDocumentChange[]): void {
+    this.nodeDocumentMutations.push(...changes);
+  }
+
   get nextTopologyMutationOrdinal(): number {
     return this.topologyMutations.length;
   }
@@ -371,6 +381,7 @@ class TemplateCompilerPendingMutationOverlay {
       [...this.attributeValueMutations.values()],
       [...occurrenceGenerationReservations],
       [...this.topologyMutations],
+      [...this.nodeDocumentMutations],
     );
   }
 }
@@ -1762,6 +1773,35 @@ export class TemplateCompilerExecutionSession {
     return this.pendingAttempt;
   }
 
+  /** Apply the document adoption performed when JIT moves a reached subtree into generated template content. */
+  adoptSiteNodeDocuments(
+    driver: TemplateCompilerSiteExecutionDriverReference,
+    nodes: readonly TemplateCompilerNodeOccurrence[],
+    causeHandles: readonly ClaimEndpointHandle[],
+    sourceAddressHandle: AddressHandle | null,
+  ): TemplateCompilerOperation | null {
+    this.assertCurrentSiteExecutionDriver(driver);
+    for (const node of nodes) this.requireOccurrenceContext(driver.context, node);
+    const target = nodes.find(node => this.forest.ownerDocumentFor(node) !== 'platform');
+    if (target == null) return null;
+    const attempt = this.beginOperation({
+      operationKey: `${driver.lane.localKey}:document-adoption:${target.occurrenceKey}:${driver.expectedLaneOperationCount}`,
+      context: driver.context,
+      operationKind: TemplateCompilerOperationKind.DocumentAdoption,
+      executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
+      target: this.occurrenceTarget(driver.context, target),
+      causeHandles,
+      sourceAddressHandle,
+      siteExecutionDriver: driver,
+    });
+    const overlay = this.requirePendingMutationOverlay(attempt);
+    for (const node of nodes) {
+      overlay.recordNodeDocumentChanges(this.forest.adoptNodeDocument(node, 'platform'));
+    }
+    return this.completeOperation(attempt,
+      new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete));
+  }
+
   /** Apply the original slot-attribute removals before any projection group can invoke a source hook. */
   consumeProjectionSlots(
     driver: TemplateCompilerSiteExecutionDriverReference,
@@ -2956,6 +2996,7 @@ export class TemplateCompilerExecutionSession {
       this.mutationAuthority.readPendingGenerations(authorityBatch),
     );
     const isSiteExecution = attempt.context instanceof TemplateCompilerSiteExecutionContextReference;
+    const isDocumentAdoption = attempt.operationKind === TemplateCompilerOperationKind.DocumentAdoption;
     const siteNodeDetachments = mutationBatch.nodeDetachmentMutations;
     const siteTopologyIsExact = attempt.operationKind === TemplateCompilerOperationKind.ProjectionSlotConsumption
       ? attempt.executionMechanism === TemplateCompilerOperationExecutionMechanism.BuiltIn
@@ -2965,11 +3006,20 @@ export class TemplateCompilerExecutionSession {
         && (attempt.executionMechanism === TemplateCompilerOperationExecutionMechanism.StaticCallable
           || (mutationBatch.topologyMutations.length === siteNodeDetachments.length
             && mutationBatch.occurrenceGenerationReservations.length === 0));
+    const siteMutationsAreExact = isDocumentAdoption
+      ? attempt.executionMechanism === TemplateCompilerOperationExecutionMechanism.BuiltIn
+        && completion.completionKind === TemplateCompilerOperationCompletionKind.Complete
+        && mutationBatch.nodeDocumentMutations.length > 0
+        && mutationBatch.topologyMutations.length === 0
+        && mutationBatch.occurrenceGenerationReservations.length === 0
+        && mutationBatch.attributeValueMutations.length === 0
+      : mutationBatch.nodeDocumentMutations.length === 0 && siteTopologyIsExact;
+    const siteEagerMutationDelta = mutationBatch.siteTopologyMutationDelta + mutationBatch.nodeDocumentMutations.length;
     if (
       isSiteExecution
       && (
-        this.forest.mutationRevision !== attempt.startForestMutationRevision + mutationBatch.siteTopologyMutationDelta
-        || !siteTopologyIsExact
+        this.forest.mutationRevision !== attempt.startForestMutationRevision + siteEagerMutationDelta
+        || !siteMutationsAreExact
         || (siteNodeDetachments.length > 0
           && (
             attempt.operationKind !== TemplateCompilerOperationKind.ProcessContent
@@ -2996,11 +3046,11 @@ export class TemplateCompilerExecutionSession {
     if (
       isSiteExecution
       && mutationBatch.state === TemplateCompilerMutationBatchState.Committed
-      && this.forest.mutationRevision !== attempt.startForestMutationRevision + mutationBatch.siteTopologyMutationDelta
+      && this.forest.mutationRevision !== attempt.startForestMutationRevision + siteEagerMutationDelta
         + mutationBatch.attributeValueMutations.length
     ) {
       throw new Error(
-        `Compiler site operation '${attempt.operationKey}' lost exact scalar-only mutation currentness.`,
+        `Compiler site operation '${attempt.operationKey}' lost exact mutation currentness after scalar commit.`,
       );
     }
 
@@ -3365,6 +3415,7 @@ export class TemplateCompilerExecutionSession {
         || !admittedOperationContexts.has(operation.context)
         || (operation.context instanceof TemplateCompilerSiteExecutionContextReference
           && operation.operationKind !== TemplateCompilerOperationKind.ProcessContent
+          && operation.operationKind !== TemplateCompilerOperationKind.DocumentAdoption
           && operation.operationKind !== TemplateCompilerOperationKind.ProjectionSlotConsumption)
       ) {
         throw new Error(`Compiler operation '${operation.operationKey}' has incoherent family order or ownership.`);
@@ -3405,6 +3456,26 @@ export class TemplateCompilerExecutionSession {
         && operation.operationKind === TemplateCompilerOperationKind.ProcessContent;
       const isSiteProjectionSlots = operation.context instanceof TemplateCompilerSiteExecutionContextReference
         && operation.operationKind === TemplateCompilerOperationKind.ProjectionSlotConsumption;
+      const isSiteDocumentAdoption = operation.context instanceof TemplateCompilerSiteExecutionContextReference
+        && operation.operationKind === TemplateCompilerOperationKind.DocumentAdoption;
+      if (isSiteDocumentAdoption && (
+        operation.executionMechanism !== TemplateCompilerOperationExecutionMechanism.BuiltIn
+        || operation.completion.completionKind !== TemplateCompilerOperationCompletionKind.Complete
+        || operation.mutationBatch.attributeValueMutations.length > 0
+        || operation.mutationBatch.occurrenceGenerationReservations.length > 0
+        || operation.mutationBatch.topologyMutations.length > 0
+        || operation.mutationBatch.nodeDocumentMutations.length === 0
+        || operation.endForestMutationRevision !== operation.startForestMutationRevision
+          + operation.mutationBatch.nodeDocumentMutations.length
+      )) throw new Error('Document adoption operation lost its exact document-change history.');
+      if (operation.mutationBatch.nodeDocumentMutations.length > 0 && !isSiteDocumentAdoption) {
+        throw new Error(`Compiler operation '${operation.operationKey}' owns unsupported document-change history.`);
+      }
+      for (const mutation of operation.mutationBatch.nodeDocumentMutations) {
+        if (this.forest.nodeForOccurrenceKey(mutation.node.occurrenceKey) !== mutation.node) {
+          throw new Error(`Compiler operation '${operation.operationKey}' adopted a node from another forest.`);
+        }
+      }
       if (isSiteProjectionSlots && (
         operation.executionMechanism !== TemplateCompilerOperationExecutionMechanism.BuiltIn
         || operation.completion.completionKind !== TemplateCompilerOperationCompletionKind.Complete
@@ -3925,6 +3996,7 @@ export class TemplateCompilerExecutionSession {
         || active !== driver
         || driver.context !== context
         || (operationKind !== TemplateCompilerOperationKind.ProcessContent
+          && operationKind !== TemplateCompilerOperationKind.DocumentAdoption
           && operationKind !== TemplateCompilerOperationKind.ProjectionSlotConsumption)
       ) {
         throw new Error(
@@ -4004,6 +4076,12 @@ export class TemplateCompilerExecutionSession {
     operationKind: TemplateCompilerOperationKind,
     target: TemplateCompilerOperationTarget,
   ): void {
+    if (operationKind === TemplateCompilerOperationKind.DocumentAdoption
+      && (!(context instanceof TemplateCompilerSiteExecutionContextReference)
+        || !(target instanceof TemplateCompilerOccurrenceOperationTarget)
+        || this.forest.nodeForOccurrenceKey(target.occurrence.occurrenceKey) !== target.occurrence)) {
+      throw new Error('Compiler document adoption requires a site node target.');
+    }
     const isBootstrap = context instanceof TemplateCompilerBootstrapContextReference;
     const requiresBootstrap = operationKind === TemplateCompilerOperationKind.CompilerHook
       || operationKind === TemplateCompilerOperationKind.LocalTemplateExtraction;

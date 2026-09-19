@@ -279,9 +279,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   `AuSlot.processContent` removed-child references preserve their source-edge dispositions. Text expansion is an
   explicit source-anchored 1→N operation, and output bands retain browser-input order across replacements. Generated
   authority is session-branded and role-checked, including exact generated carrier pairs. This is
-  also where final content-document affiliation is selected: newly generated compiler templates use the platform
-  document, while reused authored and local template contents stay in the inert template-contents document. This
-  final-state fact does not answer a source hook's earlier `ownerDocument` read during traversal. The layer remains
+  also where final carrier/content-document affiliation is read from the existing forest: newly generated compiler
+  templates use the platform document, while reused authored and local template contents stay inert. No separate
+  document-selection literals are maintained at this boundary. The layer remains
   execution mechanics only: it does not freeze transformed products, allocate durable targets, publish kernel records,
   or switch the production compiler traversal.
 - `template-compiler-execution.ts` is the matching product-free ordered semantic-operation transaction. It binds
@@ -339,9 +339,14 @@ classification, expression parsing, and instruction lowering converge on the sam
   Hooks and the ordinary attribute owner read that same physical state; no projection suppression mask remains.
   Later structural execution adopts the original consumption, so a hook-created same-name Attr survives. Generated
   child slot assignments use committed HookAttribute insertion and addressless wires, not invented authored spans.
-  ownerDocument reads remain explicitly unsupported until document affiliation follows JIT's template construction
-  and adoption: generated projection contents can belong to platform.document while retained authored contents stay
-  inert. A universal document identity would select incorrect hook branches.
+  ownerDocument reads follow live forest affiliation, independent of physical parent edges. One reached TC host's
+  hook runs before wrapping adoption; its child hooks run afterward. Projection entrants are adopted group-by-group
+  immediately before that group's traversal. Retained template content remains inert, and flattened-template children
+  move without adopting the emptied source fragment. Document identities survive evaluator forks and detached node
+  reads. Document nodeType/nodeName/ownerDocument are known; factories, ambient document content and other unmodeled
+  members remain explicit unsupported boundaries. Source-hook rollback preserves prior compiler adoption.
+  Ordinary forest child insertion includes document adoption within its existing mutation operation; structural
+  root/template-content ownership edges do not imply DOM insertion. The same journal restores affiliation on rollback.
   Unsupported attempted hooks discard their
   pending forest mutations; they are not successful no-ops or ordinary thrown exceptions. The forest journals touched
   state in place, preserving node/live-collection identity without cloning a second DOM. Source-hook removals use the

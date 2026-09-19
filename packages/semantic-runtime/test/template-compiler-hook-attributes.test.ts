@@ -171,16 +171,19 @@ export class MyApp {}
         node instanceof TemplateCompilerElementOccurrence && node.tagName === 'unsupported-projection-probe'
       ));
     if (endpoint == null) throw new Error('Expected the unsupported projection endpoint.');
-    const [prefix, failedHook] = endpoint.siteOperations;
+    const [prefix, adoption, failedHook] = endpoint.siteOperations;
     expect(endpoint.siteOperations.map(operation => operation.operationKind)).toEqual([
-      TemplateCompilerOperationKind.ProjectionSlotConsumption, TemplateCompilerOperationKind.ProcessContent,
+      TemplateCompilerOperationKind.ProjectionSlotConsumption, TemplateCompilerOperationKind.DocumentAdoption,
+      TemplateCompilerOperationKind.ProcessContent,
     ]);
     expect(prefix?.mutationBatch.state).toBe(TemplateCompilerMutationBatchState.Committed);
+    expect(adoption?.mutationBatch.state).toBe(TemplateCompilerMutationBatchState.Committed);
     expect(failedHook?.completion.completionKind).toBe(TemplateCompilerOperationCompletionKind.Unsupported);
     expect(failedHook?.mutationBatch.state).toBe(TemplateCompilerMutationBatchState.Discarded);
     const originalSlot = prefix?.mutationBatch.attributeDetachmentMutations[0];
     if (originalSlot == null || failedHook == null) throw new Error('Expected prefix and failed-hook mutation history.');
     expect(originalSlot.attribute).toMatchObject({ name: 'au-slot', value: 'slot', owner: null });
+    expect(endpoint.execution.forest.ownerDocumentFor(originalSlot.previousOwner)).toBe('platform');
     expect(originalSlot.previousOwner.readAttributes().map(attribute => [attribute.name, attribute.value]))
       .toEqual([['title', 'before']]);
     expect(failedHook.mutationBatch.attributeInsertionMutations.map(mutation => mutation.attribute.name))

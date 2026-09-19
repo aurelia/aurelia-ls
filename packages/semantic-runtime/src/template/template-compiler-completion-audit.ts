@@ -8,6 +8,7 @@ import { TemplateCompilerRootCompilationStateKind } from './template-compiler-ro
 import {
   TemplateCompilerSiteCursorAttributeEvent,
   TemplateCompilerSiteCursorContainerlessPlacementEvent,
+  TemplateCompilerSiteCursorDocumentAdoptionEvent,
   TemplateCompilerSiteCursorElementEvent,
   TemplateCompilerSiteCursorLetElementEvent,
   TemplateCompilerSiteCursorPhaseEvent,
@@ -213,6 +214,7 @@ export function auditTemplateCompilerTraversalCompletion(
     && !sameObjects(endpoint.siteOperations, [
       ...transcript.events.flatMap(event => event instanceof TemplateCompilerSiteCursorProcessContentEvent
         ? [event.result.operation]
+        : event instanceof TemplateCompilerSiteCursorDocumentAdoptionEvent ? [event.operation]
         : event instanceof TemplateCompilerSiteCursorProjectionExtractionEvent && event.slotOperation != null
           ? [event.slotOperation] : []),
       ...(transcript.frontier?.terminalOperation == null ? [] : [transcript.frontier.terminalOperation]),

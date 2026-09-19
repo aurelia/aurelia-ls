@@ -22,15 +22,23 @@ attribute, and generates a live title binding. The hook also removes and recreat
 to target its own named outlet, adding a live custom-attribute binding. Readbacks are written into DOM attributes;
 no hook inputs or results are retained in captured mutable state.
 
-JIT characterization of the same fixture found `host.ownerDocument === platform.document` is false for `AttributeLab`
-in the authored root and for `ProjectionProbe` inside retained template-controller content, but true for direct
-named probes and the flattened bare-template probe. `CompilationContext.h` explicitly adopts generated template
-content into the platform document (`aurelia/packages/template-compiler/src/template-compiler.ts:1560`), whereas
-`TemplateElementFactory.t` creates authored template content without adoption
-(`aurelia/packages/template-compiler/src/template-element-factory.ts:24`). This characterization is not an assertion
-of the strict golden: source hooks refuse `ownerDocument` reads until document affiliation is modeled together with
-native inert-template construction. A single platform-document or inert-document reference would misrepresent one
-of these cases.
+Source-hook document affiliation is checked through DOM readbacks in the same seven interaction checkpoints.
+`ProjectionLab.processContent` records the original inert owner on each probe before extraction; the probe's own
+hook then sees the platform document for direct and flattened projections, but stays inert inside a retained
+template's content. `AttributeLab` also observes the inert authored root and its child before projection.
+The same `ProjectionProbe` resource covers its own `if` (hook still inert before wrapping), a plain-element `if`
+ancestor (hook subsequently sees the platform document), and a retained-template `if` ancestor (hook stays inert).
+Every probe compares host, ordinary child, nested template element, nested template content and its inner child:
+adoption into the platform document moves the template element but preserves the inert boundary of its content.
+These are compile-time readbacks, not guesses from the final connected DOM. The existing local-template scenario
+separately checks inert document reads in `OwnedDependency.processContent` inside extracted local definitions.
+
+The independent pinned-JIT run establishes the expected values. `CompilationContext.h` explicitly adopts generated
+template content into the platform document (`aurelia/packages/template-compiler/src/template-compiler.ts:1560`),
+whereas `TemplateElementFactory.t` creates authored template content without adoption
+(`aurelia/packages/template-compiler/src/template-element-factory.ts:24`). A single platform-document or inert-document
+reference would misrepresent one of these cases. This fixture does not use document factories, explicit adoption,
+registry access, or document traversal from source hooks; support for identity reads does not imply those APIs.
 
 The browser harness registers an autonomous native custom element and two customized button built-ins before any
 application modules load. The fixture's `before-app` event verifies that loading compiler-final definitions did not

@@ -323,6 +323,85 @@ describe('template compiler execution sequence', () => {
     }
   });
 
+  test('records site document adoption without structural mutations or repeated no-op operations', () => {
+    const browser = new BrowserEffectiveTemplateFixture('compiler-execution-site-document');
+    try {
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(browser.materialize('root',
+        '<section><span>one</span><template><i>retained</i></template></section><p>two</p>',
+      ).emission);
+      const execution = TemplateCompilerExecutionSession.createForForest('site-document:family', forest);
+      const lane = execution.admitRootInvocation('site-document:plan');
+      const closure = closeExactNoLocalBootstrap(browser, execution, lane, 'site-document');
+      const driver = execution.beginSiteExecutionDriver(execution.captureSiteExecutionFrontier(closure));
+      const roots = forest.compilerContent.readChildren();
+      const section = roots[0] as TemplateCompilerElementOccurrence;
+      const span = section.readChildren()[0] as TemplateCompilerElementOccurrence;
+      const template = section.readChildren()[1] as TemplateCompilerElementOccurrence;
+      const paragraph = roots[1] as TemplateCompilerElementOccurrence;
+      const originalParent = section.parent;
+      const beforeRevision = forest.mutationRevision;
+      const causeHandles = [browser.run.handles.product('site-document:definition')];
+      const sourceAddressHandle = browser.run.handles.address('site-document:source');
+      expect(forest.ownerDocumentFor(section)).toBe('template-contents');
+
+      const operation = execution.adoptSiteNodeDocuments(driver, roots, causeHandles, sourceAddressHandle)!;
+      const changedNodes = [section, span, span.readChildren()[0], template, paragraph, paragraph.readChildren()[0]];
+      expect(operation).toMatchObject({
+        operationKind: TemplateCompilerOperationKind.DocumentAdoption,
+        executionMechanism: TemplateCompilerOperationExecutionMechanism.BuiltIn,
+        completion: { completionKind: TemplateCompilerOperationCompletionKind.Complete },
+        causeHandles,
+        sourceAddressHandle,
+        startForestMutationRevision: beforeRevision,
+        endForestMutationRevision: beforeRevision + changedNodes.length,
+      });
+      expect(operation.mutationBatch.nodeDocumentMutations).toEqual(changedNodes.map(node => ({
+        node, previousDocument: 'template-contents', nextDocument: 'platform',
+      })));
+      expect(operation.mutationBatch.topologyMutations).toEqual([]);
+      expect(operation.mutationBatch.attributeValueMutations).toEqual([]);
+      expect(operation.mutationBatch.occurrenceGenerationReservations).toEqual([]);
+      expect(section.parent).toBe(originalParent);
+      expect(forest.compilerContent.readChildren()).toBe(roots);
+      expect(forest.ownerDocumentFor(template.templateContent!)).toBe('template-contents');
+      expect(forest.ownerDocumentFor(template.templateContent!.readChildren()[0]!)).toBe('template-contents');
+      expect(() => execution.assertCurrentSiteExecutionDriver(driver)).not.toThrow();
+      const operationCount = execution.sequence.readContextOperations(driver.context).length;
+      expect(execution.adoptSiteNodeDocuments(driver, roots, causeHandles, sourceAddressHandle)).toBeNull();
+      expect(forest.mutationRevision).toBe(beforeRevision + changedNodes.length);
+      expect(execution.sequence.readContextOperations(driver.context)).toHaveLength(operationCount);
+      execution.finishSiteExecutionDriver(driver);
+      forest.assertCoherentTopology();
+    } finally { browser.dispose(); }
+  });
+
+  test('does not admit unrecorded document adoption as a processContent mutation', () => {
+    const browser = new BrowserEffectiveTemplateFixture('compiler-execution-unrecorded-document');
+    try {
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(
+        browser.materialize('root', '<div></div>').emission,
+      );
+      const execution = TemplateCompilerExecutionSession.createForForest('unrecorded-document:family', forest);
+      const lane = execution.admitRootInvocation('unrecorded-document:plan');
+      const closure = closeExactNoLocalBootstrap(browser, execution, lane, 'unrecorded-document');
+      const driver = execution.beginSiteExecutionDriver(execution.captureSiteExecutionFrontier(closure));
+      const root = forest.compilerContent.readChildren()[0]!;
+      const attempt = execution.beginOperation({
+        operationKey: 'unrecorded-document:process', context: driver.context,
+        operationKind: TemplateCompilerOperationKind.ProcessContent,
+        executionMechanism: TemplateCompilerOperationExecutionMechanism.StaticCallable,
+        target: execution.callableEffectTarget(driver.context, new TemplateCompilerCallableReference(
+          null, null, browser.run.handles.address('hook'),
+        ), root),
+        causeHandles: [browser.run.handles.product('definition')], siteExecutionDriver: driver,
+      });
+      forest.adoptNodeDocument(root, 'platform');
+      expect(() => execution.completeOperation(attempt,
+        new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete),
+      )).toThrow(/unledgered or unsupported forest mutation/);
+    } finally { browser.dispose(); }
+  });
+
   test('commits built-in processContent child detachments in caller-proven order', () => {
     const browser = new BrowserEffectiveTemplateFixture('compiler-execution-site-detachment');
     try {

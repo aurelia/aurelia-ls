@@ -76,6 +76,7 @@ export const enum TemplateCompilerSiteCursorEventKind {
   Element = 'element',
   LetElement = 'let-element',
   ProcessContent = 'process-content',
+  DocumentAdoption = 'document-adoption',
   Attribute = 'attribute',
   TemplateControllerTransition = 'template-controller-transition',
   ProjectionExtraction = 'projection-extraction',
@@ -167,6 +168,22 @@ export class TemplateCompilerSiteCursorPhaseEvent extends TemplateCompilerSiteCu
     readonly remainderEvidence: readonly TemplateCompilerAuthoredSiteRemainderEvidence[] = [],
   ) {
     super(authority, ordinal, TemplateCompilerSiteCursorEventKind.Phase);
+  }
+}
+
+/** A prior DOM adoption whose document changes are visible to subsequently reached hooks. */
+export class TemplateCompilerSiteCursorDocumentAdoptionEvent extends TemplateCompilerSiteCursorEvent {
+  constructor(
+    authority: object,
+    ordinal: number,
+    readonly operation: TemplateCompilerOperation,
+  ) {
+    super(authority, ordinal, TemplateCompilerSiteCursorEventKind.DocumentAdoption);
+    if (operation.operationKind !== TemplateCompilerOperationKind.DocumentAdoption
+      || operation.executionMechanism !== TemplateCompilerOperationExecutionMechanism.BuiltIn
+      || operation.completion.completionKind !== TemplateCompilerOperationCompletionKind.Complete) {
+      throw new Error('Compiler document adoption event requires its completed built-in operation.');
+    }
   }
 }
 

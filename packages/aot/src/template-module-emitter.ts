@@ -661,6 +661,9 @@ function emitTemplateNodeValue(
   if (carrier?.nodeKind !== 'element' || carrier.tagName !== 'template' || content?.nodeKind !== 'fragment') {
     throw invalidHandoff(request, 'Compiled tree carrier/content is not one template and fragment pair.');
   }
+  if (tree.carrierOwnerDocument !== 'platform' && tree.carrierOwnerDocument !== 'template-contents') {
+    throw invalidHandoff(request, 'Compiled tree is missing its carrier document affiliation.');
+  }
   if (tree.contentOwnerDocument !== 'platform' && tree.contentOwnerDocument !== 'template-contents') {
     throw invalidHandoff(request, 'Compiled tree is missing its content document affiliation.');
   }
@@ -728,7 +731,9 @@ function emitTemplateNodeValue(
   if (!emitted.has(tree.compilerContentNodeId)) {
     throw invalidHandoff(request, 'Compiler carrier did not structurally own its compiler content fragment.');
   }
-  lines.push(`  $platformDocument.adoptNode(${carrierVariable});`);
+  if (tree.carrierOwnerDocument === 'platform') {
+    lines.push(`  $platformDocument.adoptNode(${carrierVariable});`);
+  }
   if (tree.contentOwnerDocument === 'platform') {
     lines.push(`  $platformDocument.adoptNode(${carrierVariable}.content);`);
   }

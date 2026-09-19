@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 
 import type { ProductHandle } from '../src/kernel/handles.js';
+import { BrowserTemplateCarrierKind } from '../src/template/browser-template-selection.js';
 import { HtmlCommentSemanticKind, HtmlIrNodeKind } from '../src/template/html-ir.js';
 import {
   TemplateCompilerCommentOccurrence,
@@ -40,6 +41,11 @@ describe('template compiler occurrence forest', () => {
           .toEqual(reachable.attributeProducts);
 
         for (const node of forest.readNodes()) {
+          expect(forest.ownerDocumentFor(node), key).toBe(
+            node === forest.compilerCarrier && emission.tree.carrierKind === BrowserTemplateCarrierKind.SynthesizedWrapper
+              ? 'platform'
+              : 'template-contents',
+          );
           expect(forest.nodeForOccurrenceKey(node.occurrenceKey), key).toBe(node);
           expect(forest.nodesForInputProduct(node.inputReference!.productHandle), key).toEqual([node]);
           expect(forest.nodesForInputIdentity(node.inputIdentityKey!), key).toEqual([node]);
@@ -221,6 +227,74 @@ describe('template compiler occurrence forest', () => {
       forest.assertCoherentTopology();
     } finally {
       readParentOrdinal.mockRestore();
+      fixture.dispose();
+    }
+  });
+
+  test('adopts projected subtrees but keeps retained template contents inert and detached documents stable', () => {
+    const fixture = new BrowserEffectiveTemplateFixture('template-compiler-occurrence-documents');
+    try {
+      const emission = fixture.materialize(
+        'documents',
+        '<section><article au-slot="named"><span>projected</span><template if.bind="keep"><b>retained</b></template></article><aside></aside></section>',
+      ).emission;
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(emission);
+      const other = TemplateCompilerOccurrenceForest.fromBrowserEffective(emission);
+      const element = (name: string) => forest.readNodes().find((node): node is TemplateCompilerElementOccurrence =>
+        node instanceof TemplateCompilerElementOccurrence && node.tagName === name && node !== forest.compilerCarrier
+      )!;
+      const article = element('article');
+      const span = element('span');
+      const template = element('template');
+      const aside = element('aside');
+      const content = template.templateContent!;
+      const bold = element('b');
+      const projectedText = span.readChildren()[0]!;
+      const retainedText = bold.readChildren()[0]!;
+      const originalParent = article.parent;
+      const originalOrdinal = article.readParentOrdinal();
+      const revision = forest.mutationRevision;
+
+      const changes = forest.adoptNodeDocument(article, 'platform');
+      expect(changes).toEqual([article, span, projectedText, template].map((node) => ({
+        node, previousDocument: 'template-contents', nextDocument: 'platform',
+      })));
+      expect(forest.mutationRevision).toBe(revision + changes.length);
+      expect(article.parent).toBe(originalParent);
+      expect(article.readParentOrdinal()).toBe(originalOrdinal);
+      expect(forest.ownerDocumentFor(content)).toBe('template-contents');
+      expect(forest.ownerDocumentFor(bold)).toBe('template-contents');
+
+      forest.detachNode(article);
+      expect(forest.ownerDocumentFor(article)).toBe('platform');
+      expect(forest.ownerDocumentFor(projectedText)).toBe('platform');
+      const beforeInsert = forest.mutationRevision;
+      forest.insertDetachedNode(article, aside, TemplateCompilerOccurrenceEdgeKind.Child, 0);
+      expect(forest.mutationRevision).toBe(beforeInsert + 1);
+      expect(forest.ownerDocumentFor(article)).toBe('template-contents');
+      expect(forest.ownerDocumentFor(projectedText)).toBe('template-contents');
+
+      // CompilationContext.h explicitly adopts generated content. Same-document host adoption does not undo it.
+      forest.adoptNodeDocument(content, 'platform');
+      const beforeNoop = forest.mutationRevision;
+      expect(forest.adoptNodeDocument(article, 'template-contents')).toEqual([]);
+      expect(forest.mutationRevision).toBe(beforeNoop);
+      expect(forest.ownerDocumentFor(content)).toBe('platform');
+      expect(forest.ownerDocumentFor(retainedText)).toBe('platform');
+
+      // A genuinely cross-document host adoption does run HTML template adopting steps after ordinary descendants.
+      expect(forest.adoptNodeDocument(article, 'platform')).toEqual([
+        ...[article, span, projectedText, template].map((node) => ({
+          node, previousDocument: 'template-contents', nextDocument: 'platform',
+        })),
+        ...[content, bold, retainedText].map((node) => ({
+          node, previousDocument: 'platform', nextDocument: 'template-contents',
+        })),
+      ]);
+      expect(() => forest.ownerDocumentFor(other.compilerContent)).toThrow(/belongs to another forest/);
+      expect(() => forest.adoptNodeDocument(other.compilerContent, 'platform')).toThrow(/belongs to another forest/);
+      forest.assertCoherentTopology();
+    } finally {
       fixture.dispose();
     }
   });

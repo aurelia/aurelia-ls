@@ -1,10 +1,12 @@
+/* global HTMLElement, Document */
 import { customElement } from 'aurelia';
 
 @customElement({ name: 'attribute-lab', template: '<au-slot></au-slot>' })
 export class AttributeLab {
-  static processContent(host: HTMLElement): void {
+  static processContent(host: HTMLElement, platform: { document: Document }): void {
     host.setAttribute('data-host-created', 'yes');
     host.classList.add('generated-host');
+    host.setAttribute('data-document-view', `${host.ownerDocument === platform.document}:${host.firstElementChild!.ownerDocument === host.ownerDocument}`);
     for (const child of host.children) {
       switch (child.getAttribute('data-case')) {
         case 'is-remove':

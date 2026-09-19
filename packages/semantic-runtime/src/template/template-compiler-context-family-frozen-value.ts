@@ -466,6 +466,7 @@ function materializeContext(
       browserEmission(family).tree.toReference(),
       nodeReferences.get(context.structure.compilerCarrier)!,
       nodeReferences.get(context.structure.compilerContent)!,
+      context.structure.carrierOwnerDocument,
       context.structure.contentOwnerDocument,
       [],
     ),

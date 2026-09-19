@@ -60,7 +60,7 @@ import {
 } from './template-instruction-runtime-value.js';
 
 export const TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION =
-  'semantic-runtime/template-compiler-compiled-handoff/v5' as const;
+  'semantic-runtime/template-compiler-compiled-handoff/v6' as const;
 
 export interface TemplateCompilerCompiledHandoffValue {
   readonly schemaVersion: typeof TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION;
@@ -251,6 +251,7 @@ export interface TemplateCompilerCompiledHandoffWatchPropertyKey {
 export interface TemplateCompilerCompiledHandoffTree {
   readonly compilerCarrierNodeId: string;
   readonly compilerContentNodeId: string;
+  readonly carrierOwnerDocument: TemplateContentOwnerDocument;
   readonly contentOwnerDocument: TemplateContentOwnerDocument;
   readonly nodes: readonly TemplateCompilerCompiledHandoffNode[];
   readonly attributes: readonly TemplateCompilerCompiledHandoffAttribute[];
@@ -777,6 +778,7 @@ function projectTree(
   return {
     compilerCarrierNodeId: nodeId(context.tree.compilerCarrier.productHandle),
     compilerContentNodeId: nodeId(context.tree.compilerContent.productHandle),
+    carrierOwnerDocument: context.tree.carrierOwnerDocument,
     contentOwnerDocument: context.tree.contentOwnerDocument,
     nodes: context.nodes.map((node) => nodeValue(node, nodeIds, attributeIds, store)),
     attributes: context.attributes.map((attribute) => attributeValue(attribute, nodeIds, attributeIds, store)),

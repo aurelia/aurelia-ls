@@ -206,6 +206,7 @@ async function captureLocalTemplates(page: Page): Promise<ApplicationObservation
       message: message?.value ?? '',
       cardValues: Array.from(document.querySelectorAll('#cards > local-card .local-card'), text),
       ownedDependencyCount: document.querySelectorAll('.owned-dependency').length,
+      ownedDependencyHookDocuments: Array.from(document.querySelectorAll('owned-dependency'), host => host.getAttribute('data-hook-platform-document')),
       peerCardValue: document.querySelector('local-peer .local-card')?.textContent?.trim() ?? null,
       nestedValue: document.querySelector('.nested-local')?.textContent?.trim() ?? null,
       conventionValue: document.querySelector('.convention-local')?.textContent?.trim() ?? null,

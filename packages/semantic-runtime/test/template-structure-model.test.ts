@@ -52,6 +52,7 @@ import {
   TemplateStructuralNodeReference,
   TemplateStructuralTreeKind,
   TemplateStructuralTreeReference,
+  type TemplateContentOwnerDocument,
 } from '../src/template/template-structure.js';
 import {
   TemplateStructureDerivation,
@@ -319,7 +320,7 @@ describe('template structural model', () => {
       handles.address('source-span'),
     );
     const tree = bindDetail(
-      new CompilerTransformedTemplateTree(source, inputTree, carrier, content, 'template-contents'),
+      new CompilerTransformedTemplateTree(source, inputTree, carrier, content, 'platform', 'template-contents'),
       handles,
       'transformed-tree',
       KernelVocabulary.Template.StructuralTree.key,
@@ -378,6 +379,37 @@ describe('template structural model', () => {
     ]);
 
     const context = { compareRecordHandles: () => KernelPublicationDecisionKind.Retain } as const;
+    const documentTree = (carrierDocument: TemplateContentOwnerDocument, contentDocument: TemplateContentOwnerDocument) =>
+      bindDetail(
+        new CompilerTransformedTemplateTree(source, inputTree, carrier, content, carrierDocument, contentDocument),
+        handles,
+        'transformed-tree',
+        KernelVocabulary.Template.StructuralTree.key,
+        'transformed-tree',
+      );
+    expect(TemplateProductDetails.StructuralTree.compare(
+      tree, documentTree('platform', 'template-contents'), context,
+    )).toBe(KernelPublicationDecisionKind.Retain);
+    expect(TemplateProductDetails.StructuralTree.compare(
+      tree, documentTree('template-contents', 'template-contents'), context,
+    )).toBe(KernelPublicationDecisionKind.Replace);
+    expect(TemplateProductDetails.StructuralTree.compare(
+      tree, documentTree('platform', 'platform'), context,
+    )).toBe(KernelPublicationDecisionKind.Replace);
+    const nativeElement = (customElementIs: string | null) => bindDetail(
+      new CompilerTransformedTemplateElement(transformedTree, 'button', HtmlNamespaceKind.Html,
+        'http://www.w3.org/1999/xhtml', [], [], null, customElementIs),
+      handles,
+      'native-element',
+      KernelVocabulary.Template.StructuralNode.key,
+      'native-element',
+    );
+    expect(TemplateProductDetails.StructuralNode.compare(
+      nativeElement('native-button'), nativeElement('native-button'), context,
+    )).toBe(KernelPublicationDecisionKind.Retain);
+    expect(TemplateProductDetails.StructuralNode.compare(
+      nativeElement('native-button'), nativeElement(null), context,
+    )).toBe(KernelPublicationDecisionKind.Replace);
     const comment = (kind: HtmlCommentSemanticKind) => bindDetail(
       new CompilerTransformedTemplateComment(transformedTree, 'au', kind),
       handles,

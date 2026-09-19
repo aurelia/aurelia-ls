@@ -243,6 +243,7 @@ export interface HelloWorldCardObservation {
 }
 
 export interface LocalTemplatesObservation {
+  readonly ownedDependencyHookDocuments: readonly (string | null)[];
   readonly message: string;
   readonly cardValues: readonly string[];
   readonly ownedDependencyCount: number;

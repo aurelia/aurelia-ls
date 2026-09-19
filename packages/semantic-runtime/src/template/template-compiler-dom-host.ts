@@ -116,6 +116,7 @@ export class TemplateCompilerDomHost {
   private readonly methodNames = new WeakMap<EvaluationValue, string>();
   private readonly ownedNodes = new Set<TemplateCompilerNodeOccurrence>();
   private readonly document = new CompilerDomOpaqueReference('document');
+  private readonly templateContentsDocument = new CompilerDomOpaqueReference('document');
   private evaluationGraph: StaticEvaluationValueGraph | null = null;
 
   constructor(
@@ -201,6 +202,12 @@ export class TemplateCompilerDomHost {
   ): EvaluationValue {
     if (this.refusal != null) return this.unsupported(member, node, moduleKey, host);
     if (reference.kind === 'platform' && member === 'document') return this.referenceValue(this.document);
+    if (reference.kind === 'document') {
+      if (member === 'nodeType') return new EvaluationNumberValue(9);
+      if (member === 'nodeName') return new EvaluationStringValue('#document');
+      if (member === 'ownerDocument') return new EvaluationNullValue();
+      return this.unsupported(member, node, moduleKey, host);
+    }
     if (reference.kind === 'token-iterator') return member === 'next'
       ? this.method('token-iterator:next') : this.unsupported(member, node, moduleKey, host);
     if (reference.kind === 'tokens') {
@@ -229,9 +236,8 @@ export class TemplateCompilerDomHost {
     switch (member) {
       case 'nodeType': return new EvaluationNumberValue(nodeType(occurrence));
       case 'nodeName': return new EvaluationStringValue(nodeName(occurrence));
-      // JIT adopts generated projection contents, but authored/retained template contents can stay inert.
-      // Node affiliation must follow those operations before document identity can be answered exactly.
-      case 'ownerDocument': return this.unsupported(member, node, moduleKey, host, 'dom-document-affiliation');
+      case 'ownerDocument': return this.referenceValue(this.execution.forest.ownerDocumentFor(occurrence) === 'platform'
+        ? this.document : this.templateContentsDocument);
       case 'parentNode':
       case 'parentElement':
         if (occurrence === this.rootElement) return this.outside(member, node, moduleKey, host);

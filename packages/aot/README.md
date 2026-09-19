@@ -53,15 +53,15 @@ and executable header values remain subject to the complete emitter's existing f
 
 The current emitter is a CSR baseline. It preserves the compiler's exact DOM node graph rather than serializing and
 reparsing HTML, because reparsing can merge adjacent text nodes that Aurelia instruction rows address separately.
-Handoff v5 carries final template-content document affiliation and each element's original native `is` creation input.
+Handoff v6 carries final carrier/content document affiliation and each element's original native `is` creation input.
 The emitter constructs the complete graph in the inert template-contents document, then adopts generated-context
 content into the platform document when requested by semantic-runtime. Native custom elements therefore do not
 construct during module loading. The original `is` creation value stays distinct from hook-rewritten attributes.
 This also preserves JIT Rendering's first-import versus cached-clone upgrade timing; simply keeping all content inert
 would change repeated generated-template views. Adjacent text nodes remain separate throughout.
-The carrier element itself is platform-owned in the emitted representation; introspection of an authored outer
-template's original carrier-document identity is not yet represented. This is distinct from the content-document
-affiliation that Rendering uses to instantiate views, and from source hooks' still-unsupported temporal ownerDocument.
+Carrier affiliation is preserved separately: an implicit wrapper is platform-owned, whereas a selected authored
+outer template can remain inert. Semantic-runtime supplies these final facts from the same forest that answers
+source hooks' temporal ownerDocument reads; AOT does not derive them again from definition kind or final parentage.
 A small virtual runtime helper applies compiler fields to carrier-owned Aurelia definitions after resource definition and
 before its first `Rendering.compile`; this is the candidate for a later additive framework hook. The generated facade
 keeps Aurelia/AppRoot lifecycle while replacing implicit `StandardConfiguration` installation through an exact

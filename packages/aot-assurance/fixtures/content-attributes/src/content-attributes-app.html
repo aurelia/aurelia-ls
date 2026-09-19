@@ -26,9 +26,14 @@
   <projection-lab>
     <native-probe data-native="projection" au-slot="first"><i></i></native-probe>
     <template au-slot="first"><native-probe data-native="flat-projection"><i></i></native-probe></template>
-    <projection-probe id="projected-first" au-slot="first"><span au-slot="authored" class="projected-value">first:${message}</span></projection-probe>
-    <projection-probe id="projected-second" au-slot="second"><span au-slot="authored" class="projected-value">second:${message}</span></projection-probe>
-    <template au-slot="first"><projection-probe id="projected-flat"><span au-slot="authored" class="projected-value">flat:${message}</span></projection-probe></template>
-    <template au-slot="second" repeat.for="item of items" if.bind="active && item !== 'two'"><projection-probe class="projected-repeat"><span au-slot="authored" class="projected-value">${item}:${message}</span></projection-probe></template>
+    <projection-probe id="projected-first" au-slot="first"><span au-slot="authored" class="projected-value">first:${message}</span><template><i></i></template></projection-probe>
+    <projection-probe id="projected-second" au-slot="second"><span au-slot="authored" class="projected-value">second:${message}</span><template><i></i></template></projection-probe>
+    <template au-slot="first"><projection-probe id="projected-flat"><span au-slot="authored" class="projected-value">flat:${message}</span><template><i></i></template></projection-probe></template>
+    <template au-slot="second" repeat.for="item of items" if.bind="active && item !== 'two'"><projection-probe class="projected-repeat"><span au-slot="authored" class="projected-value">${item}:${message}</span><template><i></i></template></projection-probe></template>
   </projection-lab>
+  <section id="document-transitions">
+    <projection-probe id="tc-own" if.bind="active"><span au-slot="authored" class="projected-value">tc-own:${message}</span><template><i></i></template></projection-probe>
+    <div id="tc-parent" if.bind="active"><projection-probe id="tc-descendant"><span au-slot="authored" class="projected-value">tc-descendant:${message}</span><template><i></i></template></projection-probe></div>
+    <template if.bind="active"><projection-probe id="retained-tc-descendant"><span au-slot="authored" class="projected-value">retained-tc-descendant:${message}</span><template><i></i></template></projection-probe></template>
+  </section>
 </template>

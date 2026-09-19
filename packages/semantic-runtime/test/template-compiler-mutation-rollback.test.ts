@@ -17,7 +17,7 @@ const Root = TemplateCompilerOccurrenceEdgeKind.Root;
 const TemplateContent = TemplateCompilerOccurrenceEdgeKind.TemplateContent;
 
 describe('compiler mutation rollback', () => {
-  test('restores every owning edge and scalar in place without rewinding the forest epoch', () => {
+  test('restores every owning edge, document and scalar in place without rewinding the forest epoch', () => {
     const browser = new BrowserEffectiveTemplateFixture('compiler-rollback-edges');
     try {
       const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(browser.materialize(
@@ -34,12 +34,15 @@ describe('compiler mutation rollback', () => {
       const attribute = div.readAttributes()[0]!;
       forest.rewriteAttributeValue(attribute, 'previously committed');
       forest.rewriteCharacterData(text, 'previous text');
+      forest.adoptNodeDocument(templateContent, 'platform');
       const before = forestState(forest);
       const roots = forest.readRoots();
       const children = div.readChildren();
       const attributes = div.readAttributes();
       const scope = forest.beginMutationScope();
 
+      forest.adoptNodeDocument(div, 'platform');
+      expect(forest.ownerDocumentFor(templateContent)).toBe('template-contents');
       forest.rewriteAttributeValue(attribute, 'attempt one');
       forest.rewriteAttributeValue(attribute, 'attempt two');
       forest.moveAttribute(attribute, aside, 1);
@@ -51,6 +54,7 @@ describe('compiler mutation rollback', () => {
       forest.reorderNode(bold, 0);
       forest.detachDirectChild(div, 0, bold);
       forest.moveNode(italic, aside, Child, 0);
+      expect(forest.ownerDocumentFor(italic)).toBe('template-contents');
       forest.detachNode(templateContent);
       forest.insertDetachedNode(templateContent, aside, TemplateContent, 0);
       forest.detachNode(forest.compilerCarrier);
@@ -65,6 +69,7 @@ describe('compiler mutation rollback', () => {
       expect(div.readChildren()).toBe(children);
       expect(div.readAttributes()).toBe(attributes);
       expect(template.templateContent).toBe(templateContent);
+      expect(forest.ownerDocumentFor(templateContent)).toBe('platform');
       expect(attribute.scalarWriteRevision).toBe(1);
       expect(text.scalarWriteRevision).toBe(1);
       expect(comment.scalarWriteRevision).toBe(0);
@@ -106,6 +111,8 @@ describe('compiler mutation rollback', () => {
       // Input lineage does not choose the new element's native creation identity.
       expect(generatedElement.customElementIs).toBe('generated-template');
       const generatedFragment = forest.createGeneratedFragment(generation(), forest.compilerContent.inputReference);
+      expect(forest.ownerDocumentFor(generatedElement)).toBe('platform');
+      expect(forest.ownerDocumentFor(generatedFragment)).toBe('platform');
       const generatedText = forest.createGeneratedText(generation(), 'copy', text.inputReference);
       const generatedComment = forest.createGeneratedComment(
         generation(), 'copy', HtmlCommentSemanticKind.Plain, comment.inputReference,
@@ -116,7 +123,9 @@ describe('compiler mutation rollback', () => {
       const originlessText = forest.createGeneratedText(generation(), 'new');
       const originlessAttribute = forest.createGeneratedAttribute(generation(), 'data-new', 'new', null, null);
       forest.insertDetachedNode(generatedElement, div, Child, 0);
+      expect(forest.ownerDocumentFor(generatedElement)).toBe('template-contents');
       forest.insertDetachedNode(generatedFragment, generatedElement, TemplateContent, 0);
+      expect(forest.ownerDocumentFor(generatedFragment)).toBe('platform');
       forest.insertDetachedNode(generatedText, generatedFragment, Child, 0);
       forest.insertDetachedNode(generatedComment, generatedFragment, Child, 1);
       forest.insertDetachedNode(originlessText, generatedFragment, Child, 2);
@@ -147,6 +156,7 @@ describe('compiler mutation rollback', () => {
           expect(forest.nodesForInputIdentity(node.inputReference.identityHandle)).not.toContain(node);
         }
         expect(() => forest.insertDetachedNode(node, div, Child, 0)).toThrow(/belongs to another forest/);
+        expect(() => forest.ownerDocumentFor(node)).toThrow(/belongs to another forest/);
       }
       for (const attr of [generatedAttribute, originlessAttribute]) {
         expect(forest.attributeForOccurrenceKey(attr.occurrenceKey)).toBeNull();
@@ -306,6 +316,7 @@ function forestState(forest: TemplateCompilerOccurrenceForest): unknown {
     roots: forest.readRoots().map((node) => node.occurrenceKey),
     nodes: forest.readNodes().map((node) => ({
       key: node.occurrenceKey,
+      document: forest.ownerDocumentFor(node),
       parent: node.parent?.occurrenceKey ?? null,
       edge: node.parentEdgeKind,
       ordinal: node.readParentOrdinal(),

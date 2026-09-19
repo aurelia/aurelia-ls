@@ -1,6 +1,7 @@
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import { StaticCallableCompletionKind } from '../evaluation/function-execution.js';
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
+import type { ClaimEndpointHandle } from '../kernel/claim.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import { ExpressionParseResultKind, type ExpressionParseResult } from '../expression/parse-result-algebra.js';
 import type { SourceSpan } from '../expression/source-span.js';
@@ -88,6 +89,7 @@ import { decideTemplateCompilerSurrogateValidation } from './surrogate-compiler-
 import {
   TemplateCompilerSiteCursorAttributeEvent,
   TemplateCompilerSiteCursorContainerlessPlacementEvent,
+  TemplateCompilerSiteCursorDocumentAdoptionEvent,
   TemplateCompilerSiteCursorElementEvent,
   type TemplateCompilerSiteCursorEvent,
   TemplateCompilerSiteCursorFrontier,
@@ -157,6 +159,7 @@ import {
   realizeTemplateCompilerProjectionLogicalExtraction,
   type TemplateCompilerProjectionLogicalExtractionPreparation,
   type TemplateCompilerProjectionLogicalExtractionRealization,
+  type TemplateCompilerProjectionRealizedEntrantBand,
 } from './template-compiler-projection-logical-extraction.js';
 import {
   prepareTemplateCompilerTemplateControllerTransition,
@@ -485,6 +488,10 @@ class TemplateCompilerRootSiteCursor {
     TemplateCompilerSiteCursorStagedElementContinuationWork,
     TemplateCompilerClosedElementContinuation
   >();
+  private readonly pendingProjectionAdoptions = new Map<TemplateCompilerSiteCursorContextReference, {
+    readonly band: TemplateCompilerProjectionRealizedEntrantBand;
+    readonly preparation: TemplateCompilerProjectionLogicalExtractionPreparation;
+  }>();
   private readonly startForestMutationRevision: number;
   private readonly startGlobalOperationCount: number;
   private readonly startLaneOperationCount: number;
@@ -611,6 +618,14 @@ class TemplateCompilerRootSiteCursor {
     while (this.frontier == null) {
       const selection = this.taskSession.next();
       if (selection == null) break;
+      const adoption = this.pendingProjectionAdoptions.get(selection.context);
+      if (adoption != null) {
+        this.pendingProjectionAdoptions.delete(selection.context);
+        // JIT aggregates and adopts a single group's nodes immediately before compiling that group.
+        this.adoptDocuments(adoption.band.entrants.map(entrant => entrant.node),
+          [adoption.preparation.request.envelope.definition.productHandle!],
+          adoption.preparation.request.envelope.source.sourceAddressHandle);
+      }
       const childFrame = this.visitNode(selection);
       if (childFrame != null) {
         this.taskSession.pushContextFrame(selection.context, childFrame.parent, childFrame.children);
@@ -1392,6 +1407,7 @@ class TemplateCompilerRootSiteCursor {
         contexts: projectionContextInputs,
       });
       for (const band of realization.entrantBands) {
+        if (band.entrants.length > 0) this.pendingProjectionAdoptions.set(band.context, { band, preparation });
         const works = this.taskSession.stageContextLogicalEntrantBand(band.context, band.entrantInputs);
         entrantBandStagings.push(new TemplateCompilerSiteCursorProjectionEntrantBandStaging(band, works));
         for (const [ordinal, entrant] of band.entrants.entries()) {
@@ -1447,6 +1463,13 @@ class TemplateCompilerRootSiteCursor {
       this.appendEvent(projectionEvent);
     }
 
+    if (templateControllerPreparation != null && element.templateContent == null) {
+      // Slot removal and document adoption commute here: both precede all projected/ordinary child hooks.
+      // Keep the prepared slot snapshot intact until its attribute-only prefix has committed.
+      this.adoptDocuments([element], [this.binding.currentFamily.ownerHandle],
+        templateControllers[0]!.sourceAddressHandle);
+    }
+
     const state = new TemplateCompilerClosedElementContinuation(
       hasTemplateControllers
         ? preparation == null
@@ -1472,6 +1495,24 @@ class TemplateCompilerRootSiteCursor {
       this.taskSession.scheduleChildContexts(sourceContext, state.projectionContexts);
     }
     return null;
+  }
+
+  private adoptDocuments(
+    nodes: readonly TemplateCompilerNodeOccurrence[],
+    causes: readonly ClaimEndpointHandle[],
+    sourceAddress: AddressHandle | null,
+  ): void {
+    if (nodes.every(node => this.binding.forest.ownerDocumentFor(node) === 'platform')) return;
+    if (this.siteDriver == null) {
+      this.siteDriver = this.binding.execution.beginSiteExecutionDriver(
+        this.binding.execution.captureSiteExecutionFrontier(this.binding.bootstrapClosure),
+      );
+      this.semantics.useSiteDriver(this.siteDriver);
+    }
+    const operation = this.binding.execution.adoptSiteNodeDocuments(this.siteDriver, nodes, causes, sourceAddress);
+    if (operation != null) this.appendEvent(new TemplateCompilerSiteCursorDocumentAdoptionEvent(
+      siteCursorConstructionAuthority, this.transcriptOrdinal++, operation,
+    ));
   }
 
   private accountProjectionSlotConsumptions(
