@@ -183,6 +183,7 @@ function compareCompilerTransformedNodeVariant(
     case HtmlIrNodeKind.Element:
       semantic = next.nodeKind === HtmlIrNodeKind.Element
         && previous.customElementIs === next.customElementIs
+        && previous.parserInertScript === next.parserInertScript
         && sameValues(
           previous.tagName,
           next.tagName,

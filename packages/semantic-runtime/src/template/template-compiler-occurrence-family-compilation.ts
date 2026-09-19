@@ -555,17 +555,6 @@ function executeLane(
     };
   }
   const schedule = prepareTemplateCompilerContextFamilyStructuralSchedule(target.target);
-  if (!root && schedule.processContentExecutionOrder.length > 0) {
-    return {
-      execution: null,
-      result: unavailable(
-        TemplateCompilerContextFamilyCompilationState.Open,
-        'local-process-content-target-execution-open',
-        `Local definition '${definition.name}' requires processContent adoption across the extracted-lane boundary.`,
-        definition.identityHandle == null ? [] : [definition.identityHandle],
-      ),
-    };
-  }
   const attachment = root
     ? execution.commitPreparedContextFamilyTargetAttachment(
         execution.prepareContextFamilyTargetAttachment(target.target, schedule),

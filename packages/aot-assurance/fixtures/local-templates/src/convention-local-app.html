@@ -1,6 +1,8 @@
+<import from="./owned-dependency"></import>
 <convention-leaf value.bind="value"></convention-leaf>
 
 <template as-custom-element="convention-leaf">
   <bindable name="value"></bindable>
   <strong class="convention-local">${value}</strong>
+  <owned-dependency data-remove="authored"><div class="owned-moves"></div><span>span:${value}</span><b>bold:${value}</b><em class="owned-discarded" title.bind="value">discarded:${value}</em></owned-dependency>
 </template>

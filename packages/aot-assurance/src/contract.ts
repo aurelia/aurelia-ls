@@ -5,6 +5,7 @@ import type { ExplicitShadowApplicationObservation } from './explicit-shadow-sce
 import type { CompilerHooksApplicationObservation } from './compiler-hooks-scenario.js';
 import type { CompatibleHooksApplicationObservation } from './compatible-hooks-scenario.js';
 import type { ContentAttributesApplicationObservation } from './content-attributes-scenario.js';
+import type { ContentMovesApplicationObservation } from './content-moves-scenario.js';
 
 export type AssuranceLane = 'jit' | 'aot';
 export type AssuranceScenario =
@@ -17,6 +18,7 @@ export type AssuranceScenario =
   | 'compiler-hooks'
   | 'compatible-hooks'
   | 'content-attributes'
+  | 'content-moves'
   | 'routed-storefront'
   | 'state-backed-form'
   | 'projects-and-milestones';
@@ -192,6 +194,7 @@ export type ApplicationObservation =
   | CompilerHooksApplicationObservation
   | CompatibleHooksApplicationObservation
   | ContentAttributesApplicationObservation
+  | ContentMovesApplicationObservation
   | RoutedStorefrontApplicationObservation
   | StateBackedFormApplicationObservation
   | ProjectsAndMilestonesApplicationObservation;
@@ -244,6 +247,8 @@ export interface HelloWorldCardObservation {
 
 export interface LocalTemplatesObservation {
   readonly ownedDependencyHookDocuments: readonly (string | null)[];
+  readonly ownedDependencyMoves: readonly (readonly string[])[];
+  readonly ownedDependencyRemovals: { readonly nodes: number; readonly attributes: number };
   readonly message: string;
   readonly cardValues: readonly string[];
   readonly ownedDependencyCount: number;

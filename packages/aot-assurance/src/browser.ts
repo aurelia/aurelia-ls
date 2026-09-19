@@ -22,6 +22,7 @@ import { runExplicitShadowLane } from './explicit-shadow-scenario.js';
 import { runCompilerHooksLane } from './compiler-hooks-scenario.js';
 import { runCompatibleHooksLane } from './compatible-hooks-scenario.js';
 import { runContentAttributesLane } from './content-attributes-scenario.js';
+import { runContentMovesLane } from './content-moves-scenario.js';
 
 export interface BrowserBatchResult {
   readonly browser: Browser;
@@ -64,6 +65,7 @@ async function runLane(
   if (scenario === 'compiler-hooks') return runCompilerHooksLane(browser, lane, url);
   if (scenario === 'compatible-hooks') return runCompatibleHooksLane(browser, lane, url);
   if (scenario === 'content-attributes') return runContentAttributesLane(browser, lane, url);
+  if (scenario === 'content-moves') return runContentMovesLane(browser, lane, url);
   if (scenario === 'routed-storefront') return runRoutedStorefrontLane(browser, lane, url);
   if (scenario === 'state-backed-form') return runStateBackedFormLane(browser, lane, url);
   if (scenario === 'projects-and-milestones') return runProjectsAndMilestonesLane(browser, lane, url);
@@ -207,6 +209,11 @@ async function captureLocalTemplates(page: Page): Promise<ApplicationObservation
       cardValues: Array.from(document.querySelectorAll('#cards > local-card .local-card'), text),
       ownedDependencyCount: document.querySelectorAll('.owned-dependency').length,
       ownedDependencyHookDocuments: Array.from(document.querySelectorAll('owned-dependency'), host => host.getAttribute('data-hook-platform-document')),
+      ownedDependencyMoves: Array.from(document.querySelectorAll('.owned-moves'), wrapper => Array.from(wrapper.children, text)),
+      ownedDependencyRemovals: {
+        nodes: document.querySelectorAll('.owned-discarded').length,
+        attributes: document.querySelectorAll('owned-dependency[data-remove]').length,
+      },
       peerCardValue: document.querySelector('local-peer .local-card')?.textContent?.trim() ?? null,
       nestedValue: document.querySelector('.nested-local')?.textContent?.trim() ?? null,
       conventionValue: document.querySelector('.convention-local')?.textContent?.trim() ?? null,

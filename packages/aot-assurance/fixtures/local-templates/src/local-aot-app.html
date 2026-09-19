@@ -14,7 +14,7 @@
   <template as-custom-element="local-card">
     <bindable name="value"></bindable>
     <span class="local-card">${value}</span>
-    <owned-dependency></owned-dependency>
+    <owned-dependency data-remove="authored"><div class="owned-moves"></div><span>span:${value}</span><b>bold:${value}</b><em class="owned-discarded" title.bind="value">discarded:${value}</em></owned-dependency>
   </template>
 
   <template as-custom-element="local-peer">

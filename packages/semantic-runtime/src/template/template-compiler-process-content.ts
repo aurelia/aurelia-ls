@@ -37,6 +37,7 @@ import {
   type TemplateCompilerInvocationBootstrapClosure,
   TemplateCompilerInvocationPhase,
   type TemplateCompilerNodeDetachmentMutation,
+  type TemplateCompilerNodePlacementMutation,
   TemplateCompilerOperationCompletion,
   TemplateCompilerOperationCompletionKind,
   TemplateCompilerOperationExecutionMechanism,
@@ -149,12 +150,12 @@ export class TemplateCompilerProcessContentPlan {
   }
 }
 
-/** One committed direct-child removal in exact framework iteration order. */
+/** One final removed root at its committed edge; built-ins retain their direct-child removal order. */
 export class TemplateCompilerProcessContentRemoval {
   constructor(
     readonly occurrence: TemplateCompilerNodeOccurrence,
     readonly liveOrdinal: number,
-    readonly mutation: TemplateCompilerNodeDetachmentMutation,
+    readonly mutation: TemplateCompilerNodeDetachmentMutation | TemplateCompilerNodePlacementMutation,
   ) {}
 }
 
@@ -180,7 +181,7 @@ export class TemplateCompilerProcessContentResult {
     readonly returnedFalse: boolean,
   ) {
     const target = operation.target;
-    const mutations = operation.mutationBatch.nodeDetachmentMutations;
+    const mutations = finalProcessContentNodeRemovals(operation);
     if (
       authority !== processContentResultAuthority
       || !plan.isExact()
@@ -206,12 +207,13 @@ export class TemplateCompilerProcessContentResult {
       throw new Error('Template compiler processContent result lost operation, metadata, or removal authority.');
     }
     this.#authority = authority;
-    this.removedSiteOccurrences = [
+    const removedSiteOccurrences = [
       ...removals.flatMap((removal) => siteOccurrencesInSubtree(removal.occurrence)),
       ...operation.mutationBatch.attributeDetachmentMutations.map(mutation => mutation.attribute),
     ].filter(occurrence => occurrence.generation == null && occurrence.inputReference != null);
-    this.#removedSiteOccurrenceSet = new Set(this.removedSiteOccurrences);
-    if (this.#removedSiteOccurrenceSet.size !== this.removedSiteOccurrences.length) {
+    this.#removedSiteOccurrenceSet = new Set(removedSiteOccurrences);
+    this.removedSiteOccurrences = [...this.#removedSiteOccurrenceSet];
+    if (metadata != null && this.#removedSiteOccurrenceSet.size !== removedSiteOccurrences.length) {
       throw new Error('Template compiler processContent result repeats one removed site occurrence.');
     }
   }
@@ -451,8 +453,8 @@ export function executeTemplateCompilerProcessContent(
     attempt,
     new TemplateCompilerOperationCompletion(TemplateCompilerOperationCompletionKind.Complete),
   );
-  const removals = operation.mutationBatch.nodeDetachmentMutations.map((mutation) =>
-    new TemplateCompilerProcessContentRemoval(mutation.node, mutation.previousOrdinal, mutation)
+  const removals = finalProcessContentNodeRemovals(operation).map((mutation) =>
+    new TemplateCompilerProcessContentRemoval(mutation.node, mutation.previousOrdinal!, mutation)
   );
   return new TemplateCompilerProcessContentResult(
     processContentResultAuthority,
@@ -465,6 +467,19 @@ export function executeTemplateCompilerProcessContent(
     removals,
     returnedFalse,
   );
+}
+
+/** Temporary detachments do not remove compiler sites: only the final disconnected roots do. */
+function finalProcessContentNodeRemovals(
+  operation: TemplateCompilerOperation,
+): readonly (TemplateCompilerNodeDetachmentMutation | TemplateCompilerNodePlacementMutation)[] {
+  if (operation.executionMechanism !== TemplateCompilerOperationExecutionMechanism.StaticCallable) {
+    return operation.mutationBatch.nodeDetachmentMutations;
+  }
+  const finalPlacements = new Map<TemplateCompilerNodeOccurrence, TemplateCompilerNodePlacementMutation>();
+  for (const mutation of operation.mutationBatch.nodePlacementMutations) finalPlacements.set(mutation.node, mutation);
+  return [...finalPlacements.values()].filter(mutation => mutation.nextParent == null
+    && mutation.node.parent == null).sort((left, right) => left.eventOrdinal - right.eventOrdinal);
 }
 
 class ProcessContentTemporalAuthority {

@@ -1,0 +1,25 @@
+<input id="message-input" value.bind="message">
+<button id="toggle" click.trigger="active = !active">Toggle</button>
+<button id="append" click.trigger="append()">Append</button>
+<output id="message-value">${message}</output>
+<move-card id="outer-card" value.bind="message">
+  <move-lab id="lab" au-slot="body">
+    <section id="source">
+      <p id="first" stamp.bind="message">first:${message}</p>
+      <p id="second">second:${message}</p>
+      <move-card id="moved-card" value.bind="message">
+        <b au-slot="title" stamp.bind="message">title:${message}</b>
+        <template au-slot="body" if.bind="active"><span class="moved-row" repeat.for="item of items" stamp.bind="message">${item}:${message}</span></template>
+      </move-card>
+      <p id="replacement">replacement:${message}</p>
+      <p id="discarded" stamp.bind="message">discarded:${message}</p>
+      <div id="text-moves">before:${message}<i>separator</i>after:${message}</div>
+    </section>
+    <section id="target"></section>
+    <template id="donor"><p id="adopted" stamp.bind="message">adopted:${message}</p></template>
+    <script id="moved-script"></script>
+    <pre id="script-source">window.contentMovesScriptRuns = (window.contentMovesScriptRuns ?? 0) + 1;</pre>
+    <input id="void-parent">
+    <b id="void-child" stamp.bind="message">void:${message}</b>
+  </move-lab>
+</move-card>

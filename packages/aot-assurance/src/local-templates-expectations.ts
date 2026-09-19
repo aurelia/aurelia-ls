@@ -18,11 +18,11 @@ export function assertLocalTemplatesExpectations(transcript: LaneTranscript): vo
   assert.equal(transcript.probes, null);
   assert.equal(transcript.semantic.teardownEvents, null);
   const expected: readonly [string, LocalTemplatesObservation][] = [
-    ['initial', observation('alpha', ['alpha', 'alpha'], 3, 'peer', 'alpha', 'alpha')],
-    ['owner-update-propagation', observation('bravo', ['bravo', 'bravo'], 3, 'peer', 'bravo', 'bravo')],
-    ['repeat-growth', observation('bravo', ['bravo', 'bravo', 'bravo'], 4, 'peer', 'bravo', 'bravo')],
-    ['nested-hidden', observation('bravo', ['bravo', 'bravo', 'bravo'], 4, 'peer', null, 'bravo')],
-    ['nested-restored', observation('bravo', ['bravo', 'bravo', 'bravo'], 4, 'peer', 'bravo', 'bravo')],
+    ['initial', observation('alpha', ['alpha', 'alpha'], 4, 'peer', 'alpha', 'alpha')],
+    ['owner-update-propagation', observation('bravo', ['bravo', 'bravo'], 4, 'peer', 'bravo', 'bravo')],
+    ['repeat-growth', observation('bravo', ['bravo', 'bravo', 'bravo'], 5, 'peer', 'bravo', 'bravo')],
+    ['nested-hidden', observation('bravo', ['bravo', 'bravo', 'bravo'], 5, 'peer', null, 'bravo')],
+    ['nested-restored', observation('bravo', ['bravo', 'bravo', 'bravo'], 5, 'peer', 'bravo', 'bravo')],
   ];
   assert.equal(transcript.semantic.checkpoints.length, expected.length);
   for (const [index, [label, model]] of expected.entries()) {
@@ -45,5 +45,7 @@ function observation(
 ): LocalTemplatesObservation {
   return { message, cardValues, ownedDependencyCount, peerCardValue, nestedValue, conventionValue,
     ownedDependencyHookDocuments: Array.from({ length: ownedDependencyCount }, () => 'false'),
+    ownedDependencyMoves: [...cardValues, peerCardValue, conventionValue].map(value => [`bold:${value}`, `span:${value}`]),
+    ownedDependencyRemovals: { nodes: 0, attributes: 0 },
   };
 }

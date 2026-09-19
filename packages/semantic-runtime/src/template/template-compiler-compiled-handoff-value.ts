@@ -60,7 +60,7 @@ import {
 } from './template-instruction-runtime-value.js';
 
 export const TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION =
-  'semantic-runtime/template-compiler-compiled-handoff/v6' as const;
+  'semantic-runtime/template-compiler-compiled-handoff/v7' as const;
 
 export interface TemplateCompilerCompiledHandoffValue {
   readonly schemaVersion: typeof TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION;
@@ -285,6 +285,7 @@ export interface TemplateCompilerCompiledHandoffElement extends TemplateCompiler
   readonly children: readonly string[];
   readonly templateContentNodeId: string | null;
   readonly customElementIs: string | null;
+  readonly parserInertScript: boolean;
 }
 
 export interface TemplateCompilerCompiledHandoffText extends TemplateCompilerCompiledHandoffNodeBase {
@@ -809,6 +810,7 @@ function nodeValue(
       namespace: node.namespace,
       namespaceUri: node.namespaceUri,
       customElementIs: node.customElementIs,
+      parserInertScript: node.parserInertScript,
       attributeIds: references(node.attributes, attributeIds, 'attribute'),
       children: references(node.children, nodeIds, 'child node'),
       templateContentNodeId: node.templateContent == null

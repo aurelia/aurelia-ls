@@ -24,25 +24,6 @@ import {
 } from './runtime-spread-plan.js';
 
 const htmlNamespace = 'http://www.w3.org/1999/xhtml';
-const htmlVoidElements = new Set([
-  'area',
-  'base',
-  'basefont',
-  'bgsound',
-  'br',
-  'col',
-  'embed',
-  'hr',
-  'img',
-  'input',
-  'keygen',
-  'link',
-  'meta',
-  'param',
-  'source',
-  'track',
-  'wbr',
-]);
 export type AotArtifactErrorCode =
   | 'AOT_ARTIFACT_INVALID_HANDOFF'
   | 'AOT_ARTIFACT_UNSUPPORTED_HEADER'
@@ -698,19 +679,31 @@ function emitTemplateNodeValue(
         if (node.customElementIs !== null && typeof node.customElementIs !== 'string') {
           throw invalidHandoff(request, 'Compiled element is missing its native custom-element creation input.');
         }
+        if (typeof node.parserInertScript !== 'boolean'
+          || (node.parserInertScript && (node.namespaceUri !== htmlNamespace || node.tagName !== 'script'))) {
+          throw invalidHandoff(request, 'Compiled element has missing or incompatible parser-inert script state.');
+        }
         const options = node.customElementIs === null
           ? ''
           : `, { is: ${emitJavaScriptValue(node.customElementIs, request)} }`;
         const create = node.namespaceUri === htmlNamespace
           ? `$document.createElement(${emitJavaScriptValue(node.tagName, request)}${options})`
           : `$document.createElementNS(${emitJavaScriptValue(node.namespaceUri, request)}, ${emitJavaScriptValue(node.tagName, request)})`;
-        lines.push(`  const ${variable} = ${create};`);
+        if (node.parserInertScript) {
+          // HTML fragment parsing, unlike createElement in an inert document, marks scripts already started.
+          // Parse only the empty element and its original creation-time is value; author code/text stays DOM-built.
+          const parser = `${variable}Parser`;
+          const is = node.customElementIs === null ? '' : ` is="${escapeHtmlAttribute(node.customElementIs)}"`;
+          lines.push(`  const ${parser} = $document.createElement('template');`);
+          lines.push(`  ${parser}.innerHTML = ${emitJavaScriptValue(`<script${is}></script>`, request)};`);
+          lines.push(`  const ${variable} = ${parser}.content.firstChild;`);
+          if (node.customElementIs !== null) lines.push(`  ${variable}.removeAttribute('is');`);
+        } else {
+          lines.push(`  const ${variable} = ${create};`);
+        }
         emitAttributes(node, variable, attributes, request, lines);
         const childIds = node.templateContentNodeId == null ? node.children : [node.templateContentNodeId];
         const parent = node.templateContentNodeId == null ? variable : `${variable}.content`;
-        if (node.namespaceUri === htmlNamespace && htmlVoidElements.has(node.tagName) && childIds.length > 0) {
-          throw invalidHandoff(request, `Void element <${node.tagName}> retains compiled children.`);
-        }
         for (const childId of childIds) {
           const child = emitNode(childId);
           lines.push(`  ${parent}.append(${child});`);
@@ -739,6 +732,11 @@ function emitTemplateNodeValue(
   }
   lines.push(`  return ${carrierVariable};`, '})()');
   return lines.join('\n');
+}
+
+function escapeHtmlAttribute(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\r/g, '&#13;');
 }
 
 function emitAttributes(

@@ -379,6 +379,134 @@ describe('interpreted compiler DOM host', () => {
     } finally { run.dispose(); }
   });
 
+  test.each([
+    ['append existing first', 'return node.appendChild(a) === a;', ['b', 'c', 'a']],
+    ['insert existing last', 'return node.insertBefore(c, a) === c;', ['c', 'a', 'b']],
+    ['insert before itself', 'return node.insertBefore(b, b) === b;', ['a', 'b', 'c']],
+    ['insert before undefined', 'return node.insertBefore(a, undefined) === a;', ['b', 'c', 'a']],
+    ['replace from later sibling', 'return node.replaceChild(c, a) === a && a.parentNode === null;', ['c', 'b']],
+    ['replace from earlier sibling', 'return node.replaceChild(a, c) === c && c.parentNode === null;', ['b', 'a']],
+    ['replace itself', 'return node.replaceChild(b, b) === b;', ['a', 'b', 'c']],
+    ['repeat remove/reinsert', 'node.removeChild(a);node.appendChild(a);a.remove();node.insertBefore(a,b);return a===node.firstChild;', ['a', 'b', 'c']],
+  ] as const)('relocates existing nodes with native return values: %s', (_name, body, expected) => {
+    const run = new DomHookRun('<div><i id="a"></i><i id="b"></i><i id="c"></i></div>');
+    try {
+      const originals = [...run.root.readChildren()];
+      const result = run.invoke(`function hook(node){const a=node.children[0],b=node.children[1],c=node.children[2];${body}}`);
+      expect(result.kind, run.host.refusal?.summary ?? result.evaluation?.auditOpenSeams.map(seam => seam.summary).join('\n'))
+        .toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+      expect(run.root.readChildren()).toEqual(expected.map(id => originals['abc'.indexOf(id)]));
+      run.execution.forest.assertCoherentTopology();
+    } finally { run.dispose(); }
+  });
+
+  test('drains an existing template fragment and can edit detached owned subtrees', () => {
+    const run = new DomHookRun('<div><template><i></i><b></b></template><section><u></u></section></div>');
+    try {
+      const result = run.invoke(`function hook(node){
+        const template=node.children[0],section=node.children[1]; const content=template.content;
+        const i=content.firstChild; const b=content.lastChild; const u=section.firstChild;
+        const returned=section.insertBefore(content,u);
+        node.removeChild(section); section.removeChild(i); section.appendChild(i); node.appendChild(section);
+        return returned===content && content.childNodes.length===0 && content.parentNode===null
+          && section.firstChild===b && section.lastChild===i && section.childNodes[1]===u
+          && i.ownerDocument===section.ownerDocument;
+      }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+      run.execution.forest.assertCoherentTopology();
+    } finally { run.dispose(); }
+  });
+
+  test('allows a detached former child to receive its former parent without a historical ancestry cycle', () => {
+    const run = new DomHookRun('<div><section><i></i></section></div>');
+    try {
+      const result = run.invoke(`function hook(node){
+        const parent=node.firstChild,child=parent.firstChild;
+        parent.removeChild(child);child.appendChild(parent);
+        return node.childNodes.length===0 && child.parentNode===null && parent.parentNode===child;
+      }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+      run.execution.forest.assertCoherentTopology();
+    } finally { run.dispose(); }
+  });
+
+  test.each([
+    ['node.firstChild.appendChild(node);', 'HierarchyRequestError'],
+    ['node.firstChild.insertBefore(node, node.lastChild);', 'HierarchyRequestError'],
+    ['node.insertBefore(node.firstChild, node.lastChild.firstChild);', 'NotFoundError'],
+    ['node.lastChild.firstChild.appendChild(node.firstChild);', 'HierarchyRequestError'],
+    ['node.appendChild({});', 'TypeError'],
+    ['node.insertBefore(node.firstChild);', 'TypeError'],
+    ['node.replaceChild(node.firstChild,null);', 'TypeError'],
+  ] as const)('preserves native pre-insertion failure: %s', (body, name) => {
+    const run = new DomHookRun('<div><i></i><b>text</b></div>');
+    try {
+      const original = [...run.root.readChildren()];
+      const result = run.invoke(`function hook(node){try{${body}}catch(error){return error.name==='${name}';}}`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+      expect(run.root.readChildren()).toEqual(original);
+    } finally { run.dispose(); }
+  });
+
+  test('refuses ordinary template-element insertion without mistaking it for template content', () => {
+    const run = new DomHookRun('<div><template></template><i></i></div>');
+    try {
+      const original = [...run.root.readChildren()];
+      const result = run.invoke('function hook(node){node.firstChild.appendChild(node.lastChild);}');
+      expect(result.kind).toBe(StaticCallableCompletionKind.Open);
+      expect(run.host.refusal).toMatchObject({ kind: 'template-element-children', member: 'appendChild' });
+      run.complete(result.kind);
+      expect(run.root.readChildren()).toEqual(original);
+      expect((original[0] as TemplateCompilerElementOccurrence).templateContent!.readChildren()).toEqual([]);
+    } finally { run.dispose(); }
+  });
+
+  test('rolls back relocation, detached edits and document adoption after an unsupported operation', () => {
+    const run = new DomHookRun('<div><template><i id="before"></i></template><section></section><b></b></div>', true);
+    try {
+      const originals = [...run.root.readChildren()];
+      const template = originals[0] as TemplateCompilerElementOccurrence;
+      const i = template.templateContent!.readChildren()[0] as TemplateCompilerElementOccurrence;
+      const result = run.invoke(`function hook(node){
+        const template=node.children[0],section=node.children[1],b=node.children[2]; const i=template.content.firstChild;
+        section.appendChild(i); i.id='pending'; node.replaceChild(section,b);
+        node.removeChild(section); section.removeChild(i); section.appendChild(i); node.insertBefore(section,template);
+        node.getBoundingClientRect();
+      }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Open);
+      expect(run.host.refusal).toMatchObject({ member: 'getBoundingClientRect', kind: 'unsupported-dom-member' });
+      run.complete(result.kind);
+      expect(run.root.readChildren()).toEqual(originals);
+      expect(template.templateContent!.readChildren()).toEqual([i]);
+      expect((originals[1] as TemplateCompilerElementOccurrence).readChildren()).toEqual([]);
+      expect(i.readAttributes()[0]!.value).toBe('before');
+      expect(run.execution.forest.ownerDocumentFor(i)).toBe('template-contents');
+      run.execution.forest.assertCoherentTopology();
+    } finally { run.dispose(); }
+  });
+
+  test('rolls back earlier moves when collection destructuring reaches the existing evaluator boundary', () => {
+    const run = new DomHookRun('<div><i></i><b></b></div>');
+    try {
+      const original = [...run.root.readChildren()];
+      const result = run.invoke('function hook(node){node.appendChild(node.firstChild);const [first]=node.children;return first;}');
+      expect(result.kind).toBe(StaticCallableCompletionKind.Open);
+      expect(result.evaluation?.auditOpenSeams.some(seam => seam.summary.includes('Array binding pattern source'))).toBe(true);
+      expect(run.host.refusal).toBeNull();
+      expect(run.root.readChildren()).toEqual([original[1], original[0]]);
+      run.complete(result.kind);
+      expect(run.root.readChildren()).toEqual(original);
+    } finally { run.dispose(); }
+  });
+
   test('observes live indices and sibling identity while removing descendants', () => {
     const run = new DomHookRun('<div><i id="a"><u></u></i><i id="b"></i><i id="c"></i></div>');
     try {
@@ -511,7 +639,7 @@ class DomHookRun {
   readonly attempt: ReturnType<TemplateCompilerExecutionSession['beginOperation']>;
   readonly host: TemplateCompilerDomHost;
 
-  constructor(markup: string) {
+  constructor(markup: string, platformRoot = false) {
     const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(this.browser.materialize('root', markup).emission);
     this.root = forest.compilerContent.readChildren()[0] as TemplateCompilerElementOccurrence;
     this.execution = TemplateCompilerExecutionSession.createForForest('dom-host:family', forest);
@@ -535,6 +663,8 @@ class DomHookRun {
       new TemplateCompilerLocalExtractionResult(lane, TemplateCompilerLocalExtractionState.NoLocalTemplates, forest.mutationRevision, [], [], null, null),
     );
     const driver = this.execution.beginSiteExecutionDriver(this.execution.captureSiteExecutionFrontier(closure));
+    if (platformRoot) this.execution.adoptSiteNodeDocuments(driver, [this.root],
+      [this.browser.run.handles.product('definition')], this.browser.run.handles.address('source'));
     const callable = new TemplateCompilerCallableReference(null, null, this.browser.run.handles.address('source'));
     this.attempt = this.execution.beginOperation({
       operationKey: 'dom-host:process', context: driver.context,

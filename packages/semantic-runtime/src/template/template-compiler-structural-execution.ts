@@ -44,6 +44,7 @@ import type {
   TemplateCompilerNodeOccurrence,
   TemplateCompilerOccurrenceForest,
   TemplateCompilerParentOccurrence,
+  TemplateCompilerSeededNodePlacement,
 } from './template-compiler-occurrence.js';
 import { TemplateCompilerOccurrenceMembershipArrivalPosture } from './template-compiler-occurrence-membership.js';
 import type {
@@ -65,6 +66,9 @@ import {
   type TemplateCompilerOperation,
   TemplateCompilerOperationMutationBatch,
   TemplateCompilerMutationBatchState,
+  TemplateCompilerNodeDetachmentMutation,
+  TemplateCompilerNodePlacementMutation,
+  TemplateCompilerOperationExecutionMechanism,
 } from './template-compiler-execution.js';
 
 const structuralExecutionForests = new WeakSet<TemplateCompilerOccurrenceForest>();
@@ -264,6 +268,7 @@ export class TemplateCompilerStructuralExecutionSession {
     targetPlan: TemplateCompilerTargetPlan,
     mutationAuthority: TemplateCompilerForestMutationAuthority,
     subtreeExclusions: readonly TemplateCompilerSiteCursorSubtreeExclusionEvent[] = [],
+    sourceOperations: readonly TemplateCompilerOperation[] = [],
   ): TemplateCompilerStructuralExecutionSession {
     if (structuralExecutionForests.has(forest)) {
       throw new Error('Compiler occurrence forest already belongs to a structural execution session.');
@@ -275,6 +280,7 @@ export class TemplateCompilerStructuralExecutionSession {
       forest,
       targetPlan,
       mutationAuthority,
+      sourceOperations,
     );
     for (const exclusion of subtreeExclusions) {
       session.requireForestNode(exclusion.owner);
@@ -320,8 +326,10 @@ export class TemplateCompilerStructuralExecutionSession {
     forest: TemplateCompilerOccurrenceForest,
     targetPlan: TemplateCompilerTargetPlan,
     mutationAuthority: TemplateCompilerForestMutationAuthority,
+    sourceOperations: readonly TemplateCompilerOperation[] = [],
   ): TemplateCompilerStructuralExecutionSession {
     const session = new TemplateCompilerStructuralExecutionSession(forest, mutationAuthority);
+    session.admitCompilerSourceOperations(sourceOperations);
     session.admitTargetPlanFamily(targetPlan);
     session.bindContextStructure(
       targetPlan.root,
@@ -415,7 +423,10 @@ export class TemplateCompilerStructuralExecutionSession {
     TemplateCompilerElementOccurrence,
     TemplateCompilerRenderLocationTargetGeometry[]
   >();
-  private readonly seededChildNodesByParent = new Map<TemplateCompilerParentOccurrence, TemplateCompilerNodeOccurrence[]>();
+  /** Compiler input order after committed site edits. Original browser placements remain in the forest. */
+  private readonly sourceChildNodesByParent = new Map<TemplateCompilerParentOccurrence, TemplateCompilerNodeOccurrence[]>();
+  private readonly sourceNodePlacements = new Map<TemplateCompilerNodeOccurrence, TemplateCompilerSeededNodePlacement>();
+  private readonly sourceDetachedNodes = new Set<TemplateCompilerNodeOccurrence>();
   private nextInputEventOrdinal = 0;
 
   private constructor(
@@ -429,7 +440,7 @@ export class TemplateCompilerStructuralExecutionSession {
       }
       const placement = forest.seededNodePlacement(node);
       if (placement?.parent != null && placement.edgeKind === TemplateCompilerOccurrenceEdgeKind.Child) {
-        appendMap(this.seededChildNodesByParent, placement.parent, node);
+        appendMap(this.sourceChildNodesByParent, placement.parent, node);
       }
     }
     for (const attribute of forest.readAttributes()) {
@@ -440,6 +451,75 @@ export class TemplateCompilerStructuralExecutionSession {
       const owner = forest.seededAttributePlacement(attribute)?.owner ?? null;
       if (owner != null) appendMap(this.seededAttributesByOwner, owner, attribute);
     }
+  }
+
+  /** Fold committed edits into compiler input order without rewriting browser provenance. */
+  admitCompilerSourceOperations(operations: readonly TemplateCompilerOperation[]): void {
+    if (!operations.some(operation => operation.mutationBatch.state === TemplateCompilerMutationBatchState.Committed
+      && operation.mutationBatch.nodePlacementMutations.length > 0)) return;
+    for (const operation of operations) {
+      if (operation.mutationBatch.state !== TemplateCompilerMutationBatchState.Committed) continue;
+      for (const mutation of operation.mutationBatch.topologyMutations) {
+        if (!(mutation instanceof TemplateCompilerNodePlacementMutation)
+          && !(mutation instanceof TemplateCompilerNodeDetachmentMutation)) continue;
+        const node = mutation.node;
+        const placement = this.sourceNodePlacement(node);
+        const currentEdge = this.sourceDetachedNodes.has(node)
+          ? { parent: null, edgeKind: TemplateCompilerOccurrenceEdgeKind.Detached } : placement;
+        if (placement == null || currentEdge == null
+          || currentEdge.parent !== mutation.previousParent || currentEdge.edgeKind !== mutation.previousEdgeKind) {
+          throw new Error(`Compiler source relocation '${node.occurrenceKey}' lost its prior caused edge.`);
+        }
+        if (mutation instanceof TemplateCompilerNodePlacementMutation
+          && (operation.operationKind !== TemplateCompilerOperationKind.ProcessContent
+            || operation.executionMechanism !== TemplateCompilerOperationExecutionMechanism.StaticCallable)) {
+          throw new Error('Only a committed source content hook can establish an edited compiler input edge.');
+        }
+        if (mutation.previousParent != null && mutation.previousEdgeKind === TemplateCompilerOccurrenceEdgeKind.Child) {
+          const children = this.sourceChildNodesByParent.get(mutation.previousParent) ?? [];
+          if (children[mutation.previousOrdinal!] !== node) {
+            throw new Error(`Compiler source relocation '${node.occurrenceKey}' lost its event-time child ordinal.`);
+          }
+          children.splice(mutation.previousOrdinal!, 1);
+        }
+        if (mutation instanceof TemplateCompilerNodePlacementMutation && mutation.nextParent != null) {
+          let children = this.sourceChildNodesByParent.get(mutation.nextParent);
+          if (children == null) this.sourceChildNodesByParent.set(mutation.nextParent, children = []);
+          if (mutation.nextOrdinal! > children.length) throw new Error('Compiler source placement exceeds its parent.');
+          children.splice(mutation.nextOrdinal!, 0, node);
+          this.sourceNodePlacements.set(node, {
+            ...placement, parent: mutation.nextParent, edgeKind: TemplateCompilerOccurrenceEdgeKind.Child,
+            ordinal: mutation.nextOrdinal!,
+          });
+          this.expectedFinalInputNodeEdges.set(node, {
+            parent: mutation.nextParent, edgeKind: TemplateCompilerOccurrenceEdgeKind.Child,
+          });
+          this.sourceDetachedNodes.delete(node);
+        } else {
+          this.expectedFinalInputNodeEdges.set(node, { parent: null, edgeKind: TemplateCompilerOccurrenceEdgeKind.Detached });
+          this.sourceDetachedNodes.add(node);
+        }
+      }
+    }
+    let preorderOrdinal = 0;
+    const pending = this.forest.readNodes().filter(node =>
+      this.forest.seededNodePlacement(node)?.edgeKind === TemplateCompilerOccurrenceEdgeKind.Root
+      || this.sourceDetachedNodes.has(node)).map(node => ({ node, ordinal: this.sourceNodePlacement(node)!.ordinal })).reverse();
+    while (pending.length > 0) {
+      const { node, ordinal } = pending.pop()!;
+      const placement = this.sourceNodePlacement(node)!;
+      if (placement.ordinal !== ordinal || placement.preorderOrdinal !== preorderOrdinal) {
+        this.sourceNodePlacements.set(node, { ...placement, ordinal, preorderOrdinal });
+      }
+      preorderOrdinal++;
+      const children = this.sourceChildNodesByParent.get(node as TemplateCompilerParentOccurrence) ?? [];
+      if (node instanceof TemplateCompilerElementOccurrence && node.templateContent != null) pending.push({ node: node.templateContent, ordinal: 0 });
+      for (let index = children.length - 1; index >= 0; index--) pending.push({ node: children[index]!, ordinal: index });
+    }
+  }
+
+  private sourceNodePlacement(node: TemplateCompilerNodeOccurrence): TemplateCompilerSeededNodePlacement | null {
+    return this.sourceNodePlacements.get(node) ?? this.forest.seededNodePlacement(node);
   }
 
   /** Read admitted compilation units in family admission order. */
@@ -786,6 +866,7 @@ export class TemplateCompilerStructuralExecutionSession {
       HtmlNamespaceKind.Html,
       'http://www.w3.org/1999/xhtml',
       null,
+      false,
     );
     const content = this.forest.createGeneratedFragment(this.createGeneration(
       context,
@@ -1136,7 +1217,7 @@ export class TemplateCompilerStructuralExecutionSession {
       }
     }
     this.requireCurrentInputEdgeAuthority(input);
-    this.assertSeededSourceOrder(input);
+    this.assertCompilerSourceOrder(input);
     if (detachInput == null) this.forest.detachNode(input);
     else detachInput(input);
     if (!hasDetachedNodeEdge(input)) {
@@ -1181,12 +1262,14 @@ export class TemplateCompilerStructuralExecutionSession {
     const node = removal.occurrence;
     const mutation = removal.mutation;
     this.requireForestNode(node);
-    const seeded = this.forest.seededNodePlacement(node);
+    const seeded = this.sourceNodePlacement(node);
     const requiredSourceCause = this.requiredSourceConsumptionCause(node, context);
     const exactOrigin = this.forest.exactAuthoredNodeOrigin(node)?.authored ?? null;
     const removedReference = instruction.auSlotProcessContentRemovedChildNodes[removalOrdinal] ?? null;
     const definitionHandle = result.plan.definition?.productHandle ?? null;
     const hostRow = context.readRows().find((row) => row.instructions.includes(instruction)) ?? null;
+    // The committed source invocation proved subtree ownership when each placement ran. Rechecking ancestry via
+    // remembered last-live edges is invalid: a detached descendant may legally become its former parent's parent.
     if (
       !result.isModuleConstructed()
       || result.plan.execution.forest !== this.forest
@@ -1195,7 +1278,6 @@ export class TemplateCompilerStructuralExecutionSession {
       || result.removals[removalOrdinal] !== removal
       || mutation.node !== node
       || mutation.previousParent == null
-      || !seededDescendantOf(this.forest, node, result.plan.host)
       || mutation.previousEdgeKind !== TemplateCompilerOccurrenceEdgeKind.Child
       || removal.liveOrdinal !== mutation.previousOrdinal
       || seeded?.parent !== mutation.previousParent
@@ -1269,7 +1351,6 @@ export class TemplateCompilerStructuralExecutionSession {
       || this.forest.attributeForOccurrenceKey(attribute.occurrenceKey) !== attribute
       || attribute.owner != null
       || owner !== sourceOwner
-      || (owner !== result.plan.host && !seededDescendantOf(this.forest, owner, result.plan.host))
       || this.consumedAttributes.has(attribute)
       || (attribute.inputReference == null && attribute.generation == null)
       || definitionHandle == null
@@ -1404,7 +1485,7 @@ export class TemplateCompilerStructuralExecutionSession {
       : context.compilerReachableNodeOrdinal(authoredProductHandle);
     const occurrenceMembershipOrdinal = context.occurrenceMembershipOrdinal(node);
     this.requireCurrentInputEdgeAuthority(node);
-    this.assertSeededSourceOrder(node);
+    this.assertCompilerSourceOrder(node);
     if (detachNode == null) this.forest.detachNode(node);
     else detachNode(node);
     if (!hasDetachedNodeEdge(node)) {
@@ -1638,7 +1719,7 @@ export class TemplateCompilerStructuralExecutionSession {
       throw new Error(`Render-location row '${row.localKey}' requires a retained browser input element.`);
     }
     this.requireCurrentInputEdgeAuthority(replacedNode);
-    this.assertSeededSourceOrder(replacedNode);
+    this.assertCompilerSourceOrder(replacedNode);
     this.requireExactRowOrigin(row, replacedNode);
     const parent = replacedNode.parent;
     const ordinal = replacedNode.readParentOrdinal();
@@ -1857,7 +1938,7 @@ export class TemplateCompilerStructuralExecutionSession {
     }
     this.assertInputNodeTransfers();
     this.assertInputTextExpansions();
-    this.assertSeededInputTopology();
+    this.assertCompilerInputTopology();
     this.assertInputDispositions();
     for (const [row, geometry] of this.geometriesByRow) {
       const context = this.contextForLocalKey(row.context.localKey);
@@ -1986,7 +2067,7 @@ export class TemplateCompilerStructuralExecutionSession {
       }
     } else {
       this.requireCurrentInputEdgeAuthority(node);
-      this.assertSeededSourceOrder(node);
+      this.assertCompilerSourceOrder(node);
     }
     const startForestMutationRevision = this.forest.mutationRevision;
     if (moveNode == null) {
@@ -2077,7 +2158,7 @@ export class TemplateCompilerStructuralExecutionSession {
         const content = input.contributor instanceof TemplateCompilerElementOccurrence
           ? input.contributor.templateContent
           : null;
-        for (const child of content == null ? [] : this.seededChildNodesByParent.get(content) ?? []) {
+        for (const child of content == null ? [] : this.sourceChildNodesByParent.get(content) ?? []) {
           entrants.set(child, input.contributorProductHandle);
         }
         break;
@@ -2278,7 +2359,7 @@ export class TemplateCompilerStructuralExecutionSession {
     if (hostProductHandle == null || childProductHandle == null) return null;
     const host = this.exactSeededNodeForAuthored(hostProductHandle);
     const child = this.exactSeededNodeForAuthored(childProductHandle);
-    const placement = child == null ? null : this.forest.seededNodePlacement(child);
+    const placement = child == null ? null : this.sourceNodePlacement(child);
     if (
       !(host instanceof TemplateCompilerElementOccurrence)
       || child == null
@@ -2288,22 +2369,22 @@ export class TemplateCompilerStructuralExecutionSession {
     return { host, child, childProductHandle };
   }
 
-  private assertSeededSourceOrder(node: TemplateCompilerNodeOccurrence): void {
+  private assertCompilerSourceOrder(node: TemplateCompilerNodeOccurrence): void {
     const parent = node.parent;
     if (parent == null || node.parentEdgeKind !== TemplateCompilerOccurrenceEdgeKind.Child) return;
     const currentOrdinal = node.readParentOrdinal();
     if (currentOrdinal == null) return;
     const children = parent.readChildren();
-    const seededPlacement = this.forest.seededNodePlacement(node);
+    const seededPlacement = this.sourceNodePlacement(node);
     if (seededPlacement?.parent === parent && seededPlacement.edgeKind === TemplateCompilerOccurrenceEdgeKind.Child) {
       const previous = nearestPrior(children, currentOrdinal, (candidate) => {
-        const placement = this.forest.seededNodePlacement(candidate);
+        const placement = this.sourceNodePlacement(candidate);
         return placement?.parent === parent && placement.edgeKind === TemplateCompilerOccurrenceEdgeKind.Child
           ? placement.ordinal
           : null;
       });
       const next = nearestNext(children, currentOrdinal, (candidate) => {
-        const placement = this.forest.seededNodePlacement(candidate);
+        const placement = this.sourceNodePlacement(candidate);
         return placement?.parent === parent && placement.edgeKind === TemplateCompilerOccurrenceEdgeKind.Child
           ? placement.ordinal
           : null;
@@ -2316,7 +2397,7 @@ export class TemplateCompilerStructuralExecutionSession {
     const sourceOrdinal = seededPlacement?.preorderOrdinal ?? null;
     const transferredOrdinal = (child: TemplateCompilerNodeOccurrence): number | null => {
       const expected = this.expectedFinalInputNodeEdges.get(child);
-      const placement = this.forest.seededNodePlacement(child);
+      const placement = this.sourceNodePlacement(child);
       return expected?.parent === parent
         && expected.edgeKind === TemplateCompilerOccurrenceEdgeKind.Child
         && placement != null
@@ -2376,7 +2457,7 @@ export class TemplateCompilerStructuralExecutionSession {
   }
 
   private requireCurrentInputEdgeAuthority(node: TemplateCompilerNodeOccurrence): void {
-    const seeded = this.forest.seededNodePlacement(node);
+    const seeded = this.sourceNodePlacement(node);
     const expected = this.expectedFinalInputNodeEdges.get(node) ?? null;
     const parent = expected == null ? seeded?.parent ?? null : expected.parent;
     const edgeKind = expected == null ? seeded?.edgeKind ?? null : expected.edgeKind;
@@ -2681,7 +2762,7 @@ export class TemplateCompilerStructuralExecutionSession {
       throw new Error('Compiler input-node transfer indexes have divergent cardinality.');
     }
     for (const [node, transfers] of this.inputNodeTransfersByNode) {
-      const seededPlacement = this.forest.seededNodePlacement(node);
+      const seededPlacement = this.sourceNodePlacement(node);
       if (seededPlacement == null || transfers.length === 0) {
         throw new Error(`Compiler occurrence '${node.occurrenceKey}' has incoherent transfer history.`);
       }
@@ -2770,7 +2851,7 @@ export class TemplateCompilerStructuralExecutionSession {
     let previousHostOrdinal = -1;
     for (const contributor of authority.projection.contributors) {
       const input = this.projectionContributorInput(authority, contributor);
-      const hostOrdinal = input == null ? null : this.forest.seededNodePlacement(input.contributor)?.ordinal ?? null;
+      const hostOrdinal = input == null ? null : this.sourceNodePlacement(input.contributor)?.ordinal ?? null;
       if (input == null || hostOrdinal == null || hostOrdinal <= previousHostOrdinal) {
         throw new Error(`Projection context '${context.localKey}' has an inexact or reordered browser contributor.`);
       }
@@ -2799,7 +2880,7 @@ export class TemplateCompilerStructuralExecutionSession {
           const content = input.contributor instanceof TemplateCompilerElementOccurrence
             ? input.contributor.templateContent
             : null;
-          const directInputs = content == null ? [] : this.seededChildNodesByParent.get(content) ?? [];
+          const directInputs = content == null ? [] : this.sourceChildNodesByParent.get(content) ?? [];
           const directTransfers = directInputs.map((node) => this.inputNodeTransfer(context, node));
           if (
             disposition?.context !== context
@@ -2864,7 +2945,7 @@ export class TemplateCompilerStructuralExecutionSession {
           let previousHostOrdinal = -1;
           for (const contributor of instruction.discardedProjectionContributors) {
             const input = this.projectionHostChild(instruction, contributor);
-            const placement = input == null ? null : this.forest.seededNodePlacement(input.contributor);
+            const placement = input == null ? null : this.sourceNodePlacement(input.contributor);
             const disposition = input == null ? null : this.consumedNodes.get(input.contributor) ?? null;
             if (
               contributor.disposition !== HydrateElementProjectionContributorDisposition.DiscardedWhitespace
@@ -2900,7 +2981,7 @@ export class TemplateCompilerStructuralExecutionSession {
           let previousHostOrdinal = -1;
           for (const childReference of removed) {
             const input = this.instructionHostChild(instruction, childReference);
-            const placement = input == null ? null : this.forest.seededNodePlacement(input.child);
+            const placement = input == null ? null : this.sourceNodePlacement(input.child);
             const disposition = input == null ? null : this.consumedNodes.get(input.child) ?? null;
             const hasAuSlotAttribute = input != null
               && input.child instanceof TemplateCompilerElementOccurrence
@@ -2933,9 +3014,9 @@ export class TemplateCompilerStructuralExecutionSession {
       const actualOutputs = expansion.sourceParent.readChildren().filter((node) => expansionOutputs.has(node));
       const sourceChildren = expansion.sourceParent.readChildren();
       const outputIndexes = expansion.outputs.map((output) => sourceChildren.indexOf(output));
-      const seededInput = this.forest.seededNodePlacement(input);
+      const seededInput = this.sourceNodePlacement(input);
       const retainedSiblingIndexes = sourceChildren.flatMap((node, index) => {
-        const placement = this.forest.seededNodePlacement(node);
+        const placement = this.sourceNodePlacement(node);
         return placement != null
           && seededInput != null
           && placement.parent === seededInput.parent
@@ -2982,9 +3063,9 @@ export class TemplateCompilerStructuralExecutionSession {
     }
   }
 
-  private assertSeededInputTopology(): void {
+  private assertCompilerInputTopology(): void {
     for (const node of this.forest.readNodes()) {
-      const seededPlacement = this.forest.seededNodePlacement(node);
+      const seededPlacement = this.sourceNodePlacement(node);
       if (seededPlacement == null) continue;
       const expected = this.expectedFinalInputNodeEdges.get(node) ?? null;
       if (expected != null) {
@@ -3011,7 +3092,7 @@ export class TemplateCompilerStructuralExecutionSession {
       readonly seededOrdinal: number;
     }[]>();
     for (const node of this.forest.readNodes()) {
-      const placement = this.forest.seededNodePlacement(node);
+      const placement = this.sourceNodePlacement(node);
       if (
         placement?.parent == null
         || placement.edgeKind !== TemplateCompilerOccurrenceEdgeKind.Child
@@ -3041,7 +3122,7 @@ export class TemplateCompilerStructuralExecutionSession {
         return expected?.parent === structure.compilerContent
           && expected.edgeKind === TemplateCompilerOccurrenceEdgeKind.Child;
       });
-      const seededOrder = transferred.map((node) => this.forest.seededNodePlacement(node)?.preorderOrdinal ?? -1);
+      const seededOrder = transferred.map((node) => this.sourceNodePlacement(node)?.preorderOrdinal ?? -1);
       if (seededOrder.some((ordinal, index) => ordinal < 0 || (index > 0 && ordinal <= seededOrder[index - 1]!))) {
         throw new Error(`Compiler target context '${context.localKey}' changed transferred input order.`);
       }
@@ -3087,20 +3168,20 @@ export class TemplateCompilerStructuralExecutionSession {
   }
 
   private sourcePreorderOrdinalForOutput(node: TemplateCompilerNodeOccurrence): number | null {
-    const seeded = this.forest.seededNodePlacement(node);
+    const seeded = this.sourceNodePlacement(node);
     if (seeded != null) return seeded.preorderOrdinal;
     if (node instanceof TemplateCompilerTextOccurrence) {
       const expansion = this.inputTextExpansionsByOutput.get(node) ?? null;
       return expansion == null
         ? null
-        : this.forest.seededNodePlacement(expansion.input)?.preorderOrdinal ?? null;
+        : this.sourceNodePlacement(expansion.input)?.preorderOrdinal ?? null;
     }
     if (!(node instanceof TemplateCompilerCommentOccurrence)) return null;
     const renderGeometry = this.geometriesByStart.get(node)
       ?? this.geometriesByEnd.get(node)
       ?? null;
     if (renderGeometry?.replacedNode != null) {
-      return this.forest.seededNodePlacement(renderGeometry.replacedNode)?.preorderOrdinal ?? null;
+      return this.sourceNodePlacement(renderGeometry.replacedNode)?.preorderOrdinal ?? null;
     }
     const markerGeometry = this.geometriesByMarker.get(node) ?? null;
     if (markerGeometry == null) return null;
@@ -3108,10 +3189,10 @@ export class TemplateCompilerStructuralExecutionSession {
       ? markerGeometry.replacedNode
       : markerGeometry.target;
     if (source == null) return null;
-    const sourceSeed = this.forest.seededNodePlacement(source);
+    const sourceSeed = this.sourceNodePlacement(source);
     if (sourceSeed != null) return sourceSeed.preorderOrdinal;
     return source instanceof TemplateCompilerTextOccurrence
-      ? this.forest.seededNodePlacement(this.inputTextExpansionsByOutput.get(source)?.input ?? source)?.preorderOrdinal ?? null
+      ? this.sourceNodePlacement(this.inputTextExpansionsByOutput.get(source)?.input ?? source)?.preorderOrdinal ?? null
       : null;
   }
 
@@ -3551,20 +3632,6 @@ function rowCauseHandles(
     throw new Error(`Compiler target row '${row.localKey}' has no semantic cause for generated geometry.`);
   }
   return causes;
-}
-
-/** Hook removals precede context transfers; later physical ancestry is not their source-edge authority. */
-function seededDescendantOf(
-  forest: TemplateCompilerOccurrenceForest,
-  node: TemplateCompilerNodeOccurrence,
-  ancestor: TemplateCompilerElementOccurrence,
-): boolean {
-  let parent = forest.seededNodePlacement(node)?.parent ?? null;
-  while (parent != null) {
-    if (parent === ancestor) return true;
-    parent = forest.seededNodePlacement(parent)?.parent ?? null;
-  }
-  return false;
 }
 
 function contextContains(

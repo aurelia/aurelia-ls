@@ -17,6 +17,32 @@ const Root = TemplateCompilerOccurrenceEdgeKind.Root;
 const TemplateContent = TemplateCompilerOccurrenceEdgeKind.TemplateContent;
 
 describe('compiler mutation rollback', () => {
+  test('retains HTML parser-inert script state through relocation without imposing it on SVG scripts', () => {
+    const browser = new BrowserEffectiveTemplateFixture('compiler-script-creation');
+    try {
+      const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(browser.materialize(
+        'root', '<div><script is="original-script"></script><svg><script></script></svg></div><aside></aside>',
+      ).emission);
+      const scripts = forest.readNodes().filter((node): node is TemplateCompilerElementOccurrence =>
+        node instanceof TemplateCompilerElementOccurrence && node.tagName === 'script'
+      );
+      const html = scripts.find(node => node.namespace === HtmlNamespaceKind.Html)!;
+      const svg = scripts.find(node => node.namespace === HtmlNamespaceKind.Svg)!;
+      expect(html.parserInertScript).toBe(true);
+      expect(svg.parserInertScript).toBe(false);
+      const scope = forest.beginMutationScope();
+      forest.moveNode(html, element(forest, 'aside'), Child, 0);
+      forest.rewriteAttributeValue(html.readAttributes()[0]!, 'changed-script');
+      expect(html.parserInertScript).toBe(true);
+      expect(html.customElementIs).toBe('original-script');
+      forest.finishMutationScope(scope, false);
+      expect(html.parserInertScript).toBe(true);
+      expect(html.readAttributes()[0]!.value).toBe('original-script');
+    } finally {
+      browser.dispose();
+    }
+  });
+
   test('restores every owning edge, document and scalar in place without rewinding the forest epoch', () => {
     const browser = new BrowserEffectiveTemplateFixture('compiler-rollback-edges');
     try {
@@ -106,7 +132,7 @@ describe('compiler mutation rollback', () => {
         owner, batch, TemplateCompilerGeneratedOccurrenceRole.Clone, ordinal++,
       );
       const generatedElement = forest.createGeneratedElement(
-        generation(), 'template', HtmlNamespaceKind.Html, 'http://www.w3.org/1999/xhtml', 'generated-template', div.inputReference,
+        generation(), 'template', HtmlNamespaceKind.Html, 'http://www.w3.org/1999/xhtml', 'generated-template', false, div.inputReference,
       );
       // Input lineage does not choose the new element's native creation identity.
       expect(generatedElement.customElementIs).toBe('generated-template');
@@ -178,7 +204,7 @@ describe('compiler mutation rollback', () => {
         owner, retry, TemplateCompilerGeneratedOccurrenceRole.Clone, 0,
       );
       const retryElement = forest.createGeneratedElement(
-        retryGeneration, 'template', HtmlNamespaceKind.Html, 'http://www.w3.org/1999/xhtml', 'generated-template', div.inputReference,
+        retryGeneration, 'template', HtmlNamespaceKind.Html, 'http://www.w3.org/1999/xhtml', 'generated-template', false, div.inputReference,
       );
       expect(retryElement.customElementIs).toBe('generated-template');
       expect(retryElement.occurrenceKey).toBe(generatedElement.occurrenceKey);

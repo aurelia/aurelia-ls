@@ -351,6 +351,7 @@ describe('template structural model', () => {
         [],
         null,
         null,
+        false,
       ),
       handles,
       'child',
@@ -398,7 +399,7 @@ describe('template structural model', () => {
     )).toBe(KernelPublicationDecisionKind.Replace);
     const nativeElement = (customElementIs: string | null) => bindDetail(
       new CompilerTransformedTemplateElement(transformedTree, 'button', HtmlNamespaceKind.Html,
-        'http://www.w3.org/1999/xhtml', [], [], null, customElementIs),
+        'http://www.w3.org/1999/xhtml', [], [], null, customElementIs, false),
       handles,
       'native-element',
       KernelVocabulary.Template.StructuralNode.key,
@@ -409,6 +410,17 @@ describe('template structural model', () => {
     )).toBe(KernelPublicationDecisionKind.Retain);
     expect(TemplateProductDetails.StructuralNode.compare(
       nativeElement('native-button'), nativeElement(null), context,
+    )).toBe(KernelPublicationDecisionKind.Replace);
+    const script = (parserInertScript: boolean) => bindDetail(
+      new CompilerTransformedTemplateElement(transformedTree, 'script', HtmlNamespaceKind.Html,
+        'http://www.w3.org/1999/xhtml', [], [], null, null, parserInertScript),
+      handles, 'script-element', KernelVocabulary.Template.StructuralNode.key, 'script-element',
+    );
+    expect(TemplateProductDetails.StructuralNode.compare(
+      script(true), script(true), context,
+    )).toBe(KernelPublicationDecisionKind.Retain);
+    expect(TemplateProductDetails.StructuralNode.compare(
+      script(true), script(false), context,
     )).toBe(KernelPublicationDecisionKind.Replace);
     const comment = (kind: HtmlCommentSemanticKind) => bindDetail(
       new CompilerTransformedTemplateComment(transformedTree, 'au', kind),

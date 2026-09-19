@@ -33,6 +33,7 @@ import { HtmlNamespaceKind } from '../src/template/html-ir.js';
 import {
   TemplateCompilerExecutionSession,
   TemplateCompilerOperationKind,
+  type TemplateCompilerOperation,
 } from '../src/template/template-compiler-execution.js';
 import {
   compileTemplateCompilerContextFamily,
@@ -2013,6 +2014,73 @@ describe('template compiler root site cursor', () => {
       expect(result.value?.contexts.some((entry) => entry.owner.ownerKind === 'projection')).toBe(true);
     } finally {
       adoptions.mockRestore();
+      candidate.abort();
+    }
+  });
+
+  test('retains authored node origins through repeated hook relocations and consumes only final removed roots', () => {
+    const candidate = fixture.runtime.computationLifecycle.begin({
+      kind: 'template-compiler-node-relocation-test',
+      reconciliationKey: fixture.browserRun.locus.reconciliationKey,
+      summary: 'Existing-node relocation, source ownership, and final removal.',
+    });
+    const operations = vi.spyOn(TemplateCompilerExecutionSession.prototype, 'completeOperation');
+    const removals = vi.spyOn(TemplateCompilerStructuralExecutionSession.prototype, 'adoptCommittedProcessContentRemoval');
+    try {
+      const result = fixture.compileContextFamily('cursor-node-relocation', candidate);
+      expect(result.state, result.reasons.map(reason => reason.summary).join('\n'))
+        .toBe(TemplateCompilerContextFamilyCompilationState.Exact);
+      const operation = operations.mock.results.map(entry => entry.value as TemplateCompilerOperation)
+        .find(entry => entry.mutationBatch.nodePlacementMutations.length === 7);
+      expect(operation).toBeDefined();
+      const placements = operation!.mutationBatch.nodePlacementMutations;
+      const first = placements[0]!.node;
+      const nested = placements[4]!.node;
+      const removed = placements[6]!.node;
+      expect(placements.slice(0, 4).map(entry => entry.node)).toEqual([first, first, first, first]);
+      expect(first.inputReference).not.toBeNull();
+      expect(first.generation).toBeNull();
+      expect(nested.inputReference).not.toBeNull();
+      expect(nested.generation).toBeNull();
+      expect(removals.mock.calls.map(call => call[3].occurrence)).toEqual([removed]);
+      expect(removals.mock.calls[0]?.[2].removedSiteOccurrences.some(occurrence =>
+        occurrence instanceof TemplateCompilerTextOccurrence && occurrence.text === '${never}')).toBe(true);
+      const outputElements = result.value!.contexts.flatMap(context => context.nodes)
+        .filter(node => 'tagName' in node);
+      expect(outputElements.map(node => node.tagName)).toContain('b');
+      expect(outputElements.map(node => node.tagName)).toContain('i');
+      expect(outputElements.map(node => node.tagName)).not.toContain('aside');
+      const derivation = result.value!.derivations.find(entry => entry.operationOrdinal === operation!.executionOrdinal)!;
+      expect(derivation.inputs.map(term => term.structure.productHandle)).toContain(first.inputReference!.productHandle);
+      expect(derivation.inputs.map(term => term.structure.productHandle)).toContain(removed.inputReference!.productHandle);
+      expect(derivation.outputs).toHaveLength(2);
+    } finally {
+      operations.mockRestore();
+      removals.mockRestore();
+      candidate.abort();
+    }
+  });
+
+  test('consumes a detached subtree whose descendant became its parent without treating historical edges as live ancestry', () => {
+    const candidate = fixture.runtime.computationLifecycle.begin({
+      kind: 'template-compiler-detached-reversal-test',
+      reconciliationKey: fixture.browserRun.locus.reconciliationKey,
+      summary: 'Detached subtree reversal retains finite source lineage.',
+    });
+    const removals = vi.spyOn(TemplateCompilerStructuralExecutionSession.prototype, 'adoptCommittedProcessContentRemoval');
+    try {
+      const result = fixture.compileContextFamily('cursor-detached-reversal-owner', candidate);
+      expect(result.state, result.reasons.map(reason => reason.summary).join('\n'))
+        .toBe(TemplateCompilerContextFamilyCompilationState.Exact);
+      expect(removals.mock.calls).toHaveLength(1);
+      const removed = removals.mock.calls[0]![3].occurrence;
+      expect(removed).toMatchObject({ tagName: 'aside', parent: null });
+      expect(removed.readChildren().map(node => node instanceof TemplateCompilerElementOccurrence ? node.tagName : node.nodeKind))
+        .toEqual(['b', 'section']);
+      expect(result.value!.contexts.flatMap(context => context.nodes).filter(node => 'tagName' in node).map(node => node.tagName))
+        .not.toContain('aside');
+    } finally {
+      removals.mockRestore();
       candidate.abort();
     }
   });

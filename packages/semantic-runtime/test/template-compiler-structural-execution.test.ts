@@ -657,6 +657,7 @@ describe('template compiler structural execution mechanics', () => {
         HtmlNamespaceKind.Html,
         'http://www.w3.org/1999/xhtml',
         null,
+        false,
       );
       const firstContent = forest.createGeneratedFragment(session.createGeneration(
         contexts[0]!,
@@ -1918,6 +1919,7 @@ describe('template compiler structural execution mechanics', () => {
           element.namespace,
           element.namespaceUri,
           element.customElementIs,
+          element.parserInertScript,
           forgedNode,
         )).toThrow(/seeded origin index/);
         const forgedAttribute = new TemplateStructuralAttributeReference(
@@ -1954,6 +1956,7 @@ describe('template compiler structural execution mechanics', () => {
           element.namespace,
           element.namespaceUri,
           element.customElementIs,
+          element.parserInertScript,
           element.inputReference,
         );
         expect(() => forest.createGeneratedAttribute(
@@ -1988,6 +1991,7 @@ describe('template compiler structural execution mechanics', () => {
           HtmlNamespaceKind.Html,
           'http://www.w3.org/1999/xhtml',
           null,
+          false,
         );
         expect(() => session.createGeneration(
           context,
@@ -2031,6 +2035,7 @@ describe('template compiler structural execution mechanics', () => {
           HtmlNamespaceKind.Svg,
           'http://www.w3.org/2000/svg',
           null,
+          false,
         );
         const content = forest.createGeneratedFragment(session.createGeneration(
           context,
@@ -2087,6 +2092,7 @@ describe('template compiler structural execution mechanics', () => {
           HtmlNamespaceKind.Html,
           'http://www.w3.org/1999/xhtml',
           null,
+          false,
         );
         forest.insertDetachedNode(
           falseCarrier,

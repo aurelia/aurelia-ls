@@ -241,14 +241,64 @@ describe('AOT compiler patch module emitter', () => {
   }
 
   it('rejects a compiled tree without document affiliation or native creation inputs', () => {
-    for (const field of ['carrierOwnerDocument', 'contentOwnerDocument', 'customElementIs'] as const) {
+    for (const field of ['carrierOwnerDocument', 'contentOwnerDocument', 'customElementIs', 'parserInertScript'] as const) {
       const value = withNativeConstructionTree('platform', 'template-contents');
       const tree = value.definitions.find(definition => definition.definitionId === value.rootDefinitionId)!.tree;
-      if (field !== 'customElementIs') Reflect.deleteProperty(tree, field);
+      if (field === 'carrierOwnerDocument' || field === 'contentOwnerDocument') Reflect.deleteProperty(tree, field);
       else Reflect.deleteProperty(tree.nodes.find(node => node.nodeKind === 'element')!, field);
       expect(() => new AotCompilerPatchModuleEmitter().emit({
         handoff: value, projectRoot: fixtureRoot, sourcePath: templatePath, sourceText,
       })).toThrowError(expect.objectContaining({ code: 'AOT_ARTIFACT_INVALID_HANDOFF' }));
+    }
+  });
+
+  it('preserves parser-inert script creation separately from script text and DOM children on void elements', async () => {
+    const value = withNativeConstructionTree('platform', 'template-contents');
+    const root = value.definitions.find(definition => definition.definitionId === value.rootDefinitionId)!;
+    const common = { source: null, fieldProvenance: [] };
+    const baseElement = {
+      ...common, nodeKind: 'element' as const, namespace: 'html', namespaceUri: 'http://www.w3.org/1999/xhtml',
+      customElementIs: null, parserInertScript: false, attributeIds: [], children: [], templateContentNodeId: null,
+    };
+    const tree: TemplateCompilerCompiledHandoffTree = {
+      ...root.tree,
+      nodes: [
+        ...root.tree.nodes.filter(node => node.nodeId === 'carrier' || node.nodeId === 'content').map(node => node.nodeId === 'content'
+          ? { ...node, children: ['parsed-script', 'dynamic-script', 'void'] }
+          : node),
+        { ...baseElement, nodeId: 'parsed-script', tagName: 'script', parserInertScript: true,
+          customElementIs: 'original-script"<&>\r', attributeIds: ['changed-script-is'], children: ['parsed-left', 'parsed-right'] },
+        { ...baseElement, nodeId: 'dynamic-script', tagName: 'script', children: ['dynamic-text'] },
+        { ...baseElement, nodeId: 'void', tagName: 'input', children: ['void-child'] },
+        { ...baseElement, nodeId: 'void-child', tagName: 'span' },
+        { ...common, nodeId: 'parsed-left', nodeKind: 'text', text: 'left', textKind: 'static' },
+        { ...common, nodeId: 'parsed-right', nodeKind: 'text', text: 'right', textKind: 'static' },
+        { ...common, nodeId: 'dynamic-text', nodeKind: 'text', text: 'dynamic', textKind: 'static' },
+      ],
+      attributes: [{
+        ...common, attributeId: 'changed-script-is', ownerNodeId: 'parsed-script', name: 'is', value: 'changed-script',
+        namespaceUri: null, prefix: null,
+      }],
+    };
+    const artifact = new AotCompilerPatchModuleEmitter().emit({
+      handoff: { ...value, definitions: value.definitions.map(definition => definition === root ? { ...root, tree } : definition) },
+      projectRoot: fixtureRoot, sourcePath: templatePath, sourceText,
+    });
+    expect(artifact.code.match(/\.innerHTML =/g)).toHaveLength(1);
+    expect(artifact.code).toContain('original-script&quot;&lt;&amp;&gt;&#13;');
+    const dom = new JSDOM('<!doctype html><html><body></body></html>');
+    try {
+      const imported = await importPatchModule(artifact.code, artifact.digest, dom);
+      const scripts = imported.template.content.querySelectorAll('script');
+      expect(scripts).toHaveLength(2);
+      expect(scripts[0]!.getAttribute('is')).toBe('changed-script');
+      expect(Array.from(scripts[0]!.childNodes, node => node.nodeValue)).toEqual(['left', 'right']);
+      expect(scripts[1]!.textContent).toBe('dynamic');
+      const realized = dom.window.document.importNode(imported.template.content, true);
+      expect(realized.querySelector('input')!.firstElementChild!.tagName).toBe('SPAN');
+      // JSDOM does not preserve HTML script already-started state; the content-moves Chromium golden checks execution.
+    } finally {
+      dom.window.close();
     }
   });
 
@@ -620,6 +670,7 @@ function withNativeConstructionTree(
   const element = (nodeId: string, tagName: string, customElementIs: string | null = null) => ({
     ...common, nodeId, nodeKind: 'element' as const, tagName, namespace: 'html',
     namespaceUri: 'http://www.w3.org/1999/xhtml', customElementIs,
+    parserInertScript: false,
     attributeIds: [] as string[], children: [] as string[], templateContentNodeId: null as string | null,
   });
   const tree: TemplateCompilerCompiledHandoffTree = {

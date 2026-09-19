@@ -346,6 +346,7 @@ export type CompilerTransformedTemplateNodeField =
   | 'children'
   | 'templateContent'
   | 'customElementIs'
+  | 'parserInertScript'
   | 'value'
   | 'realization'
   | 'source';
@@ -441,6 +442,8 @@ export class CompilerTransformedTemplateElement {
     readonly templateContent: TemplateStructuralNodeReference | null,
     /** Original element-creation input, independent of a later removed or rewritten `is` attribute. */
     readonly customElementIs: string | null,
+    /** Preserve the HTML parser's already-started script state independently from final text and attributes. */
+    readonly parserInertScript: boolean,
     readonly fieldProvenance: readonly FieldProvenance<CompilerTransformedTemplateNodeField>[] = [],
   ) {}
 

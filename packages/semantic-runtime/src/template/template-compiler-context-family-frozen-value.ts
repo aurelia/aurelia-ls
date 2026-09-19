@@ -525,6 +525,7 @@ function materializeNode(
       childReferences,
       occurrence.templateContent == null ? null : nodeReferences.get(occurrence.templateContent)!,
       occurrence.customElementIs,
+      occurrence.parserInertScript,
       [],
     );
   } else if (occurrence instanceof TemplateCompilerTextOccurrence) {

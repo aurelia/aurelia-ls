@@ -49,6 +49,7 @@ import {
 import { StaticBuildServer } from './server.js';
 import { assertCompatibleHooksBuildEvidence, assertCompatibleHooksExpectations } from './compatible-hooks-scenario.js';
 import { assertContentAttributesBuildEvidence, assertContentAttributesExpectations } from './content-attributes-scenario.js';
+import { assertContentMovesBuildEvidence, assertContentMovesExpectations } from './content-moves-scenario.js';
 
 export interface RunAssuranceOptions {
   readonly adapterSpecifier: string;
@@ -115,6 +116,7 @@ export function assertScenarioBuildEvidence(
   else if (scenario === 'compiler-hooks') assertCompilerHooksBuildEvidence(evidence);
   else if (scenario === 'compatible-hooks') assertCompatibleHooksBuildEvidence(evidence);
   else if (scenario === 'content-attributes') assertContentAttributesBuildEvidence(evidence);
+  else if (scenario === 'content-moves') assertContentMovesBuildEvidence(evidence);
   else if (scenario === 'routed-storefront') assertRoutedStorefrontBuildEvidence(evidence);
   else if (scenario === 'state-backed-form') assertStateBackedFormBuildEvidence(evidence);
   else if (scenario === 'projects-and-milestones') assertProjectsAndMilestonesBuildEvidence(evidence);
@@ -152,6 +154,9 @@ export function assertScenarioBrowserEvidence(
     } else if (scenario === 'content-attributes') {
       assertContentAttributesExpectations(browserBatch.jit);
       assertContentAttributesExpectations(browserBatch.aot);
+    } else if (scenario === 'content-moves') {
+      assertContentMovesExpectations(browserBatch.jit);
+      assertContentMovesExpectations(browserBatch.aot);
     } else if (scenario === 'routed-storefront') {
       assertRoutedStorefrontExpectations(browserBatch.jit);
       assertRoutedStorefrontExpectations(browserBatch.aot);
@@ -186,6 +191,8 @@ function defaultFixtureRoot(scenario: AssuranceScenario): string {
       return resolve(packageRoot, 'fixtures', 'compatible-hooks');
     case 'content-attributes':
       return resolve(packageRoot, 'fixtures', 'content-attributes');
+    case 'content-moves':
+      return resolve(packageRoot, 'fixtures', 'content-moves');
     case 'routed-storefront':
       return resolve(
         packageRoot,

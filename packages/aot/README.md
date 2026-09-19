@@ -53,12 +53,18 @@ and executable header values remain subject to the complete emitter's existing f
 
 The current emitter is a CSR baseline. It preserves the compiler's exact DOM node graph rather than serializing and
 reparsing HTML, because reparsing can merge adjacent text nodes that Aurelia instruction rows address separately.
-Handoff v6 carries final carrier/content document affiliation and each element's original native `is` creation input.
+Handoff v7 carries final carrier/content document affiliation and each element's original native `is` creation input
+and parser-inert HTML script state.
 The emitter constructs the complete graph in the inert template-contents document, then adopts generated-context
 content into the platform document when requested by semantic-runtime. Native custom elements therefore do not
 construct during module loading. The original `is` creation value stays distinct from hook-rewritten attributes.
 This also preserves JIT Rendering's first-import versus cached-clone upgrade timing; simply keeping all content inert
 would change repeated generated-template views. Adjacent text nodes remain separate throughout.
+Parser-inert HTML scripts need one additional creation step: an empty script skeleton is parsed before attributes and
+child nodes are applied. Creating such a script with createElement would incorrectly make it executable on attachment.
+Only the empty skeleton and escaped original `is` value use parsing; authored code/text is still built as DOM nodes.
+SVG scripts and explicitly dynamic script creation are not silently made inert. Direct DOM output also permits valid
+DOM children under HTML void elements, which HTML serialization alone could not preserve.
 Carrier affiliation is preserved separately: an implicit wrapper is platform-owned, whereas a selected authored
 outer template can remain inert. Semantic-runtime supplies these final facts from the same forest that answers
 source hooks' temporal ownerDocument reads; AOT does not derive them again from definition kind or final parentage.

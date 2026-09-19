@@ -398,6 +398,52 @@ class CursorProjectionSlotRewriter {
 })
 class CursorProjectionGeneratedSlot {}
 
+@customElement({ name: 'cursor-node-relocator', template: '' })
+class CursorNodeRelocator {
+  static processContent(element: HTMLElement) {
+    const wrapper = element.children[0]!;
+    const first = element.children[1]!;
+    const removed = element.children[2]!;
+    element.removeChild(first);
+    wrapper.appendChild(first);
+    element.appendChild(first);
+    wrapper.appendChild(first);
+    const nested = removed.firstChild!;
+    removed.removeChild(nested);
+    wrapper.appendChild(nested);
+    element.removeChild(removed);
+  }
+}
+
+@customElement({
+  name: 'cursor-node-relocation',
+  template: '<cursor-node-relocator><section></section><b title.bind="label">${label}</b><aside><i>${label}</i><strong>${never}</strong></aside></cursor-node-relocator>',
+  dependencies: [CursorNodeRelocator],
+})
+class CursorNodeRelocation {
+  label = 'ready';
+  never = 'excluded';
+}
+
+@customElement({ name: 'cursor-detached-reversal', template: '' })
+class CursorDetachedReversal {
+  static processContent(element: HTMLElement) {
+    const outer = element.firstChild!;
+    const inner = outer.firstChild!;
+    outer.removeChild(inner);
+    inner.appendChild(outer);
+  }
+}
+
+@customElement({
+  name: 'cursor-detached-reversal-owner',
+  template: '<cursor-detached-reversal><section><aside><b>${removed}</b></aside></section></cursor-detached-reversal>',
+  dependencies: [CursorDetachedReversal],
+})
+class CursorDetachedReversalOwner {
+  removed = 'removed';
+}
+
 @customElement({
   name: 'cursor-marker',
   template: cursorMarkerTemplate,
@@ -630,6 +676,8 @@ void new Aurelia()
     CursorContextFamilyProjectionSiblings,
     CursorProjectionSlotIdentity,
     CursorProjectionGeneratedSlot,
+    CursorNodeRelocation,
+    CursorDetachedReversalOwner,
     CursorMarker,
     CursorNativeContainerless,
     CursorWide,

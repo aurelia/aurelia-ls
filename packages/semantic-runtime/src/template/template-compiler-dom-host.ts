@@ -102,8 +102,8 @@ type CompilerDomReference = CompilerDomNodeReference | CompilerDomCollectionRefe
 /**
  * Source-callable DOM operations over the existing compiler forest and pending operation overlay.
  *
- * Traversal, attribute creation/removal/value updates, class tokens, and descendant removal use one pending operation.
- * Node creation, reparenting, markup writes, and metadata writes remain explicit refusals until generated sites enter
+ * Traversal, attributes, class tokens, and existing-node relocation/removal use one pending operation.
+ * Node creation, cloning, markup writes, and metadata writes remain explicit refusals until generated sites enter
  * ordinary compiler lowering. Dataset remains unsupported until deletion and enumeration have owned evaluator lanes.
  */
 export class TemplateCompilerDomHost {
@@ -285,6 +285,9 @@ export class TemplateCompilerDomHost {
         ? new EvaluationNullValue() : new EvaluationStringValue(textContent(occurrence));
       case 'hasChildNodes':
       case 'contains':
+      case 'appendChild':
+      case 'insertBefore':
+      case 'replaceChild':
       case 'removeChild': return this.method(member);
       case 'remove':
         if (!(occurrence instanceof TemplateCompilerFragmentOccurrence)) return this.method(member);
@@ -399,6 +402,9 @@ export class TemplateCompilerDomHost {
     }
     if (reference.kind !== 'node') return domThrow('TypeError', 'Illegal DOM invocation.');
     const occurrence = reference.occurrence;
+    if (member === 'appendChild' || member === 'insertBefore' || member === 'replaceChild') {
+      return this.invokeNodePlacement(occurrence, member, args, frame, host);
+    }
     if (member === 'hasChildNodes') return staticInvocationValue(new EvaluationBooleanValue(occurrence.readChildren().length > 0));
     if (member === 'contains') {
       if (args.length === 0) return domThrow('TypeError', 'contains requires a node.');
@@ -423,10 +429,6 @@ export class TemplateCompilerDomHost {
       }
       if (child === this.rootElement) return staticInvocationValue(this.outside(member, frame.node, frame.moduleKey, host));
       if (child.parent == null) return staticInvocationValue(EvaluationUndefined);
-      // A removed subtree remains inspectable, but further detached-tree mutation needs a wider site disposition.
-      let ancestor: TemplateCompilerNodeOccurrence | null = child.parent;
-      while (ancestor != null && ancestor !== this.rootElement) ancestor = ancestor.parent;
-      if (ancestor == null) return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'detached-subtree-mutation'));
       this.execution.detachProcessContentNode(this.attempt, child);
       return staticInvocationValue(member === 'remove' ? EvaluationUndefined : this.nodeValue(child));
     }
@@ -452,6 +454,61 @@ export class TemplateCompilerDomHost {
       }
       default: return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host));
     }
+  }
+
+  private invokeNodePlacement(
+    parent: TemplateCompilerNodeOccurrence,
+    member: 'appendChild' | 'insertBefore' | 'replaceChild',
+    args: readonly EvaluationValue[],
+    frame: StaticInvocationFrame,
+    host: StaticIntrinsicEvaluationHost,
+  ): StaticInvocationDispatch {
+    const replacing = member === 'replaceChild';
+    if (args.length < (member === 'appendChild' ? 1 : 2)) return domThrow('TypeError', `${member} is missing a required node.`);
+    const input = this.references.read(args[0]!);
+    if (input?.kind !== 'node' && input?.kind !== 'document') return domThrow('TypeError', `${member} requires a node.`);
+    const referenceValue = args[1];
+    const nullableReference = !replacing && (referenceValue == null
+      || referenceValue.kind === EvaluationValueKind.Null || referenceValue.kind === EvaluationValueKind.Undefined);
+    const reference = member === 'appendChild' || nullableReference ? null : this.references.read(referenceValue!);
+    if (member !== 'appendChild' && !nullableReference && reference?.kind !== 'node' && reference?.kind !== 'document') {
+      return domThrow('TypeError', `${member} requires a ${replacing ? 'child' : 'reference'} node.`);
+    }
+    if (!isParent(parent)) return domThrow('HierarchyRequestError', 'This node cannot contain children.');
+    // DOM validates ancestry before checking the reference child's membership, including template-content hosts.
+    if (input.kind === 'node') {
+      for (let ancestor: TemplateCompilerNodeOccurrence | null = parent; ancestor != null; ancestor = ancestor.parent) {
+        if (ancestor === input.occurrence) return domThrow('HierarchyRequestError', 'A node cannot contain its own ancestor.');
+      }
+    }
+    const child = reference?.kind === 'node' ? reference.occurrence : null;
+    if (reference != null && (child == null || child.parent !== parent || child.parentEdgeKind !== TemplateCompilerOccurrenceEdgeKind.Child)) {
+      return domThrow('NotFoundError', 'The reference node is not a child of this parent.');
+    }
+    if (input.kind !== 'node' || input.occurrence instanceof TemplateCompilerDoctypeOccurrence) {
+      return domThrow('HierarchyRequestError', 'This node cannot be inserted into an element or fragment.');
+    }
+    const node = input.occurrence;
+    if (node === this.rootElement) return staticInvocationValue(this.outside(member, frame.node, frame.moduleKey, host));
+    if (parent instanceof TemplateCompilerElementOccurrence && parent.templateContent != null) {
+      // Ordinary children of <template> are distinct from .content; their compiler/emitter path is not admitted yet.
+      return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'template-element-children'));
+    }
+    const siblings = parent.readChildren();
+    let before = replacing ? siblings[siblings.indexOf(child!) + 1] ?? null : child;
+    if (before === node) before = siblings[siblings.indexOf(node) + 1] ?? null;
+    // Insertion drains a fragment's children; its own template-content ownership and identity do not move.
+    const inputs = node instanceof TemplateCompilerFragmentOccurrence ? [...node.readChildren()] : [node];
+    if (replacing && node === child) return staticInvocationValue(this.nodeValue(child));
+    if (replacing) this.execution.detachProcessContentNode(this.attempt, child!);
+    for (const inputNode of inputs) {
+      const currentChildren = parent.readChildren();
+      let ordinal = before == null ? currentChildren.length : currentChildren.indexOf(before);
+      if (inputNode.parent === parent && inputNode.parentEdgeKind === TemplateCompilerOccurrenceEdgeKind.Child
+        && currentChildren.indexOf(inputNode) < ordinal) ordinal--;
+      this.execution.placeProcessContentNode(this.attempt, inputNode, parent, ordinal);
+    }
+    return staticInvocationValue(this.nodeValue(replacing ? child! : node));
   }
 
   private invokeAttributeMethod(

@@ -41,7 +41,7 @@ import type {
   TemplateCompilerProcessContentRemoval,
   TemplateCompilerProcessContentResult,
 } from './template-compiler-process-content.js';
-import { TemplateCompilerAttributeDetachmentMutation, TemplateCompilerNodeDetachmentMutation } from './template-compiler-execution.js';
+import { TemplateCompilerAttributeDetachmentMutation, type TemplateCompilerTopologyMutation } from './template-compiler-execution.js';
 import type {
   TemplateCompilerSiteCursorProjectionExtractionEvent,
   TemplateCompilerSiteCursorTemplateControllerTransitionEvent,
@@ -684,11 +684,13 @@ export class TemplateCompilerContextFamilyStructuralSchedulePreparation {
 function orderedProcessContentRemovals(
   result: TemplateCompilerProcessContentResult,
 ): readonly (TemplateCompilerProcessContentRemoval | TemplateCompilerAttributeDetachmentMutation)[] {
-  const nodes = new Map(result.removals.map((removal) => [removal.mutation, removal] as const));
+  const nodes = new Map<TemplateCompilerTopologyMutation, TemplateCompilerProcessContentRemoval>(
+    result.removals.map((removal) => [removal.mutation, removal]),
+  );
   return result.operation.mutationBatch.topologyMutations.flatMap<TemplateCompilerProcessContentRemoval | TemplateCompilerAttributeDetachmentMutation>((mutation) =>
     mutation instanceof TemplateCompilerAttributeDetachmentMutation
       ? [mutation]
-      : mutation instanceof TemplateCompilerNodeDetachmentMutation
+      : nodes.has(mutation)
         ? [nodes.get(mutation)!]
         : []
   );

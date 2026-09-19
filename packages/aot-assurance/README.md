@@ -11,9 +11,15 @@ therefore run through the generated base-runtime facade instead of retaining the
 The routed storefront additionally requires its exact 11-resource/11-renderer plan and an omitted event modifier, so
 browser parity exercises the optimized configuration rather than only a compile-free conservative fallback.
 
-The default package assurance runs twelve complementary scenarios:
+The default package assurance runs thirteen complementary scenarios:
 
 - `g0` is the deeply instrumented parser/teardown control and owns the runtime string-parse guard;
+- `content-moves` is strict AOT for relocation of original source-hook descendants. It moves authored content into
+  an empty wrapper, reorders siblings, repeatedly removes/reinserts the same node, replaces across parents, and
+  permanently removes bound content. Moved custom elements retain named projections, custom attributes, `if`/`repeat`,
+  and updates after hide/restore. A retained template contributes a child through inert-to-platform document adoption;
+  reordered original interpolation text siblings become adjacent and compile in the resulting order. Five checkpoints
+  and teardown check explicit JIT-grounded outcomes. All three compiler-final definitions are required.
 - `content-attributes` is strict AOT for ordinary source-hook attribute transforms. It creates, removes and readds
   attributes; generates input bindings, custom attributes, `as-element` components, `if`/`repeat` controllers, and a
   select whose generated `value` binding precedes `multiple` in source order. HTML/SVG classList and xlink/XML
@@ -40,7 +46,10 @@ The default package assurance runs twelve complementary scenarios:
   visibility, recursively nests a local cohort, and exercises repeated/conditional use sites through owner update
   propagation, repeat growth, removal, and restoration. One decorated template-value component exercises the
   source-owned compiler patch; one paired convention component exercises the complete DefinitionModule owner-Type
-  realization. Both realize local graphs without runtime JIT compilation.
+  realization. Both realize local graphs without runtime JIT compilation. In each owner, a local component calls a
+  content hook that moves original bound children into a wrapper and reorders them; their local scope bindings remain
+  live through updates and repeated instantiation. Removed authored nodes and attributes must also remain absent
+  when the local compiler result rejoins its owning definition family.
 - `routed-storefront` runs the semantic-runtime/IDE pressure fixture through its real router bootstrap. It covers the
   fulfilled promise branch, debounced search, checkbox and select observation, switch branches, class/style output,
   no-match structure, shared DI state, route-state persistence, and data-bound detail navigation. Its AOT build must

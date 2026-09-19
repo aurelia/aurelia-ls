@@ -220,6 +220,8 @@ export class TemplateCompilerElementOccurrence extends TemplateCompilerNodeOccur
     readonly namespaceUri: string,
     /** Native creation-time `is` value; attribute mutations cannot change the native element identity. */
     readonly customElementIs: string | null,
+    /** HTML fragment parsing marks scripts already started; later DOM moves must retain that state. */
+    readonly parserInertScript: boolean,
     generation: TemplateCompilerOccurrenceGeneration | null = null,
   ) {
     super(occurrenceKey, inputIdentityKey, inputReference, parent, parentEdgeKind, generation);
@@ -659,6 +661,7 @@ export class TemplateCompilerOccurrenceForest {
     namespace: HtmlNamespaceKind,
     namespaceUri: string,
     customElementIs: string | null,
+    parserInertScript: boolean,
     inputReference: TemplateStructuralNodeReference | null = null,
   ): TemplateCompilerElementOccurrence {
     const canonicalInput = this.canonicalGeneratedNodeInput(inputReference, HtmlIrNodeKind.Element);
@@ -672,6 +675,7 @@ export class TemplateCompilerOccurrenceForest {
       namespace,
       namespaceUri,
       customElementIs,
+      parserInertScript,
       generation,
     ));
   }
@@ -1438,6 +1442,7 @@ class TemplateCompilerOccurrenceForestBuilder {
           input.namespace,
           input.namespaceUri,
           this.initialCustomElementIs(input),
+          input.namespace === HtmlNamespaceKind.Html && input.tagName === 'script',
         );
         break;
       case HtmlIrNodeKind.Text:

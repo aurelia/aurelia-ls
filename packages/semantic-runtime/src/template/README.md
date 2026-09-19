@@ -329,10 +329,16 @@ classification, expression parsing, and instruction lowering converge on the sam
   through the same event/context forest.
   `template-compiler-dom-host.ts` exposes that forest to isolated source hooks through the evaluator's owned-operation
   lane. The surface includes node/element navigation, live collections and iteration, attribute creation/removal/value
-  writes (including namespaces), ordered live classList operations, and descendant removal. Generated attributes enter
+  writes (including namespaces), ordered live classList operations, and owned existing-node appendChild/insertBefore/
+  replaceChild/removeChild. Repeated removal/reinsertion and moves through an existing template content fragment keep
+  the original node identity. Ordered source placements distinguish temporary detachment from final removed roots;
+  only final removal excludes compiler sites. Structural input order is folded from committed hook effects while
+  immutable browser seed placement remains provenance. Ordinary template-element children (not .content) still
+  require unsupported fallback until both compiler traversal and emission can preserve that distinct edge.
+  Generated attributes enter
   the ordinary live classifier/lowerer; committed HookAttribute insertion supplies provenance when no authored HTML
   attribute exists. Creation followed by removal can have no final structural derivation while its execution remains
-  recorded. New nodes, reparenting, markup/text writes, selectors, dataset and metadata effects remain explicit
+  recorded. New-node factories/cloning, markup/text writes, selectors, dataset and metadata effects remain explicit
   unsupported operations until their complete lowering paths are admitted. Namespace-duplicate qualified names and
   browser-version-sensitive name spellings remain explicit compatibility boundaries, not invented DOM exceptions.
   Projection removes original au-slot attributes through one ordered site operation before projected hooks execute.
@@ -347,6 +353,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   members remain explicit unsupported boundaries. Source-hook rollback preserves prior compiler adoption.
   Ordinary forest child insertion includes document adoption within its existing mutation operation; structural
   root/template-content ownership edges do not imply DOM insertion. The same journal restores affiliation on rollback.
+  Parser-created HTML scripts separately retain their inert execution state as immutable creation metadata. A source
+  hook moving text into a parsed empty script does not turn it into a dynamically created executable script. This state
+  survives structural semantic comparison, freezing and detached handoff; document affiliation alone is insufficient.
   Unsupported attempted hooks discard their
   pending forest mutations; they are not successful no-ops or ordinary thrown exceptions. The forest journals touched
   state in place, preserving node/live-collection identity without cloning a second DOM. Source-hook removals use the

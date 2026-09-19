@@ -13,6 +13,7 @@ import {
   TemplateCompilerAttributeDetachmentMutation,
   TemplateCompilerAttributeInsertionMutation,
   TemplateCompilerNodeDetachmentMutation,
+  TemplateCompilerNodePlacementMutation,
   type TemplateCompilerOperation,
 } from './template-compiler-execution.js';
 import {
@@ -636,6 +637,9 @@ export function createTemplateCompilerStructuralDerivationVisitor(
     for (const mutation of operation.mutationBatch.topologyMutations) {
       if (mutation instanceof TemplateCompilerNodeDetachmentMutation) {
         visitInput(mutation.node);
+      } else if (mutation instanceof TemplateCompilerNodePlacementMutation) {
+        visitInput(mutation.node);
+        visitOutput(mutation.node);
       } else if (mutation instanceof TemplateCompilerAttributeDetachmentMutation) {
         visitInput(mutation.attribute);
       } else if (mutation instanceof TemplateCompilerAttributeInsertionMutation) {
