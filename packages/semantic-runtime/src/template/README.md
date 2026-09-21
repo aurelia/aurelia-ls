@@ -389,9 +389,12 @@ products; target JavaScript emission remains outside this substrate.
   imply native construction/fetch; nested template content resets that destination to I. Object-valued importNode
   options remain unsupported instead of being mistaken for Boolean deep flags. Native radio copying/movement/attribute
   changes, range copying/min/max/step changes, parsed radio/range nodes, and input type changes refuse as native-control-state:
-  checkedness and sanitized values can survive cloning without being reconstructible from final attributes. Untouched
-  static controls remain admitted; range default initialization under sequential emitter attribute writes is a separately
-  recorded correctness gap, not fixed by this hook boundary. The existing whole-app
+  checkedness and sanitized values can survive cloning without being reconstructible from final attributes. Originally
+  browser-parsed ranges separately carry nativeRangeInitialization in the transformed element and handoff v8: existing
+  post-hook attribute-owner snapshots supply native inputs, and contributions supply compiler-removal order. Unvisited
+  or suppressed controls use current attributes without inventing an attribute walk. This preserves default state even
+  when native min/type/etc are consumed as Aurelia resources. Consumers let the browser initialize and repeat those
+  removals; no numeric sanitizer or arbitrary source-history replay is added. The existing whole-app
   compatible fallback retains valid dynamic behavior; unsupported does not mean invalid author code.
   Generated native <slot> outlets use the existing slot-name product with absent authored references and spans.
   Dynamic interpolation joins through exact expression handles, not ambiguous null source-attribute handles.

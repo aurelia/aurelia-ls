@@ -184,6 +184,9 @@ function compareCompilerTransformedNodeVariant(
       semantic = next.nodeKind === HtmlIrNodeKind.Element
         && previous.customElementIs === next.customElementIs
         && previous.parserInertScript === next.parserInertScript
+        && sameNullable(previous.nativeRangeInitialization, next.nativeRangeInitialization, (left, right) =>
+          sameArrays(left.attributes, right.attributes, (a, b) => a.name === b.name && a.value === b.value)
+          && sameArrays(left.removals, right.removals, (a, b) => a === b))
         && sameValues(
           previous.tagName,
           next.tagName,

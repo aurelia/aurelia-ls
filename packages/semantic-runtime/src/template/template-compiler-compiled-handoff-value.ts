@@ -51,6 +51,7 @@ import {
   type CompilerTransformedTemplateAttribute,
   type CompilerTransformedTemplateNode,
   type TemplateContentOwnerDocument,
+  type TemplateNativeRangeInitialization,
 } from './template-structure.js';
 import {
   TemplateCompilerFrameworkInstructionType,
@@ -60,7 +61,7 @@ import {
 } from './template-instruction-runtime-value.js';
 
 export const TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION =
-  'semantic-runtime/template-compiler-compiled-handoff/v7' as const;
+  'semantic-runtime/template-compiler-compiled-handoff/v8' as const;
 
 export interface TemplateCompilerCompiledHandoffValue {
   readonly schemaVersion: typeof TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION;
@@ -286,6 +287,7 @@ export interface TemplateCompilerCompiledHandoffElement extends TemplateCompiler
   readonly templateContentNodeId: string | null;
   readonly customElementIs: string | null;
   readonly parserInertScript: boolean;
+  readonly nativeRangeInitialization: TemplateNativeRangeInitialization | null;
 }
 
 export interface TemplateCompilerCompiledHandoffText extends TemplateCompilerCompiledHandoffNodeBase {
@@ -811,6 +813,7 @@ function nodeValue(
       namespaceUri: node.namespaceUri,
       customElementIs: node.customElementIs,
       parserInertScript: node.parserInertScript,
+      nativeRangeInitialization: node.nativeRangeInitialization,
       attributeIds: references(node.attributes, attributeIds, 'attribute'),
       children: references(node.children, nodeIds, 'child node'),
       templateContentNodeId: node.templateContent == null

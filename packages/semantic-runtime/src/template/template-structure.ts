@@ -347,6 +347,7 @@ export type CompilerTransformedTemplateNodeField =
   | 'templateContent'
   | 'customElementIs'
   | 'parserInertScript'
+  | 'nativeRangeInitialization'
   | 'value'
   | 'realization'
   | 'source';
@@ -429,6 +430,17 @@ export class CompilerTransformedTemplateFragment {
   }
 }
 
+export type TemplateNativeRangeAttributeName = 'type' | 'min' | 'max' | 'step' | 'value';
+
+/**
+ * Browser-parsed range state before its compiler attribute walk, followed by native removals in JIT order.
+ * Unvisited inputs retain their current parsed state with no removals; DOM-created inputs cannot claim this recipe.
+ */
+export interface TemplateNativeRangeInitialization {
+  readonly attributes: readonly { readonly name: TemplateNativeRangeAttributeName; readonly value: string }[];
+  readonly removals: readonly TemplateNativeRangeAttributeName[];
+}
+
 export class CompilerTransformedTemplateElement {
   readonly nodeKind = HtmlIrNodeKind.Element;
 
@@ -445,6 +457,7 @@ export class CompilerTransformedTemplateElement {
     /** Preserve the HTML parser's already-started script state independently from final text and attributes. */
     readonly parserInertScript: boolean,
     readonly fieldProvenance: readonly FieldProvenance<CompilerTransformedTemplateNodeField>[] = [],
+    readonly nativeRangeInitialization: TemplateNativeRangeInitialization | null = null,
   ) {}
 
   get productHandle(): ProductHandle {

@@ -9,13 +9,14 @@ import {
   TemplateCompilerCompiledHandoffState,
 } from '../src/template/browser-template.js';
 import { MutableProjectSourceOverlay } from './support/incremental-conformance.js';
+import type { TemplateCompilerCompiledHandoffElement } from '../src/template/template-compiler-compiled-handoff-value.js';
 
 const fixtureRoot = path.resolve(import.meta.dirname, '../fixtures/pressure/app-pattern-convention-minimal-app');
 
 test('compiles owned DOM effects and distinguishes unsupported and abrupt hooks in one app', async () => {
   const overlay = new MutableProjectSourceOverlay();
   overlay.write(path.join(fixtureRoot, 'src/my-app.ts'), [
-    "import { customElement } from '@aurelia/runtime-html';",
+    "import { customElement, customAttribute } from '@aurelia/runtime-html';",
     "@customElement({ name: 'filter-gate', template: '<au-slot></au-slot>' })",
     'class FilterGate {',
     '  static processContent(el: HTMLElement) {',
@@ -57,7 +58,21 @@ test('compiles owned DOM effects and distinguishes unsupported and abrupt hooks 
     'class AbruptView {}',
     "@customElement({ name: 'temporal-view', dependencies: [TemporalGate], template: '<temporal-gate></temporal-gate>' })",
     'class TemporalView {}',
-    "@customElement({ name: 'my-app', template: '', dependencies: [DomView, NestedView, UnsupportedView, AbruptView, TemporalView] })",
+    ...['type', 'min', 'max', 'step', 'value'].map(name =>
+      `@customAttribute({ name: '${name}', bindables: ['value'] }) class Range${name} { value = ''; }`),
+    "@customElement({ name: 'range-consumed-view', dependencies: [Rangetype, Rangemin, Rangemax, Rangestep, Rangevalue], template: '<input type=\"range\" min=\"80\" max=\"100\" step=\"2\" value=\"90\">' })",
+    'class RangeConsumedView {}',
+    "@customElement({ name: 'range-plain-view', template: '<input type=\"RANGE\" min=\"80\" max=\"100\"><input type=\"text\"><template><input type=\"range\" min=\"10\" max=\"20\"></template><template as-custom-element=\"scoped-range\"><input type=\"range\" min=\"30\" max=\"50\"></template><scoped-range></scoped-range>' })",
+    'class RangePlainView {}',
+    "@customElement({ name: 'range-edit', template: '<au-slot></au-slot>' })",
+    "class RangeEdit { static processContent(el: HTMLElement) { el.children[0].setAttribute('value', '94'); el.children[1].removeAttribute('value'); } }",
+    "@customElement({ name: 'range-edited-view', dependencies: [RangeEdit], template: '<range-edit><input type=\"range\" min=\"80\" max=\"100\"><input type=\"range\" min=\"80\" max=\"100\" value=\"88\"></range-edit>' })",
+    'class RangeEditedView {}',
+    "@customElement({ name: 'range-suppress', template: '' })",
+    "class RangeSuppress { static processContent(el: HTMLElement) { el.firstElementChild!.setAttribute('value', '92'); return false; } }",
+    "@customElement({ name: 'range-suppressed-view', dependencies: [RangeSuppress], template: '<range-suppress><input type=\"range\" min=\"80\" max=\"100\"></range-suppress>' })",
+    'class RangeSuppressedView {}',
+    "@customElement({ name: 'my-app', template: '', dependencies: [DomView, NestedView, UnsupportedView, AbruptView, TemporalView, RangeConsumedView, RangePlainView, RangeEditedView, RangeSuppressedView] })",
     'export class MyApp {}',
   ].join('\n'));
   const runtime = await createSemanticRuntime({
@@ -67,7 +82,7 @@ test('compiles owned DOM effects and distinguishes unsupported and abrupt hooks 
     projectInputAuthority: new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost(overlay)),
   });
   try {
-    const app = await runtime.openApp({ telemetry: { inquiryProfile: 'aot' } });
+    const app = await runtime.openApp({ includeCompilerOccurrencePrecedents: true, telemetry: { inquiryProfile: 'aot' } });
     const batch = materializeSemanticAppTemplateCompilerHandoffs({ app });
     const resource = (name: string) => {
       const row = batch.resources.find(candidate => candidate.resourceName === name);
@@ -97,7 +112,43 @@ test('compiles owned DOM effects and distinguishes unsupported and abrupt hooks 
     expect(resource('temporal-view').runtimeFallback).toBe('process-content-unsupported');
     expect(resource('abrupt-view').state).toBe(TemplateCompilerCompiledHandoffState.Abrupt);
     expect(resource('abrupt-view').runtimeFallback).toBeNull();
+    const rangeNodes = (name: string) => {
+      const row = resource(name);
+      expect(row.state, row.reasons.map(reason => reason.summary).join('\n')).toBe(TemplateCompilerCompiledHandoffState.Exact);
+      expect(row.value?.schemaVersion).toBe('semantic-runtime/template-compiler-compiled-handoff/v8');
+      return row.value!.definitions.flatMap(definition => definition.tree.nodes)
+        .filter((node): node is TemplateCompilerCompiledHandoffElement => node.nodeKind === 'element' && node.tagName === 'input');
+    };
+    const plain = rangeNodes('range-plain-view');
+    expect(plain.map(node => node.nativeRangeInitialization)).toEqual([
+      { attributes: [{ name: 'type', value: 'RANGE' }, { name: 'min', value: '80' }, { name: 'max', value: '100' }], removals: [] },
+      null,
+      { attributes: [{ name: 'type', value: 'range' }, { name: 'min', value: '10' }, { name: 'max', value: '20' }], removals: [] },
+      { attributes: [{ name: 'type', value: 'range' }, { name: 'min', value: '30' }, { name: 'max', value: '50' }], removals: [] },
+    ]);
+    const localRange = resource('range-plain-view').value!.definitions.find(definition => definition.owner.ownerKind === 'local-template');
+    expect(localRange).toBeDefined();
+    expect(localRange!.tree.nodes.find(node => node.nodeKind === 'element' && node.tagName === 'input'))
+      .toMatchObject({ nativeRangeInitialization: {
+        attributes: [{ name: 'type', value: 'range' }, { name: 'min', value: '30' }, { name: 'max', value: '50' }], removals: [],
+      } });
+    const consumed = rangeNodes('range-consumed-view')[0]!;
+    expect(consumed.attributeIds).toEqual([]);
+    expect(consumed.nativeRangeInitialization).toEqual({
+      attributes: [{ name: 'type', value: 'range' }, { name: 'min', value: '80' }, { name: 'max', value: '100' },
+        { name: 'step', value: '2' }, { name: 'value', value: '90' }],
+      removals: ['type', 'min', 'max', 'step', 'value'],
+    });
+    const edited = rangeNodes('range-edited-view');
+    expect(edited.map(node => node.nativeRangeInitialization)).toEqual([
+      { attributes: [{ name: 'type', value: 'range' }, { name: 'min', value: '80' }, { name: 'max', value: '100' }, { name: 'value', value: '94' }], removals: [] },
+      { attributes: [{ name: 'type', value: 'range' }, { name: 'min', value: '80' }, { name: 'max', value: '100' }], removals: [] },
+    ]);
+    expect(rangeNodes('range-suppressed-view')[0]!.nativeRangeInitialization).toEqual({
+      attributes: [{ name: 'type', value: 'range' }, { name: 'min', value: '80' }, { name: 'max', value: '100' }, { name: 'value', value: '92' }],
+      removals: [],
+    });
   } finally {
     runtime.retireWorkspaceIncarnation();
   }
-}, 30_000);
+}, 60_000);

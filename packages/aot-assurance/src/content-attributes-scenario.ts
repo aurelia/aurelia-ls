@@ -1,4 +1,4 @@
-/* global window, document, Element, HTMLElement, HTMLButtonElement, HTMLInputElement, HTMLSelectElement, HTMLTemplateElement, customElements, requestAnimationFrame */
+/* global window, document, Element, HTMLElement, HTMLButtonElement, HTMLInputElement, HTMLSelectElement, HTMLTemplateElement, HTMLFormElement, customElements, requestAnimationFrame */
 import assert from 'node:assert/strict';
 import type { Browser, Page } from 'playwright';
 import type { AotBuildEvidence, AssuranceLane, CheckpointTranscript, LaneTranscript, LiveElementTranscript } from './contract.js';
@@ -24,6 +24,14 @@ interface NativeConstructionProbe {
   constructors: NativeConstruction[];
 }
 
+interface NativeRangeObservation {
+  readonly role: string;
+  readonly type: string;
+  readonly value: string;
+  readonly defaultValue: string;
+  readonly attributes: readonly (readonly [string, string])[];
+}
+
 export interface ContentAttributesApplicationObservation {
   readonly kind: 'content-attributes';
   readonly live: readonly LiveElementTranscript[];
@@ -31,6 +39,8 @@ export interface ContentAttributesApplicationObservation {
   readonly model: {
     readonly message: string;
     readonly native: NativeConstructionObservation;
+    readonly ranges: readonly NativeRangeObservation[];
+    readonly consumedRangeAttributes: readonly NativeRangeObservation[];
     readonly host: readonly (readonly [string, string])[];
     readonly order: readonly (readonly [string, string])[];
     readonly orderNamespace: { readonly upper: string | null; readonly lower: string | null; readonly html: string | null };
@@ -110,6 +120,12 @@ export async function runContentAttributesLane(browser: Browser, lane: Assurance
     };
     await checkpoint('generated-attribute-families');
     await page.locator('#generated-input').fill('bravo');
+    await page.evaluate(() => {
+      const dirty = document.querySelector<HTMLInputElement>('#range-minmax')!;
+      dirty.value = '97';
+      dirty.setAttribute('value', '93');
+      document.querySelector<HTMLInputElement>('#range-step')!.setAttribute('value', '63');
+    });
     await checkpoint('generated-two-way-writeback');
     await page.locator('#toggle').click();
     await checkpoint('generated-controllers-hidden');
@@ -117,6 +133,7 @@ export async function runContentAttributesLane(browser: Browser, lane: Assurance
     await checkpoint('repeat-growth-while-hidden');
     await page.locator('#generated-select').focus();
     await page.locator('#generated-select').selectOption(['a', 'b']);
+    await page.locator('#native-range-state').evaluate((form: HTMLFormElement) => form.reset());
     await checkpoint('generated-select-multiple-writeback');
     await page.locator('#toggle').click();
     await checkpoint('generated-controllers-restored');
@@ -165,6 +182,14 @@ async function capture(page: Page): Promise<ContentAttributesApplicationObservat
             children: retained.firstElementChild!.childElementCount,
           },
         },
+        ranges: Array.from(root.querySelectorAll<HTMLInputElement>('[data-range]'), (range) => ({
+          role: range.getAttribute('data-range')!, type: range.type, value: range.value, defaultValue: range.defaultValue,
+          attributes: attributes(range),
+        })),
+        consumedRangeAttributes: Array.from(root.querySelectorAll<HTMLInputElement>('[data-consumed-range]'), (range) => ({
+          role: range.getAttribute('data-consumed-range')!, type: range.type, value: range.value, defaultValue: range.defaultValue,
+          attributes: attributes(range),
+        })),
         host: attributes(root.querySelector('#lab')!),
         order: attributes(order),
         orderNamespace: {
@@ -241,6 +266,17 @@ export function assertContentAttributesExpectations(transcript: LaneTranscript):
         model: {
           message,
           native: expectedNativeConstruction(count, active),
+          ranges: expectedNativeRanges(index, count, active),
+          consumedRangeAttributes: [
+            ...Array.from({ length: count + 1 }, () => ({
+              role: 'min', type: 'range', value: '90', defaultValue: '',
+              attributes: [['data-consumed-range', 'min'], ['type', 'range'], ['max', '100']],
+            })),
+            {
+              role: 'type', type: 'text', value: '90', defaultValue: '',
+              attributes: [['data-consumed-range', 'type'], ['min', '80'], ['max', '100']],
+            },
+          ],
           host: [['id', 'lab'], ['data-host-created', 'yes'], ['class', 'generated-host'], ['data-document-view', 'false:true']],
           order: [
             ['id', 'order-case'], ['data-case', 'order'], ['data-second', 'replaced'], ['data-first', 'readded'],
@@ -290,6 +326,28 @@ export function assertContentAttributesExpectations(transcript: LaneTranscript):
       },
     }, `${transcript.lane} ${label}`);
   }
+}
+
+function expectedNativeRanges(checkpoint: number, count: number, active: boolean): readonly NativeRangeObservation[] {
+  const initial = checkpoint === 0;
+  const reset = checkpoint >= 4;
+  const minmax = [['type', 'range'], ['min', '80'], ['max', '100']] as const;
+  const stepped = [['type', 'range'], ['step', '10'], ['min', '3'], ['max', '90']] as const;
+  const range = (
+    role: string, value: string, attributes: readonly (readonly [string, string])[], defaultValue = '',
+  ): NativeRangeObservation => ({ role, type: 'range', value, defaultValue, attributes });
+  return [
+    range('minmax', initial ? '90' : reset ? '93' : '97', [
+      ['id', 'range-minmax'], ['data-range', 'minmax'], ...minmax, ...(initial ? [] : [['value', '93']] as const),
+    ], initial ? '' : '93'),
+    range('step', initial ? '43' : '63', [
+      ['id', 'range-step'], ['data-range', 'step'], ...stepped, ...(initial ? [] : [['value', '63']] as const),
+    ], initial ? '' : '63'),
+    range('explicit', '84', [['data-range', 'explicit'], ...minmax, ['value', '84']], '84'),
+    range('type-last', '90', [['data-range', 'type-last'], ['min', '80'], ['max', '100'], ['type', 'range']]),
+    ...(active ? [range('conditional', '90', [['data-range', 'conditional'], ...minmax])] : []),
+    ...Array.from({ length: count }, () => range('repeat', '43', [['data-range', 'repeat'], ...stepped])),
+  ];
 }
 
 function expectedNativeConstruction(count: number, active: boolean): NativeConstructionObservation {

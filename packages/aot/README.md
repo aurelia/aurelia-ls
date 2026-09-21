@@ -53,8 +53,8 @@ and executable header values remain subject to the complete emitter's existing f
 
 The current emitter is a CSR baseline. It preserves the compiler's exact DOM node graph rather than serializing and
 reparsing HTML, because reparsing can merge adjacent text nodes that Aurelia instruction rows address separately.
-Handoff v7 carries final carrier/content document affiliation and each element's original native `is` creation input
-and parser-inert HTML script state.
+Handoff v8 carries final carrier/content document affiliation, each element's original native `is` creation input,
+parser-inert HTML script state, and a nullable parsed-range initialization description.
 The emitter constructs the complete graph in the inert template-contents document, then adopts generated-context
 content into the platform document when requested by semantic-runtime. Native custom elements therefore do not
 construct during module loading. The original `is` creation value stays distinct from hook-rewritten attributes.
@@ -65,6 +65,14 @@ child nodes are applied. Creating such a script with createElement would incorre
 Only the empty skeleton and escaped original `is` value use parsing; authored code/text is still built as DOM nodes.
 SVG scripts and explicitly dynamic script creation are not silently made inert. Direct DOM output also permits valid
 DOM children under HTML void elements, which HTML serialization alone could not preserve.
+
+Range controls need their parsed initialization, not just final attributes: sequential attribute writes can produce a
+different default value, and the compiler can consume native `min`, `type`, or other attributes as Aurelia resources.
+Semantic-runtime projects its existing pre-walk attribute snapshot and ordered removals for originally parsed ranges.
+The emitter restores consumed native inputs temporarily, recomputes the clean default with a value content-attribute
+write, then repeats those removals. It does not assign `.value`, reorder retained attributes, or simulate numeric
+sanitization. Dirty-value behavior, reset and runtime cloning remain native. Arbitrary source-hook range histories
+retain their separate unsupported boundary; this is not blanket normalization of factory-created controls.
 Carrier affiliation is preserved separately: an implicit wrapper is platform-owned, whereas a selected authored
 outer template can remain inert. Semantic-runtime supplies these final facts from the same forest that answers
 source hooks' temporal ownerDocument reads; AOT does not derive them again from definition kind or final parentage.
@@ -99,10 +107,11 @@ The effective configuration mode becomes `preserve` even when replacement was re
 links cannot apply: `allow-c0-fallback` keeps the original graph, while `require-applied` remains an explicit conflict.
 Strict remains the default, and compatible builds with no fallback trigger still compile normally.
 
-Shared hook support now includes owned document factories and generated binding/controller/projection lowering.
+Shared hook support includes owned document factories, node copying, text edits, contextual innerHTML and generated
+binding/controller/projection lowering, including native and Aurelia slots.
 Native custom-element construction and unclosed resource effects in the platform document remain explicit unsupported
-hook results; they follow the same compatible policy, not a separate partial-template fallback. Generated native
-`<slot>` outlet admission is still a distinct Pending compiler boundary and is not silently converted to JIT.
+hook results; native-state and parser-profile boundaries follow the same compatible policy, not a separate
+partial-template fallback. The shared template README owns the precise supported DOM envelope.
 
 `src/testing` contains two retained low-level characterization lanes:
 

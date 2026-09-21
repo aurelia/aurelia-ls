@@ -702,6 +702,7 @@ function emitTemplateNodeValue(
           lines.push(`  const ${variable} = ${create};`);
         }
         emitAttributes(node, variable, attributes, request, lines);
+        emitNativeRangeInitialization(node, variable, request, lines);
         const childIds = node.templateContentNodeId == null ? node.children : [node.templateContentNodeId];
         const parent = node.templateContentNodeId == null ? variable : `${variable}.content`;
         for (const childId of childIds) {
@@ -766,6 +767,34 @@ function emitAttributes(
         `  ${variable}.setAttributeNS(${emitJavaScriptValue(attribute.namespaceUri, request)}, ${emitJavaScriptValue(name, request)}, ${emitJavaScriptValue(attribute.value, request)});`,
       );
     }
+  }
+}
+
+function emitNativeRangeInitialization(
+  node: TemplateCompilerCompiledHandoffElement,
+  variable: string,
+  request: AotTemplateModuleEmissionRequest,
+  lines: string[],
+): void {
+  const initialization = node.nativeRangeInitialization;
+  if (initialization === null) return;
+  if (initialization === undefined || node.namespaceUri !== htmlNamespace || node.tagName !== 'input') {
+    throw invalidHandoff(request, 'Compiled element has missing or incompatible native range initialization.');
+  }
+  // Final attributes alone cannot recover the control value after the compiler consumes native min/type/etc.
+  // Restore just those temporary inputs, leaving every retained attribute in its final observable position.
+  for (const attribute of initialization.attributes) {
+    if (initialization.removals.includes(attribute.name)) {
+      lines.push(`  ${variable}.setAttribute(${emitJavaScriptValue(attribute.name, request)}, ${emitJavaScriptValue(attribute.value, request)});`);
+    }
+  }
+  // A content-attribute write recomputes the parsed default through the browser's own sanitization rules without
+  // setting the dirty-value flag. Setting .value would change later attribute updates and form.reset behavior.
+  const value = initialization.attributes.find(attribute => attribute.name === 'value');
+  lines.push(`  ${variable}.setAttribute('value', ${emitJavaScriptValue(value?.value ?? '', request)});`);
+  if (value == null) lines.push(`  ${variable}.removeAttribute('value');`);
+  for (const name of initialization.removals) {
+    lines.push(`  ${variable}.removeAttribute(${emitJavaScriptValue(name, request)});`);
   }
 }
 

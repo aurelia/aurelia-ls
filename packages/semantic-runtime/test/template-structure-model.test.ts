@@ -422,6 +422,25 @@ describe('template structural model', () => {
     expect(TemplateProductDetails.StructuralNode.compare(
       script(true), script(false), context,
     )).toBe(KernelPublicationDecisionKind.Replace);
+    const range = (min: string, removals: readonly ('type' | 'min')[] = []) => bindDetail(
+      new CompilerTransformedTemplateElement(transformedTree, 'input', HtmlNamespaceKind.Html,
+        'http://www.w3.org/1999/xhtml', [], [], null, null, false, [], {
+          attributes: [{ name: 'type', value: 'range' }, { name: 'min', value: min }], removals,
+        }),
+      handles, 'range-element', KernelVocabulary.Template.StructuralNode.key, 'range-element',
+    );
+    expect(TemplateProductDetails.StructuralNode.compare(
+      range('80'), range('80'), context,
+    )).toBe(KernelPublicationDecisionKind.Retain);
+    expect(TemplateProductDetails.StructuralNode.compare(
+      range('80'), range('90'), context,
+    )).toBe(KernelPublicationDecisionKind.Replace);
+    expect(TemplateProductDetails.StructuralNode.compare(
+      range('80'), range('80', ['min']), context,
+    )).toBe(KernelPublicationDecisionKind.Replace);
+    expect(TemplateProductDetails.StructuralNode.compare(
+      range('80', ['type', 'min']), range('80', ['min', 'type']), context,
+    )).toBe(KernelPublicationDecisionKind.Replace);
     const comment = (kind: HtmlCommentSemanticKind) => bindDetail(
       new CompilerTransformedTemplateComment(transformedTree, 'au', kind),
       handles,

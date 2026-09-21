@@ -241,7 +241,7 @@ describe('AOT compiler patch module emitter', () => {
   }
 
   it('rejects a compiled tree without document affiliation or native creation inputs', () => {
-    for (const field of ['carrierOwnerDocument', 'contentOwnerDocument', 'customElementIs', 'parserInertScript'] as const) {
+    for (const field of ['carrierOwnerDocument', 'contentOwnerDocument', 'customElementIs', 'parserInertScript', 'nativeRangeInitialization'] as const) {
       const value = withNativeConstructionTree('platform', 'template-contents');
       const tree = value.definitions.find(definition => definition.definitionId === value.rootDefinitionId)!.tree;
       if (field === 'carrierOwnerDocument' || field === 'contentOwnerDocument') Reflect.deleteProperty(tree, field);
@@ -258,7 +258,8 @@ describe('AOT compiler patch module emitter', () => {
     const common = { source: null, fieldProvenance: [] };
     const baseElement = {
       ...common, nodeKind: 'element' as const, namespace: 'html', namespaceUri: 'http://www.w3.org/1999/xhtml',
-      customElementIs: null, parserInertScript: false, attributeIds: [], children: [], templateContentNodeId: null,
+      customElementIs: null, parserInertScript: false, nativeRangeInitialization: null,
+      attributeIds: [], children: [], templateContentNodeId: null,
     };
     const tree: TemplateCompilerCompiledHandoffTree = {
       ...root.tree,
@@ -305,6 +306,57 @@ describe('AOT compiler patch module emitter', () => {
   it('shares the carrier transform runtime module contract', () => {
     expect(AOT_COMPILER_PATCH_RUNTIME_MODULE_ID).toBe(AOT_RUNTIME_MODULE_SPECIFIER);
     expect(AOT_COMPILER_PATCH_RUNTIME_MODULE_SOURCE).toContain('export function applyCompiledCustomElement');
+  });
+
+  it('restores parsed range inputs before compiler removals without dirtying values or reordering retained attributes', async () => {
+    const value = withNativeConstructionTree('platform', 'template-contents');
+    const root = value.definitions.find(definition => definition.definitionId === value.rootDefinitionId)!;
+    const common = { source: null, fieldProvenance: [] };
+    const input = {
+      ...common, nodeKind: 'element' as const, tagName: 'input', namespace: 'html',
+      namespaceUri: 'http://www.w3.org/1999/xhtml', customElementIs: null, parserInertScript: false,
+      children: [], templateContentNodeId: null,
+    };
+    const attributes = [
+      { name: 'type' as const, value: 'range' }, { name: 'min' as const, value: '80' }, { name: 'max' as const, value: '100' },
+    ];
+    const tree: TemplateCompilerCompiledHandoffTree = {
+      ...root.tree,
+      nodes: [
+        ...root.tree.nodes.filter(node => node.nodeId === 'carrier' || node.nodeId === 'content').map(node => node.nodeId === 'content'
+          ? { ...node, children: ['minimum', 'kind'] } : node),
+        { ...input, nodeId: 'minimum', attributeIds: ['minimum-id', 'minimum-type', 'minimum-max'],
+          nativeRangeInitialization: { attributes, removals: ['min'] } },
+        { ...input, nodeId: 'kind', attributeIds: ['kind-id', 'kind-min', 'kind-max'],
+          nativeRangeInitialization: { attributes, removals: ['type'] } },
+      ],
+      attributes: [
+        ...[['id', 'minimum'], ['type', 'range'], ['max', '100']].map(([name, value]) => ({
+          ...common, attributeId: `minimum-${name}`, ownerNodeId: 'minimum', name: name!, value: value!, namespaceUri: null, prefix: null,
+        })),
+        ...[['id', 'kind'], ['min', '80'], ['max', '100']].map(([name, value]) => ({
+          ...common, attributeId: `kind-${name}`, ownerNodeId: 'kind', name: name!, value: value!, namespaceUri: null, prefix: null,
+        })),
+      ],
+    };
+    const artifact = new AotCompilerPatchModuleEmitter().emit({
+      handoff: { ...value, definitions: value.definitions.map(definition => definition === root ? { ...root, tree } : definition) },
+      projectRoot: fixtureRoot, sourcePath: templatePath, sourceText,
+    });
+    expect(artifact.code).not.toMatch(/\.value\s*=/);
+    const dom = new JSDOM('<!doctype html><html><body></body></html>');
+    try {
+      const imported = await importPatchModule(artifact.code, artifact.digest, dom);
+      const minimum = imported.template.content.querySelector('#minimum')!;
+      const kind = imported.template.content.querySelector('#kind')!;
+      expect(Array.from(minimum.attributes, attribute => [attribute.name, attribute.value]))
+        .toEqual([['id', 'minimum'], ['type', 'range'], ['max', '100']]);
+      expect(Array.from(kind.attributes, attribute => [attribute.name, attribute.value]))
+        .toEqual([['id', 'kind'], ['min', '80'], ['max', '100']]);
+      // Browser assurance owns numeric sanitization, clean/dirty value updates, resets and repeated runtime cloning.
+      expect(minimum.hasAttribute('value')).toBe(false);
+      expect(kind.hasAttribute('value')).toBe(false);
+    } finally { dom.window.close(); }
   });
 
   it('keeps the static patch available when runtime spread closure is nonexact', () => {
@@ -670,7 +722,7 @@ function withNativeConstructionTree(
   const element = (nodeId: string, tagName: string, customElementIs: string | null = null) => ({
     ...common, nodeId, nodeKind: 'element' as const, tagName, namespace: 'html',
     namespaceUri: 'http://www.w3.org/1999/xhtml', customElementIs,
-    parserInertScript: false,
+    parserInertScript: false, nativeRangeInitialization: null,
     attributeIds: [] as string[], children: [] as string[], templateContentNodeId: null as string | null,
   });
   const tree: TemplateCompilerCompiledHandoffTree = {

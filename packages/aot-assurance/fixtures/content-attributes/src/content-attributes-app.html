@@ -8,6 +8,14 @@
   <native-probe data-native="repeat" repeat.for="item of items"><i></i></native-probe>
   <template repeat.for="item of items"><native-probe data-native="retained-repeat"><i></i></native-probe></template>
   <template id="native-retained"><native-probe data-native="retained"><i></i></native-probe></template>
+  <form id="native-range-state">
+    <input id="range-minmax" data-range="minmax" type="range" min="80" max="100">
+    <input id="range-step" data-range="step" type="range" step="10" min="3" max="90">
+    <input data-range="explicit" type="range" min="80" max="100" value="84">
+    <input data-range="type-last" min="80" max="100" type="range">
+    <div if.bind="active"><input data-range="conditional" type="range" min="80" max="100"></div>
+    <div repeat.for="item of items"><input data-range="repeat" type="range" step="10" min="3" max="90"></div>
+  </form>
   <attribute-lab id="lab">
     <button data-native="is-remove" data-case="is-remove" is="native-button"><i></i></button>
     <button data-native="is-rewrite" data-case="is-rewrite" is="native-button"><i></i></button>

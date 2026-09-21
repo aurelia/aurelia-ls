@@ -1,9 +1,11 @@
 /* global HTMLElement, HTMLTemplateElement, Document */
 import { customElement } from 'aurelia';
+import { InputTypeAttribute } from './native-input-attributes.js';
 
 @customElement({
   name: 'projection-lab',
-  template: '<section id="projection-first"><au-slot name="first"></au-slot></section><section id="projection-second"><au-slot name="second"></au-slot></section>',
+  template: '<section id="projection-first"><au-slot name="first"></au-slot></section><section id="projection-second"><au-slot name="second"></au-slot></section><input data-consumed-range="type" type="range" min="80" max="100">',
+  dependencies: [InputTypeAttribute],
 })
 export class ProjectionLab {
   static processContent(host: HTMLElement, platform: { document: Document }): void {

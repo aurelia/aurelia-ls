@@ -59,6 +59,22 @@ The native registry is harness-owned so observation instrumentation does not add
 require support for source-hook document/registry access. The existing five resource definitions remain the complete
 strict AOT cohort.
 
+The same checkpoints also exercise parser-created native range state, independently of source hooks. Static ranges
+cover min/max defaults, step-constrained defaults, explicit values, and a type-last authored attribute order. Their
+values must be `90`, `43`, `84`, and `90`; writing the same attributes sequentially onto a fresh input does not preserve
+the first two parser defaults. An `if` view and repeated views carry the same controls through initial import, cached
+cloning, hide/restore, and collection growth. Every checkpoint records live value, defaultValue and exact attribute
+order. The second checkpoint dirties one control before changing its value attribute and changes a clean control's
+value attribute; the fifth resets only this dedicated form. This distinguishes parser initialization from a sticky
+value override and checks ordinary browser form behavior without a new scenario or resource definition.
+
+Two no-op custom attributes test compiler-owned removal of native input attributes. `AttributeCard` registers `min`
+only in its own dependency scope; its parsed range starts at `90`, then the compiler consumes `min="80"` while the
+native value remains `90`. `ProjectionLab` separately registers `type`; consuming `type="range"` leaves a native text
+input whose current value is still `90`. The cases capture current type, value, defaultValue and ordered surviving
+attributes. Final attributes alone cannot recreate these states. Separate resource scopes keep both custom
+attributes away from the ordinary range cases and preserve the same five compiled custom-element definitions.
+
 The existing shared assurance harness runs seven browser checkpoints and teardown. Multiple-select model order is
 intentionally separate from selected-options DOM order: RC2 retains the already selected `b` and appends newly
 selected `a` to the model array. The scenario requires five AOT artifacts and no JIT fallback.

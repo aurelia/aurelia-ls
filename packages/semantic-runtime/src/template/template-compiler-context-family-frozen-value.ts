@@ -11,6 +11,8 @@ import {
   TemplateRenderTarget,
 } from './compiled-template.js';
 import { TemplateCompilerTargetContextRole } from './compiler-target-plan.js';
+import { HtmlNamespaceKind } from './html-ir.js';
+import { TemplateCompilerLiveAttributeDisposition } from './template-compiler-live-attribute-owner.js';
 import {
   createTemplateCompilerStructuralDerivationVisitor,
   type TemplateCompilerContextFamilyFreezeContextPreparation,
@@ -50,6 +52,8 @@ import {
   TemplateStructuralNodeReference,
   TemplateStructuralTreeKind,
   TemplateStructuralTreeReference,
+  type TemplateNativeRangeAttributeName,
+  type TemplateNativeRangeInitialization,
 } from './template-structure.js';
 import {
   TemplateStructureDerivation,
@@ -363,11 +367,13 @@ export function materializeTemplateCompilerContextFamilyFrozenValue(
   const provenanceHandle = publication.handles.provenance(
     `${preparation.preparedAllocation.ledger.rootSiteKey}:provenance`,
   );
+  const nativeRanges = nativeRangeInitializations(preparation);
   const contexts = preparation.contexts.map((context, index) => materializeContext(
     context,
     preparation,
     provenanceHandle,
     index === 0 ? nativeSlotOutlets.value?.outlets ?? [] : [],
+    nativeRanges,
   ));
   const nodeOutputs = new Map<TemplateCompilerNodeOccurrence, CompilerTransformedTemplateNode>();
   const attributeOutputs = new Map<TemplateCompilerAttributeOccurrence, CompilerTransformedTemplateAttribute>();
@@ -411,6 +417,7 @@ function materializeContext(
   family: TemplateCompilerContextFamilyFreezePreparation,
   provenanceHandle: ProvenanceHandle,
   nativeSlotOutlets: readonly CompiledNativeSlotOutlet[],
+  nativeRanges: ReadonlyMap<TemplateCompilerElementOccurrence, TemplateNativeRangeInitialization>,
 ): TemplateCompilerContextFamilyFrozenContext {
   const treeReference = new TemplateStructuralTreeReference(
     context.treeReservation.productHandle,
@@ -459,6 +466,7 @@ function materializeContext(
     nodeReferences,
     attributeReferences,
     provenanceHandle,
+    nativeRanges,
   ));
   const tree = bindReservation(
     new CompilerTransformedTemplateTree(
@@ -506,6 +514,7 @@ function materializeNode(
   nodeReferences: ReadonlyMap<TemplateCompilerNodeOccurrence, TemplateStructuralNodeReference>,
   attributeReferences: ReadonlyMap<TemplateCompilerAttributeOccurrence, TemplateStructuralAttributeReference>,
   provenanceHandle: ProvenanceHandle,
+  nativeRanges: ReadonlyMap<TemplateCompilerElementOccurrence, TemplateNativeRangeInitialization>,
 ): CompilerTransformedTemplateNode {
   const occurrence = node.occurrence;
   const childReferences = occurrence instanceof TemplateCompilerElementOccurrence
@@ -527,6 +536,7 @@ function materializeNode(
       occurrence.customElementIs,
       occurrence.parserInertScript,
       [],
+      nativeRanges.get(occurrence) ?? null,
     );
   } else if (occurrence instanceof TemplateCompilerTextOccurrence) {
     product = new CompilerTransformedTemplateText(
@@ -554,6 +564,45 @@ function materializeNode(
     provenanceHandle,
     node.reservation.addressHandle,
   );
+}
+
+/** Preserve parsed range initialization across the compiler's attribute removals, without replaying source hooks. */
+function nativeRangeInitializations(
+  family: TemplateCompilerContextFamilyFreezePreparation,
+): ReadonlyMap<TemplateCompilerElementOccurrence, TemplateNativeRangeInitialization> {
+  const forest = family.execution.attachment.execution.forest;
+  const transcript = family.execution.attachment.target.allocation.rows.receipt.traversal.audit.transcript;
+  const owners = new Map(transcript.attributeOwners.map(owner => [owner.element, owner] as const));
+  const parsedRanges = new Set<TemplateCompilerElementOccurrence>();
+  for (const attribute of forest.readAttributes()) {
+    if (attribute.namespaceUri != null || attribute.name !== 'type' || attribute.initialValue.toLowerCase() !== 'range') continue;
+    const element = forest.seededAttributePlacement(attribute)?.owner;
+    if (element?.namespace === HtmlNamespaceKind.Html && element.tagName === 'input'
+      && element.inputReference != null && element.generation == null) parsedRanges.add(element);
+  }
+  const result = new Map<TemplateCompilerElementOccurrence, TemplateNativeRangeInitialization>();
+  for (const element of parsedRanges) {
+    const owner = owners.get(element);
+    // Captured values precede this element's own JIT attribute walk, after its source processContent effects.
+    // Suppressed/unvisited inputs have no compiler removals; their current attributes remain the native input.
+    const attributes = (owner?.ownerInput.attributes ?? element.readAttributes()).flatMap(attribute =>
+      isNativeRangeAttribute(attribute)
+        ? [{ name: attribute.name, value: owner == null ? attribute.value : owner.ownerInput.capturedValueFor(attribute)! }]
+        : []);
+    const removals = owner?.contributions.flatMap(contribution =>
+      contribution.disposition === TemplateCompilerLiveAttributeDisposition.Removed
+        && isNativeRangeAttribute(contribution.frame.attribute) ? [contribution.frame.attribute.name] : []) ?? [];
+    result.set(element, { attributes, removals });
+  }
+  return result;
+}
+
+function isNativeRangeAttribute(
+  attribute: TemplateCompilerAttributeOccurrence,
+): attribute is TemplateCompilerAttributeOccurrence & { readonly name: TemplateNativeRangeAttributeName } {
+  return attribute.namespaceUri == null
+    && (attribute.name === 'type' || attribute.name === 'min' || attribute.name === 'max'
+      || attribute.name === 'step' || attribute.name === 'value');
 }
 
 function materializeRow(
