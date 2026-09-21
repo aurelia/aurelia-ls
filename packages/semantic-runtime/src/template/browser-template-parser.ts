@@ -15,17 +15,26 @@ import {
   BrowserTemplateDraftAuthority,
   BrowserTemplateDraftResult,
   BrowserTemplateDraftLocationKind,
+  BrowserTemplateDraftNodeKind,
   BrowserTemplateElementDraft,
   BrowserTemplateFragmentDraft,
   BrowserTemplateParseIssue,
   BrowserTemplateSourceLocation,
   BrowserTemplateTextDraft,
   type BrowserTemplateDraftPathSegment,
+  type BrowserTemplateContextualParseResult,
+  type BrowserTemplateElementContext,
+  type BrowserTemplateFragmentContext,
   type BrowserTemplateNodeDraft,
+  type BrowserTemplateStructureAttribute,
+  type BrowserTemplateStructureNode,
 } from './browser-template-draft.js';
 import { HtmlNamespaceKind } from './html-ir.js';
+import { isHtmlVoidElement } from './html-elements.js';
 
 export const BROWSER_TEMPLATE_DRAFT_PARSE5_VERSION = '8.0.1' as const;
+const htmlNamespaceUri: string = html.NS.HTML;
+const mathNamespaceUri: string = html.NS.MATHML;
 
 const parse5Authority = new BrowserTemplateDraftAuthority(
   'parse5',
@@ -35,20 +44,170 @@ const parse5Authority = new BrowserTemplateDraftAuthority(
 );
 
 /** Parse one `HTMLTemplateElement.innerHTML` candidate through the pinned parse5 profile. */
-export function parseBrowserTemplateFragmentDraft(markup: string): BrowserTemplateDraftResult {
-  const errors: ParserError[] = [];
+export function parseBrowserTemplateFragmentDraft(markup: string): BrowserTemplateDraftResult<typeof parse5Authority> {
   const context = defaultTreeAdapter.createElement('template', html.NS.HTML, []);
+  return parseFragmentDraft(markup, context, parse5Authority);
+}
+
+/**
+ * Parse evaluated hook markup in its current DOM context. Draft locations refer to this string, never authored HTML.
+ * The caller owns native-effect admission and supplies actual ancestry, including ancestors outside a hook's scope.
+ */
+export function parseBrowserTemplateContextualFragmentDraft(
+  markup: string,
+  request: BrowserTemplateFragmentContext,
+): BrowserTemplateContextualParseResult {
+  const descriptor = request.element;
+  const isHtml = descriptor.namespaceUri === htmlNamespaceUri;
+  const scriptingEnabled = isHtml && descriptor.tagName === 'template' ? false : request.scriptingEnabled;
+  if (isForeignFormContext(descriptor) || request.ancestors.some(isForeignFormContext)) {
+    return {
+      kind: 'unsupported', reason: 'foreign-form-context',
+      summary: 'Pinned parse5 treats a foreign-namespace form context as an HTML form ancestor.',
+    };
+  }
+  if (isHtml && descriptor.tagName === 'noscript' && !scriptingEnabled) {
+    return {
+      kind: 'unsupported', reason: 'inert-noscript-context',
+      summary: 'Pinned parse5 parses an inert noscript fragment as raw text where the browser parses markup.',
+    };
+  }
+  if (descriptor.namespaceUri === mathNamespaceUri && descriptor.tagName === 'annotation-xml') {
+    return {
+      kind: 'unsupported', reason: 'mathml-integration-context',
+      summary: 'MathML annotation-xml fragment integration has an unresolved pinned-parser/browser namespace difference.',
+    };
+  }
+  if (isHtml && descriptor.tagName === 'select') return customizableSelectRefusal();
+  const context = parserContextElement(descriptor);
+  let descendant = context;
+  for (const ancestor of request.ancestors) {
+    const parent = parserContextElement(ancestor);
+    defaultTreeAdapter.appendChild(parent, descendant);
+    descendant = parent;
+  }
+  const draft = parseFragmentDraft(markup, context, new BrowserTemplateDraftAuthority(
+    'parse5', BROWSER_TEMPLATE_DRAFT_PARSE5_VERSION, 'html-contextual-fragment', scriptingEnabled,
+  ));
+  // Refuse the select itself, not only surviving children: its discarded tokens are precisely the parser-version gap.
+  const pending = [...draft.fragment.children];
+  while (pending.length > 0) {
+    const node = pending.pop()!;
+    if (node.nodeKind !== BrowserTemplateDraftNodeKind.Element) continue;
+    if (node.namespace === HtmlNamespaceKind.Html && node.tagName === 'select') return customizableSelectRefusal();
+    pending.push(...node.children, ...(node.templateContent?.children ?? []));
+  }
+  return { kind: 'parsed', draft };
+}
+
+function customizableSelectRefusal(): BrowserTemplateContextualParseResult {
+  return {
+    kind: 'unsupported', reason: 'customizable-select-profile',
+    summary: 'Select fragment parsing requires a current customizable-select profile, not pinned parse5 recovery.',
+  };
+}
+
+function isForeignFormContext(element: BrowserTemplateElementContext): boolean {
+  return element.tagName === 'form' && element.namespaceUri !== htmlNamespaceUri;
+}
+
+function parserContextElement(descriptor: BrowserTemplateElementContext): DefaultTreeAdapterTypes.Element {
+  return defaultTreeAdapter.createElement(descriptor.tagName, descriptor.namespaceUri as html.NS,
+    descriptor.attributes.map(attribute => ({
+      name: attribute.name, value: attribute.value,
+      ...(attribute.namespaceUri == null ? {} : { namespace: attribute.namespaceUri }),
+      ...(attribute.prefix == null ? {} : { prefix: attribute.prefix }),
+    })));
+}
+
+/**
+ * Current-state HTML innerHTML serialization, including the May 2025 attribute angle-bracket escaping rule.
+ * Callers supply a template root's content children and synthesize a missing creation-time is attribute in this view.
+ * A document resolver is needed when nested template content has different scripting state from the root document.
+ */
+export function serializeBrowserTemplateInnerHtml(
+  context: BrowserTemplateElementContext,
+  children: readonly BrowserTemplateStructureNode[],
+  scriptingEnabled: boolean | ((element: BrowserTemplateElementContext) => boolean),
+): string {
+  if (context.namespaceUri === htmlNamespaceUri && isSerializedHtmlVoidElement(context.tagName)) return '';
+  return children.map(child => serializeStructureNode(child, context, scriptingEnabled)).join('');
+}
+
+function serializeStructureNode(
+  node: BrowserTemplateStructureNode,
+  parent: BrowserTemplateElementContext | null,
+  scriptingEnabled: boolean | ((element: BrowserTemplateElementContext) => boolean),
+): string {
+  switch (node.kind) {
+    case 'text': {
+      const unescaped = parent != null && parent.namespaceUri === htmlNamespaceUri
+        && html.hasUnescapedText(parent.tagName,
+          typeof scriptingEnabled === 'boolean' ? scriptingEnabled : scriptingEnabled(parent));
+      return unescaped ? node.value : escapeHtmlString(node.value, false);
+    }
+    case 'comment': return `<!--${node.value}-->`;
+    case 'doctype': return `<!DOCTYPE ${node.name}>`;
+    case 'element': {
+      let result = `<${node.tagName}`;
+      for (const attribute of node.attributes) {
+        result += ` ${serializedAttributeName(attribute)}="${escapeHtmlString(attribute.value, true)}"`;
+      }
+      result += '>';
+      if (node.namespaceUri === htmlNamespaceUri && isSerializedHtmlVoidElement(node.tagName)) return result;
+      const template = node.namespaceUri === htmlNamespaceUri && node.tagName === 'template';
+      for (const child of template ? node.content ?? [] : node.children) {
+        result += serializeStructureNode(child, template ? null : node, scriptingEnabled);
+      }
+      return `${result}</${node.tagName}>`;
+    }
+  }
+}
+
+function isSerializedHtmlVoidElement(tagName: string): boolean {
+  // Historical void names remain special to HTML serialization, including nodes created through DOM factories.
+  return isHtmlVoidElement(tagName) || tagName === 'basefont' || tagName === 'bgsound'
+    || tagName === 'frame' || tagName === 'keygen';
+}
+
+function serializedAttributeName(attribute: BrowserTemplateStructureAttribute): string {
+  switch (attribute.namespaceUri) {
+    case html.NS.XML: return `xml:${attribute.name}`;
+    case html.NS.XMLNS: return attribute.name === 'xmlns' ? 'xmlns' : `xmlns:${attribute.name}`;
+    case html.NS.XLINK: return `xlink:${attribute.name}`;
+    default: return attribute.prefix == null ? attribute.name : `${attribute.prefix}:${attribute.name}`;
+  }
+}
+
+function escapeHtmlString(value: string, attribute: boolean): string {
+  return value.replace(attribute ? /[&<>"\u00a0]/g : /[&<>\u00a0]/g, character => {
+    switch (character) {
+      case '&': return '&amp;';
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '"': return '&quot;';
+      default: return '&nbsp;';
+    }
+  });
+}
+
+function parseFragmentDraft<Authority extends BrowserTemplateDraftAuthority>(
+  markup: string,
+  context: DefaultTreeAdapterTypes.Element,
+  authority: Authority,
+): BrowserTemplateDraftResult<Authority> {
+  const errors: ParserError[] = [];
   const parsed = parseFragment(context, markup, {
-    scriptingEnabled: parse5Authority.scriptingEnabled,
+    scriptingEnabled: authority.scriptingEnabled,
     sourceCodeLocationInfo: true,
     onParseError: (error) => { errors.push(error); },
   });
   const fragment = materializeFragment(parsed, markup, []);
   return new BrowserTemplateDraftResult(
-    parse5Authority,
+    authority,
     markup,
     fragment,
-    serialize(parsed, { scriptingEnabled: parse5Authority.scriptingEnabled }),
+    serialize(parsed, { scriptingEnabled: authority.scriptingEnabled }),
     errors.map((error) => new BrowserTemplateParseIssue(error.code, requiredSourceLocation(error))),
   );
 }

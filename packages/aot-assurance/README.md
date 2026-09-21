@@ -20,7 +20,8 @@ The default package assurance runs thirteen complementary scenarios:
   and updates after hide/restore. A retained template contributes a child through inert-to-platform document adoption;
   reordered original interpolation text siblings become adjacent and compile in the resulting order. Authored and
   generated text edits replace interpolation expressions; element/fragment `textContent` removes prior bound subtrees,
-  and edited text/comment/template copies preserve independent identities and reactive behavior. Five checkpoints
+  and edited text/comment/template copies preserve independent identities and reactive behavior. Contextual markup adds
+  parser-inserted table structure, inert custom-element/projection parsing, inert scripts, and live getter roundtrips. Five checkpoints
   and teardown check explicit JIT-grounded outcomes. All three compiler-final definitions are required.
 - `content-attributes` is strict AOT for ordinary source-hook attribute transforms. It creates, removes and readds
   attributes; generates input bindings, custom attributes, `as-element` components, `if`/`repeat` controllers, and a

@@ -14,6 +14,7 @@ import {
   TemplateCompilerHookSet,
 } from '../src/template/compiler-hook-world.js';
 import { TemplateCompilerDomHost } from '../src/template/template-compiler-dom-host.js';
+import { parseBrowserTemplateContextualFragmentDraft, serializeBrowserTemplateInnerHtml } from '../src/template/browser-template-parser.js';
 import {
   TemplateCompilerCallableReference,
   TemplateCompilerExecutionSession,
@@ -29,6 +30,169 @@ import { TemplateCompilerElementOccurrence, TemplateCompilerOccurrenceForest } f
 import { BrowserEffectiveTemplateFixture } from './browser-effective-template-fixture.js';
 
 describe('interpreted compiler DOM host', () => {
+  test('parses table, raw-text and SVG markup in the receiving context', () => {
+    const run = new DomHookRun('<div><table></table><textarea></textarea><svg><foreignObject></foreignObject></svg></div>');
+    try {
+      const result = run.invoke(`function hook(node) {
+        const table=node.children[0],textarea=node.children[1],svg=node.children[2];
+        table.innerHTML='<tr><td title="&amp;">cell</td></tr>';
+        textarea.innerHTML='<b>&amp;</b>';
+        svg.firstChild.innerHTML='<p>foreign HTML</p>';
+        return table.firstChild.localName==='tbody'&&table.firstChild.firstChild.firstChild.textContent==='cell'
+          &&table.innerHTML==='<tbody><tr><td title="&amp;">cell</td></tr></tbody>'
+          &&textarea.childNodes.length===1&&textarea.firstChild.data==='<b>&</b>'
+          &&textarea.innerHTML==='&lt;b&gt;&amp;&lt;/b&gt;'
+          &&svg.firstChild.firstChild.namespaceURI==='http://www.w3.org/1999/xhtml';
+      }`);
+      expect(result.kind, run.host.refusal?.summary).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+      run.execution.forest.assertCoherentTopology();
+    } finally { run.dispose(); }
+  });
+
+  test('honors form ancestors for element and template parsing and detaches original children', () => {
+    const run = new DomHookRun('<form><section><i>old</i></section><template><b>old</b></template></form>');
+    try {
+      const result = run.invoke(`function hook(node) {
+        const section=node.firstChild,carrier=node.children[1],old=section.firstChild,content=carrier.content;
+        section.innerHTML='<form><b>kept</b></form>';
+        carrier.innerHTML='<form><i>template</i></form>';
+        return section.innerHTML==='<b>kept</b>'&&old.parentNode===null&&old.textContent==='old'
+          &&carrier.content===content&&carrier.innerHTML==='<i>template</i>'&&carrier.childNodes.length===0;
+      }`);
+      expect(result.kind, run.host.refusal?.summary).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+    } finally { run.dispose(); }
+  });
+
+  test('serializes current pending values, creation-time is, namespaces and void nodes', () => {
+    const run = new DomHookRun('<div><button id="first" is="native-button"></button><button is="native-other" id="second"></button><svg><use xlink:href="#old"></use></svg><input></div>');
+    try {
+      const result = run.invoke(`function hook(node) {
+        node.children[0].removeAttribute('is');node.children[1].setAttribute('is','changed');
+        const span=node.ownerDocument.createElement('span');span.textContent='<&>';
+        span.setAttribute('title','<&>"');node.children[0].appendChild(span);
+        node.children[2].firstChild.setAttributeNS('http://www.w3.org/1999/xlink','xlink:href','#new');
+        node.children[3].appendChild(node.ownerDocument.createTextNode('not serialized'));
+        return node.innerHTML==='<button is="native-button" id="first"><span title="&lt;&amp;&gt;&quot;">&lt;&amp;&gt;</span></button><button is="changed" id="second"></button><svg><use xlink:href="#new"></use></svg><input>'
+          &&node.children[3].innerHTML===''&&node.children[3].childNodes.length===1;
+      }`);
+      expect(result.kind, run.host.refusal?.summary).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+    } finally { run.dispose(); }
+  });
+
+  test('distinguishes call-wide parse scripting from each serialized noscript document', () => {
+    const run = new DomHookRun('<div><section></section><template></template></div>', true);
+    try {
+      const result = run.invoke(`function hook(node) {
+        node.firstChild.innerHTML='<noscript><b>raw</b></noscript><template><noscript><b>nested raw</b></noscript></template>';
+        node.children[1].innerHTML='<noscript><b>inert</b></noscript>';
+        return node.firstChild.firstChild.childNodes[0].nodeType===3
+          &&node.firstChild.innerHTML==='<noscript><b>raw</b></noscript><template><noscript>&lt;b&gt;nested raw&lt;/b&gt;</noscript></template>'
+          &&node.children[1].content.firstChild.firstChild.nodeType===1
+          &&node.children[1].innerHTML==='<noscript><b>inert</b></noscript>';
+      }`);
+      expect(result.kind, run.host.refusal?.summary).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+    } finally { run.dispose(); }
+  });
+
+  test('retains parsed script state and inert custom construction through cloning', () => {
+    const run = new DomHookRun('<div><template></template><section></section></div>', true);
+    try {
+      const result = run.invoke(`function hook(node) {
+        const carrier=node.firstChild;
+        carrier.innerHTML='<native-widget><button is="native-button"></button><script>never()</script></native-widget>';
+        const copy=carrier.content.firstChild.cloneNode(true);
+        node.children[1].innerHTML='<script>alsoNever()</script>';
+        return copy!==carrier.content.firstChild&&copy.ownerDocument===carrier.content.ownerDocument
+          &&copy.innerHTML==='<button is="native-button"></button><script>never()</script>';
+      }`);
+      expect(result.kind, run.host.refusal?.summary).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+      const scripts = run.execution.forest.readNodes().filter(node => node instanceof TemplateCompilerElementOccurrence && node.tagName === 'script');
+      expect(scripts).toHaveLength(3);
+      expect(scripts.every(node => (node as TemplateCompilerElementOccurrence).parserInertScript)).toBe(true);
+    } finally { run.dispose(); }
+  });
+
+  test('parses an adopted template inertly but retains its platform content affiliation', () => {
+    const run = new DomHookRun('<div><template></template></div>', true, true, true);
+    try {
+      const result = run.invoke(`function hook(node,platform) {
+        const carrier=node.firstChild;
+        carrier.innerHTML='<native-widget></native-widget><noscript><b>inert parse</b></noscript>';
+        return carrier.content.ownerDocument===platform.document&&carrier.content.firstChild.ownerDocument===platform.document
+          &&carrier.content.children[1].firstChild.nodeType===1;
+      }`);
+      expect(result.kind, run.host.refusal?.summary).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+    } finally { run.dispose(); }
+  });
+
+  test('refuses resource effects even when template parsing suppressed native constructors', () => {
+    const run = new DomHookRun('<div><template></template></div>', true, true, true);
+    try {
+      const result = run.invoke(`function hook(node){node.firstChild.innerHTML='<img src="fetch.png">';}`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Open);
+      expect(run.host.refusal).toMatchObject({ kind: 'native-resource-effects' });
+      run.complete(result.kind);
+      expect((run.root.readChildren()[0] as TemplateCompilerElementOccurrence).templateContent!.readChildren()).toEqual([]);
+    } finally { run.dispose(); }
+  });
+
+  test.each([['null', ''], ['undefined', 'undefined'], ['42', '42']] as const)(
+    'converts innerHTML = %s without treating undefined as null', (expression, expected) => {
+      const run = new DomHookRun('<div><b>old</b></div>');
+      try {
+        const result = run.invoke(`function hook(node){node.innerHTML=${expression};return node.innerHTML===${JSON.stringify(expected)};}`);
+        expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+        expect(result.evaluation?.value).toMatchObject({ value: true });
+        run.complete(result.kind);
+      } finally { run.dispose(); }
+    },
+  );
+
+  test.each([
+    ['native constructor', 'node.innerHTML="<native-widget></native-widget>";', 'native-custom-element-construction'],
+    ['native customized constructor', 'node.innerHTML="<button is=custom-button></button>";', 'native-custom-element-construction'],
+    ['native image', 'node.innerHTML="<img src=fetch.png>";', 'native-resource-effects'],
+    ['radio state', 'node.innerHTML="<input type=radio checked>";', 'native-control-state'],
+    ['range state', 'node.innerHTML="<input type=range min=80 max=100>";', 'native-control-state'],
+    ['select profile', 'node.innerHTML="<select><button>discarded</button></select>";', 'dom-markup-customizable-select-profile'],
+    ['unknown coercion', 'node.innerHTML={toString(){return "<b>unknown</b>";}};', 'runtime-dependent-input'],
+    ['later unsupported call', 'node.getBoundingClientRect();', 'unsupported-dom-member'],
+  ] as const)('refuses %s and rolls back parsed replacements and generated inventory', (_label, body, kind) => {
+    const run = new DomHookRun('<div><i>original</i></div>', true);
+    try {
+      const before = [...run.execution.forest.readNodes()];
+      const result = run.invoke(`function hook(node){node.innerHTML='<b>tentative</b>';try{${body}}catch(error){return true;}}`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Open);
+      expect(run.host.refusal).toMatchObject({ kind });
+      run.complete(result.kind);
+      expect(run.execution.forest.readNodes()).toEqual(before);
+      expect(run.root.readChildren()[0]).toHaveProperty('tagName', 'i');
+      run.execution.forest.assertCoherentTopology();
+      run.execution.mutationAuthority.assertGeneratedInventory();
+    } finally { run.dispose(); }
+  });
+
+  test('keeps markup unavailable outside the opt-in parser-backed compiler path', () => {
+    const run = new DomHookRun('<div></div>', false, false);
+    try {
+      const result = run.invoke('function hook(node){node.innerHTML="<b></b>";}');
+      expect(result.kind).toBe(StaticCallableCompletionKind.Open);
+      expect(run.host.refusal).toMatchObject({ kind: 'dom-markup-unavailable' });
+      run.complete(result.kind);
+    } finally { run.dispose(); }
+  });
   test('stages text and comment writes through every read alias and copies the current value', () => {
     const run = new DomHookRun('<div>original<!--note--><b>nested</b></div>');
     try {
@@ -310,6 +474,10 @@ describe('interpreted compiler DOM host', () => {
     ['color value history', '<input type="color">', 'input.removeAttributeNS(null,"type");'],
     ['type toggle', '<input type="number">', 'input.toggleAttribute("type",false);'],
     ['namespaced type setter', '<input type="number">', 'input.setAttributeNS(null,"type","text");'],
+    ['range minimum history', '<input type="range">', 'input.setAttribute("min","80");'],
+    ['range maximum history', '<input type="range" max="20">', 'input.removeAttribute("max");'],
+    ['range step history', '<input type="range">', 'input.setAttributeNS(null,"step","30");'],
+    ['range copy', '<input type="range" min="80" max="100">', 'input.cloneNode();'],
   ] as const)('refuses unmodeled native control state: %s', (_label, markup, body) => {
     const run = new DomHookRun(`<div>${markup}</div>`);
     try {
@@ -1079,7 +1247,7 @@ describe('interpreted compiler DOM host', () => {
     ['ambient document', 'platform.document.body;', 'body', 'unsupported-dom-member'],
     ['explicit document adoption', 'node.ownerDocument.adoptNode(node);', 'adoptNode', 'unsupported-dom-member'],
     ['dataset', 'node.dataset.key = "x";', 'dataset', 'unsupported-dom-member'],
-    ['markup write', 'node.innerHTML = "<b></b>";', 'innerHTML', 'unsupported-dom-member'],
+    ['outer markup write', 'node.outerHTML = "<b></b>";', 'outerHTML', 'unsupported-dom-member'],
     ['metadata', 'metadata.name = "changed";', 'name', 'unsupported-dom-member'],
     ['selector', 'node.querySelector("i");', 'querySelector', 'unsupported-dom-member'],
   ])('refuses %s and rolls back earlier supported writes and removals', (_label, body, member, kind) => {
@@ -1144,10 +1312,12 @@ class DomHookRun {
   readonly attempt: ReturnType<TemplateCompilerExecutionSession['beginOperation']>;
   readonly host: TemplateCompilerDomHost;
 
-  constructor(markup: string, platformRoot = false) {
+  constructor(markup: string, platformRoot = false, withMarkup = true, adoptFirstTemplateContent = false) {
     const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(this.browser.materialize('root', markup).emission);
     this.root = forest.compilerContent.readChildren()[0] as TemplateCompilerElementOccurrence;
-    this.execution = TemplateCompilerExecutionSession.createForForest('dom-host:family', forest);
+    this.execution = TemplateCompilerExecutionSession.createForForest('dom-host:family', forest, withMarkup ? {
+      parse: parseBrowserTemplateContextualFragmentDraft, serialize: serializeBrowserTemplateInnerHtml,
+    } : null);
     const lane = this.execution.admitRootInvocation('dom-host:lane');
     const context = this.execution.bootstrapContext(lane);
     const bootstrapDriver = this.execution.beginHookBootstrapDriver(lane);
@@ -1169,6 +1339,9 @@ class DomHookRun {
     );
     const driver = this.execution.beginSiteExecutionDriver(this.execution.captureSiteExecutionFrontier(closure));
     if (platformRoot) this.execution.adoptSiteNodeDocuments(driver, [this.root],
+      [this.browser.run.handles.product('definition')], this.browser.run.handles.address('source'));
+    if (adoptFirstTemplateContent) this.execution.adoptSiteNodeDocuments(driver,
+      [(this.root.readChildren()[0] as TemplateCompilerElementOccurrence).templateContent!],
       [this.browser.run.handles.product('definition')], this.browser.run.handles.address('source'));
     const callable = new TemplateCompilerCallableReference(null, null, this.browser.run.handles.address('source'));
     this.attempt = this.execution.beginOperation({

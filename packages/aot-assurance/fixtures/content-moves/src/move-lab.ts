@@ -182,5 +182,34 @@ export class MoveLab {
     target.appendChild(copies);
     el.setAttribute('data-copies', `${shallow !== first}:${shallowWasEmpty}:${shallow.getAttribute('data-copy-state') === 'before'}:${first.getAttribute('data-copy-state') === 'after'}:${copiedConditional !== conditional}:${copiedConditional.content !== conditional.content}:${copiedConditional.ownerDocument === platform.document}:${copiedConditional.content.ownerDocument === inert}:${copiedCardWasInert}:${copiedCard.ownerDocument === platform.document}:${card.ownerDocument === platform.document}`);
     el.setAttribute('data-text-edits', `${first.firstChild === firstText && firstText.textContent === 'first:${message.toUpperCase()}' && firstText.length === firstText.data.length}:${textMoves.firstChild === movedText && movedText.data === 'after:${message.length}'}:${replacedText.parentNode === null && discarded.parentNode === null}:${fragmentReadback}:${cleared.firstChild === null && clearedText.parentNode === null}:${generatedComment.data === 'generated-content' && copiedComment.data === 'copied-content' && copiedComment !== generatedComment}`);
+
+    // Contextual markup is parsed before normal controller/resource lowering, just like authored content.
+    const markup = platform.document.createElement('section');
+    markup.id = 'markup-wrapper';
+    const table = platform.document.createElement('table');
+    table.id = 'markup-table';
+    table.setAttribute('if.bind', 'active');
+    table.innerHTML = '<tr repeat.for="item of items"><td stamp.bind="message">markup:${item}:${message}</td></tr>';
+    const tableContext = table.firstElementChild!.localName === 'tbody';
+    markup.appendChild(table);
+
+    const parsedTemplate = inert.createElement('template') as HTMLTemplateElement;
+    parsedTemplate.innerHTML = '<move-card id="parsed-card" value.bind="message"><b au-slot="title" stamp.bind="message">parsed-title:${message}</b><template au-slot="body" if.bind="active"><span class="parsed-body" stamp.bind="message">parsed-body:${message}</span></template></move-card><script id="parsed-script">window.contentMovesScriptRuns = (window.contentMovesScriptRuns ?? 0) + 1;</script><svg><script>window.contentMovesSvgScriptRuns = (window.contentMovesSvgScriptRuns ?? 0) + 1;</script></svg>';
+    const parsedCard = parsedTemplate.content.firstElementChild!;
+    const parsedInert = parsedCard.ownerDocument === inert;
+    markup.appendChild(parsedTemplate.content);
+
+    const readback = inert.createElement('p');
+    readback.id = 'markup-readback';
+    readback.innerHTML = '<b data-stage="before">before</b>';
+    const beforeRoundtrip = readback.firstElementChild!;
+    beforeRoundtrip.setAttribute('data-stage', '<after>');
+    beforeRoundtrip.firstChild!.nodeValue = 'readback & ${message.toUpperCase()}';
+    const liveSerialization = readback.innerHTML === '<b data-stage="&lt;after&gt;">readback &amp; ${message.toUpperCase()}</b>';
+    readback.innerHTML = readback.innerHTML;
+    const freshRoundtrip = readback.firstElementChild !== beforeRoundtrip && beforeRoundtrip.parentNode === null;
+    markup.appendChild(readback);
+    target.appendChild(markup);
+    el.setAttribute('data-markup', `${tableContext}:${parsedInert}:${parsedTemplate.content.firstChild === null}:${parsedCard.ownerDocument === platform.document}:${liveSerialization}:${freshRoundtrip}`);
   }
 }

@@ -42,14 +42,17 @@ export class BrowserTemplateSourceLocation {
 }
 
 /** Exact parser profile used for this run-local draft; it is not a universal browser authority. */
-export class BrowserTemplateDraftAuthority {
+export class BrowserTemplateDraftAuthority<
+  Context extends 'html-template-fragment' | 'html-contextual-fragment' = 'html-template-fragment' | 'html-contextual-fragment',
+  ScriptingEnabled extends boolean = boolean,
+> {
   readonly schemaVersion = BROWSER_TEMPLATE_DRAFT_SCHEMA_VERSION;
 
   constructor(
     readonly parser: 'parse5',
     readonly parserVersion: string,
-    readonly context: 'html-template-fragment',
-    readonly scriptingEnabled: false,
+    readonly context: Context,
+    readonly scriptingEnabled: ScriptingEnabled,
   ) {}
 }
 
@@ -149,9 +152,9 @@ export type BrowserTemplateNodeDraft =
   | BrowserTemplateDoctypeDraft;
 
 /** Product-free run-local template tree-builder result. */
-export class BrowserTemplateDraftResult {
+export class BrowserTemplateDraftResult<Authority extends BrowserTemplateDraftAuthority = BrowserTemplateDraftAuthority> {
   constructor(
-    readonly authority: BrowserTemplateDraftAuthority,
+    readonly authority: Authority,
     readonly markup: string,
     readonly fragment: BrowserTemplateFragmentDraft,
     /** Diagnostic serialization witness only; structural equality must use `browserTemplateStructure`. */
@@ -166,6 +169,31 @@ export interface BrowserTemplateStructureAttribute {
   readonly namespaceUri: string | null;
   readonly prefix: string | null;
 }
+
+/** Current DOM context, without authored addresses or parser source-location claims. */
+export interface BrowserTemplateElementContext {
+  readonly tagName: string;
+  readonly namespaceUri: string;
+  readonly attributes: readonly BrowserTemplateStructureAttribute[];
+}
+
+export interface BrowserTemplateFragmentContext {
+  readonly element: BrowserTemplateElementContext;
+  /** Actual element ancestors, nearest first; template-content ownership is not a DOM parent edge. */
+  readonly ancestors: readonly BrowserTemplateElementContext[];
+  /** Ordinary element parsing follows its document; HTML template parsing always uses false. */
+  readonly scriptingEnabled: boolean;
+}
+
+/** A pinned parser profile refusal is neither invalid HTML nor an ordinary DOM exception. */
+export type BrowserTemplateContextualParseResult =
+  | { readonly kind: 'parsed'; readonly draft: BrowserTemplateDraftResult }
+  | {
+      readonly kind: 'unsupported';
+      readonly reason: 'inert-noscript-context' | 'customizable-select-profile' | 'mathml-integration-context'
+        | 'foreign-form-context';
+      readonly summary: string;
+    };
 
 export type BrowserTemplateStructureNode =
   | {

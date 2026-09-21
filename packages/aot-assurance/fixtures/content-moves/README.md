@@ -2,7 +2,7 @@
 
 The same source runs through production JIT and strict AOT builds. Five ordered browser checkpoints check
 the resulting structure, reactive updates, projected-controller removal, updates while hidden, restoration,
-and complete teardown. There are no selectors, ambient accesses, markup setters, or cross-host edits in the hook.
+and complete teardown. There are no selectors, ambient accesses, or cross-host edits in the hook.
 
 `MoveLab.processContent` first transforms original descendants:
 
@@ -54,6 +54,18 @@ Finally, source `cloneNode` / `importNode` create additional independently react
 - Previously edited authored interpolation text and a generated comment are cloned independently. The comment copy is
   edited without changing its source; template copies retain the generated row's edited expression. JIT's distinct
   static/bound text nodes and all copied expression updates remain observable in the existing checkpoints.
+
+Contextual `innerHTML` uses the same compiler pipeline:
+
+- A table receives row markup without an explicit tbody; browser context inserts tbody before `repeat`, interpolation,
+  and custom-attribute lowering. The table's `if` hides it while collection and parent binding values change.
+- An inert template parses a custom element with named title and conditional body projections, plus a script. Draining
+  its content into the platform-owned wrapper adopts the parsed nodes; their projections remain reactive, and the parsed
+  script retains inertness through emitted construction and runtime cloning (the existing execution counter stays zero).
+- An adjacent parsed SVG script executes once after runtime cloning, as JIT does; a separate counter prevents the HTML
+  script's inert creation state from being incorrectly applied to SVG. It remains one across all five checkpoints.
+- A live getter serializes staged attribute and Text edits with native escaping. Assigning that result back produces fresh
+  node identity, detaches the previous child, and compiles the resulting uppercase interpolation without stale source text.
 
 Custom element names and templates are created using the authored donor template content's inert owner document;
 ordinary native nodes can use the platform document. Insertion adopts generated content in the same way as original

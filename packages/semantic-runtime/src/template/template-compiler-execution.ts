@@ -13,6 +13,15 @@ import {
   type TemplateCompilerTargetRowPlan,
 } from './compiler-target-plan.js';
 import type { TemplateCompilerHookSet } from './compiler-hook-world.js';
+import {
+  BrowserTemplateDraftNodeKind,
+  type BrowserTemplateFragmentDraft,
+  type BrowserTemplateNodeDraft,
+} from './browser-template-draft.js';
+import type {
+  parseBrowserTemplateContextualFragmentDraft,
+  serializeBrowserTemplateInnerHtml,
+} from './browser-template-parser.js';
 import type { TemplateCompilerContextFamilyTargetPlanPreparation } from './template-compiler-context-family-target-plan.js';
 import {
   buildTemplateCompilerContextFamilyOperationSchedule,
@@ -1284,6 +1293,12 @@ export class TemplateCompilerReachedAttributeScalarReceipt {
   }
 }
 
+/** Run-local markup operations supplied by the opt-in browser compiler boundary. */
+export interface TemplateCompilerDomMarkup {
+  readonly parse: typeof parseBrowserTemplateContextualFragmentDraft;
+  readonly serialize: typeof serializeBrowserTemplateInnerHtml;
+}
+
 /**
  * Product-free forest-first owner for one exact compiler family/cohort invocation.
  *
@@ -1318,11 +1333,12 @@ export class TemplateCompilerExecutionSession {
   static createForForest(
     familyKey: string,
     forest: TemplateCompilerOccurrenceForest,
+    domMarkup: TemplateCompilerDomMarkup | null = null,
   ): TemplateCompilerExecutionSession {
     if (compilerExecutionForests.has(forest)) {
       throw new Error('Compiler occurrence forest already owns an ordered execution session.');
     }
-    const session = new TemplateCompilerExecutionSession(familyKey, forest, null, false);
+    const session = new TemplateCompilerExecutionSession(familyKey, forest, null, false, domMarkup);
     compilerExecutionForests.add(forest);
     return session;
   }
@@ -1428,6 +1444,7 @@ export class TemplateCompilerExecutionSession {
     readonly forest: TemplateCompilerOccurrenceForest,
     mutationAuthority: TemplateCompilerForestMutationAuthority | null,
     private readonly legacyStructuralCompatibility: boolean,
+    readonly domMarkup: TemplateCompilerDomMarkup | null = null,
   ) {
     if (familyKey.length === 0) {
       throw new Error('Compiler execution family requires a non-empty key.');
@@ -2084,13 +2101,15 @@ export class TemplateCompilerExecutionSession {
     customElementIs: string | null,
     document: TemplateContentOwnerDocument,
     sourceNode: TemplateCompilerElementOccurrence | null = null,
+    /** Fresh parser creation state is independent from copied-node lineage. */
+    creation: { readonly parserInertScript: boolean } | null = null,
   ): TemplateCompilerElementOccurrence {
     this.requireSourceProcessContentAttempt(attempt);
     const overlay = this.requirePendingMutationOverlay(attempt);
     const generation = this.createGeneration(attempt, TemplateCompilerGeneratedOccurrenceRole.HookElement,
       overlay.nextTopologyMutationOrdinal);
     const element = this.forest.createGeneratedElement(generation, tagName, namespace, namespaceUri, customElementIs,
-      sourceNode?.parserInertScript ?? false, null, document);
+      sourceNode?.parserInertScript ?? creation?.parserInertScript ?? false, null, document);
     overlay.recordNodeCreation(new TemplateCompilerNodeCreationMutation(overlay.nextTopologyMutationOrdinal, element, document, null, sourceNode));
     if (namespace === HtmlNamespaceKind.Html && tagName === 'template') {
       this.createProcessContentFragment(attempt, 'template-contents', element, sourceNode?.templateContent ?? null);
@@ -2149,6 +2168,57 @@ export class TemplateCompilerExecutionSession {
     }
     overlay.recordNodeCreation(new TemplateCompilerNodeCreationMutation(overlay.nextTopologyMutationOrdinal, node, document, templateOwner, sourceNode));
     return node;
+  }
+
+  /** Ingest a product-free fragment parse as fresh source-hook outputs, not copies of browser-input products. */
+  createProcessContentParsedFragment(
+    attempt: TemplateCompilerPendingOperationAttempt,
+    draft: BrowserTemplateFragmentDraft,
+    document: TemplateContentOwnerDocument,
+  ): TemplateCompilerFragmentOccurrence {
+    const fragment = this.createProcessContentFragment(attempt, document);
+    this.appendProcessContentParsedChildren(attempt, draft.children, fragment, document);
+    return fragment;
+  }
+
+  private appendProcessContentParsedChildren(
+    attempt: TemplateCompilerPendingOperationAttempt,
+    children: readonly BrowserTemplateNodeDraft[],
+    parent: TemplateCompilerParentOccurrence,
+    document: TemplateContentOwnerDocument,
+  ): void {
+    for (const draft of children) {
+      let node: TemplateCompilerNodeOccurrence;
+      switch (draft.nodeKind) {
+        case BrowserTemplateDraftNodeKind.Element: {
+          const isHtml = draft.namespace === HtmlNamespaceKind.Html;
+          const customElementIs = isHtml
+            ? draft.attributes.find(attribute => attribute.namespaceUri == null && attribute.name === 'is')?.value ?? null
+            : null;
+          const element = this.createProcessContentElement(attempt, draft.tagName, draft.namespace, draft.namespaceUri,
+            customElementIs, document, null, { parserInertScript: isHtml && draft.tagName === 'script' });
+          for (const attribute of draft.attributes) {
+            this.setProcessContentAttribute(attempt, element, attribute, attribute.value);
+          }
+          this.appendProcessContentParsedChildren(attempt, draft.children, element, document);
+          if (draft.templateContent != null) {
+            this.appendProcessContentParsedChildren(attempt, draft.templateContent.children,
+              element.templateContent!, 'template-contents');
+          }
+          node = element;
+          break;
+        }
+        case BrowserTemplateDraftNodeKind.Text:
+          node = this.createProcessContentText(attempt, draft.text, document);
+          break;
+        case BrowserTemplateDraftNodeKind.Comment:
+          node = this.createProcessContentComment(attempt, draft.text, document);
+          break;
+        case BrowserTemplateDraftNodeKind.Doctype:
+          throw new Error('Source-hook fragment parsing cannot create a document type.');
+      }
+      this.placeProcessContentNode(attempt, node, parent, parent.readChildren().length);
+    }
   }
 
   /** Copy the current owned subtree; new Hook* identities retain source lineage, never input ownership. */

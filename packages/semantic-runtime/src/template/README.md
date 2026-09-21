@@ -2,12 +2,10 @@
 
 See [../README.md](../README.md) for the folder-wide rebuild map and Atlas and auLink rule.
 
-This folder models the template-compiler-facing world as it is re-layered onto kernel, resource, DI, parser, and
-lowering products.
-
-The goal is not to implement the compiler here. The goal is to make the products that later materializers must create
-explicit enough that resource recognition, configuration, DI world construction, HTML parsing, attribute
-classification, expression parsing, and instruction lowering converge on the same contracts.
+This folder owns shared template-compiler semantics over kernel, resource, DI, parser, and lowering products.
+Resource recognition, configuration, DI world construction, HTML parsing, attribute classification, expression
+parsing, compiler DOM effects, and instruction lowering converge here. IDE/MCP inquiries and AOT consume those
+products; target JavaScript emission remains outside this substrate.
 
 ## Layers
 
@@ -178,7 +176,13 @@ classification, expression parsing, and instruction lowering converge on the sam
   `@aurelia-ls/semantic-runtime/browser-template` subpath exposes the two parser/tree helpers needed by browser-oracle
   assurance alongside the detached build/configuration contract, while keeping run-local compiler internals private;
   ordinary IDE/MCP imports do not load the parser. This is a run-local input boundary rather than a durable kernel
-  product.
+  product. The same product-free adapter also handles contextual source-hook fragments using current element/attribute
+  state, actual DOM ancestors (including form ancestry), and an explicit call-wide scripting profile. That profile is
+  distinct from each resulting node's document affiliation. Known pinned-parser disagreements remain typed refusals;
+  evaluated hook strings do not acquire invented authored HTML products or spans. Current-state innerHTML serialization
+  preserves ordered attributes, namespaces, modern escaping, raw-text/template behavior and per-node noscript document
+  state. The existing build handoff injects parse/serialize functions into its run-local execution session; neither the
+  session nor DOM host imports the parser at runtime through the ordinary IDE/MCP entry point.
 - `browser-template-correspondence.ts` conservatively relates one authored draft to the exact browser draft and parser
   authorities before carrier selection. It uses opening-token/range anchors for exact occurrences, reconstruction
   cohorts for one-to-many recovery, named implied/drop/factory derivations, and explicit unresolved partitions for
@@ -354,7 +358,15 @@ classification, expression parsing, and instruction lowering converge on the sam
   with identical single-Text content refuses as browser-dependent-node-identity because Chromium's identity-preserving
   optimization differs from the standard replacement semantics. Empty replacement is supported. Template element
   textContent affects ordinary children rather than .content and remains subject to that existing nonempty-child bound.
-  Markup writes, CharacterData methods, selectors, dataset and metadata effects remain explicit unsupported operations until their
+  innerHTML reads serialize the current staged subtree; missing customized-built-in is is synthesized only in that
+  serialization view, not reinserted into the forest. Contextual writes replace the element's ordinary children or a
+  template's content with parsed Hook* occurrences through the existing creation/placement journal. Parsed HTML script
+  state and initial is are explicit creation metadata, not fake copy lineage. Native effects are checked before exposing
+  or replacing the parsed subtree; refusal discards all tentative creations and prior hook edits. Ordinary platform
+  parsing can run native constructors; template parsing suppresses them even for explicitly platform-adopted content,
+  while resource fetching still depends on output affiliation. Known inert-noscript, select, MathML integration and
+  foreign-form context mismatches stay explicit parser-profile boundaries. CharacterData methods, outerHTML, selectors,
+  dataset and metadata effects remain explicit unsupported operations until their
   complete lowering paths are admitted. Namespace-duplicate qualified names and
   browser-version-sensitive name spellings remain explicit compatibility boundaries, not invented DOM exceptions.
   Projection removes original au-slot attributes through one ordered site operation before projected hooks execute.
@@ -376,8 +388,10 @@ classification, expression parsing, and instruction lowering converge on the sam
   browser effects model. Copy preflight uses the destination document, so copying from P into I does not falsely
   imply native construction/fetch; nested template content resets that destination to I. Object-valued importNode
   options remain unsupported instead of being mistaken for Boolean deep flags. Native radio copying/movement/attribute
-  changes and input type changes refuse as native-control-state: checkedness and sanitized values can survive cloning
-  without being reconstructible from final attributes. Untouched static controls remain admitted. The existing whole-app
+  changes, range copying/min/max/step changes, parsed radio/range nodes, and input type changes refuse as native-control-state:
+  checkedness and sanitized values can survive cloning without being reconstructible from final attributes. Untouched
+  static controls remain admitted; range default initialization under sequential emitter attribute writes is a separately
+  recorded correctness gap, not fixed by this hook boundary. The existing whole-app
   compatible fallback retains valid dynamic behavior; unsupported does not mean invalid author code.
   Generated native <slot> outlets use the existing slot-name product with absent authored references and spans.
   Dynamic interpolation joins through exact expression handles, not ambiguous null source-attribute handles.

@@ -12,10 +12,14 @@ import {
   type BrowserTemplateNodeDraft,
   BrowserTemplateTextDraft,
   browserTemplateStructure,
+  type BrowserTemplateElementContext,
+  type BrowserTemplateStructureNode,
 } from '../src/template/browser-template-draft.js';
 import {
   BROWSER_TEMPLATE_DRAFT_PARSE5_VERSION,
   parseBrowserTemplateFragmentDraft,
+  parseBrowserTemplateContextualFragmentDraft,
+  serializeBrowserTemplateInnerHtml,
 } from '../src/template/browser-template-parser.js';
 import {
   BrowserTemplateCarrierKind,
@@ -380,6 +384,124 @@ describe('browser template draft', () => {
     expect(ignorableSiblings.carrierKind).toBe(BrowserTemplateCarrierKind.AuthoredTemplate);
     expect(ignorableSiblings.discardedInputNodes.map(nodeLabel))
       .toEqual(['#text: \n', '#comment:before', '#comment:after', '#text:\t']);
+  });
+
+  test('parses evaluated markup with actual element, form ancestry and call-wide scripting context', () => {
+    const parse = (markup: string, context: BrowserTemplateElementContext, scriptingEnabled = false,
+      ancestors: readonly BrowserTemplateElementContext[] = []) => {
+      const result = parseBrowserTemplateContextualFragmentDraft(markup, { element: context, ancestors, scriptingEnabled });
+      if (result.kind !== 'parsed') throw new Error(result.summary);
+      return result.draft;
+    };
+    const context = (tagName: string, namespaceUri = htmlNamespace): BrowserTemplateElementContext =>
+      ({ tagName, namespaceUri, attributes: [] });
+    const table = parse('before<tr><td>x</td></tr>after', context('table'));
+    expect(table.fragment.children.map(nodeLabel)).toEqual(['#text:before', 'tbody', '#text:after']);
+    expect(table.authority).toMatchObject({ context: 'html-contextual-fragment', scriptingEnabled: false });
+    const formMarkup = '<form id="inner"><input></form><b>end</b>';
+    expect(parse(formMarkup, context('div')).fragment.children.map(nodeLabel)).toEqual(['form', 'b']);
+    expect(parse(formMarkup, context('div'), false, [context('section'), context('form')])
+      .fragment.children.map(nodeLabel)).toEqual(['input', 'b']);
+    expect(parse(formMarkup, context('template'), false, [context('form')])
+      .fragment.children.map(nodeLabel)).toEqual(['input', 'b']);
+    const noscriptMarkup = '<noscript><b>x</b></noscript>';
+    expect(rootElement(parse(noscriptMarkup, context('div'), false).fragment.children, 'noscript')
+      .children.map(nodeLabel)).toEqual(['b']);
+    expect(rootElement(parse(noscriptMarkup, context('div'), true).fragment.children, 'noscript')
+      .children.map(nodeLabel)).toEqual(['#text:<b>x</b>']);
+    const template = parse(noscriptMarkup, context('template'), true);
+    expect(template.authority.scriptingEnabled).toBe(false);
+    expect(rootElement(template.fragment.children, 'noscript').children.map(nodeLabel)).toEqual(['b']);
+    const nested = rootElement(parse(`<template>${noscriptMarkup}</template>`, context('div'), true).fragment.children, 'template');
+    expect(rootElement(nested.templateContent!.children, 'noscript').children.map(nodeLabel)).toEqual(['#text:<b>x</b>']);
+    const textarea = parse('one<b>x</b>&amp;\r\n', context('textarea'));
+    expect(textarea.fragment.children.map(nodeLabel)).toEqual(['#text:one<b>x</b>&\n']);
+    const svg = parse('<circle/><foreignObject><div>x</div></foreignObject>', context('svg', svgNamespace));
+    expect(rootElement(svg.fragment.children, 'circle').namespaceUri).toBe(svgNamespace);
+    expect(childElement(rootElement(svg.fragment.children, 'foreignObject'), 'div').namespaceUri).toBe(htmlNamespace);
+    expect(rootElement(parse('<div>x</div>', context('foreignObject', svgNamespace)).fragment.children, 'div').namespaceUri)
+      .toBe(htmlNamespace);
+  });
+
+  test('refuses known contextual parser profiles without rejecting markup-looking raw text or comments', () => {
+    const parse = (tagName: string, markup: string, scriptingEnabled = false, namespaceUri = htmlNamespace) =>
+      parseBrowserTemplateContextualFragmentDraft(markup, {
+        element: { tagName, namespaceUri, attributes: [] }, ancestors: [], scriptingEnabled,
+      });
+    expect(parse('noscript', '<b>x</b>')).toMatchObject({ kind: 'unsupported', reason: 'inert-noscript-context' });
+    expect(parse('noscript', '<b>x</b>', true).kind).toBe('parsed');
+    expect(parse('select', '<option>one</option>')).toMatchObject({ kind: 'unsupported', reason: 'customizable-select-profile' });
+    expect(parse('div', '<template><select><button>erased</button></select></template>'))
+      .toMatchObject({ kind: 'unsupported', reason: 'customizable-select-profile' });
+    expect(parse('annotation-xml', '<div>x</div><mi>y</mi>', false, 'http://www.w3.org/1998/Math/MathML'))
+      .toMatchObject({ kind: 'unsupported', reason: 'mathml-integration-context' });
+    expect(parseBrowserTemplateContextualFragmentDraft('<form><input></form>', {
+      element: { tagName: 'div', namespaceUri: htmlNamespace, attributes: [] },
+      ancestors: [{ tagName: 'form', namespaceUri: svgNamespace, attributes: [] }], scriptingEnabled: false,
+    })).toMatchObject({ kind: 'unsupported', reason: 'foreign-form-context' });
+    expect(parse('div', '<!--<select>--><textarea><select></textarea>').kind).toBe('parsed');
+    // The authored template candidate is unchanged; its correspondence layer owns its existing profile refusal.
+    expect(rootElement(parseBrowserTemplateFragmentDraft('<select><option>x</option></select>').fragment.children, 'select'))
+      .toBeInstanceOf(BrowserTemplateElementDraft);
+  });
+
+  test('serializes current DOM snapshots with attribute escaping, native namespaces and actual template content', () => {
+    const context: BrowserTemplateElementContext = { tagName: 'div', namespaceUri: htmlNamespace, attributes: [] };
+    const current: BrowserTemplateStructureNode[] = [{
+      kind: 'element', tagName: 'span', namespaceUri: htmlNamespace,
+      attributes: [
+        { name: 'is', value: 'initial-native-name', namespaceUri: null, prefix: null },
+        { name: 'title', value: '<>&"\u00a0', namespaceUri: null, prefix: null },
+        { name: 'href', value: '#x', namespaceUri: xlinkNamespace, prefix: 'xlink' },
+        { name: 'lang', value: 'en', namespaceUri: 'http://www.w3.org/XML/1998/namespace', prefix: 'xml' },
+        { name: 'other', value: 'v', namespaceUri: 'urn:other', prefix: null },
+        { name: 'flag', value: 'v', namespaceUri: 'urn:other', prefix: 'p' },
+      ],
+      children: [{ kind: 'text', value: '<>&"\u00a0' }, { kind: 'comment', value: 'comment' }], content: null,
+    }];
+    expect(serializeBrowserTemplateInnerHtml(context, current, true)).toBe(
+      '<span is="initial-native-name" title="&lt;&gt;&amp;&quot;&nbsp;" xlink:href="#x" xml:lang="en" other="v" p:flag="v">'
+      + '&lt;&gt;&amp;"&nbsp;<!--comment--></span>',
+    );
+    expect(serializeBrowserTemplateInnerHtml({ ...context, tagName: 'input' }, current, true)).toBe('');
+    for (const tagName of ['basefont', 'bgsound', 'frame', 'keygen']) {
+      expect(serializeBrowserTemplateInnerHtml({ ...context, tagName }, current, true)).toBe('');
+      expect(serializeBrowserTemplateInnerHtml(context, [{
+        kind: 'element', tagName, namespaceUri: htmlNamespace, attributes: [], children: current, content: null,
+      }], true)).toBe(`<${tagName}>`);
+    }
+    expect(serializeBrowserTemplateInnerHtml({ ...context, tagName: 'command' }, [{ kind: 'text', value: 'retained' }], true))
+      .toBe('retained');
+    const nested: BrowserTemplateStructureNode = {
+      kind: 'element', tagName: 'template', namespaceUri: htmlNamespace, attributes: [],
+      children: [{ kind: 'text', value: 'ordinary ignored' }],
+      content: [{ kind: 'text', value: 'actual <content>' }],
+    };
+    expect(serializeBrowserTemplateInnerHtml(context, [nested], true)).toBe('<template>actual &lt;content&gt;</template>');
+    expect(serializeBrowserTemplateInnerHtml({ ...context, tagName: 'script' }, [{ kind: 'text', value: '<>&' }], true))
+      .toBe('<>&');
+    expect(serializeBrowserTemplateInnerHtml({ ...context, tagName: 'textarea' }, [{ kind: 'text', value: '<>&' }], true))
+      .toBe('&lt;&gt;&amp;');
+  });
+
+  test('serializes noscript text against each exact snapshot owner rather than the root document', () => {
+    const context: BrowserTemplateElementContext = { tagName: 'div', namespaceUri: htmlNamespace, attributes: [] };
+    const noscript: BrowserTemplateStructureNode & { kind: 'element' } = {
+      kind: 'element', tagName: 'noscript', namespaceUri: htmlNamespace, attributes: [],
+      children: [{ kind: 'text', value: '<b>x</b>' }], content: null,
+    };
+    const template: BrowserTemplateStructureNode = {
+      kind: 'element', tagName: 'template', namespaceUri: htmlNamespace, attributes: [], children: [], content: [noscript],
+    };
+    const inertNodes = new Set<BrowserTemplateElementContext>([noscript]);
+    const scripting = (element: BrowserTemplateElementContext) => !inertNodes.has(element);
+    expect(serializeBrowserTemplateInnerHtml(context, [template], scripting))
+      .toBe('<template><noscript>&lt;b&gt;x&lt;/b&gt;</noscript></template>');
+    inertNodes.clear();
+    expect(serializeBrowserTemplateInnerHtml(context, [template], scripting))
+      .toBe('<template><noscript><b>x</b></noscript></template>');
+    expect(serializeBrowserTemplateInnerHtml(noscript, noscript.children, false)).toBe('&lt;b&gt;x&lt;/b&gt;');
+    expect(serializeBrowserTemplateInnerHtml(noscript, noscript.children, true)).toBe('<b>x</b>');
   });
 });
 

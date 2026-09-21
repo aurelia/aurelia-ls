@@ -23,7 +23,17 @@ export interface ContentMovesApplicationObservation {
     readonly donorChildren: number;
     readonly titleFallbacks: number;
     readonly scriptExecutions: number;
+    readonly svgScriptExecutions: number;
     readonly voidChild: { readonly parent: string; readonly text: string; readonly stamp: string | null };
+    readonly markup: {
+      readonly transformations: string | null;
+      readonly tableBodies: number;
+      readonly rows: readonly { readonly text: string; readonly stamp: string | null }[];
+      readonly title: { readonly text: string; readonly stamp: string | null };
+      readonly body: readonly { readonly text: string; readonly stamp: string | null }[];
+      readonly readback: { readonly text: string; readonly stage: string | null };
+      readonly scripts: number;
+    };
     readonly copies: {
       readonly identities: string | null;
       readonly shallow: { readonly text: string; readonly stamp: string | null; readonly snapshot: string | null };
@@ -57,6 +67,7 @@ declare global {
   interface Window {
     contentMovesFixture?: { stop(): Promise<void> };
     contentMovesScriptRuns?: number;
+    contentMovesSvgScriptRuns?: number;
   }
 }
 
@@ -111,6 +122,9 @@ async function capture(page: Page): Promise<ContentMovesApplicationObservation> 
     const copies = root.querySelector('#copied-wrapper')!;
     const shallow = copies.querySelector('#shallow-copy')!;
     const copiedTitle = copies.querySelector('.copied-title')!;
+    const markup = root.querySelector('#markup-wrapper')!;
+    const parsedTitle = markup.querySelector('#parsed-card header b')!;
+    const readback = markup.querySelector('#markup-readback b')!;
     return {
       kind: 'content-moves',
       live: [{ id: input.id, value: input.value }],
@@ -134,10 +148,20 @@ async function capture(page: Page): Promise<ContentMovesApplicationObservation> 
         donorChildren: root.querySelector<HTMLTemplateElement>('#donor')!.content.childNodes.length,
         titleFallbacks: root.querySelectorAll('.title-fallback').length,
         scriptExecutions: window.contentMovesScriptRuns ?? 0,
+        svgScriptExecutions: window.contentMovesSvgScriptRuns ?? 0,
         voidChild: {
           parent: root.querySelector('#void-child')!.parentElement!.id,
           text: root.querySelector('#void-child')!.textContent,
           stamp: root.querySelector('#void-child')!.getAttribute('data-stamped'),
+        },
+        markup: {
+          transformations: lab.getAttribute('data-markup'),
+          tableBodies: markup.querySelectorAll('#markup-table > tbody').length,
+          rows: Array.from(markup.querySelectorAll('#markup-table td'), (element) => ({ text: element.textContent, stamp: element.getAttribute('data-stamped') })),
+          title: { text: parsedTitle.textContent, stamp: parsedTitle.getAttribute('data-stamped') },
+          body: Array.from(markup.querySelectorAll('.parsed-body'), (element) => ({ text: element.textContent, stamp: element.getAttribute('data-stamped') })),
+          readback: { text: readback.textContent, stage: readback.getAttribute('data-stage') },
+          scripts: markup.querySelectorAll('#parsed-script').length,
         },
         copies: {
           identities: lab.getAttribute('data-copies'),
@@ -205,7 +229,7 @@ export function assertContentMovesExpectations(transcript: LaneTranscript): void
           documents: 'true:false:true:true',
           textEdits: 'true:true:true:true:true:true',
           source: ['second'],
-          target: ['replacement', 'first', 'moved-card', 'adopted', 'text-moves', 'moved-script', 'void-parent', 'generated-wrapper', 'copied-wrapper'],
+          target: ['replacement', 'first', 'moved-card', 'adopted', 'text-moves', 'moved-script', 'void-parent', 'generated-wrapper', 'copied-wrapper', 'markup-wrapper'],
           values: [
             { id: 'replacement', text: `replacement:${message.length}`, stamp: null },
             { id: 'first', text: `first:${message.toUpperCase()}`, stamp: message },
@@ -213,14 +237,24 @@ export function assertContentMovesExpectations(transcript: LaneTranscript): void
             { id: 'adopted', text: `adopted:${message}`, stamp: message },
             { id: 'text-moves', text: `after:${message.length}before:${message}separator`, stamp: null },
           ],
-          cards: [`card:${message}`, `card:${message}`, `card:${message}`, `card:${message}`],
+          cards: [`card:${message}`, `card:${message}`, `card:${message}`, `card:${message}`, `card:${message}`],
           title: { text: `title:${message}`, stamp: message },
           rows: active ? ['one', 'two', 'three'].slice(0, count).map((item) => ({ text: `${item}:${message}`, stamp: message })) : [],
           discarded: 0,
           donorChildren: 0,
           titleFallbacks: 1,
           scriptExecutions: 0,
+          svgScriptExecutions: 1,
           voidChild: { parent: 'void-parent', text: `void:${message}`, stamp: message },
+          markup: {
+            transformations: 'true:true:true:true:true:true',
+            tableBodies: active ? 1 : 0,
+            rows: active ? ['one', 'two', 'three'].slice(0, count).map((item) => ({ text: `markup:${item}:${message}`, stamp: message })) : [],
+            title: { text: `parsed-title:${message}`, stamp: message },
+            body: active ? [{ text: `parsed-body:${message}`, stamp: message }] : [],
+            readback: { text: `readback & ${message.toUpperCase()}`, stage: '<after>' },
+            scripts: 1,
+          },
           copies: {
             identities: 'true:true:true:true:true:true:true:true:true:true:true',
             shallow: { text: `shallow:${message}`, stamp: message, snapshot: 'before' },

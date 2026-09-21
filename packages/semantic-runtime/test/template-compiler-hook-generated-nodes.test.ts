@@ -163,7 +163,38 @@ class CommentEditor {
 }
 @customElement({ name: 'edited-marker-view', dependencies: [CommentEditor], template: '<comment-editor><!--ordinary--></comment-editor>' })
 class EditedMarkerView {}
-@customElement({ name: 'my-app', template: '', dependencies: [GeneratedView, InvalidView, LetView, MarkerView, NativeView, ResourceView, ControlView, ShadowView, SlotInvalidView, EditedTextView, EditedMarkerView] })
+@customElement({ name: 'markup-maker', template: '<au-slot></au-slot>' })
+class MarkupMaker {
+  static processContent(el: HTMLElement) {
+    el.innerHTML = '<form><p data-form-context="suppressed">Direct \\u0024{direct}</p></form>';
+    const doc = el.ownerDocument;
+    const table = doc.createElement('table');
+    table.innerHTML = '<tr><td title.bind="title">Cell \\u0024{title}</td></tr>';
+    el.appendChild(table);
+    const carrier = doc.createElement('template');
+    carrier.innerHTML = '<section data-parsed="&amp;"><button click.trigger="activate()" highlight.bind="color">Parsed \\u0024{title}</button><b repeat.for="item of items" if.bind="visible">Item \\u0024{item}</b><generated-card value.bind="title"><span au-slot="body">Projection \\u0024{title}</span></generated-card><!--parsed-comment--><script>neverExecuted()</script></section>';
+    el.appendChild(carrier.content);
+  }
+}
+@customElement({ name: 'markup-view', dependencies: [MarkupMaker, GeneratedCard, Highlight], template: '<form><markup-maker><i>Discarded \\u0024{discardedMarkup}</i></markup-maker></form>' })
+class MarkupView { direct = 'direct'; title = 'title'; color = 'blue'; items = [1, 2]; visible = true; activate() {} }
+@customElement({ name: 'markup-problem-maker', template: '' })
+class MarkupProblemMaker {
+  static processContent(el: HTMLElement) {
+    const mode = el.getAttribute('mode');
+    el.setAttribute('data-tentative', 'discarded');
+    if (mode === 'invalid') el.innerHTML = '<span>Invalid \\u0024{???}</span>';
+    else if (mode === 'marker') el.innerHTML = '<!--au-->';
+    else { try { el.innerHTML = '<input type="range" min="80" max="100">'; } catch { return true; } }
+  }
+}
+@customElement({ name: 'markup-invalid-view', dependencies: [MarkupProblemMaker], template: '<markup-problem-maker mode="invalid"></markup-problem-maker>' })
+class MarkupInvalidView {}
+@customElement({ name: 'markup-marker-view', dependencies: [MarkupProblemMaker], template: '<markup-problem-maker mode="marker"></markup-problem-maker>' })
+class MarkupMarkerView {}
+@customElement({ name: 'markup-range-view', dependencies: [MarkupProblemMaker], template: '<markup-problem-maker mode="range"><b>original</b></markup-problem-maker>' })
+class MarkupRangeView {}
+@customElement({ name: 'my-app', template: '', dependencies: [GeneratedView, InvalidView, LetView, MarkerView, NativeView, ResourceView, ControlView, ShadowView, SlotInvalidView, EditedTextView, EditedMarkerView, MarkupView, MarkupInvalidView, MarkupMarkerView, MarkupRangeView] })
 export class MyApp {}
 `);
   const runtime = await createSemanticRuntime({
@@ -240,6 +271,43 @@ export class MyApp {}
     expect(editedMarker?.value).toBeNull();
     expect(editedMarker?.reasons.some(reason => reason.frontierCause?.frontierKind === TemplateCompilerSiteCursorFrontierKind.AuthoredCompilerMarkerReserved))
       .toBe(true);
+    const markup = batch.resources.find(resource => resource.resourceName === 'markup-view');
+    expect(markup?.state, markup?.reasons.map(reason => `${reason.reasonKind}: ${reason.summary}`).join('\n'))
+      .toBe(TemplateCompilerCompiledHandoffState.Exact);
+    if (markup?.value == null) throw new Error('Missing parsed-markup definition.');
+    const markupDefinitions = markup.value.definitions;
+    expect(markupDefinitions.filter(definition => definition.owner.ownerKind === 'template-controller')).toHaveLength(2);
+    expect(markupDefinitions.filter(definition => definition.owner.ownerKind === 'projection').length).toBeGreaterThanOrEqual(2);
+    const markupNodes = markupDefinitions.flatMap(definition => definition.tree.nodes);
+    // The source host's form ancestor affects fragment parsing even though the new form token is not a child yet.
+    expect(markupNodes.filter(node => node.nodeKind === 'element' && node.tagName === 'form')).toHaveLength(1);
+    expect(markupNodes.filter(node => node.nodeKind === 'element' && node.tagName === 'tbody')).toHaveLength(1);
+    expect(markupNodes.find(node => node.nodeKind === 'element' && node.tagName === 'script'))
+      .toMatchObject({ parserInertScript: true });
+    expect(markupNodes.find(node => node.nodeKind === 'comment' && node.text === 'parsed-comment')?.source)
+      .toMatchObject({ kind: 'unexpanded-address' });
+    const markupAttributes = markupDefinitions.flatMap(definition => definition.tree.attributes);
+    expect(markupAttributes.find(attribute => attribute.name === 'data-parsed')).toMatchObject({ value: '&', source: null });
+    expect(markupAttributes.find(attribute => attribute.name === 'data-form-context')).toMatchObject({ value: 'suppressed', source: null });
+    const markupInstructions = markupDefinitions.flatMap(definition => definition.rows.flat());
+    const markupTextBindings = markupInstructions.filter(instruction => instruction.value.type === TemplateCompilerFrameworkInstructionType.TextBinding);
+    expect(markupTextBindings).toHaveLength(5);
+    expect(markupTextBindings.every(instruction => instruction.source == null)).toBe(true);
+    const markupRows = JSON.stringify(markupInstructions);
+    for (const name of ['direct', 'title', 'activate', 'color', 'highlight', 'generated-card', 'items', 'visible', 'item']) {
+      expect(markupRows, name).toContain(name);
+    }
+    expect(markupRows).not.toContain('discardedMarkup');
+    expect(JSON.stringify(markupDefinitions.map(definition => definition.tree))).not.toContain('Discarded');
+    for (const [resourceName, frontierKind] of [
+      ['markup-invalid-view', TemplateCompilerSiteCursorFrontierKind.ReachedNormalizedInvalid],
+      ['markup-marker-view', TemplateCompilerSiteCursorFrontierKind.AuthoredCompilerMarkerReserved],
+    ] as const) {
+      const problem = batch.resources.find(resource => resource.resourceName === resourceName);
+      expect(problem?.value).toBeNull();
+      expect(problem?.runtimeFallback).toBeNull();
+      expect(problem?.reasons.some(reason => reason.frontierCause?.frontierKind === frontierKind)).toBe(true);
+    }
     const shadow = batch.resources.find(resource => resource.resourceName === 'shadow-view');
     expect(shadow?.state, shadow?.reasons.map(reason => `${reason.reasonKind}: ${reason.summary}`).join('\n'))
       .toBe(TemplateCompilerCompiledHandoffState.Exact);
@@ -281,6 +349,7 @@ export class MyApp {}
       ['native-view', 'native-custom-element-construction', '<native-maker data-authored="native"></native-maker>'],
       ['resource-view', 'native-resource-effects', '<resource-maker data-authored="resource"></resource-maker>'],
       ['control-view', 'native-control-state', '<control-maker><input type="number" value="invalid"></control-maker>'],
+      ['markup-range-view', 'native-control-state', '<markup-problem-maker mode="range"><b>original</b></markup-problem-maker>'],
     ] as const) {
       const unsupported = batch.resources.find(resource => resource.resourceName === name);
       expect(unsupported?.state, unsupported?.reasons.map(reason => reason.summary).join('\n'))
@@ -300,4 +369,4 @@ export class MyApp {}
     nativeOutlets.mockRestore();
     runtime.retireWorkspaceIncarnation();
   }
-}, 30_000);
+}, 60_000);

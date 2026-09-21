@@ -56,6 +56,7 @@ import {
 import { TemplateCompilerCompletedMutationBatchKind } from '../src/template/template-compiler-mutation-authority.js';
 import { TemplateCompilerStructuralExecutionSession } from '../src/template/template-compiler-structural-execution.js';
 import { BrowserEffectiveTemplateFixture } from './browser-effective-template-fixture.js';
+import { parseBrowserTemplateFragmentDraft } from '../src/template/browser-template-parser.js';
 import { HtmlNamespaceKind } from '../src/template/html-ir.js';
 
 describe('template compiler execution sequence', () => {
@@ -499,6 +500,114 @@ describe('template compiler execution sequence', () => {
         }
         execution.finishSiteExecutionDriver(driver);
         execution.seal();
+      } finally { browser.dispose(); }
+    },
+  );
+
+  test.each([
+    ['platform', TemplateCompilerOperationCompletionKind.Complete],
+    ['template-contents', TemplateCompilerOperationCompletionKind.Complete],
+    ['platform', TemplateCompilerOperationCompletionKind.Unsupported],
+    ['template-contents', TemplateCompilerOperationCompletionKind.Unsupported],
+  ] as const)('ingests parsed source fragments with fresh identities and native creation state: %s / %s',
+    (document, completionKind) => {
+      const browser = new BrowserEffectiveTemplateFixture('compiler-execution-parsed-fragment');
+      try {
+        const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(browser.materialize('root',
+          '<div><i>retained</i></div>',
+        ).emission);
+        const originalNodes = [...forest.readNodes()];
+        const originalAttributes = [...forest.readAttributes()];
+        const execution = TemplateCompilerExecutionSession.createForForest('parsed-fragment:family', forest);
+        const lane = execution.admitRootInvocation('parsed-fragment:lane');
+        const closure = closeExactNoLocalBootstrap(browser, execution, lane, 'parsed-fragment');
+        const driver = execution.beginSiteExecutionDriver(execution.captureSiteExecutionFrontier(closure));
+        const root = forest.compilerContent.readChildren()[0] as TemplateCompilerElementOccurrence;
+        const retained = root.readChildren()[0]!;
+        const request = (operationKey: string) => ({
+          operationKey, context: driver.context,
+          operationKind: TemplateCompilerOperationKind.ProcessContent,
+          executionMechanism: TemplateCompilerOperationExecutionMechanism.StaticCallable,
+          target: execution.callableEffectTarget(driver.context, new TemplateCompilerCallableReference(
+            null, null, browser.run.handles.address('parsed-fragment:hook'),
+          ), root),
+          causeHandles: [browser.run.handles.product('parsed-fragment:definition')], siteExecutionDriver: driver,
+        });
+        const draft = parseBrowserTemplateFragmentDraft('<section data-order="first" DATA-ORDER="discarded" title="&amp;">'
+          + '<script>alreadyStarted</script><button is="native-button">text<!--note--></button>'
+          + '<template><script>nestedInert</script><svg viewBox="0 0 1 1"><script>foreignScript</script>'
+          + '<use xlink:href="#shape"></use><foreignObject><b>html child</b></foreignObject></svg></template></section>').fragment;
+        const attempt = execution.beginOperation(request('parsed-fragment:process'));
+        const fragment = execution.createProcessContentParsedFragment(attempt, draft, document);
+        const second = execution.createProcessContentParsedFragment(attempt, draft, document);
+        const section = fragment.readChildren()[0] as TemplateCompilerElementOccurrence;
+        const script = section.readChildren()[0] as TemplateCompilerElementOccurrence;
+        const button = section.readChildren()[1] as TemplateCompilerElementOccurrence;
+        const template = section.readChildren()[2] as TemplateCompilerElementOccurrence;
+        const nestedScript = template.templateContent!.readChildren()[0] as TemplateCompilerElementOccurrence;
+        const svg = template.templateContent!.readChildren()[1] as TemplateCompilerElementOccurrence;
+        const foreignScript = svg.readChildren()[0] as TemplateCompilerElementOccurrence;
+        const use = svg.readChildren()[1] as TemplateCompilerElementOccurrence;
+        const htmlChild = svg.readChildren()[2]!.readChildren()[0] as TemplateCompilerElementOccurrence;
+        expect(fragment.parent).toBeNull();
+        expect(fragment).not.toBe(second);
+        expect(section).not.toBe(second.readChildren()[0]);
+        expect(section.occurrenceKey).not.toBe(second.readChildren()[0]!.occurrenceKey);
+        expect(section.readAttributes().map(attribute => [attribute.name, attribute.value])).toEqual([
+          ['data-order', 'first'], ['title', '&'],
+        ]);
+        expect(script.parserInertScript).toBe(true);
+        expect(nestedScript.parserInertScript).toBe(true);
+        expect(foreignScript.parserInertScript).toBe(false);
+        expect(button.customElementIs).toBe('native-button');
+        execution.removeProcessContentAttribute(attempt, button.readAttributes()[0]!);
+        expect(button.customElementIs).toBe('native-button');
+        expect(button.readChildren()[0]).toMatchObject({ text: 'text', inputReference: null });
+        expect(button.readChildren()[1]).toMatchObject({ text: 'note', inputReference: null });
+        expect(svg.namespace).toBe(HtmlNamespaceKind.Svg);
+        expect(svg.readAttributes()[0]!.name).toBe('viewBox');
+        expect(use.readAttributes()[0]).toMatchObject({
+          name: 'href', prefix: 'xlink', namespaceUri: 'http://www.w3.org/1999/xlink', value: '#shape',
+        });
+        expect(htmlChild.namespace).toBe(HtmlNamespaceKind.Html);
+        expect(forest.ownerDocumentFor(fragment)).toBe(document);
+        expect(forest.ownerDocumentFor(section)).toBe(document);
+        expect(forest.ownerDocumentFor(script)).toBe(document);
+        expect(forest.ownerDocumentFor(template)).toBe(document);
+        expect(forest.ownerDocumentFor(template.templateContent!)).toBe('template-contents');
+        expect(forest.ownerDocumentFor(nestedScript)).toBe('template-contents');
+        expect(forest.ownerDocumentFor(htmlChild)).toBe('template-contents');
+        execution.placeProcessContentNode(attempt, section, root, root.readChildren().length);
+        const operation = execution.completeOperation(attempt, completionKind === TemplateCompilerOperationCompletionKind.Complete
+          ? new TemplateCompilerOperationCompletion(completionKind)
+          : new TemplateCompilerOperationCompletion(completionKind, [], 'Later unsupported operation.'));
+        expect(operation.mutationBatch.nodeCreationMutations.every(mutation =>
+          mutation.node.inputReference == null && mutation.sourceNode == null)).toBe(true);
+        expect(operation.mutationBatch.attributeInsertionMutations.every(mutation =>
+          mutation.attribute.inputReference == null && mutation.sourceAttribute == null)).toBe(true);
+        if (completionKind === TemplateCompilerOperationCompletionKind.Complete) {
+          expect(root.readChildren()).toEqual([retained, section]);
+          expect(script.parserInertScript).toBe(true);
+          expect(button.customElementIs).toBe('native-button');
+          expect(button.readAttributes()).toEqual([]);
+          // Ordinary insertion adopts only the live subtree; nested template contents remain in their inert document.
+          expect(forest.ownerDocumentFor(script)).toBe(forest.ownerDocumentFor(root));
+          expect(forest.ownerDocumentFor(nestedScript)).toBe('template-contents');
+          const terminal = execution.beginOperation(request('parsed-fragment:terminal'));
+          execution.completeOperation(terminal, new TemplateCompilerOperationCompletion(
+            TemplateCompilerOperationCompletionKind.Unsupported, [], 'No target planning in this execution-only test.',
+          ));
+        } else {
+          expect(root.readChildren()).toEqual([retained]);
+          expect(forest.readNodes()).toEqual(originalNodes);
+          expect(forest.readAttributes()).toEqual(originalAttributes);
+          for (const mutation of operation.mutationBatch.nodeCreationMutations) {
+            expect(forest.nodeForOccurrenceKey(mutation.node.occurrenceKey)).toBeNull();
+          }
+        }
+        execution.finishSiteExecutionDriver(driver);
+        execution.seal();
+        forest.assertCoherentTopology();
       } finally { browser.dispose(); }
     },
   );

@@ -39,6 +39,11 @@ import {
   type EvaluationValue,
 } from '../evaluation/values.js';
 import { HtmlNamespaceKind } from './html-ir.js';
+import type {
+  BrowserTemplateElementContext,
+  BrowserTemplateStructureAttribute,
+  BrowserTemplateStructureNode,
+} from './browser-template-draft.js';
 import type { TemplateContentOwnerDocument } from './template-structure.js';
 import type {
   TemplateCompilerExecutionSession,
@@ -107,7 +112,8 @@ type CompilerDomReference = CompilerDomNodeReference | CompilerDomCollectionRefe
  * Traversal, document factories, copies, attributes, class tokens, and node relocation/removal use one pending operation.
  * Native resource effects are not confined DOM mutations: platform-owned resource mutations remain explicit refusals.
  * CharacterData and replace-all text writes share that transaction; browser-dependent identity remains explicit.
- * Native control history, markup/metadata writes, and dataset remain unsupported until their owned lowering lanes exist.
+ * Contextual markup uses the opt-in parser adapter and the same generated-node lowering, not authored source products.
+ * Native control history, unsupported parser profiles, metadata writes and dataset remain explicit boundaries.
  */
 export class TemplateCompilerDomHost {
   readonly argumentValues: readonly EvaluationValue[];
@@ -127,15 +133,7 @@ export class TemplateCompilerDomHost {
     private readonly attempt: TemplateCompilerPendingOperationAttempt,
     private readonly rootElement: TemplateCompilerElementOccurrence,
   ) {
-    const pending = [rootElement as TemplateCompilerNodeOccurrence];
-    while (pending.length > 0) {
-      const node = pending.pop()!;
-      this.ownedNodes.add(node);
-      pending.push(...node.readChildren());
-      if (node instanceof TemplateCompilerElementOccurrence && node.templateContent != null) {
-        pending.push(node.templateContent);
-      }
-    }
+    this.ownSubtree(rootElement);
     this.argumentValues = [
       this.nodeValue(rootElement),
       this.referenceValue(new CompilerDomOpaqueReference('platform')),
@@ -308,6 +306,7 @@ export class TemplateCompilerDomHost {
     }
     if (occurrence instanceof TemplateCompilerElementOccurrence) {
       switch (member) {
+        case 'innerHTML': return this.readMarkup(occurrence, node, moduleKey, host);
         case 'tagName': return new EvaluationStringValue(nodeName(occurrence));
         case 'localName': return new EvaluationStringValue(occurrence.tagName);
         case 'namespaceURI': return new EvaluationStringValue(occurrence.namespaceUri);
@@ -356,6 +355,7 @@ export class TemplateCompilerDomHost {
       return this.setReflectedAttribute(reference.element, 'class', value, member, node, moduleKey, host);
     }
     if (this.refusal == null && reference.kind === 'node' && reference.occurrence instanceof TemplateCompilerElementOccurrence) {
+      if (member === 'innerHTML') return this.writeMarkup(reference.occurrence, value, node, moduleKey, host);
       const name = member === 'id' || member === 'slot' ? member
         : member === 'classList' || member === 'className' && reference.occurrence.namespace === HtmlNamespaceKind.Html ? 'class' : null;
       if (name != null) return this.setReflectedAttribute(reference.occurrence, name, value, member, node, moduleKey, host);
@@ -372,6 +372,113 @@ export class TemplateCompilerDomHost {
       if (!(child instanceof TemplateCompilerCommentOccurrence)) text += this.textContent(child);
     }
     return text;
+  }
+
+  private markupAttributes(element: TemplateCompilerElementOccurrence, serialized = false): BrowserTemplateStructureAttribute[] {
+    const attributes = element.readAttributes().map(attribute => ({
+      name: attribute.name, namespaceUri: attribute.namespaceUri, prefix: attribute.prefix,
+      // Real parser ancestry can extend beyond the hook's exposed subtree; those attributes cannot be pending here.
+      value: this.ownedNodes.has(element) ? this.execution.readAttributeValue(this.attempt, attribute) : attribute.value,
+    }));
+    if (serialized && element.customElementIs != null
+      && !attributes.some(attribute => attribute.namespaceUri == null && attribute.name === 'is')) {
+      attributes.unshift({ name: 'is', value: element.customElementIs, namespaceUri: null, prefix: null });
+    }
+    return attributes;
+  }
+
+  private markupContext(element: TemplateCompilerElementOccurrence): BrowserTemplateElementContext {
+    return { tagName: element.tagName, namespaceUri: element.namespaceUri, attributes: this.markupAttributes(element) };
+  }
+
+  private readMarkup(
+    element: TemplateCompilerElementOccurrence, node: ts.Node, moduleKey: string, host: StaticIntrinsicEvaluationHost,
+  ): EvaluationValue {
+    const adapter = this.execution.domMarkup;
+    if (adapter == null) return this.unsupported('innerHTML', node, moduleKey, host, 'dom-markup-unavailable');
+    const documents = new Map<BrowserTemplateElementContext, boolean>();
+    const snapshot = (occurrence: TemplateCompilerNodeOccurrence): BrowserTemplateStructureNode => {
+      if (occurrence instanceof TemplateCompilerElementOccurrence) {
+        const value: BrowserTemplateStructureNode = {
+          kind: 'element', tagName: occurrence.tagName, namespaceUri: occurrence.namespaceUri,
+          attributes: this.markupAttributes(occurrence, true), children: occurrence.readChildren().map(snapshot),
+          content: occurrence.templateContent?.readChildren().map(snapshot) ?? null,
+        };
+        documents.set(value, this.execution.forest.ownerDocumentFor(occurrence) === 'platform');
+        return value;
+      }
+      if (occurrence instanceof TemplateCompilerTextOccurrence || occurrence instanceof TemplateCompilerCommentOccurrence) {
+        return { kind: occurrence instanceof TemplateCompilerTextOccurrence ? 'text' : 'comment',
+          value: this.execution.readCharacterData(this.attempt, occurrence) };
+      }
+      if (occurrence instanceof TemplateCompilerDoctypeOccurrence) {
+        return { kind: 'doctype', name: occurrence.name, publicId: occurrence.publicId, systemId: occurrence.systemId };
+      }
+      throw new Error('Markup serialization requires DOM children, not a fragment node.');
+    };
+    const context = this.markupContext(element);
+    documents.set(context, this.execution.forest.ownerDocumentFor(element) === 'platform');
+    return new EvaluationStringValue(adapter.serialize(context,
+      (element.templateContent ?? element).readChildren().map(snapshot), candidate => documents.get(candidate)!));
+  }
+
+  private writeMarkup(
+    element: TemplateCompilerElementOccurrence, value: EvaluationValue,
+    node: ts.Node, moduleKey: string, host: StaticIntrinsicEvaluationHost,
+  ): EvaluationValue {
+    const markup = value.kind === EvaluationValueKind.Null ? '' : domPrimitiveString(value);
+    if (markup == null) return this.unsupported('innerHTML', node, moduleKey, host, 'runtime-dependent-input');
+    const adapter = this.execution.domMarkup;
+    if (adapter == null) return this.unsupported('innerHTML', node, moduleKey, host, 'dom-markup-unavailable');
+    const ancestors: BrowserTemplateElementContext[] = [];
+    let ancestor = element;
+    while (ancestor.parentEdgeKind === TemplateCompilerOccurrenceEdgeKind.Child && ancestor.parent instanceof TemplateCompilerElementOccurrence) {
+      ancestor = ancestor.parent;
+      ancestors.push(this.markupContext(ancestor));
+    }
+    const parsed = adapter.parse(markup, {
+      element: this.markupContext(element), ancestors,
+      scriptingEnabled: this.execution.forest.ownerDocumentFor(element) === 'platform',
+    });
+    if (parsed.kind === 'unsupported') return this.unsupported('innerHTML', node, moduleKey, host, `dom-markup-${parsed.reason}`);
+    const destination = element.templateContent ?? element;
+    if (this.hasNativeResourceAttributeEffect(element)
+      || destination.readChildren().some(child => this.hasNativeResourceTreeEffect(child, null))) {
+      return this.unsupported('innerHTML', node, moduleKey, host, 'native-resource-effects');
+    }
+    if (destination.readChildren().some(child => this.hasNativeControlTreeState(child))) {
+      return this.unsupported('innerHTML', node, moduleKey, host, 'native-control-state');
+    }
+    // Pure draft ingestion remains tentative. Native-effect refusal discards it with the rest of this hook.
+    const fragment = this.execution.createProcessContentParsedFragment(this.attempt, parsed.draft.fragment,
+      this.execution.forest.ownerDocumentFor(destination));
+    const pending = [...fragment.readChildren()];
+    while (pending.length > 0) {
+      const current = pending.pop()!;
+      if (current instanceof TemplateCompilerElementOccurrence) {
+        if (this.execution.forest.ownerDocumentFor(current) === 'platform') {
+          // Template setters parse inertly even when their existing content was explicitly adopted into P.
+          if (element.templateContent == null && current.namespace === HtmlNamespaceKind.Html
+            && (current.tagName.includes('-') || current.customElementIs != null)) {
+            return this.unsupported('innerHTML', node, moduleKey, host, 'native-custom-element-construction');
+          }
+          if (this.isNativeResourceElement(current)) {
+            return this.unsupported('innerHTML', node, moduleKey, host, 'native-resource-effects');
+          }
+        }
+        if (this.isNativeRadio(current) || this.isNativeRange(current)) {
+          return this.unsupported('innerHTML', node, moduleKey, host, 'native-control-state');
+        }
+        if (current.templateContent != null) pending.push(...current.templateContent.readChildren());
+      }
+      pending.push(...current.readChildren());
+    }
+    this.ownSubtree(fragment);
+    for (const child of [...destination.readChildren()]) this.execution.detachProcessContentNode(this.attempt, child);
+    for (const child of [...fragment.readChildren()]) {
+      this.execution.placeProcessContentNode(this.attempt, child, destination, destination.readChildren().length);
+    }
+    return EvaluationUndefined;
   }
 
   private writeText(
@@ -651,7 +758,7 @@ export class TemplateCompilerDomHost {
             return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-resource-effects'));
           }
         }
-        if (this.isNativeRadio(element)) {
+        if (this.isNativeRadio(element) || this.isNativeRange(element)) {
           return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-control-state'));
         }
         if (deep && element.templateContent != null) {
@@ -664,13 +771,7 @@ export class TemplateCompilerDomHost {
       if (deep) for (const child of current.node.readChildren()) pending.push({ node: child, document: current.document });
     }
     const copy = this.execution.cloneProcessContentNode(this.attempt, source, deep, document);
-    const owned = [copy];
-    while (owned.length > 0) {
-      const node = owned.pop()!;
-      this.ownedNodes.add(node);
-      owned.push(...node.readChildren());
-      if (node instanceof TemplateCompilerElementOccurrence && node.templateContent != null) owned.push(node.templateContent);
-    }
+    this.ownSubtree(copy);
     return staticInvocationValue(this.nodeValue(copy));
   }
 
@@ -1010,6 +1111,11 @@ export class TemplateCompilerDomHost {
       && asciiLower(this.reflectedAttributeValue(element, 'type')) === 'radio';
   }
 
+  private isNativeRange(element: TemplateCompilerElementOccurrence): boolean {
+    return element.namespace === HtmlNamespaceKind.Html && element.tagName === 'input'
+      && asciiLower(this.reflectedAttributeValue(element, 'type')) === 'range';
+  }
+
   /** Native input state can survive cloning but is not determined by final attributes alone. */
   private hasNativeControlAttributeState(
     element: TemplateCompilerElementOccurrence,
@@ -1018,6 +1124,7 @@ export class TemplateCompilerDomHost {
   ): boolean {
     if (element.namespace !== HtmlNamespaceKind.Html || element.tagName !== 'input') return false;
     if (this.isNativeRadio(element)) return true;
+    if (this.isNativeRange(element) && attribute.namespaceUri == null && ['min', 'max', 'step'].includes(attribute.name)) return true;
     return attribute.namespaceUri == null && attribute.name === 'type'
       && (asciiLower(value ?? '') || 'text') !== (asciiLower(this.reflectedAttributeValue(element, 'type')) || 'text');
   }
@@ -1124,6 +1231,16 @@ export class TemplateCompilerDomHost {
       this.nodeReferences.set(node, reference);
     }
     return this.referenceValue(reference);
+  }
+
+  private ownSubtree(root: TemplateCompilerNodeOccurrence): void {
+    const pending = [root];
+    while (pending.length > 0) {
+      const node = pending.pop()!;
+      this.ownedNodes.add(node);
+      pending.push(...node.readChildren());
+      if (node instanceof TemplateCompilerElementOccurrence && node.templateContent != null) pending.push(node.templateContent);
+    }
   }
 
   private nullableNode(node: TemplateCompilerNodeOccurrence | null): EvaluationValue {

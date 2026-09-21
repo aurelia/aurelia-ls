@@ -11,7 +11,12 @@ import type { ComputationRun } from '../kernel/computation-lifecycle.js';
 import {
   BrowserEffectiveTemplateMaterializer,
 } from './browser-effective-template-materializer.js';
-import { parseBrowserTemplateFragmentDraft } from './browser-template-parser.js';
+import {
+  parseBrowserTemplateContextualFragmentDraft,
+  parseBrowserTemplateFragmentDraft,
+  serializeBrowserTemplateInnerHtml,
+} from './browser-template-parser.js';
+import type { TemplateCompilerDomMarkup } from './template-compiler-execution.js';
 import { selectBrowserTemplateCompilerCarrier } from './browser-template-selection.js';
 import {
   compileTemplateCompilerContextFamily,
@@ -63,6 +68,11 @@ import {
   type TemplateCompilerOccurrenceLocalDefinitionValue,
 } from './template-compiler-occurrence-family-compilation.js';
 import { TemplateCompilerSiteCursorFrontierKind } from './template-compiler-site-cursor-event.js';
+
+const domMarkup: TemplateCompilerDomMarkup = {
+  parse: parseBrowserTemplateContextualFragmentDraft,
+  serialize: serializeBrowserTemplateInnerHtml,
+};
 
 export const enum TemplateCompilerCompiledHandoffState {
   Exact = 'exact',
@@ -350,6 +360,7 @@ function prepareResource(
     browserEmission: browser,
     currentFrontDoor: app.emission.templates.frontDoor,
     compilerReadStore: store,
+    domMarkup,
   });
   if (family.state !== TemplateCompilerContextFamilyCompilationState.Exact || family.value == null) {
     return unavailablePreparation(unavailableMaterialization(resource, {
@@ -486,6 +497,7 @@ function prepareOccurrenceResource(
     currentFamily,
     appRootDefinitionProductHandle: compilation.appRootDefinitionProductHandle,
     publication: run,
+    domMarkup,
   });
   if (occurrence.state !== TemplateCompilerContextFamilyCompilationState.Exact || occurrence.value == null) {
     return unavailablePreparation(unavailableMaterialization(resource, {
