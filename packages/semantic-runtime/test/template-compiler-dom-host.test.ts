@@ -15,6 +15,7 @@ import {
 } from '../src/template/compiler-hook-world.js';
 import { TemplateCompilerDomHost } from '../src/template/template-compiler-dom-host.js';
 import { parseBrowserTemplateContextualFragmentDraft, serializeBrowserTemplateInnerHtml } from '../src/template/browser-template-parser.js';
+import { queryTemplateCompilerDescendantElements } from '../src/template/template-compiler-dom-selectors.js';
 import {
   TemplateCompilerCallableReference,
   TemplateCompilerExecutionSession,
@@ -30,6 +31,153 @@ import { TemplateCompilerElementOccurrence, TemplateCompilerOccurrenceForest } f
 import { BrowserEffectiveTemplateFixture } from './browser-effective-template-fixture.js';
 
 describe('interpreted compiler DOM host', () => {
+  test('returns fresh static selector lists while reading pending attributes and current topology', () => {
+    const run = new DomHookRun('<div><section><i id="a"></i><i id="b"></i></section><template><i id="inert"></i></template></div>');
+    try {
+      const result = run.invoke(`function hook(node){
+        node.className='pending';const section=node.firstChild;
+        const snapshot=section.querySelectorAll('div.pending > section > i');
+        const other=section.querySelectorAll(':scope > i');const live=section.children;
+        let count=0;snapshot.forEach(child=>{child.className='detached';child.remove();count++;});
+        section.append(snapshot[1],snapshot[0]);
+        const carrier=node.children[1];
+        return snapshot!==other&&count===2&&snapshot.length===2&&snapshot[0].id==='a'&&other[0]===snapshot[0]
+          &&live[0].id==='b'&&section.querySelector('.detached')===snapshot[1]&&snapshot.item(2)===null
+          &&node.querySelector('#inert')===null&&node.querySelector(':scope')===null
+          &&carrier.content.querySelector('i').id==='inert'&&carrier.content.querySelectorAll(':scope > i').length===0;
+      }`);
+      expect(result.kind, run.host.refusal?.summary).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+      run.execution.forest.assertCoherentTopology();
+    } finally { run.dispose(); }
+  });
+
+  test.each(['i:hover', 'i, :checked', '[title="x" s]'])(
+    'keeps unsupported selector semantics explicit and rolls back: %s', selector => {
+      const run = new DomHookRun('<div><i></i></div>');
+      try {
+        const result = run.invoke(`function hook(node){node.id='pending';try{node.querySelectorAll(${JSON.stringify(selector)});}catch(error){return true;}}`);
+        expect(result.kind).toBe(StaticCallableCompletionKind.Open);
+        expect(run.host.refusal).toMatchObject({ kind: 'dom-selector-profile' });
+        run.complete(result.kind);
+        expect(run.root.readAttributes()).toEqual([]);
+      } finally { run.dispose(); }
+    },
+  );
+
+  test.each([
+    ['node.querySelector()', 'TypeError'], ['node.querySelector("")', 'SyntaxError'],
+    ['node.querySelectorAll("   ")', 'SyntaxError'],
+  ])('keeps established native query failures catchable: %s', (body, errorName) => {
+    const run = new DomHookRun('<div></div>');
+    try {
+      const result = run.invoke(`function hook(node){try{${body};}catch(error){node.id='caught';return error.name==='${errorName}';}}`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+      expect(run.root.readAttributes()[0]?.value).toBe('caught');
+    } finally { run.dispose(); }
+  });
+
+  test.each([
+    ['duplicates', 'node.append(a,b,a);', 'group,b,a'],
+    ['ancestor then descendant', 'node.append(group,a);', 'group,a'],
+    ['descendant then ancestor', 'node.append(a,group);', 'a,group'],
+  ])('appends node arguments in native final order: %s', (_label, body, expected) => {
+    const run = new DomHookRun('<div><section id="group"><i id="a"></i><i id="b"></i></section></div>');
+    try {
+      const result = run.invoke(`function hook(node){const group=node.firstChild,a=group.firstChild,b=group.lastChild;
+        ${body}
+        return Array.from(node.children).map(child=>child.id).join(',')===${JSON.stringify(expected)};
+      }`);
+      expect(result.kind, run.host.refusal?.summary).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+      run.execution.forest.assertCoherentTopology();
+    } finally { run.dispose(); }
+  });
+
+  test.each([
+    ['node.append(a,fragment)', 'a,b'],
+    ['node.append(fragment,a)', 'b,a'],
+    ['node.append(fragment,fragment)', 'a,b'],
+  ])('drains fragments at their argument position: %s', (body, expected) => {
+    const run = new DomHookRun('<div><template><i id="a"></i><i id="b"></i></template></div>', true);
+    try {
+      const result = run.invoke(`function hook(node,platform){const carrier=node.firstChild,fragment=carrier.content,a=fragment.firstChild;
+        const originalDocument=fragment.ownerDocument;${body};
+        return Array.from(node.children).map(child=>child.id).join(',')===${JSON.stringify(',' + expected)}
+          &&fragment.childNodes.length===0&&fragment.ownerDocument===originalDocument&&a.ownerDocument===platform.document;
+      }`);
+      expect(result.kind, run.host.refusal?.summary).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+    } finally { run.dispose(); }
+  });
+
+  test('converts primitive append arguments to distinct Text nodes and returns undefined', () => {
+    const run = new DomHookRun('<div></div>');
+    try {
+      const result = run.invoke(`function hook(node){
+        const empty=node.append(),returned=node.append('',null,undefined,false,42,0x10n);
+        return empty===undefined&&returned===undefined&&node.childNodes.length===6&&node.firstChild.data===''
+          &&node.textContent==='nullundefinedfalse4216'&&node.childNodes[1]!==node.childNodes[2];
+      }`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      run.complete(result.kind);
+    } finally { run.dispose(); }
+  });
+
+  test.each([
+    ['node.append(node.firstChild,node.ownerDocument,node.lastChild)', 'dom-append-hierarchy'],
+    ['node.firstChild.append(node,node.lastChild)', 'dom-append-hierarchy'],
+    ['const f=node.ownerDocument.createDocumentFragment();f.append(f)', 'dom-append-hierarchy'],
+    ['node.append(node.firstChild,{toString(){return "x";}})', 'runtime-dependent-input'],
+    ['const t=node.ownerDocument.createElement("template");t.append("ordinary")', 'template-element-children'],
+  ])('refuses unclosed append behavior without a fabricated catchable error: %s', (body, kind) => {
+    const run = new DomHookRun('<div><i></i><b></b></div>');
+    try {
+      const before=[...run.execution.forest.readNodes()];
+      const result=run.invoke(`function hook(node){node.id='pending';try{${body};}catch(error){return true;}}`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Open);
+      expect(run.host.refusal).toMatchObject({ kind });
+      run.complete(result.kind);
+      expect(run.execution.forest.readNodes()).toEqual(before);
+      expect(run.root.readAttributes()).toEqual([]);
+      run.execution.forest.assertCoherentTopology();
+    } finally { run.dispose(); }
+  });
+
+  test('retains genuine single-node append hierarchy failures', () => {
+    const run = new DomHookRun('<div><i></i></div>');
+    try {
+      const result = run.invoke(`function hook(node){try{node.firstChild.append(node);}catch(error){return error.name==='HierarchyRequestError'&&node.childNodes.length===1;}}`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Normal);
+      expect(result.evaluation?.value).toMatchObject({ value: true });
+      expect(run.host.refusal).toBeNull();
+      run.complete(result.kind);
+    } finally { run.dispose(); }
+  });
+
+  test.each([
+    ['<img src="image.png">', 'native-resource-effects'],
+    ['<input type="radio" checked>', 'native-control-state'],
+  ])('retains native append effect boundaries and rolls back preceding arguments: %s', (markup, kind) => {
+    const run = new DomHookRun(`<div><i></i>${markup}</div>`, true);
+    try {
+      const nodes=[...run.execution.forest.readNodes()],children=[...run.root.readChildren()];
+      const result=run.invoke(`function hook(node){const first=node.firstChild,last=node.lastChild;node.append(first,'tentative',last);}`);
+      expect(result.kind).toBe(StaticCallableCompletionKind.Open);
+      expect(run.host.refusal).toMatchObject({ kind, member: 'append' });
+      run.complete(result.kind);
+      expect(run.root.readChildren()).toEqual(children);
+      expect(run.execution.forest.readNodes()).toEqual(nodes);
+      run.execution.forest.assertCoherentTopology();
+    } finally { run.dispose(); }
+  });
+
   test('parses table, raw-text and SVG markup in the receiving context', () => {
     const run = new DomHookRun('<div><table></table><textarea></textarea><svg><foreignObject></foreignObject></svg></div>');
     try {
@@ -1249,7 +1397,7 @@ describe('interpreted compiler DOM host', () => {
     ['dataset', 'node.dataset.key = "x";', 'dataset', 'unsupported-dom-member'],
     ['outer markup write', 'node.outerHTML = "<b></b>";', 'outerHTML', 'unsupported-dom-member'],
     ['metadata', 'metadata.name = "changed";', 'name', 'unsupported-dom-member'],
-    ['selector', 'node.querySelector("i");', 'querySelector', 'unsupported-dom-member'],
+    ['selector state', 'node.querySelector("i:hover");', 'querySelector', 'dom-selector-profile'],
   ])('refuses %s and rolls back earlier supported writes and removals', (_label, body, member, kind) => {
     const run = new DomHookRun('<div id="original"><i></i><b></b></div>');
     try {
@@ -1312,11 +1460,12 @@ class DomHookRun {
   readonly attempt: ReturnType<TemplateCompilerExecutionSession['beginOperation']>;
   readonly host: TemplateCompilerDomHost;
 
-  constructor(markup: string, platformRoot = false, withMarkup = true, adoptFirstTemplateContent = false) {
+  constructor(markup: string, platformRoot = false, withDomServices = true, adoptFirstTemplateContent = false) {
     const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(this.browser.materialize('root', markup).emission);
     this.root = forest.compilerContent.readChildren()[0] as TemplateCompilerElementOccurrence;
-    this.execution = TemplateCompilerExecutionSession.createForForest('dom-host:family', forest, withMarkup ? {
+    this.execution = TemplateCompilerExecutionSession.createForForest('dom-host:family', forest, withDomServices ? {
       parse: parseBrowserTemplateContextualFragmentDraft, serialize: serializeBrowserTemplateInnerHtml,
+      query: queryTemplateCompilerDescendantElements,
     } : null);
     const lane = this.execution.admitRootInvocation('dom-host:lane');
     const context = this.execution.bootstrapContext(lane);

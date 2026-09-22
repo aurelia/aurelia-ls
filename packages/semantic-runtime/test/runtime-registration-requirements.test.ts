@@ -434,6 +434,7 @@ describe('runtime registration requirements', () => {
       "import { CustomExpression, createAccessScopeExpression, createInterpolation } from '@aurelia/expression-parser';",
       "import type { Instruction } from '@aurelia/template-compiler';",
       "import { AttrSyntax, BindingMode, itPropertyBinding } from '@aurelia/template-compiler';",
+      "import { ITemplateCompilerHooks, TemplateCompilerHooks, templateCompilerHooks } from '@aurelia/template-compiler';",
       "import { MyApp } from './my-app';",
       '',
       'type PreservedTypes = ExpressionType | Instruction;',
@@ -444,6 +445,9 @@ describe('runtime registration requirements', () => {
       'void AttrSyntax;',
       'void BindingMode;',
       'void itPropertyBinding;',
+      'void ITemplateCompilerHooks;',
+      'void TemplateCompilerHooks;',
+      'void templateCompilerHooks;',
       'Aurelia.app(MyApp).start();',
     ].join('\n'));
 
@@ -454,6 +458,43 @@ describe('runtime registration requirements', () => {
       expect(selection.reasons.map((reason) => reason.reasonKind)).not.toContain(
         RuntimeRegistrationRequirementReasonKind.RuntimeTemplateCompilationRequired,
       );
+    }
+  }, 20_000);
+
+  test.each([
+    ['stable', 'return false;', RuntimeRegistrationRequirementSelectionKind.ExactLeaves],
+    ['unclosed', 'template.remove(); return false;', RuntimeRegistrationRequirementSelectionKind.ConservativeGroup],
+  ])('preserves hook registry ABI aliases without bypassing %s hook closure', async (name, body, expectedSelection) => {
+    const overlay = new MutableProjectSourceOverlay();
+    overlay.write(path.join(minimalRoot, 'src/hook-api.ts'), [
+      'export {',
+      '  ITemplateCompilerHooks as HookToken,',
+      '  TemplateCompilerHooks as HookRegistry,',
+      '  templateCompilerHooks as hookDecorator,',
+      "} from 'aurelia';",
+    ].join('\n'));
+    overlay.write(path.join(minimalRoot, 'src/main.ts'), [
+      "import Aurelia from 'aurelia';",
+      "import { HookRegistry, HookToken, hookDecorator } from './hook-api';",
+      "import { MyApp } from './my-app';",
+      '',
+      `class SourceHook { compiling(template: HTMLElement): boolean { ${body} } }`,
+      'void HookToken;',
+      'void hookDecorator;',
+      'Aurelia.register(HookRegistry.define(SourceHook)).app(MyApp).start();',
+    ].join('\n'));
+
+    const requirements = await readRequirements(minimalRoot, overlay, `registered-${name}-hook-abi`);
+
+    for (const selection of [requirements.resources, requirements.renderers, requirements.eventModifier]) {
+      expect(selection.selectionKind).toBe(expectedSelection);
+      if (expectedSelection === RuntimeRegistrationRequirementSelectionKind.ExactLeaves) {
+        expect(selection.reasons).toEqual([]);
+      } else {
+        expect(selection.reasons.map((reason) => reason.reasonKind)).toContain(
+          RuntimeRegistrationRequirementReasonKind.CompilerHandoffUnavailable,
+        );
+      }
     }
   }, 20_000);
 

@@ -1,0 +1,20 @@
+<template>
+  <input id="message" value.bind="message">
+  <button id="add-row" click.trigger="addRow()">Add row</button>
+  <button id="add-group" click.trigger="addGroup()">Add group</button>
+  <button id="reorder" click.trigger="reorder()">Reorder</button>
+  <button id="remove" click.trigger="removeLast()">Remove last</button>
+  <button id="toggle" click.trigger="visible = !visible">Toggle</button>
+  <output id="selected">${selected}</output>
+  <template if.bind="visible">
+    <ordinary-tabs repeat.for="group of groups; key: id" id.bind="'tabs-' + group.id">
+      <tab header="Details">
+        <p class="details">${group.name}:${message}</p>
+        <button class="choose" click.trigger="choose(group.id)">Choose ${group.name}</button>
+      </tab>
+      <tab header="Rows">
+        <p class="row" repeat.for="item of items">${group.name}:${item}:${message}</p>
+      </tab>
+    </ordinary-tabs>
+  </template>
+</template>

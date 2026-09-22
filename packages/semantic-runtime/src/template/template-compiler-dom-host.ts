@@ -300,6 +300,11 @@ export class TemplateCompilerDomHost {
       case 'insertBefore':
       case 'replaceChild':
       case 'removeChild': return this.method(member);
+      case 'append':
+      case 'querySelector':
+      case 'querySelectorAll':
+        if (isParent(occurrence)) return this.method(member);
+        break;
       case 'remove':
         if (!(occurrence instanceof TemplateCompilerFragmentOccurrence)) return this.method(member);
         break;
@@ -394,7 +399,7 @@ export class TemplateCompilerDomHost {
   private readMarkup(
     element: TemplateCompilerElementOccurrence, node: ts.Node, moduleKey: string, host: StaticIntrinsicEvaluationHost,
   ): EvaluationValue {
-    const adapter = this.execution.domMarkup;
+    const adapter = this.execution.domServices;
     if (adapter == null) return this.unsupported('innerHTML', node, moduleKey, host, 'dom-markup-unavailable');
     const documents = new Map<BrowserTemplateElementContext, boolean>();
     const snapshot = (occurrence: TemplateCompilerNodeOccurrence): BrowserTemplateStructureNode => {
@@ -428,7 +433,7 @@ export class TemplateCompilerDomHost {
   ): EvaluationValue {
     const markup = value.kind === EvaluationValueKind.Null ? '' : domPrimitiveString(value);
     if (markup == null) return this.unsupported('innerHTML', node, moduleKey, host, 'runtime-dependent-input');
-    const adapter = this.execution.domMarkup;
+    const adapter = this.execution.domServices;
     if (adapter == null) return this.unsupported('innerHTML', node, moduleKey, host, 'dom-markup-unavailable');
     const ancestors: BrowserTemplateElementContext[] = [];
     let ancestor = element;
@@ -593,6 +598,22 @@ export class TemplateCompilerDomHost {
     }
     if (reference.kind !== 'node') return domThrow('TypeError', 'Illegal DOM invocation.');
     const occurrence = reference.occurrence;
+    if (member === 'append') return this.invokeAppend(occurrence, args, frame, host);
+    if (member === 'querySelector' || member === 'querySelectorAll') {
+      if (!isParent(occurrence)) return domThrow('TypeError', 'Illegal ParentNode invocation.');
+      if (args.length === 0) return domThrow('TypeError', `${member} requires a selector.`);
+      const selector = domPrimitiveString(args[0]!);
+      if (selector == null) return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'runtime-dependent-input'));
+      const adapter = this.execution.domServices;
+      if (adapter == null) return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'dom-selectors-unavailable'));
+      const result = adapter.query(occurrence, selector, attribute => attribute.owner != null && this.ownedNodes.has(attribute.owner)
+        ? this.execution.readAttributeValue(this.attempt, attribute) : attribute.value);
+      if (result.kind !== 'complete') return result.kind === 'syntax-error' ? domThrow('SyntaxError', result.summary)
+        : staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'dom-selector-profile', result.summary));
+      // Each call returns a fresh static NodeList, unlike getElementsBy* and childNodes live collections.
+      return staticInvocationValue(member === 'querySelector' ? this.nullableNode(result.elements[0] ?? null)
+        : this.referenceValue(new CompilerDomCollectionReference(true, () => result.elements)));
+    }
     if (member === 'cloneNode') {
       return this.invokeNodeCopy(occurrence, args[0], this.execution.forest.ownerDocumentFor(occurrence), member, frame, host);
     }
@@ -775,12 +796,67 @@ export class TemplateCompilerDomHost {
     return staticInvocationValue(this.nodeValue(copy));
   }
 
+  private invokeAppend(
+    parent: TemplateCompilerNodeOccurrence,
+    args: readonly EvaluationValue[],
+    frame: StaticInvocationFrame,
+    host: StaticIntrinsicEvaluationHost,
+  ): StaticInvocationDispatch {
+    if (!isParent(parent)) return domThrow('TypeError', 'Illegal ParentNode invocation.');
+    if (args.length === 0) return staticInvocationValue(EvaluationUndefined);
+    const inputs: (TemplateCompilerNodeOccurrence | string | CompilerDomOpaqueReference)[] = [];
+    // WebIDL converts every argument before any DOM movement. Unknown user coercion is not a native TypeError.
+    for (const value of args) {
+      const reference = this.references.read(value);
+      if (reference?.kind === 'node') inputs.push(reference.occurrence);
+      else if (reference?.kind === 'document') inputs.push(reference);
+      else {
+        const text = domPrimitiveString(value);
+        if (text == null) return staticInvocationValue(this.unsupported('append', frame.node, frame.moduleKey, host, 'runtime-dependent-input'));
+        inputs.push(text);
+      }
+    }
+    for (const input of inputs) {
+      if (typeof input === 'string') continue;
+      if (input instanceof TemplateCompilerFragmentOccurrence && input === parent) {
+        return staticInvocationValue(this.unsupported('append', frame.node, frame.moduleKey, host, 'dom-append-hierarchy'));
+      }
+      let invalid = input instanceof CompilerDomOpaqueReference || input instanceof TemplateCompilerDoctypeOccurrence;
+      for (let ancestor: TemplateCompilerNodeOccurrence | null = parent; ancestor != null; ancestor = ancestor.parent) {
+        if (input === ancestor) invalid = true;
+      }
+      if (invalid) {
+        // Multiargument failure side effects differ between Chromium and the standard's intermediate fragment.
+        return args.length === 1 ? domThrow('HierarchyRequestError', 'This node cannot be appended here.')
+          : staticInvocationValue(this.unsupported('append', frame.node, frame.moduleKey, host, 'dom-append-hierarchy'));
+      }
+      if (input === this.rootElement) return staticInvocationValue(this.outside('append', frame.node, frame.moduleKey, host));
+    }
+    if (parent instanceof TemplateCompilerElementOccurrence && parent.templateContent != null) {
+      return staticInvocationValue(this.unsupported('append', frame.node, frame.moduleKey, host, 'template-element-children'));
+    }
+    // No callbacks/native stateful effects are admitted during these moves. Preserve final argument order directly;
+    // fragments must be drained at their turn, after earlier arguments may have moved their children.
+    for (const input of inputs) {
+      if (input instanceof CompilerDomOpaqueReference) throw new Error('Append hierarchy validation lost its document argument.');
+      const node = typeof input === 'string'
+        ? this.execution.createProcessContentText(this.attempt, input, this.execution.forest.ownerDocumentFor(parent)) : input;
+      if (typeof input === 'string') this.ownedNodes.add(node);
+      const result = this.invokeNodePlacement(parent, 'appendChild', [this.nodeValue(node)], frame, host, 'append');
+      if (this.refusal != null || result instanceof StaticInvocationHandled && result.completion.kind === EvaluationCompletionKind.Throw) {
+        return result;
+      }
+    }
+    return staticInvocationValue(EvaluationUndefined);
+  }
+
   private invokeNodePlacement(
     parent: TemplateCompilerNodeOccurrence,
     member: 'appendChild' | 'insertBefore' | 'replaceChild',
     args: readonly EvaluationValue[],
     frame: StaticInvocationFrame,
     host: StaticIntrinsicEvaluationHost,
+    reportedMember: string = member,
   ): StaticInvocationDispatch {
     const replacing = member === 'replaceChild';
     if (args.length < (member === 'appendChild' ? 1 : 2)) return domThrow('TypeError', `${member} is missing a required node.`);
@@ -808,10 +884,10 @@ export class TemplateCompilerDomHost {
       return domThrow('HierarchyRequestError', 'This node cannot be inserted into an element or fragment.');
     }
     const node = input.occurrence;
-    if (node === this.rootElement) return staticInvocationValue(this.outside(member, frame.node, frame.moduleKey, host));
+    if (node === this.rootElement) return staticInvocationValue(this.outside(reportedMember, frame.node, frame.moduleKey, host));
     if (parent instanceof TemplateCompilerElementOccurrence && parent.templateContent != null) {
       // Ordinary children of <template> are distinct from .content; their compiler/emitter path is not admitted yet.
-      return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'template-element-children'));
+      return staticInvocationValue(this.unsupported(reportedMember, frame.node, frame.moduleKey, host, 'template-element-children'));
     }
     const siblings = parent.readChildren();
     let before = replacing ? siblings[siblings.indexOf(child!) + 1] ?? null : child;
@@ -821,11 +897,11 @@ export class TemplateCompilerDomHost {
     if (replacing && node === child) return staticInvocationValue(this.nodeValue(child));
     if (inputs.some(inputNode => this.hasNativeResourceTreeEffect(inputNode, parent))
       || replacing && this.hasNativeResourceTreeEffect(child!, null)) {
-      return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-resource-effects'));
+      return staticInvocationValue(this.unsupported(reportedMember, frame.node, frame.moduleKey, host, 'native-resource-effects'));
     }
     if (inputs.some(inputNode => this.hasNativeControlTreeState(inputNode))
       || replacing && this.hasNativeControlTreeState(child!)) {
-      return staticInvocationValue(this.unsupported(member, frame.node, frame.moduleKey, host, 'native-control-state'));
+      return staticInvocationValue(this.unsupported(reportedMember, frame.node, frame.moduleKey, host, 'native-control-state'));
     }
     if (replacing) this.execution.detachProcessContentNode(this.attempt, child!);
     for (const inputNode of inputs) {
@@ -1278,10 +1354,11 @@ export class TemplateCompilerDomHost {
     moduleKey: string,
     host: StaticIntrinsicEvaluationHost,
     kind = 'unsupported-dom-member',
+    detail: string | null = null,
   ): EvaluationValue {
     this.refusal ??= {
       kind, member, node,
-      summary: `Compiler DOM operation '${member}' is not admitted (${kind}).`,
+      summary: `Compiler DOM operation '${member}' is not admitted (${kind}).${detail == null ? '' : ` ${detail}`}`,
     };
     return host.unknown(this.refusal.summary, node, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }

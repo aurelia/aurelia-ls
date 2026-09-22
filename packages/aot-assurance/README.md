@@ -11,7 +11,7 @@ therefore run through the generated base-runtime facade instead of retaining the
 The routed storefront additionally requires its exact 11-resource/11-renderer plan and an omitted event modifier, so
 browser parity exercises the optimized configuration rather than only a compile-free conservative fallback.
 
-The default package assurance runs thirteen complementary scenarios:
+The default package assurance runs fifteen complementary scenarios:
 
 - `g0` is the deeply instrumented parser/teardown control and owns the runtime string-parse guard;
 - `content-moves` is strict AOT for relocation of original source-hook descendants. It moves authored content into
@@ -100,8 +100,16 @@ The default package assurance runs thirteen complementary scenarios:
   skipped children. Its authored mutable receiver flags are preserved, not rewritten into build-time constants:
   this compatible scenario requires explicit application-wide fallback and zero compiled artifacts. It therefore
   checks the shared engine's refusal policy and runtime preservation, not optimizer admission of mutable inputs.
-  Root-level `cssModules` registration is deferred: its DI registry-factory and distinct mapping ownership need a shared
-  semantic-runtime completion, not an AOT-only allowlist. This positive fixture does not certify that unsupported case.
+- `strict-compiler-hooks` exercises the same CSS Modules material and exact eight-checkpoint browser expectations as
+  `compiler-hooks`, but its separate source hooks return literal false, true, or undefined without mutable captures.
+  This positive counterpart requires seven compiler-final definitions and no fallback. Owner-local mappings, ordinary
+  child isolation, local-template inheritance, successive static CSS passes, one-pass dynamic class lookups and the
+  root pure `compiling` hook therefore run through genuinely emitted AOT definitions. The original compatible fixture
+  remains unchanged. Root-level `cssModules` registration is a separate shared-engine boundary, not certified here.
+- `ordinary-hooks` reconstructs Aurelia's authored tabs pattern through source `processContent`: selectors collect tab
+  elements, DOM factories create buttons and controlled panels, and variadic `append` relocates original bound content.
+  Its strict lane requires exactly the app and tabs definitions; the same browser journey checks initial projection,
+  tab changes, bound updates, keyed repeated hosts, removal and reactivation, with teardown.
 
 ```powershell
 pnpm --filter @aurelia-ls/aot-assurance test
@@ -113,6 +121,8 @@ node packages/aot-assurance/out/cli.js --scenario built-in-controllers
 node packages/aot-assurance/out/cli.js --scenario browser-recovery
 node packages/aot-assurance/out/cli.js --scenario explicit-shadow
 node packages/aot-assurance/out/cli.js --scenario compiler-hooks
+node packages/aot-assurance/out/cli.js --scenario strict-compiler-hooks
+node packages/aot-assurance/out/cli.js --scenario ordinary-hooks
 node packages/aot-assurance/out/cli.js --scenario routed-storefront
 node packages/aot-assurance/out/cli.js --scenario state-backed-form
 node packages/aot-assurance/out/cli.js --scenario projects-and-milestones

@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { emptyArray } from '@aurelia/kernel';
+import { DI, Registration, allResources, emptyArray, registrableMetadataKey } from '@aurelia/kernel';
+import * as frameworkTemplateCompiler from '@aurelia/template-compiler';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -88,6 +89,92 @@ describe('RC2 framework link', () => {
     });
     expect(interpolation.expressions).toBe(emptyArray);
     expect(Object.isFrozen(interpolation.expressions)).toBe(true);
+  });
+
+  it('preserves hook registration, lazy singleton identity and leaf/root lookup without the compiler', async () => {
+    const result = await new AotFrameworkLinkEmitter().prepare(await exactRequest(), { state: 'admitted' });
+    expect(result.disposition).toBe('applied');
+    if (result.disposition !== 'applied') return;
+    const code = result.modules.find((module) => module.packageName === '@aurelia/template-compiler')!.code;
+    const facade = evaluateTemplateCompilerHooks(code);
+
+    for (const api of [frameworkTemplateCompiler, facade]) {
+      expect(api.TemplateCompilerHooks.name).toBe('au:resource:compiler-hooks');
+      const constructions: string[] = [];
+      class RootHook {
+        readonly label = 'root';
+        constructor() { constructions.push(this.label); }
+        compiling() {}
+      }
+      class MiddleHook {
+        readonly label = 'middle';
+        constructor() { constructions.push(this.label); }
+        compiling() {}
+      }
+      class LeafHook {
+        readonly label = 'leaf';
+        constructor() { constructions.push(this.label); }
+        compiling() {}
+      }
+      const root = DI.createContainer();
+      const middle = root.createChild();
+      const leaf = middle.createChild();
+      try {
+        expect(api.TemplateCompilerHooks.define(RootHook).register(root)).toBeUndefined();
+        api.TemplateCompilerHooks.define(RootHook).register(root);
+        api.TemplateCompilerHooks.define(MiddleHook).register(middle);
+        api.TemplateCompilerHooks.define(LeafHook).register(leaf);
+        expect(constructions).toEqual([]);
+
+        const hooks = api.TemplateCompilerHooks.findAll(leaf);
+        expect(hooks.map((hook) => hook.constructor.name)).toEqual(['LeafHook', 'RootHook', 'RootHook']);
+        expect(constructions).toEqual(['leaf', 'root', 'root']);
+        expect(hooks[1]).not.toBe(hooks[2]);
+        const repeated = api.TemplateCompilerHooks.findAll(leaf);
+        repeated.forEach((hook, index) => expect(hook).toBe(hooks[index]));
+        const roots = api.TemplateCompilerHooks.findAll(root);
+        expect(roots).toHaveLength(2);
+        roots.forEach((hook, index) => expect(hook).toBe(hooks[index + 1]));
+        expect(leaf.getAll(api.ITemplateCompilerHooks, false)).toEqual([hooks[0]]);
+      } finally {
+        leaf.dispose();
+        middle.dispose();
+        root.dispose();
+      }
+    }
+  });
+
+  it('preserves both hook decorator forms and registration metadata', async () => {
+    const result = await new AotFrameworkLinkEmitter().prepare(await exactRequest(), { state: 'admitted' });
+    expect(result.disposition).toBe('applied');
+    if (result.disposition !== 'applied') return;
+    const facade = evaluateTemplateCompilerHooks(
+      result.modules.find((module) => module.packageName === '@aurelia/template-compiler')!.code,
+    );
+
+    for (const api of [frameworkTemplateCompiler, facade]) {
+      for (const factoryForm of [false, true]) {
+        class DecoratedHook { compiling() {} }
+        const metadata = {};
+        const context: ClassDecoratorContext = {
+          kind: 'class', name: DecoratedHook.name, metadata, addInitializer() {},
+        };
+        const decorated = factoryForm
+          ? api.templateCompilerHooks()(DecoratedHook, context)
+          : api.templateCompilerHooks(DecoratedHook, context);
+        expect(decorated).toBe(DecoratedHook);
+        expect(Reflect.get(metadata, registrableMetadataKey)).toMatchObject({ register: expect.any(Function) });
+        Object.defineProperty(DecoratedHook, Reflect.get(Symbol, 'metadata'), { value: metadata });
+        const container = DI.createContainer();
+        try {
+          container.register(DecoratedHook);
+          expect(api.TemplateCompilerHooks.findAll(container)).toHaveLength(1);
+          expect(api.TemplateCompilerHooks.findAll(container)[0]).toBeInstanceOf(DecoratedHook);
+        } finally {
+          container.dispose();
+        }
+      }
+    }
   });
 
   it('returns typed C0 fallbacks for valid but unadmitted, mapped, or drifted inputs', async () => {
@@ -283,4 +370,15 @@ function evaluateCreateInterpolation(code: string): (
     'emptyArray',
     `"use strict";\n${functionSource}\nreturn createInterpolation;`,
   )(emptyArray) as ReturnType<typeof evaluateCreateInterpolation>;
+}
+
+function evaluateTemplateCompilerHooks(code: string): Pick<
+  typeof frameworkTemplateCompiler,
+  'ITemplateCompilerHooks' | 'TemplateCompilerHooks' | 'templateCompilerHooks'
+> {
+  const body = code.replace(/^import [^\n]+\n/u, '').replace(/^export /gmu, '');
+  return Function(
+    'DI', 'Registration', 'allResources', 'registrableMetadataKey',
+    `"use strict";\n${body}\nreturn { ITemplateCompilerHooks, TemplateCompilerHooks, templateCompilerHooks };`,
+  )(DI, Registration, allResources, registrableMetadataKey) as ReturnType<typeof evaluateTemplateCompilerHooks>;
 }

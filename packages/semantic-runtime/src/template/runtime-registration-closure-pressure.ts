@@ -81,9 +81,9 @@ interface RuntimeCompilerNamespaceBinding {
 }
 
 /**
- * Values whose published behavior is part of the browser-final instruction ABI rather than the
- * general compiler implementation. Every other value export from these packages is conservative
- * by default: a whole-package compiler facade may not silently reinterpret an app-facing use.
+ * Values whose published behavior belongs to the retained runtime ABI (instruction/expression data and
+ * compiler-independent DI/metadata registration), not the general compiler implementation. Every other value is
+ * conservative by default: a whole-package compiler facade may not silently reinterpret an app-facing use.
  */
 const runtimeCompilerIndependentValueExports: Readonly<Record<RuntimeCompilerPackageKind, ReadonlySet<string>>> = {
   'expression-parser': new Set([
@@ -94,6 +94,11 @@ const runtimeCompilerIndependentValueExports: Readonly<Record<RuntimeCompilerPac
   'template-compiler': new Set([
     'AttrSyntax',
     'BindingMode',
+    // These retain ordinary DI/metadata behavior in the runtime ABI; registering a hook does not compile a template.
+    // Reached hook bodies and providers still have to close through the browser-final compiler handoff.
+    'ITemplateCompilerHooks',
+    'TemplateCompilerHooks',
+    'templateCompilerHooks',
     'itHydrateElement',
     'itHydrateAttribute',
     'itHydrateTemplateController',

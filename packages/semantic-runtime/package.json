@@ -137,6 +137,7 @@
   "dependencies": {
     "@jridgewell/trace-mapping": "^0.3.31",
     "@rollup/pluginutils": "5.0.2",
+    "css-selector-parser": "3.3.0",
     "parse5": "8.0.1",
     "typescript": "6.0.3"
   },

@@ -186,7 +186,9 @@ export class ExpressionParser {
 }
 `;
 
-const templateCompilerFacade = `import { DI } from '@aurelia/kernel';
+const templateCompilerFacade = `import { DI, Registration, allResources, registrableMetadataKey } from '@aurelia/kernel';
+
+const { singleton: singletonRegistration } = Registration;
 
 export const BindingMode = Object.freeze({
   default: 0,
@@ -248,13 +250,27 @@ export const AttributePattern = Object.freeze({
 
 export const TemplateCompilerHooks = Object.freeze({
   name: 'au:resource:compiler-hooks',
-  define() { unsupportedCompilerSurface('TemplateCompilerHooks.define'); },
-  findAll() { unsupportedCompilerSurface('TemplateCompilerHooks.findAll'); },
+  define(Type) {
+    return {
+      register(container) {
+        singletonRegistration(ITemplateCompilerHooks, Type).register(container);
+      },
+    };
+  },
+  findAll(container) {
+    return container.get(allResources(ITemplateCompilerHooks));
+  },
 });
 
 export function attributePattern() { unsupportedCompilerSurface('attributePattern'); }
 export function bindingCommand() { unsupportedCompilerSurface('bindingCommand'); }
-export function templateCompilerHooks() { unsupportedCompilerSurface('templateCompilerHooks'); }
+export function templateCompilerHooks(target, context) {
+  return target === void 0 ? decorator : decorator(target, context);
+  function decorator(Type, decoratorContext) {
+    decoratorContext.metadata[registrableMetadataKey] = TemplateCompilerHooks.define(Type);
+    return Type;
+  }
+}
 
 export const BindingCommand = Object.freeze({
   define() { unsupportedCompilerSurface('BindingCommand.define'); },
@@ -555,11 +571,13 @@ function validatePackageInputs(
   inputs: readonly AotFrameworkLinkPackageInput[],
   modules: readonly AotPrepareFrameworkLinkModule[],
 ): readonly AotFrameworkLinkPackageInput[] {
+  // Keep the typed readonly view: Array.isArray narrows its checked argument to mutable any[].
+  const packageInputs = inputs;
   if (!Array.isArray(inputs) || inputs.length !== linkPackageNames.length) {
     invalidRequest('Framework linking requires kernel, runtime and runtime-html packages together.');
   }
   return linkPackageNames.map((packageName) => {
-    const matches = inputs.filter((input) => input.packageName === packageName);
+    const matches = packageInputs.filter((input) => input.packageName === packageName);
     if (matches.length !== 1) invalidRequest(`Framework linking requires exactly one '${packageName}' package.`);
     const input = matches[0]!;
     const module = modules.find((candidate) => candidate.packageName === packageName)!;

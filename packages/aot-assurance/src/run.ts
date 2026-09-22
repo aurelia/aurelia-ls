@@ -45,11 +45,13 @@ import {
 import {
   assertCompilerHooksBuildEvidence,
   assertCompilerHooksExpectations,
+  assertStrictCompilerHooksBuildEvidence,
 } from './compiler-hooks-scenario.js';
 import { StaticBuildServer } from './server.js';
 import { assertCompatibleHooksBuildEvidence, assertCompatibleHooksExpectations } from './compatible-hooks-scenario.js';
 import { assertContentAttributesBuildEvidence, assertContentAttributesExpectations } from './content-attributes-scenario.js';
 import { assertContentMovesBuildEvidence, assertContentMovesExpectations } from './content-moves-scenario.js';
+import { assertOrdinaryHooksBuildEvidence, assertOrdinaryHooksExpectations } from './ordinary-hooks-scenario.js';
 
 export interface RunAssuranceOptions {
   readonly adapterSpecifier: string;
@@ -114,6 +116,8 @@ export function assertScenarioBuildEvidence(
   else if (scenario === 'browser-recovery') assertBrowserRecoveryBuildEvidence(evidence);
   else if (scenario === 'explicit-shadow') assertExplicitShadowBuildEvidence(evidence);
   else if (scenario === 'compiler-hooks') assertCompilerHooksBuildEvidence(evidence);
+  else if (scenario === 'strict-compiler-hooks') assertStrictCompilerHooksBuildEvidence(evidence);
+  else if (scenario === 'ordinary-hooks') assertOrdinaryHooksBuildEvidence(evidence);
   else if (scenario === 'compatible-hooks') assertCompatibleHooksBuildEvidence(evidence);
   else if (scenario === 'content-attributes') assertContentAttributesBuildEvidence(evidence);
   else if (scenario === 'content-moves') assertContentMovesBuildEvidence(evidence);
@@ -145,9 +149,12 @@ export function assertScenarioBrowserEvidence(
     } else if (scenario === 'explicit-shadow') {
       assertExplicitShadowExpectations(browserBatch.jit);
       assertExplicitShadowExpectations(browserBatch.aot);
-    } else if (scenario === 'compiler-hooks') {
+    } else if (scenario === 'compiler-hooks' || scenario === 'strict-compiler-hooks') {
       assertCompilerHooksExpectations(browserBatch.jit);
       assertCompilerHooksExpectations(browserBatch.aot);
+    } else if (scenario === 'ordinary-hooks') {
+      assertOrdinaryHooksExpectations(browserBatch.jit);
+      assertOrdinaryHooksExpectations(browserBatch.aot);
     } else if (scenario === 'compatible-hooks') {
       assertCompatibleHooksExpectations(browserBatch.jit);
       assertCompatibleHooksExpectations(browserBatch.aot);
@@ -187,6 +194,10 @@ function defaultFixtureRoot(scenario: AssuranceScenario): string {
       return resolve(packageRoot, 'fixtures', 'explicit-shadow');
     case 'compiler-hooks':
       return resolve(packageRoot, 'fixtures', 'compiler-hooks');
+    case 'strict-compiler-hooks':
+      return resolve(packageRoot, 'fixtures', 'strict-compiler-hooks');
+    case 'ordinary-hooks':
+      return resolve(packageRoot, 'fixtures', 'ordinary-hooks');
     case 'compatible-hooks':
       return resolve(packageRoot, 'fixtures', 'compatible-hooks');
     case 'content-attributes':

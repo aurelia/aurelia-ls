@@ -16,7 +16,8 @@ import {
   parseBrowserTemplateFragmentDraft,
   serializeBrowserTemplateInnerHtml,
 } from './browser-template-parser.js';
-import type { TemplateCompilerDomMarkup } from './template-compiler-execution.js';
+import type { TemplateCompilerDomServices } from './template-compiler-execution.js';
+import { queryTemplateCompilerDescendantElements } from './template-compiler-dom-selectors.js';
 import { selectBrowserTemplateCompilerCarrier } from './browser-template-selection.js';
 import {
   compileTemplateCompilerContextFamily,
@@ -69,9 +70,10 @@ import {
 } from './template-compiler-occurrence-family-compilation.js';
 import { TemplateCompilerSiteCursorFrontierKind } from './template-compiler-site-cursor-event.js';
 
-const domMarkup: TemplateCompilerDomMarkup = {
+const domServices: TemplateCompilerDomServices = {
   parse: parseBrowserTemplateContextualFragmentDraft,
   serialize: serializeBrowserTemplateInnerHtml,
+  query: queryTemplateCompilerDescendantElements,
 };
 
 export const enum TemplateCompilerCompiledHandoffState {
@@ -360,7 +362,7 @@ function prepareResource(
     browserEmission: browser,
     currentFrontDoor: app.emission.templates.frontDoor,
     compilerReadStore: store,
-    domMarkup,
+    domServices,
   });
   if (family.state !== TemplateCompilerContextFamilyCompilationState.Exact || family.value == null) {
     return unavailablePreparation(unavailableMaterialization(resource, {
@@ -497,7 +499,7 @@ function prepareOccurrenceResource(
     currentFamily,
     appRootDefinitionProductHandle: compilation.appRootDefinitionProductHandle,
     publication: run,
-    domMarkup,
+    domServices,
   });
   if (occurrence.state !== TemplateCompilerContextFamilyCompilationState.Exact || occurrence.value == null) {
     return unavailablePreparation(unavailableMaterialization(resource, {

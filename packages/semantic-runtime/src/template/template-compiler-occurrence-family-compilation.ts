@@ -16,7 +16,7 @@ import { prepareTemplateCompilerContextFamilyStructuralSchedule } from './templa
 import { executeTemplateCompilerContextFamilyTarget } from './template-compiler-context-family-target-execution.js';
 import type { TemplateCompilerContextFamilyValue } from './template-compiler-context-family-value.js';
 import {
-  type TemplateCompilerDomMarkup,
+  type TemplateCompilerDomServices,
   TemplateCompilerExecutionSession,
 } from './template-compiler-execution.js';
 import {
@@ -71,7 +71,7 @@ export interface TemplateCompilerOccurrenceFamilyCompilationRequest {
   readonly currentFamily: TemplateCompilationFamilyFrontDoorEmission;
   readonly appRootDefinitionProductHandle: ProductHandle | null;
   readonly publication: ComputationRun;
-  readonly domMarkup?: TemplateCompilerDomMarkup;
+  readonly domServices?: TemplateCompilerDomServices;
 }
 
 /** One scoped generated local definition and the compiler-final family produced for its exact browser carrier. */
@@ -197,7 +197,7 @@ export function compileTemplateCompilerOccurrenceFamily(
   const execution = TemplateCompilerExecutionSession.createForForest(
     `occurrence-context-family:${request.compilationKey}`,
     forest,
-    request.domMarkup,
+    request.domServices,
   );
   const rootLane = execution.admitRootInvocation(runtimeRoot.localKey);
   if (request.browserEmission.publication !== request.publication) {

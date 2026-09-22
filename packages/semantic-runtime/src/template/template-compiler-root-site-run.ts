@@ -12,7 +12,7 @@ import type { BrowserEffectiveTemplateEmission } from './browser-effective-templ
 import { LocalTemplateDefinitionMaterializer } from './local-template-definition-materializer.js';
 import { TemplateCompilerReadView, TemplateCompilerWorldAuthority } from './compiler-read-view.js';
 import {
-  type TemplateCompilerDomMarkup,
+  type TemplateCompilerDomServices,
   type TemplateCompilerInvocationBootstrapClosure,
   type TemplateCompilerExecutionLaneReference,
   TemplateCompilerExecutionSession,
@@ -78,7 +78,7 @@ export interface TemplateCompilerRootSiteRunRequest {
     & ProductDetailReadView
     & KernelReadProjectionRevisionView;
   readonly traversalMode?: TemplateCompilerSiteCursorTraversalMode;
-  readonly domMarkup?: TemplateCompilerDomMarkup;
+  readonly domServices?: TemplateCompilerDomServices;
 }
 
 /** Shared exact bootstrap/bind/cursor run used by portable observation and context-family compilation. */
@@ -196,7 +196,7 @@ export function executeTemplateCompilerRootSiteRun(
     );
   }
   const forest = TemplateCompilerOccurrenceForest.fromBrowserEffective(request.browserEmission);
-  const execution = TemplateCompilerExecutionSession.createForForest(request.runKey, forest, request.domMarkup);
+  const execution = TemplateCompilerExecutionSession.createForForest(request.runKey, forest, request.domServices);
   const lane = execution.admitRootInvocation(request.compilation.localKey);
   const hook = executeTemplateCompilerHookBootstrap({
     execution,

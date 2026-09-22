@@ -5,7 +5,7 @@ import type {
   KernelReadProjectionRevisionView,
 } from '../kernel/store.js';
 import type { BrowserEffectiveTemplateEmission } from './browser-effective-template-materializer.js';
-import type { TemplateCompilerDomMarkup } from './template-compiler-execution.js';
+import type { TemplateCompilerDomServices } from './template-compiler-execution.js';
 import {
   prepareTemplateCompilerContextFamilyAllocation,
   TemplateCompilerContextFamilyAllocationState,
@@ -127,7 +127,7 @@ export interface TemplateCompilerContextFamilyCompilationRequest {
   readonly compilerReadStore: Pick<KernelMaterializationReadView, 'readMaterializationsByOwner'>
     & ProductDetailReadView
     & KernelReadProjectionRevisionView;
-  readonly domMarkup?: TemplateCompilerDomMarkup;
+  readonly domServices?: TemplateCompilerDomServices;
 }
 
 /** Generation-bound result of the complete semantic compiler pipeline; it is not a portable wire value. */
@@ -187,7 +187,7 @@ export function compileTemplateCompilerContextFamily(
     currentFrontDoor: request.currentFrontDoor,
     compilerReadStore: request.compilerReadStore,
     traversalMode: TemplateCompilerSiteCursorTraversalMode.ClosedContextFamily,
-    domMarkup: request.domMarkup,
+    domServices: request.domServices,
   });
   if (!root.isTranscript()) {
     return unavailable(

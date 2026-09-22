@@ -107,11 +107,18 @@ The effective configuration mode becomes `preserve` even when replacement was re
 links cannot apply: `allow-c0-fallback` keeps the original graph, while `require-applied` remains an explicit conflict.
 Strict remains the default, and compatible builds with no fallback trigger still compile normally.
 
-Shared hook support includes owned document factories, node copying, text edits, contextual innerHTML and generated
+Shared hook support includes owned document factories, node copying, text edits, contextual innerHTML, structural
+selectors, variadic append and generated
 binding/controller/projection lowering, including native and Aurelia slots.
 Native custom-element construction and unclosed resource effects in the platform document remain explicit unsupported
 hook results; native-state and parser-profile boundaries follow the same compatible policy, not a separate
 partial-template fallback. The shared template README owns the precise supported DOM envelope.
+
+Compiler-hook registration is retained runtime DI/metadata behavior, not a request to compile a template. The linked
+compiler facade preserves `ITemplateCompilerHooks`, `TemplateCompilerHooks` and its decorator while real compilation
+APIs remain guarded. The strict hook/CSS Modules browser golden emits seven artifacts with no fallback; its original
+compatible counterpart still preserves all source when mutable hook captures lack temporal authority. Registration
+preservation does not bypass callable/world closure.
 
 `src/testing` contains two retained low-level characterization lanes:
 

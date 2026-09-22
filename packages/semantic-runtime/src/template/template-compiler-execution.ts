@@ -22,6 +22,7 @@ import type {
   parseBrowserTemplateContextualFragmentDraft,
   serializeBrowserTemplateInnerHtml,
 } from './browser-template-parser.js';
+import type { queryTemplateCompilerDescendantElements } from './template-compiler-dom-selectors.js';
 import type { TemplateCompilerContextFamilyTargetPlanPreparation } from './template-compiler-context-family-target-plan.js';
 import {
   buildTemplateCompilerContextFamilyOperationSchedule,
@@ -1293,10 +1294,11 @@ export class TemplateCompilerReachedAttributeScalarReceipt {
   }
 }
 
-/** Run-local markup operations supplied by the opt-in browser compiler boundary. */
-export interface TemplateCompilerDomMarkup {
+/** Run-local parsing/query services supplied by the opt-in browser compiler boundary. */
+export interface TemplateCompilerDomServices {
   readonly parse: typeof parseBrowserTemplateContextualFragmentDraft;
   readonly serialize: typeof serializeBrowserTemplateInnerHtml;
+  readonly query: typeof queryTemplateCompilerDescendantElements;
 }
 
 /**
@@ -1333,12 +1335,12 @@ export class TemplateCompilerExecutionSession {
   static createForForest(
     familyKey: string,
     forest: TemplateCompilerOccurrenceForest,
-    domMarkup: TemplateCompilerDomMarkup | null = null,
+    domServices: TemplateCompilerDomServices | null = null,
   ): TemplateCompilerExecutionSession {
     if (compilerExecutionForests.has(forest)) {
       throw new Error('Compiler occurrence forest already owns an ordered execution session.');
     }
-    const session = new TemplateCompilerExecutionSession(familyKey, forest, null, false, domMarkup);
+    const session = new TemplateCompilerExecutionSession(familyKey, forest, null, false, domServices);
     compilerExecutionForests.add(forest);
     return session;
   }
@@ -1444,7 +1446,7 @@ export class TemplateCompilerExecutionSession {
     readonly forest: TemplateCompilerOccurrenceForest,
     mutationAuthority: TemplateCompilerForestMutationAuthority | null,
     private readonly legacyStructuralCompatibility: boolean,
-    readonly domMarkup: TemplateCompilerDomMarkup | null = null,
+    readonly domServices: TemplateCompilerDomServices | null = null,
   ) {
     if (familyKey.length === 0) {
       throw new Error('Compiler execution family requires a non-empty key.');

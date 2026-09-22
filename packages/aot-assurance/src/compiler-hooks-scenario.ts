@@ -130,6 +130,15 @@ export function assertCompilerHooksBuildEvidence(evidence: AotBuildEvidence): vo
   ]);
 }
 
+export function assertStrictCompilerHooksBuildEvidence(evidence: AotBuildEvidence): void {
+  assert.equal(evidence.compilation.mode, 'strict');
+  assert.equal(evidence.compilation.fallbackScope, 'none');
+  assert.deepEqual(evidence.compilation.preserved, []);
+  assert.deepEqual(evidence.artifacts.map(artifact => artifact.definitionName).sort(), [
+    'compiler-hooks-app', 'css-child', 'opaque-literal', 'opaque-policy', 'styled-panel', 'transparent-gate', 'undecided-gate',
+  ]);
+}
+
 export function assertCompilerHooksExpectations(transcript: LaneTranscript): void {
   assert.deepEqual(transcript.semantic.pageErrors, []);
   assert.deepEqual(transcript.semantic.console, []);

@@ -1,0 +1,27 @@
+<template>
+  <input id="message" value.bind="message">
+  <button id="toggle-active" click.trigger="active = !active">Toggle active</button>
+  <button id="toggle-visible" click.trigger="visible = !visible">Toggle hosts</button>
+  <button id="append" click.trigger="append()">Append</button>
+  <p data-css="app-static" class="global local step">${message}:app</p>
+
+  <opaque-literal id="literal" value.bind="message" title.bind="message" class="local">
+    <p class="global local" if.bind="active">${message}:raw</p>
+    <transparent-gate value.bind="message"><b>${message}:nested-raw</b></transparent-gate>
+    <template au-slot="named" repeat.for="item of items"><b>${item}:inert</b></template>
+  </opaque-literal>
+  <opaque-policy id="policy" if.bind="visible" value.bind="message" title.bind="message">
+    <p if.bind="active">${message}:policy-raw</p>
+  </opaque-policy>
+  <opaque-literal repeat.for="item of items" class="repeated-gate" value.bind="item" title.bind="message">
+    <b>${item}:repeat-raw</b>
+  </opaque-literal>
+
+  <transparent-gate id="transparent" value.bind="message" title.bind="message">
+    <b if.bind="active">${message}:compiled</b>
+    <i repeat.for="item of items">${$index}:${item}:${message}</i>
+  </transparent-gate>
+  <undecided-gate id="undecided" value.bind="message"><strong>${message}:void-compiled</strong></undecided-gate>
+  <styled-panel id="panel" if.bind="visible" value.bind="message" active.bind="active" items.bind="items" class="local"></styled-panel>
+  <p id="after-hooks">${message}:after</p>
+</template>

@@ -181,8 +181,8 @@ products; target JavaScript emission remains outside this substrate.
   distinct from each resulting node's document affiliation. Known pinned-parser disagreements remain typed refusals;
   evaluated hook strings do not acquire invented authored HTML products or spans. Current-state innerHTML serialization
   preserves ordered attributes, namespaces, modern escaping, raw-text/template behavior and per-node noscript document
-  state. The existing build handoff injects parse/serialize functions into its run-local execution session; neither the
-  session nor DOM host imports the parser at runtime through the ordinary IDE/MCP entry point.
+  state. The existing build handoff injects parse/serialize/query services into its run-local execution session; neither
+  the session nor DOM host loads the HTML or CSS selector parser through the ordinary IDE/MCP entry point.
 - `browser-template-correspondence.ts` conservatively relates one authored draft to the exact browser draft and parser
   authorities before carrier selection. It uses opening-token/range anchors for exact occurrences, reconstruction
   cohorts for one-to-many recovery, named implied/drop/factory derivations, and explicit unresolved partitions for
@@ -334,7 +334,10 @@ products; target JavaScript emission remains outside this substrate.
   `template-compiler-dom-host.ts` exposes that forest to isolated source hooks through the evaluator's owned-operation
   lane. The surface includes node/element navigation, live collections and iteration, attribute creation/removal/value
   writes (including namespaces), ordered live classList operations, and owned-node appendChild/insertBefore/
-  replaceChild/removeChild. Repeated removal/reinsertion and moves through an existing template content fragment keep
+  replaceChild/removeChild and variadic append. Append converts all admitted primitive arguments before moving nodes,
+  preserves duplicate-node identity and drains fragments at their actual argument position. Unsupported coercion,
+  native effects and browser-dependent multiargument hierarchy failures remain explicit, not fabricated atomic errors.
+  Repeated removal/reinsertion and moves through an existing template content fragment keep
   the original node identity. Ordered source placements distinguish temporary detachment from final removed roots;
   only final removal excludes compiler sites. Structural input order is folded from committed hook effects while
   immutable browser seed placement remains provenance. Ordinary template-element children (not .content) still
@@ -365,7 +368,14 @@ products; target JavaScript emission remains outside this substrate.
   or replacing the parsed subtree; refusal discards all tentative creations and prior hook edits. Ordinary platform
   parsing can run native constructors; template parsing suppresses them even for explicitly platform-adopted content,
   while resource fetching still depends on output affiliation. Known inert-noscript, select, MathML integration and
-  foreign-form context mismatches stay explicit parser-profile boundaries. CharacterData methods, outerHTML, selectors,
+  foreign-form context mismatches stay explicit parser-profile boundaries. `template-compiler-dom-selectors.ts` supplies
+  bounded querySelector/querySelectorAll over the same forest, using the pinned css-selector-parser for syntax, not a
+  second DOM. Type/universal/ID/class/attribute selectors, ordinary structural combinators, lists and :scope use pending
+  attribute values and real DOM ancestry. Results are fresh static NodeLists; template content is a separate query root.
+  Ancestor matching may inspect context outside the query root but never exposes an unowned result. Unsupported syntax,
+  native-state pseudos and parser/browser-profile differences refuse the whole query rather than returning empty data.
+  The ordinary-hooks tabs browser golden retains these natural authoring APIs through generation/projection/lifecycle.
+  CharacterData methods, outerHTML,
   dataset and metadata effects remain explicit unsupported operations until their
   complete lowering paths are admitted. Namespace-duplicate qualified names and
   browser-version-sensitive name spellings remain explicit compatibility boundaries, not invented DOM exceptions.

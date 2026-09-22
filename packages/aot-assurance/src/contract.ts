@@ -6,6 +6,7 @@ import type { CompilerHooksApplicationObservation } from './compiler-hooks-scena
 import type { CompatibleHooksApplicationObservation } from './compatible-hooks-scenario.js';
 import type { ContentAttributesApplicationObservation } from './content-attributes-scenario.js';
 import type { ContentMovesApplicationObservation } from './content-moves-scenario.js';
+import type { OrdinaryHooksApplicationObservation } from './ordinary-hooks-scenario.js';
 
 export type AssuranceLane = 'jit' | 'aot';
 export type AssuranceScenario =
@@ -16,6 +17,8 @@ export type AssuranceScenario =
   | 'browser-recovery'
   | 'explicit-shadow'
   | 'compiler-hooks'
+  | 'strict-compiler-hooks'
+  | 'ordinary-hooks'
   | 'compatible-hooks'
   | 'content-attributes'
   | 'content-moves'
@@ -192,6 +195,7 @@ export type ApplicationObservation =
   | BrowserRecoveryApplicationObservation
   | ExplicitShadowApplicationObservation
   | CompilerHooksApplicationObservation
+  | OrdinaryHooksApplicationObservation
   | CompatibleHooksApplicationObservation
   | ContentAttributesApplicationObservation
   | ContentMovesApplicationObservation
