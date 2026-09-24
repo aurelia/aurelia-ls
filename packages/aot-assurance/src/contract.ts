@@ -7,6 +7,7 @@ import type { CompatibleHooksApplicationObservation } from './compatible-hooks-s
 import type { ContentAttributesApplicationObservation } from './content-attributes-scenario.js';
 import type { ContentMovesApplicationObservation } from './content-moves-scenario.js';
 import type { OrdinaryHooksApplicationObservation } from './ordinary-hooks-scenario.js';
+import type { StateStoreListApplicationObservation } from './state-store-list-scenario.js';
 
 export type AssuranceLane = 'jit' | 'aot';
 export type AssuranceScenario =
@@ -24,6 +25,7 @@ export type AssuranceScenario =
   | 'content-moves'
   | 'routed-storefront'
   | 'state-backed-form'
+  | 'state-store-list'
   | 'projects-and-milestones';
 
 export type EmissionFalsifier =
@@ -201,6 +203,7 @@ export type ApplicationObservation =
   | ContentMovesApplicationObservation
   | RoutedStorefrontApplicationObservation
   | StateBackedFormApplicationObservation
+  | StateStoreListApplicationObservation
   | ProjectsAndMilestonesApplicationObservation;
 
 export interface CheckpointTranscript {

@@ -25,10 +25,17 @@ import {
 import { RuntimeSpreadCompilation } from '../src/template/runtime-spread-compilation.js';
 import { RuntimeRendererSpreadCompileState } from '../src/template/runtime-renderer.js';
 import {
+  DispatchBindingInstruction,
   HydrateElementInstruction,
+  StateBindingInstruction,
   SpreadTransferedBindingInstruction,
 } from '../src/template/instruction-ir.js';
 import { resourceLocalRuntimeSpreadCompilations } from '../src/template/runtime-resource-ownership.js';
+import {
+  projectTemplateCompilerRuntimeInstructionClosure,
+  TemplateCompilerRuntimeInstructionFamilyState,
+  TemplateCompilerRuntimeResourceRepresentation,
+} from '../src/template/template-instruction-runtime-value.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/app-pattern-convention-minimal-app');
@@ -228,6 +235,119 @@ describe('semantic app template compiler handoff', () => {
       runtime.retireWorkspaceIncarnation();
     }
   });
+
+  test('projects state commands through the same live and durable expression authority', async () => {
+    const stateRoot = path.join(packageRoot, 'fixtures/pressure/app-pattern-state-store-list');
+    const stateTemplateFileName = path.join(stateRoot, 'src/app.html');
+    const overlay = new MutableProjectSourceOverlay();
+    overlay.write(stateTemplateFileName, [
+      '<input value.state="draft" input.dispatch="{ type: \'setDraft\', value: $event.target.value }">',
+      '<span text-content.state:filters="label"></span>',
+      '<button click.dispatch:filters="{ type: \'toggle\' }">Toggle</button>',
+      '<p>${title & state}</p>',
+    ].join('\n'));
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: stateRoot,
+      projectDiscovery: 'single-root',
+      storeKey: 'semantic-app-template-compiler-handoff-state-commands',
+      projectInputAuthority: new SemanticRuntimeProjectInputAuthority(
+        new NodeSemanticRuntimeProjectInputHost(overlay),
+      ),
+    });
+    try {
+      const app = await runtime.openApp({ telemetry: { inquiryProfile: 'aot' } });
+      const semanticResource = app.emission.templates.resources.find((candidate) =>
+        candidate.compilation.definition.name === 'app-root'
+      );
+      if (semanticResource == null) throw new Error('Expected the state-store list semantic resource.');
+      const instructions = semanticResource.compilation.compiledTemplate.instructions.filter((instruction) =>
+        instruction instanceof StateBindingInstruction || instruction instanceof DispatchBindingInstruction
+      );
+      const durable = projectTemplateCompilerRuntimeInstructionClosure({
+        rootInstructions: instructions,
+        createdInstructions: instructions,
+        productDetails: runtime.workspace.store,
+        resourceRepresentation: TemplateCompilerRuntimeResourceRepresentation.Name,
+      });
+      expect(durable.reasons).toEqual([]);
+      expect(durable.state).toBe(TemplateCompilerRuntimeInstructionFamilyState.Exact);
+      expect(durable.value?.roots).toEqual([
+        {
+          type: TemplateCompilerFrameworkInstructionType.StateBinding,
+          from: { $kind: 'AccessScope', name: 'draft', ancestor: 0 },
+          to: 'value',
+          storeName: undefined,
+        },
+        {
+          type: TemplateCompilerFrameworkInstructionType.DispatchBinding,
+          from: 'input',
+          ast: {
+            $kind: 'ObjectLiteral',
+            keys: ['type', 'value'],
+            values: [
+              { $kind: 'PrimitiveLiteral', value: 'setDraft' },
+              {
+                $kind: 'AccessMember',
+                accessGlobal: false,
+                object: {
+                  $kind: 'AccessMember',
+                  accessGlobal: false,
+                  object: { $kind: 'AccessScope', name: '$event', ancestor: 0 },
+                  name: 'target',
+                  optional: false,
+                },
+                name: 'value',
+                optional: false,
+              },
+            ],
+          },
+          storeName: undefined,
+        },
+        {
+          type: TemplateCompilerFrameworkInstructionType.StateBinding,
+          from: { $kind: 'AccessScope', name: 'label', ancestor: 0 },
+          to: 'textContent',
+          storeName: 'filters',
+        },
+        {
+          type: TemplateCompilerFrameworkInstructionType.DispatchBinding,
+          from: 'click',
+          ast: {
+            $kind: 'ObjectLiteral',
+            keys: ['type'],
+            values: [{ $kind: 'PrimitiveLiteral', value: 'toggle' }],
+          },
+          storeName: 'filters',
+        },
+      ]);
+
+      const batch = materializeSemanticAppTemplateCompilerHandoffs({
+        app,
+        templateSourcePaths: [stateTemplateFileName],
+      });
+      const resource = batch.resources[0];
+      if (resource?.state !== TemplateCompilerCompiledHandoffState.Exact) {
+        throw new Error(resource?.reasons.map((reason) => reason.summary).join(' ') ?? 'No state command handoff.');
+      }
+      const values = flattenInstructionValues(resource.value.definitions.flatMap((definition) =>
+        definition.rows.flat().map((instruction) => instruction.value)
+      ));
+      expect(values.filter((value) =>
+        value.type === TemplateCompilerFrameworkInstructionType.StateBinding
+        || value.type === TemplateCompilerFrameworkInstructionType.DispatchBinding
+      )).toEqual(durable.value?.roots);
+      expect(values).toContainEqual(expect.objectContaining({
+        type: TemplateCompilerFrameworkInstructionType.TextBinding,
+        from: expect.objectContaining({
+          $kind: 'BindingBehavior',
+          name: 'state',
+          args: [],
+        }),
+      }));
+    } finally {
+      runtime.retireWorkspaceIncarnation();
+    }
+  }, 45_000);
 
   test('detaches two exact state-backed form spread cases onto their capture owners', async () => {
     const runtime = await createSemanticRuntime({

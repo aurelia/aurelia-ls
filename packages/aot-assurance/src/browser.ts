@@ -24,6 +24,7 @@ import { runCompatibleHooksLane } from './compatible-hooks-scenario.js';
 import { runContentAttributesLane } from './content-attributes-scenario.js';
 import { runContentMovesLane } from './content-moves-scenario.js';
 import { runOrdinaryHooksLane } from './ordinary-hooks-scenario.js';
+import { runStateStoreListLane } from './state-store-list-scenario.js';
 
 export interface BrowserBatchResult {
   readonly browser: Browser;
@@ -70,6 +71,7 @@ async function runLane(
   if (scenario === 'content-moves') return runContentMovesLane(browser, lane, url);
   if (scenario === 'routed-storefront') return runRoutedStorefrontLane(browser, lane, url);
   if (scenario === 'state-backed-form') return runStateBackedFormLane(browser, lane, url);
+  if (scenario === 'state-store-list') return runStateStoreListLane(browser, lane, url);
   if (scenario === 'projects-and-milestones') return runProjectsAndMilestonesLane(browser, lane, url);
   const context = await browser.newContext();
   const page = await context.newPage();

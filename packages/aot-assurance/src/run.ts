@@ -52,6 +52,7 @@ import { assertCompatibleHooksBuildEvidence, assertCompatibleHooksExpectations }
 import { assertContentAttributesBuildEvidence, assertContentAttributesExpectations } from './content-attributes-scenario.js';
 import { assertContentMovesBuildEvidence, assertContentMovesExpectations } from './content-moves-scenario.js';
 import { assertOrdinaryHooksBuildEvidence, assertOrdinaryHooksExpectations } from './ordinary-hooks-scenario.js';
+import { assertStateStoreListBuildEvidence, assertStateStoreListExpectations } from './state-store-list-scenario.js';
 
 export interface RunAssuranceOptions {
   readonly adapterSpecifier: string;
@@ -123,6 +124,7 @@ export function assertScenarioBuildEvidence(
   else if (scenario === 'content-moves') assertContentMovesBuildEvidence(evidence);
   else if (scenario === 'routed-storefront') assertRoutedStorefrontBuildEvidence(evidence);
   else if (scenario === 'state-backed-form') assertStateBackedFormBuildEvidence(evidence);
+  else if (scenario === 'state-store-list') assertStateStoreListBuildEvidence(evidence);
   else if (scenario === 'projects-and-milestones') assertProjectsAndMilestonesBuildEvidence(evidence);
 }
 
@@ -170,6 +172,9 @@ export function assertScenarioBrowserEvidence(
     } else if (scenario === 'state-backed-form') {
       assertStateBackedFormExpectations(browserBatch.jit);
       assertStateBackedFormExpectations(browserBatch.aot);
+    } else if (scenario === 'state-store-list') {
+      assertStateStoreListExpectations(browserBatch.jit);
+      assertStateStoreListExpectations(browserBatch.aot);
     } else {
       assertProjectsAndMilestonesExpectations(browserBatch.jit);
       assertProjectsAndMilestonesExpectations(browserBatch.aot);
@@ -222,6 +227,8 @@ function defaultFixtureRoot(scenario: AssuranceScenario): string {
         'pressure',
         'app-pattern-state-backed-form',
       );
+    case 'state-store-list':
+      return resolve(packageRoot, '..', 'semantic-runtime', 'fixtures', 'pressure', 'app-pattern-state-store-list');
     case 'projects-and-milestones':
       return resolve(packageRoot, '..', '..', 'fixtures', 'projects-and-milestones');
   }

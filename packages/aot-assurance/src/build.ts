@@ -170,6 +170,7 @@ async function buildLane(
         '@aurelia/platform-browser': frameworkEsmPackage('platform-browser'),
         '@aurelia/runtime': frameworkEsmPackage('runtime'),
         '@aurelia/template-compiler': frameworkEsmPackage('template-compiler'),
+        '@aurelia/state': frameworkEsmPackage('state'),
         '@aurelia/router': resolve(
           import.meta.dirname,
           '..',

@@ -225,6 +225,18 @@ export type TemplateCompilerRuntimeInstructionValue =
       readonly type: TemplateCompilerFrameworkInstructionType.SpreadValueBinding;
       readonly target: '$bindables' | '$element';
       readonly from: string;
+    }
+  | {
+      readonly type: TemplateCompilerFrameworkInstructionType.StateBinding;
+      readonly from: RuntimeExpressionAstValue;
+      readonly to: string;
+      readonly storeName: string | undefined;
+    }
+  | {
+      readonly type: TemplateCompilerFrameworkInstructionType.DispatchBinding;
+      readonly from: string;
+      readonly ast: RuntimeExpressionAstValue;
+      readonly storeName: string | undefined;
     };
 
 export const enum TemplateCompilerRuntimeInstructionFamilyState {
@@ -887,6 +899,24 @@ class RuntimeInstructionValueProjector {
           target: instruction.target,
           from: instruction.value,
         };
+      case TemplateInstructionKind.StateBinding: {
+        const from = this.expression(instruction, instruction.expressionProductHandle, null);
+        return from == null ? null : {
+          type: TemplateCompilerFrameworkInstructionType.StateBinding,
+          from,
+          to: instruction.target,
+          storeName: instruction.storeName ?? undefined,
+        };
+      }
+      case TemplateInstructionKind.DispatchBinding: {
+        const ast = this.expression(instruction, instruction.expressionProductHandle, null);
+        return ast == null ? null : {
+          type: TemplateCompilerFrameworkInstructionType.DispatchBinding,
+          from: instruction.eventName,
+          ast,
+          storeName: instruction.storeName ?? undefined,
+        };
+      }
       default:
         this.pending(
           instruction,

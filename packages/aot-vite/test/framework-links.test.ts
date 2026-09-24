@@ -114,11 +114,14 @@ describe("exact-fingerprinted framework links", () => {
     });
   });
 
-  it("keeps an allowed session refusal completely on C0 and rejects the same refusal when applied is required", async () => {
+  it.each([
+    { kind: "recipe-unavailable", summary: "No recipe for this exact framework graph." },
+    { kind: "unsupported-input", summary: "framework-link-retained-compiler-registration: Retained registration mutates the attribute parser." },
+  ] as const)("keeps an allowed $kind refusal on C0 and rejects it when applied is required", async (reason) => {
     const fixture = await frameworkFixture();
     const refusal: AotPreparedFrameworkLinksResult = {
       disposition: "c0-fallback",
-      reason: { kind: "recipe-unavailable", summary: "No recipe for this exact framework graph." },
+      reason,
     };
     const allowed = aureliaAot({
       provider: provider(vi.fn(async () => refusal)),
@@ -148,7 +151,7 @@ describe("exact-fingerprinted framework links", () => {
       pluginContext(),
     )).rejects.toMatchObject({
       code: "AOT_VITE_FRAMEWORK_LINK_FAILED",
-      message: expect.stringContaining("No recipe for this exact framework graph"),
+      message: expect.stringContaining(reason.summary),
     });
   });
 

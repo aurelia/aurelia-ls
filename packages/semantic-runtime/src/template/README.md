@@ -473,6 +473,9 @@ products; target JavaScript emission remains outside this substrate.
   child/projection definition references, containerless state, captures, and known `AuSlot` data. Unsupported kinds or
   AST representations remain typed Pending. Exact values/results are module-constructed and cross-check family
   instruction order plus every row/value link before they can leave semantic-runtime.
+  State and dispatch consume their existing IR/parser handles through that same expression authority. Their plugin
+  wires carry precompiled ASTs (state.from versus dispatch.ast), target/event names and literal store names; detached
+  handoff and AOT emission already handle these leaves generically. This is projection, not execution of state actions.
   Hydrate-let and let-binding values share `let-element-compiler-semantics.ts` with the authored compiler adapter:
   context-flag exclusion, property versus interpolation/literal parsing, invalid-command posture, and target
   normalization are one law. The live cursor owns fresh allocation/spend/row handoff. Static root surrogates use the
@@ -1659,6 +1662,12 @@ Browser-final instructions are regenerated products, so the older runtime-render
 treated as their identity authority. Each group falls back independently when provider attribution, relevant
 registration pressure, custom renderer precedence, dynamic template compilation, package export visibility, or ABI
 coverage remains open. Plugin configurations remain whole; they are not decomposed by this runtime-html projection.
+Optional compiler-package rewriting has an additional, separate registration boundary. The existing closure-pressure
+owner joins retained actual DI operations to configured syntax catalogs, excluding only exact replaced configuration
+operations. A retained attribute-pattern registration still needs the real parser even when all templates are compiled.
+This uses `configuration/configured-catalog-selection.ts`, the same admission/kind relation as compiler-world assembly,
+not package-name detection or another registration interpreter. Its reasons affect link admission only, not ordinary
+AOT compiler replacement or runtime resource/renderer selection.
 A selective template-source request is conservative unless it still covers the complete runtime resource cohort.
 Captured-spread interface demand is typed separately from general runtime template compilation: an exact AOT spread
 lookup can discharge the former, while `AuCompose`, `enhance`, and programmatic compiler demand still require a general

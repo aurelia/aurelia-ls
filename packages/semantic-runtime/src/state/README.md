@@ -68,6 +68,13 @@ Current closed raw authority rows:
   payloads such as `{ type: "setDraft", value: $event.target.value }` close through the same DOM tag-name-map substrate
   as observer lookup while preserving the action type literal when the payload object is statically known.
 
+The AOT corridor projects existing `.state` and `.dispatch` instructions through
+`template/template-instruction-runtime-value.ts`, using the same expression handles and runtime AST projection as
+ordinary bindings. Default/literal named-store fields remain instruction data; no separate parser, store resolver,
+or reducer evaluator is introduced. Runtime behavior is still the actual state plugin. Optional compiler-package
+linking is a different contract: retained attribute-pattern registrations require the original parser registration
+behavior and currently prevent that optimization. This does not reopen the deliberately excluded state frontiers.
+
 Open state frontiers:
 
 - Dynamic store-name expressions such as `& state: storeName` remain runtime-dependent until semantic-runtime has a

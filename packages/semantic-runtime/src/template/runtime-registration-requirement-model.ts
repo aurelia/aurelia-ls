@@ -34,6 +34,8 @@ export const enum RuntimeRegistrationRequirementReasonKind {
   PackageExportUnavailable = 'package-export-unavailable',
   ProgrammaticRuntimeRegistrationUse = 'programmatic-runtime-registration-use',
   ProgrammaticUseOpen = 'programmatic-use-open',
+  /** A retained registry still mutates the attribute parser; template compilation alone does not remove this effect. */
+  RetainedAttributePatternRegistration = 'retained-attribute-pattern-registration',
 }
 
 export interface RuntimeRegistrationRequirementReason {

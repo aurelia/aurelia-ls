@@ -52,7 +52,13 @@ export const taskStateHandler: IActionHandler<TaskState> = (state, action) => {
   }
 };
 
-export const filterStateHandler: IActionHandler<TaskFilterState> = (state) => state;
+export const filterStateHandler: IActionHandler<TaskFilterState> = (state, action) => {
+  if (!isRecord(action) || action.type !== 'setShowCompleted') {
+    return state;
+  }
+  const showCompleted = action.value === true;
+  return { label: showCompleted ? 'All tasks' : 'Active tasks', showCompleted };
+};
 
 function updateDraft(state: TaskState, draft: string): TaskState {
   return {

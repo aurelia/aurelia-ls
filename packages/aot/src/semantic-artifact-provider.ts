@@ -12,6 +12,7 @@ import {
 import {
   materializeSemanticAppTemplateCompilerHandoffs,
   materializeSemanticAppStandardConfigurationSourceAttachments,
+  collectRetainedCompilerRegistrationPressure,
   CustomElementTemplateModuleRole,
   ResourceCarrierKind,
   RuntimeRegistrationRequirementReasonKind,
@@ -19,6 +20,7 @@ import {
   StandardConfigurationSourceCarrierKind,
   TemplateCompilerCompiledHandoffState,
   type RuntimeRegistrationRequirementSelection,
+  type RuntimeRegistrationRequirementReason,
   type SemanticAppRuntimeRegistrationRequirements,
   type SemanticAppTemplateCompilerHandoffResource,
   type StandardConfigurationSourceAttachment,
@@ -593,6 +595,11 @@ export class SemanticAotArtifactProvider {
         runtimeConfiguration: runtimeConfiguration.evidence,
         compilerReplacementRefusal,
         spreadClosureRefusal,
+        retainedCompilerRegistrations: collectRetainedCompilerRegistrationPressure(app, new Set(
+          runtimeConfiguration.evidence.occurrences
+            .filter((occurrence) => occurrence.disposition === 'replaced')
+            .map((occurrence) => occurrence.operationProductHandle),
+        )),
       });
       if (compilation.unavailable.length > 0) {
         throw unavailableHandoffError(root, compilation.unavailable);
@@ -952,6 +959,7 @@ export function frameworkLinkSessionAdmission(request: {
   readonly runtimeConfiguration: SemanticAotRuntimeConfigurationEvidence;
   readonly compilerReplacementRefusal: RuntimeConfigurationRefusal | null;
   readonly spreadClosureRefusal: RuntimeConfigurationRefusal | null;
+  readonly retainedCompilerRegistrations: readonly RuntimeRegistrationRequirementReason[];
 }): AotFrameworkLinkSessionAdmission {
   if (request.compilerReplacementRefusal != null) {
     return {
@@ -965,6 +973,13 @@ export function frameworkLinkSessionAdmission(request: {
       state: 'c0-fallback',
       reasonKind: 'framework-link-runtime-spread-closure-open',
       reason: request.spreadClosureRefusal.summary,
+    };
+  }
+  if (request.retainedCompilerRegistrations.length > 0) {
+    return {
+      state: 'c0-fallback',
+      reasonKind: 'framework-link-retained-compiler-registration',
+      reason: request.retainedCompilerRegistrations.map((entry) => entry.summary).join(' '),
     };
   }
   const selections: readonly (readonly [string, RuntimeRegistrationRequirementSelection])[] = [

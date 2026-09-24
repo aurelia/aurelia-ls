@@ -4,10 +4,16 @@
     <p>${label & state:'filters'}</p>
   </header>
 
+  <label>
+    <input id="show-completed" type="checkbox" checked.state:filters="showCompleted"
+      change.dispatch:filters="{ type: 'setShowCompleted', value: $event.target.checked }">
+    Show completed
+  </label>
+
   <section class="task-entry" aria-labelledby="new-task">
     <label id="new-task" for="draft-task">New task</label>
     <input id="draft-task" value.state="draft" input.dispatch="{ type: 'setDraft', value: $event.target.value }">
-    <button type="button" disabled.bind="draft === '' & state" click.dispatch="{ type: 'addTask' }">Add task</button>
+    <button id="add-task" type="button" disabled.bind="draft === '' & state" click.dispatch="{ type: 'addTask' }">Add task</button>
   </section>
 
   <ul>

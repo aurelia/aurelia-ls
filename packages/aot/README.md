@@ -120,6 +120,16 @@ APIs remain guarded. The strict hook/CSS Modules browser golden emits seven arti
 compatible counterpart still preserves all source when mutable hook captures lack temporal authority. Registration
 preservation does not bypass callable/world closure.
 
+State `.state` and `.dispatch` instructions use semantic-runtime's existing parser/AST authority and this package's
+generic leaf emitter. The state plugin, its configuration and action handlers remain native runtime code; default and
+literal named stores have a bounded strict browser golden. This does not claim full state-plugin analysis.
+
+Optional compiler-package links are refused when actual retained registrations still mutate the attribute parser.
+The shared query uses existing configured catalog/admission/operation identities after exact configuration replacement.
+With `allow-c0-fallback`, original framework modules remain while templates stay AOT; with `require-applied`, linking
+fails. This optimization fallback is not application-wide JIT fallback. No state-specific parser shim or package-name
+allowlist is introduced to force the optimization through.
+
 `src/testing` contains two retained low-level characterization lanes:
 
 - the direct JIT oracle batches compiler worlds in one process and supports filters, shards, repetition, timing, and

@@ -7,3 +7,10 @@ declare module '*.css' {
   const css: string;
   export default css;
 }
+
+interface Window {
+  __stateStoreListAssurance?: {
+    readonly ready: boolean;
+    stop(): Promise<void>;
+  };
+}

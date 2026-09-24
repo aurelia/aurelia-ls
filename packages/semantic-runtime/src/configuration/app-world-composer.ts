@@ -10,10 +10,7 @@ import {
   DiWorldConstructionEmission,
   registrationOperationsVisibleToContainer,
 } from '../di/world-construction.js';
-import {
-  frameworkRegistrationKindForOperation,
-  type ContainerRegistrationOperation,
-} from '../di/container-registration.js';
+import type { ContainerRegistrationOperation } from '../di/container-registration.js';
 import {
   DiResolveCallIssueMaterializer,
   type DiResolveCallIssueMaterialization,
@@ -68,7 +65,6 @@ import {
   ResourceRegistrationAdmission,
 } from '../registration/registration-admission.js';
 import {
-  type FrameworkRegistrationKind,
   RegistryBodyInterpretationState,
   RegistryBodyKind,
 } from '../registration/registration-reference.js';
@@ -76,6 +72,7 @@ import { RegistryValue } from '../di/registry.js';
 import type { AppRoot } from './app-root.js';
 import type { ConfigurationKernelEmission } from './configuration-kernel-emitter.js';
 import type { ConfigurationRecognitionProjectResult } from './configuration-recognition-project-pass.js';
+import { catalogProductHandlesForOperations } from './configured-catalog-selection.js';
 import {
   FrameworkServiceCustomizationRecognitionPass,
   type FrameworkServiceCustomizationProjectResult,
@@ -559,41 +556,6 @@ function syntaxForOperations(
       catalogProductHandles.has(command.catalogProductHandle)
     ),
   };
-}
-
-interface ConfiguredCatalogSelection {
-  readonly registrationAdmissionProductHandle: ProductHandle;
-  readonly frameworkKind: FrameworkRegistrationKind;
-  readonly catalogProductHandles: readonly ProductHandle[];
-}
-
-function catalogProductHandlesForOperations(
-  operations: readonly ContainerRegistrationOperation[],
-  selections: readonly ConfiguredCatalogSelection[],
-): ReadonlySet<ProductHandle> {
-  if (operations.length === 0) {
-    return new Set();
-  }
-
-  const catalogProductHandles = new Set<ProductHandle>();
-  for (const operation of operations) {
-    const frameworkKind = frameworkRegistrationKindForOperation(operation);
-    if (frameworkKind == null) {
-      continue;
-    }
-    for (const selection of selections) {
-      if (
-        selection.registrationAdmissionProductHandle !== operation.admission.productHandle
-        || selection.frameworkKind !== frameworkKind
-      ) {
-        continue;
-      }
-      for (const catalogProductHandle of selection.catalogProductHandles) {
-        catalogProductHandles.add(catalogProductHandle);
-      }
-    }
-  }
-  return catalogProductHandles;
 }
 
 function uniqueResourceRegistrationAdmissions(

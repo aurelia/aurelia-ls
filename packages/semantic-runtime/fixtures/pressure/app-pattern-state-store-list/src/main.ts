@@ -1,3 +1,4 @@
+/* global window */
 import Aurelia from 'aurelia';
 import { StateDefaultConfiguration } from '@aurelia/state';
 import { App } from './app';
@@ -8,11 +9,19 @@ import {
   taskStateHandler,
 } from './state/task-store';
 
-Aurelia
+const aurelia = Aurelia
   .register(
     StateDefaultConfiguration
       .init(initialTaskState, taskStateHandler)
       .withStore('filters', initialFilterState, filterStateHandler),
   )
-  .app(App)
-  .start();
+  .app(App);
+
+await aurelia.start();
+window.__stateStoreListAssurance = {
+  ready: true,
+  async stop() {
+    await aurelia.stop(true);
+    aurelia.dispose();
+  },
+};

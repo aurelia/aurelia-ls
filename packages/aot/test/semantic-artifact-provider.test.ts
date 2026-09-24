@@ -308,6 +308,28 @@ describe('semantic AOT artifact provider', () => {
     expect(configuration?.code).toContain('const $expressions = []');
     expect(configuration?.code).not.toContain('request.customerName');
     expect(configuration?.code).not.toContain('request.email');
+    expect(await stateFormSession.prepareFrameworkLinks(await exactFrameworkLinkRequest()))
+      .toMatchObject({ disposition: 'applied' });
+  }, 45_000);
+
+  it('compiles the state plugin app while refusing removal of its retained attribute parser', async () => {
+    const root = path.resolve(repositoryRoot, 'packages/semantic-runtime/fixtures/pressure/app-pattern-state-store-list');
+    const stateProvider = new SemanticAotArtifactProvider();
+    const stateSession = await stateProvider.openBuild({
+      root, mode: 'production', environmentName: 'client', sourcemap: false,
+      runtimeConfiguration: 'require-replaceable',
+    });
+    expect(stateProvider.evidence()?.runtimeConfiguration.occurrences.every((entry) => entry.disposition === 'replaced'))
+      .toBe(true);
+    expect(await stateSession.artifactFor({ sourcePath: path.join(root, 'src/app.html') }))
+      .toMatchObject({ payload: { definitionName: 'app-root' } });
+    expect(await stateSession.prepareFrameworkLinks(await exactFrameworkLinkRequest())).toMatchObject({
+      disposition: 'c0-fallback',
+      reason: {
+        kind: 'unsupported-input',
+        summary: expect.stringContaining('framework-link-retained-compiler-registration'),
+      },
+    });
   }, 45_000);
 
   it('preserves nonexact static spread handoffs but refuses generated compiler profiles', () => {
@@ -434,9 +456,19 @@ describe('semantic AOT artifact provider', () => {
       runtimeConfiguration,
       compilerReplacementRefusal: null,
       spreadClosureRefusal: null,
+      retainedCompilerRegistrations: [],
     };
 
     expect(frameworkLinkSessionAdmission(admitted)).toEqual({ state: 'admitted' });
+    expect(frameworkLinkSessionAdmission({
+      ...admitted,
+      retainedCompilerRegistrations: [
+        runtimeRequirementReason(RuntimeRegistrationRequirementReasonKind.RetainedAttributePatternRegistration),
+      ],
+    })).toMatchObject({
+      state: 'c0-fallback',
+      reasonKind: 'framework-link-retained-compiler-registration',
+    });
     expect(frameworkLinkSessionAdmission({
       ...admitted,
       requirements: runtimeRequirements([]),

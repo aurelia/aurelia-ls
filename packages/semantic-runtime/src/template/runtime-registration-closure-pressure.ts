@@ -3,6 +3,7 @@ import path from 'node:path';
 import ts from 'typescript';
 
 import type { SemanticApp } from '../api/runtime.js';
+import { catalogProductHandlesForOperations } from '../configuration/configured-catalog-selection.js';
 import {
   frameworkRegistrationKindForOperation,
   type ContainerRegistrationOperation,
@@ -66,6 +67,36 @@ export interface RuntimeRegistrationClosurePressure {
   readonly resources: readonly RuntimeRegistrationRequirementReason[];
   readonly renderers: readonly RuntimeRegistrationRequirementReason[];
   readonly eventModifier: readonly RuntimeRegistrationRequirementReason[];
+}
+
+/**
+ * Compiler-service registration effects left after exact configuration occurrences are replaced.
+ * These do not prevent AOT compilation or selective runtime registration: they only prevent removing the
+ * attribute-parser implementation while the original registries still execute.
+ */
+export function collectRetainedCompilerRegistrationPressure(
+  app: SemanticApp,
+  removedOperationHandles: ReadonlySet<string>,
+): readonly RuntimeRegistrationRequirementReason[] {
+  app.requireCurrent();
+  const { diWorld, configuredSyntax } = app.emission.appWorld;
+  const catalogs = new Map(configuredSyntax.catalogEmission.catalogs.map((catalog) => [catalog.productHandle, catalog]));
+  const reasons: RuntimeRegistrationRequirementReason[] = [];
+  for (const operation of diWorld.registrationOperations) {
+    const frameworkKind = frameworkRegistrationKindForOperation(operation);
+    if (frameworkKind == null || removedOperationHandles.has(operation.productHandle)) continue;
+    const retainedCatalogs = catalogProductHandlesForOperations([operation], configuredSyntax.selections);
+    for (const catalogProductHandle of retainedCatalogs) {
+      const catalog = catalogs.get(catalogProductHandle)!;
+      if (catalog.attributePatterns.length === 0) continue;
+      reasons.push(reason(
+        RuntimeRegistrationRequirementReasonKind.RetainedAttributePatternRegistration,
+        `Retained ${frameworkKind} registration mutates the attribute parser through ${catalog.group}.`,
+        [operation.productHandle, operation.admission.productHandle, catalogProductHandle],
+      ));
+    }
+  }
+  return reasons;
 }
 
 type RuntimeCompilerPackageKind = 'expression-parser' | 'template-compiler';

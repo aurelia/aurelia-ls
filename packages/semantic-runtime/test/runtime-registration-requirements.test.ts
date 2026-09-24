@@ -11,6 +11,8 @@ import {
 } from '../src/kernel/project-input.js';
 import { readDiResolveCallSites } from '../src/di/resolve-call-recognition.js';
 import {
+  collectRetainedCompilerRegistrationPressure,
+  materializeSemanticAppStandardConfigurationSourceAttachments,
   materializeSemanticAppTemplateCompilerHandoffs,
   RuntimeRegistrationRequirementReasonKind,
   RuntimeRegistrationRequirementSelectionKind,
@@ -58,6 +60,10 @@ describe('runtime registration requirements', () => {
 
       const requirements = materializeSemanticAppTemplateCompilerHandoffs({ app })
         .runtimeRegistrationRequirements;
+      const replaced = new Set<string>(materializeSemanticAppStandardConfigurationSourceAttachments(app)
+        .map((attachment) => attachment.operationProductHandle));
+      expect(collectRetainedCompilerRegistrationPressure(app, new Set())).not.toEqual([]);
+      expect(collectRetainedCompilerRegistrationPressure(app, replaced)).toEqual([]);
       expect(requirements.resources.selectionKind)
         .toBe(RuntimeRegistrationRequirementSelectionKind.ExactLeaves);
       expect(requirements.resources.leaves.map((leaf) => leaf.exportName)).toEqual(['If', 'Repeat']);
@@ -182,6 +188,9 @@ describe('runtime registration requirements', () => {
       });
       const exact = materializeSemanticAppTemplateCompilerHandoffs({ app })
         .runtimeRegistrationRequirements;
+      const replaced = new Set<string>(materializeSemanticAppStandardConfigurationSourceAttachments(app)
+        .map((attachment) => attachment.operationProductHandle));
+      expect(collectRetainedCompilerRegistrationPressure(app, replaced)).toEqual([]);
       expect([
         exact.resources.selectionKind,
         exact.renderers.selectionKind,
@@ -671,6 +680,39 @@ describe('runtime registration requirements', () => {
     expect(requirements.renderers.reasons.map((reason) => reason.reasonKind)).toContain(
       RuntimeRegistrationRequirementReasonKind.RuntimeInstructionAbiUnmodeled,
     );
+  }, 20_000);
+
+  test('keeps explicitly registered syntax outside replaced StandardConfiguration occurrences', async () => {
+    const overlay = new MutableProjectSourceOverlay();
+    overlay.write(path.join(minimalRoot, 'src/main.ts'), [
+      "import Aurelia from 'aurelia';",
+      "import { DefaultBindingSyntax } from '@aurelia/runtime-html';",
+      "import { MyApp } from './my-app';",
+      'Aurelia.register(DefaultBindingSyntax).app(MyApp).start();',
+    ].join('\n'));
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: minimalRoot,
+      projectDiscovery: 'single-root',
+      storeKey: 'runtime-registration-requirements:retained-syntax',
+      projectInputAuthority: new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost(overlay)),
+    });
+    try {
+      const app = await runtime.openApp({ analysisDepth: 'runtime-topology', telemetry: { inquiryProfile: 'aot' } });
+      const replaced = new Set<string>(materializeSemanticAppStandardConfigurationSourceAttachments(app)
+        .map((attachment) => attachment.operationProductHandle));
+      expect(replaced.size).toBeGreaterThan(0);
+      const pressure = collectRetainedCompilerRegistrationPressure(app, replaced);
+      expect(pressure).toEqual([expect.objectContaining({
+        reasonKind: RuntimeRegistrationRequirementReasonKind.RetainedAttributePatternRegistration,
+        summary: expect.stringContaining('runtime-html.default-binding-syntax'),
+      })]);
+      expect(pressure[0]!.stableKeys.some((key) => replaced.has(key))).toBe(false);
+      expect(collectRetainedCompilerRegistrationPressure(app, new Set(
+        app.emission.appWorld.diWorld.registrationOperations.map((operation) => operation.productHandle),
+      ))).toEqual([]);
+    } finally {
+      runtime.retireWorkspaceIncarnation();
+    }
   }, 20_000);
 });
 

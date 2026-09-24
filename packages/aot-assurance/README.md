@@ -11,7 +11,7 @@ therefore run through the generated base-runtime facade instead of retaining the
 The routed storefront additionally requires its exact 11-resource/11-renderer plan and an omitted event modifier, so
 browser parity exercises the optimized configuration rather than only a compile-free conservative fallback.
 
-The default package assurance runs fifteen complementary scenarios:
+The default package assurance runs sixteen complementary scenarios:
 
 - `g0` is the deeply instrumented parser/teardown control and owns the runtime string-parse guard;
 - `content-moves` is strict AOT for relocation of original source-hook descendants. It moves authored content into
@@ -78,6 +78,12 @@ The default package assurance runs fifteen complementary scenarios:
   object-valued, and multiple selects, submission state, and per-request persistence. Its AOT build must emit exactly
   `app-root`, `state-backed-form`, and `field-shell`; custom-matcher identity remains manifest-owned because the
   fixture does not provide an equal-by-id/different-identity runtime value.
+- `state-store-list` runs the existing `@aurelia/state` pressure app with its native plugin and action handlers. Six
+  checkpoints exercise default `.state`/`.dispatch`, literal named `.state:filters`/`.dispatch:filters`, and default/named
+  `& state` behavior through input dispatch, named-store isolation, repeated task growth and draft reset. Existing rows
+  retain their DOM identity and teardown empties the host. Its strict AOT build emits only `app-root`. This bounded
+  scenario does not certify dynamic store selection, custom registries, `@fromState`, middleware, or async state APIs;
+  no reducer execution or lifecycle simulation is added to semantic-runtime.
 - `projects-and-milestones` runs a curated ordinary application assembled by the former app-builder program. It covers
   the initial router redirect, four routed list/detail areas, shared DI state, project and assignment creation, boolean
   and numeric-model form channels, async review loading and creation, and object-model selection through a matcher.
@@ -125,6 +131,7 @@ node packages/aot-assurance/out/cli.js --scenario strict-compiler-hooks
 node packages/aot-assurance/out/cli.js --scenario ordinary-hooks
 node packages/aot-assurance/out/cli.js --scenario routed-storefront
 node packages/aot-assurance/out/cli.js --scenario state-backed-form
+node packages/aot-assurance/out/cli.js --scenario state-store-list
 node packages/aot-assurance/out/cli.js --scenario projects-and-milestones
 node packages/aot-assurance/out/cli.js --scenario all
 ```
