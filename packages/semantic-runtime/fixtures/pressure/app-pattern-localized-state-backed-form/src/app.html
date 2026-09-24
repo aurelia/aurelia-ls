@@ -1,5 +1,16 @@
 <main>
   <h1 t="app.title"></h1>
+  <label for="title-key">Title key</label>
+  <select id="title-key" value.bind="titleKey">
+    <option value="app.title">Title</option>
+    <option value="app.history">History</option>
+  </select>
+  <section id="translated-titles">
+    <p id="bound-title" t.bind="titleKey"></p>
+    <p id="interpolated-title" t="${titleKey}"></p>
+    <p id="converter-title">${titleKey | t}</p>
+    <p id="behavior-title" textcontent.bind="titleKey & t"></p>
+  </section>
   <label for="request-selector" t="app.request"></label>
   <select id="request-selector" value.bind="state.selectedRequestId">
     <option repeat.for="requestId of state.requestIds" model.bind="requestId">${requestId}</option>
@@ -7,5 +18,5 @@
 
   <state-backed-form request-id.bind="state.selectedRequestId"></state-backed-form>
 
-  <p t="app.submitted" t-params.bind="{ count: state.submittedCount }"></p>
+  <p id="submitted-count" t="app.submitted" t-params.bind="{ count: state.submittedCount }"></p>
 </main>

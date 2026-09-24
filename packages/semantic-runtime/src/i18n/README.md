@@ -34,6 +34,12 @@ raw values: the translation binding command creates it, and `TranslationBinding.
 interpolation before binding. Treat `CustomExpression` pressure in this lane as i18n key/binding semantics first, not
 as a generic unsupported expression overlay problem.
 
+`parseI18nTranslationKeyInterpolation(...)` owns that raw-key parser entry for both static key validation and the
+opt-in compiler projection. The latter carries the original string plus its exact interpolation result (including
+known absence) through the existing instruction/handoff path. AOT realizes the genuine CustomExpression and serves
+its remaining parser request from the generated lookup table. Bound keys/parameters already use ordinary AST
+projection. This does not add lifecycle simulation or a generic Custom-expression escape hatch.
+
 `translation-binding-issues.ts` owns the framework-grounded `TranslationBinding.create/bind` diagnostic lane. It consumes
 the shared groups after runtime rendering and template-scope construction, then emits runtime binding issues for missing
 translation keys (`AUR4000`), duplicate parameter binding (`AUR4001`), and non-string dynamic key expressions

@@ -42,6 +42,7 @@ export class AotCompilerPatchModuleEmitter {
     };
     const rootVariable = emission.variableFor(emission.root.definitionId);
     const lines: string[] = [
+      ...emission.instructionImports,
       ...(!locals.hasLocals
         ? []
         : ["import { CustomElement } from '@aurelia/runtime-html';", '']),

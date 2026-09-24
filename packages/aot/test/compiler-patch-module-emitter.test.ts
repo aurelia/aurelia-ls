@@ -3,10 +3,13 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { CustomElement } from '@aurelia/runtime-html';
+import { CustomExpression } from '@aurelia/expression-parser';
 import { createSemanticRuntime } from '@aurelia-ls/semantic-runtime';
 import {
   materializeSemanticAppTemplateCompilerHandoffs,
   TemplateCompilerCompiledHandoffState,
+  TemplateCompilerFrameworkInstructionType,
+  type TemplateCompilerCompiledHandoffInstructionValue,
   type TemplateCompilerCompiledHandoffTree,
   type TemplateCompilerCompiledHandoffValue,
 } from '@aurelia-ls/semantic-runtime/browser-template';
@@ -170,6 +173,41 @@ beforeAll(async () => {
 }, 45_000);
 
 describe('AOT compiler patch module emitter', () => {
+  it('realizes raw i18n keys with framework behavior in both complete modules and carrier patches', async () => {
+    const rawKey = '[title]greeting;hello';
+    const source = handoff.definitions[0]!.rows[0]![0]!;
+    const translation: TemplateCompilerCompiledHandoffInstructionValue = {
+      type: TemplateCompilerFrameworkInstructionType.TranslationBinding,
+      from: { value: rawKey, interpolation: undefined },
+      to: 't', mode: 2,
+    };
+    // Projection/currentness is covered by the shared compiler suite; this test owns realization only.
+    const input: TemplateCompilerCompiledHandoffValue = {
+      ...handoff,
+      definitions: handoff.definitions.map(definition => definition.definitionId === handoff.rootDefinitionId
+        ? {
+            ...definition, header: { ...definition.header, dependencies: [] },
+            rows: [[{ ...source, value: translation }]], surrogates: [{ ...source, value: translation }],
+          }
+        : definition),
+    };
+    for (const emitter of [new AotTemplateModuleEmitter(), new AotCompilerPatchModuleEmitter()]) {
+      const artifact = emitter.emit({ handoff: input, projectRoot: fixtureRoot, sourcePath: templatePath, sourceText });
+      const imported = await importPatchModule(artifact.code, artifact.digest);
+      for (const instruction of [imported.instructions[0]![0]!, imported.surrogates[0]!]) {
+        expect(instruction.type).toBe(100);
+        expect(instruction.to).toBe('t');
+        expect(instruction.mode).toBe(2);
+        const from = instruction.from as CustomExpression;
+        expect(from).toBeInstanceOf(CustomExpression);
+        expect(from.evaluate()).toBe(rawKey);
+        expect(from.bind()).toBeUndefined();
+        expect(from.unbind()).toBeUndefined();
+        expect(from).not.toHaveProperty('interpolation');
+      }
+    }
+  });
+
   for (const [carrierOwnerDocument, contentOwnerDocument] of [
     ['template-contents', 'template-contents'],
     ['platform', 'template-contents'],

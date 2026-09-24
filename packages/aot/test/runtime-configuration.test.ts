@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { DI, Registration } from '@aurelia/kernel';
 import { IExpressionParser } from '@aurelia/expression-parser';
@@ -52,6 +55,10 @@ const expressions: readonly AotRuntimeExpressionEntry[] = [
   { expressionType: 'IsIterator', source: 'item of items', value: iteratorAst },
 ];
 
+const plainInterpolation: AotRuntimeExpressionEntry = {
+  expressionType: 'Interpolation', source: 'greeting', value: undefined,
+};
+
 const runtimeHtmlReference = (exportName: string): AotRuntimeRegistrationReference => ({
   moduleSpecifier: '@aurelia/runtime-html',
   exportName,
@@ -97,6 +104,80 @@ describe('AOT runtime configuration', () => {
     expect(() => parser.parse('missing', 'IsProperty')).toThrowError(
       'AOT expression parser has no precompiled IsProperty source "missing".',
     );
+  });
+
+  it('distinguishes a known interpolation-free source from missing runtime requests', () => {
+    const interpolationAst = {
+      $kind: 'Interpolation',
+      parts: ['', ''],
+      expressions: [propertyAst],
+      isMulti: false,
+      firstExpression: propertyAst,
+    } as const;
+    const parser = new AotExpressionParser([
+      plainInterpolation,
+      { expressionType: 'Interpolation', source: '${message}', value: interpolationAst },
+    ]);
+
+    expect(parser.parse('greeting', 'Interpolation')).toBeUndefined();
+    expect(parser.parse('${message}', 'Interpolation')).toBe(interpolationAst);
+    expect(() => parser.parse('missing', 'Interpolation')).toThrowError(
+      'AOT expression parser has no precompiled Interpolation source "missing".',
+    );
+    expect(() => parser.parse('greeting', 'IsProperty')).toThrowError(
+      'AOT expression parser has no precompiled IsProperty source "greeting".',
+    );
+    expect(() => new AotExpressionParser([]).parse('greeting', 'Interpolation')).toThrowError(
+      'AOT expression parser has no precompiled Interpolation source "greeting".',
+    );
+  });
+
+  it('rejects duplicate interpolation-free entries in both the parser and runtime plan', () => {
+    const duplicateEntries = [plainInterpolation, plainInterpolation];
+    expect(() => new AotExpressionParser(duplicateEntries)).toThrowError(
+      'AOT expression table contains duplicate Interpolation source "greeting".',
+    );
+    expect(() => new AotRuntimeConfigurationPlan(duplicateEntries)).toThrowError(
+      'AOT runtime plan contains duplicate Interpolation source "greeting".',
+    );
+  });
+
+  it('executes emitted interpolation-free results without admitting missing sources', async () => {
+    const artifact = new AotRuntimeConfigurationModuleEmitter().emit(
+      new AotRuntimeConfigurationPlan([...expressions, plainInterpolation]),
+    );
+    const outputRoot = await mkdtemp(path.resolve(import.meta.dirname, '../.tmp-runtime-configuration-'));
+    const outputPath = path.join(outputRoot, 'configuration.mjs');
+    try {
+      await writeFile(outputPath, artifact.code, 'utf8');
+      const generated = await import(pathToFileURL(outputPath).href) as {
+        readonly AotExpressionParser: typeof AotExpressionParser;
+        readonly AotConfiguration: AotRuntimeConfiguration;
+      };
+      const container = DI.createContainer();
+      generated.AotConfiguration.register(container);
+      const parser = container.get(IExpressionParser);
+      const property = parser.parse('message', 'IsProperty');
+
+      expect(artifact.expressionCount).toBe(3);
+      expect(parser.parse('greeting', 'Interpolation')).toBeUndefined();
+      expect(property).toEqual(propertyAst);
+      expect(parser.parse('message', 'IsProperty')).toBe(property);
+      expect(() => parser.parse('missing', 'Interpolation')).toThrowError(
+        'AOT expression parser has no precompiled Interpolation source "missing".',
+      );
+      expect(() => parser.parse('greeting', 'IsProperty')).toThrowError(
+        'AOT expression parser has no precompiled IsProperty source "greeting".',
+      );
+      expect(() => new generated.AotExpressionParser([]).parse('greeting', 'Interpolation')).toThrowError(
+        'AOT expression parser has no precompiled Interpolation source "greeting".',
+      );
+      expect(() => new generated.AotExpressionParser([plainInterpolation, plainInterpolation])).toThrowError(
+        'AOT expression table contains duplicate Interpolation source "greeting".',
+      );
+    } finally {
+      await rm(outputRoot, { recursive: true, force: true });
+    }
   });
 
   it('admits compiler-final definitions and closes the null-template AuSlot path', () => {

@@ -17,6 +17,7 @@ import {
   TemplateCompilerRuntimeElementDataKind,
 } from '@aurelia-ls/semantic-runtime/browser-template';
 import { pascalCase } from '@aurelia/kernel';
+import { visitCompiledHandoffInstructions } from './compiled-instructions.js';
 
 import {
   AOT_RUNTIME_SPREAD_PLAN_PROTOCOL,
@@ -74,6 +75,7 @@ export interface AotDefinitionDependencyPlan {
 export class AotCompiledTemplateEmission {
   public readonly definitions: readonly TemplateCompilerCompiledHandoffDefinition[];
   public readonly root: TemplateCompilerCompiledHandoffDefinition;
+  public readonly instructionImports: readonly string[];
   readonly #definitionById: ReadonlyMap<string, TemplateCompilerCompiledHandoffDefinition>;
   readonly #variableByDefinitionId: ReadonlyMap<string, string>;
   readonly #realizedNameByDefinitionId: ReadonlyMap<string, string>;
@@ -95,6 +97,13 @@ export class AotCompiledTemplateEmission {
     }
     this.definitions = request.handoff.definitions;
     this.root = root;
+    let hasTranslationKey = false;
+    visitCompiledHandoffInstructions(request.handoff, instruction => {
+      if (instruction.type === TemplateCompilerFrameworkInstructionType.TranslationBinding) hasTranslationKey = true;
+    });
+    this.instructionImports = hasTranslationKey
+      ? ["import { CustomExpression as $aotTranslationKey } from '@aurelia/expression-parser';"]
+      : [];
     this.#definitionById = definitions;
     this.#variableByDefinitionId = new Map(request.handoff.definitions.map((definition, index) => [
       definition.definitionId,
@@ -273,6 +282,7 @@ export class AotTemplateModuleEmitter {
     const rootTypeVariable = '$rootType';
     const lines: string[] = [
       "import { CustomElement } from '@aurelia/runtime-html';",
+      ...emission.instructionImports,
       ...dependencies.imports,
       '',
       ...emission.declarationLines(),
@@ -522,6 +532,14 @@ function instructionValue(
   request: AotTemplateModuleEmissionRequest,
   variableByDefinitionId: ReadonlyMap<string, string>,
 ): string {
+  if (value.type === TemplateCompilerFrameworkInstructionType.TranslationBinding) {
+    return objectLiteral({
+      type: emitJavaScriptValue(value.type, request),
+      from: `new $aotTranslationKey(${emitJavaScriptValue(value.from.value, request)})`,
+      to: emitJavaScriptValue(value.to, request),
+      mode: emitJavaScriptValue(value.mode, request),
+    });
+  }
   if (value.type === TemplateCompilerFrameworkInstructionType.HydrateTemplateController) {
     return objectLiteral({
       type: emitJavaScriptValue(value.type, request),

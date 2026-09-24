@@ -1,7 +1,9 @@
 import type { ProductHandle } from '../kernel/handles.js';
 import type { ProductDetailReadView } from '../kernel/product-details.js';
 import type { KernelReadProjectionRevisionView } from '../kernel/store.js';
+import type { ExpressionAstNode } from '../expression/ast.js';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
+import { parseI18nTranslationKeyInterpolation } from '../i18n/key-evaluation-result.js';
 import {
   projectRuntimeExpressionAstValue,
   RuntimeExpressionAstProjectionState,
@@ -25,6 +27,7 @@ import {
   TemplateInstructionKind,
   TemplateListenerStrategy,
   type TemplateInstruction,
+  type TranslationBindingInstruction,
 } from './instruction-ir.js';
 
 const runtimeInstructionFamilyAuthority = {};
@@ -78,6 +81,14 @@ export class TemplateCompilerRuntimeResourceNameValue {
   constructor(readonly name: string) {
     if (name.length === 0) throw new Error('Runtime instruction resource name cannot be empty.');
   }
+}
+
+/** Realization recipe for i18n's behavior-bearing CustomExpression and its runtime interpolation lookup. */
+export class TemplateCompilerRuntimeTranslationKeyValue {
+  constructor(
+    readonly value: string,
+    readonly interpolation: RuntimeExpressionAstValue | undefined,
+  ) {}
 }
 
 export class TemplateCompilerRuntimeDefinitionReferenceValue {
@@ -227,6 +238,20 @@ export type TemplateCompilerRuntimeInstructionValue =
       readonly from: string;
     }
   | {
+      readonly type: TemplateCompilerFrameworkInstructionType.TranslationBinding;
+      readonly from: TemplateCompilerRuntimeTranslationKeyValue;
+      readonly to: string;
+      readonly mode: TemplateCompilerFrameworkBindingMode.ToView;
+    }
+  | {
+      readonly type:
+        | TemplateCompilerFrameworkInstructionType.TranslationBindBinding
+        | TemplateCompilerFrameworkInstructionType.TranslationParametersBinding;
+      readonly from: RuntimeExpressionAstValue;
+      readonly to: string;
+      readonly mode: TemplateCompilerFrameworkBindingMode.ToView;
+    }
+  | {
       readonly type: TemplateCompilerFrameworkInstructionType.StateBinding;
       readonly from: RuntimeExpressionAstValue;
       readonly to: string;
@@ -263,7 +288,6 @@ export const enum TemplateCompilerRuntimeInstructionReasonKind {
   CaptureSyntaxUnavailable = 'capture-syntax-unavailable',
   UnsupportedHydrateElementData = 'unsupported-hydrate-element-data',
   LetBindingSourceIncoherent = 'let-binding-source-incoherent',
-  UnsupportedInstructionKind = 'unsupported-instruction-kind',
 }
 
 export class TemplateCompilerRuntimeInstructionReason {
@@ -899,6 +923,27 @@ class RuntimeInstructionValueProjector {
           target: instruction.target,
           from: instruction.value,
         };
+      case TemplateInstructionKind.TranslationBinding: {
+        const from = this.translationKey(instruction);
+        return from == null ? null : {
+          type: TemplateCompilerFrameworkInstructionType.TranslationBinding,
+          from,
+          to: instruction.target,
+          mode: TemplateCompilerFrameworkBindingMode.ToView,
+        };
+      }
+      case TemplateInstructionKind.TranslationBindBinding:
+      case TemplateInstructionKind.TranslationParametersBinding: {
+        const from = this.expression(instruction, instruction.expressionProductHandle, null);
+        return from == null ? null : {
+          type: instruction.instructionKind === TemplateInstructionKind.TranslationBindBinding
+            ? TemplateCompilerFrameworkInstructionType.TranslationBindBinding
+            : TemplateCompilerFrameworkInstructionType.TranslationParametersBinding,
+          from,
+          to: instruction.target,
+          mode: TemplateCompilerFrameworkBindingMode.ToView,
+        };
+      }
       case TemplateInstructionKind.StateBinding: {
         const from = this.expression(instruction, instruction.expressionProductHandle, null);
         return from == null ? null : {
@@ -917,13 +962,6 @@ class RuntimeInstructionValueProjector {
           storeName: instruction.storeName ?? undefined,
         };
       }
-      default:
-        this.pending(
-          instruction,
-          TemplateCompilerRuntimeInstructionReasonKind.UnsupportedInstructionKind,
-          `Instruction kind '${instruction.instructionKind}' has no runtime-value projector yet.`,
-        );
-        return null;
     }
   }
 
@@ -998,6 +1036,13 @@ class RuntimeInstructionValueProjector {
       );
       return null;
     }
+    return this.runtimeAstValue(instruction, ast);
+  }
+
+  private runtimeAstValue(
+    instruction: TemplateInstruction,
+    ast: ExpressionAstNode,
+  ): RuntimeExpressionAstValue | null {
     const projection = projectRuntimeExpressionAstValue(ast);
     if (projection.state !== RuntimeExpressionAstProjectionState.Exact || projection.value == null) {
       this.pending(
@@ -1008,6 +1053,27 @@ class RuntimeInstructionValueProjector {
       return null;
     }
     return projection.value;
+  }
+
+  private translationKey(instruction: TranslationBindingInstruction): TemplateCompilerRuntimeTranslationKeyValue | null {
+    const result = parseI18nTranslationKeyInterpolation(instruction.rawExpression);
+    if (result.kind === ExpressionParseResultKind.InterpolationAbsent) {
+      return new TemplateCompilerRuntimeTranslationKeyValue(instruction.rawExpression, undefined);
+    }
+    const ast = runtimeAcceptedBindingExpressionAstForResult(result);
+    if (ast == null) {
+      this.pending(
+        instruction,
+        TemplateCompilerRuntimeInstructionReasonKind.ExpressionAstUnavailable,
+        `Translation key interpolation result '${result.kind}' has no runtime-accepted AST value.`,
+      );
+      return null;
+    }
+    const interpolation = this.runtimeAstValue(instruction, ast);
+    return interpolation == null ? null : new TemplateCompilerRuntimeTranslationKeyValue(
+      instruction.rawExpression,
+      interpolation,
+    );
   }
 
   private iteratorExpression(
@@ -1049,16 +1115,7 @@ class RuntimeInstructionValueProjector {
       );
       return null;
     }
-    const projection = projectRuntimeExpressionAstValue(result.ast);
-    if (projection.state !== RuntimeExpressionAstProjectionState.Exact || projection.value == null) {
-      this.pending(
-        instruction,
-        TemplateCompilerRuntimeInstructionReasonKind.ExpressionAstProjectionPending,
-        `Iterator runtime AST projection is pending: ${projection.reasons.map((reason) => reason.reasonKind).join(', ')}.`,
-      );
-      return null;
-    }
-    return projection.value;
+    return this.runtimeAstValue(instruction, result.ast);
   }
 
   private captureSyntax(

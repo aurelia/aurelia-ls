@@ -11,4 +11,5 @@ import './app.css';
 })
 export class App {
   readonly state = resolve(AppState);
+  titleKey = 'app.title';
 }

@@ -1,6 +1,6 @@
 import { auLink } from '../kernel/au-link.js';
 import { ExpressionParser } from '../expression/expression-parser.js';
-import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
+import { ExpressionParseResultKind, type InterpolationParseResult } from '../expression/parse-result-algebra.js';
 
 export type I18nTranslationTargetKind =
   | 'attribute-or-property'
@@ -17,6 +17,11 @@ export class I18nTranslationTarget {
 }
 
 const I18N_KEY_EXPRESSION_PARSER = new ExpressionParser();
+
+/** The interpolation parse performed by framework TranslationBinding.create for a raw translation key. */
+export function parseI18nTranslationKeyInterpolation(keyExpr: string): InterpolationParseResult {
+  return I18N_KEY_EXPRESSION_PARSER.parseInterpolation(keyExpr);
+}
 
 /** Static mirror of Aurelia i18n's `I18nKeyEvaluationResult` key/attribute parsing. */
 @auLink('i18n:I18nKeyEvaluationResult')
@@ -45,7 +50,7 @@ export function i18nTranslationKeyExpressionValidationSummary(keyExpr: string): 
   if (keyExpr.length === 0 || /[\r\n]/.test(keyExpr)) {
     return `value '${keyExpr}' is not a non-empty single-line i18n translation key expression.`;
   }
-  const interpolation = I18N_KEY_EXPRESSION_PARSER.parse(keyExpr, 'Interpolation');
+  const interpolation = parseI18nTranslationKeyInterpolation(keyExpr);
   switch (interpolation.kind) {
     case ExpressionParseResultKind.InterpolationSuccess:
       return null;

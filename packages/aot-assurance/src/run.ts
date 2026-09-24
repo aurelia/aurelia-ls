@@ -53,6 +53,7 @@ import { assertContentAttributesBuildEvidence, assertContentAttributesExpectatio
 import { assertContentMovesBuildEvidence, assertContentMovesExpectations } from './content-moves-scenario.js';
 import { assertOrdinaryHooksBuildEvidence, assertOrdinaryHooksExpectations } from './ordinary-hooks-scenario.js';
 import { assertStateStoreListBuildEvidence, assertStateStoreListExpectations } from './state-store-list-scenario.js';
+import { assertLocalizedFormBuildEvidence, assertLocalizedFormExpectations } from './localized-form-scenario.js';
 
 export interface RunAssuranceOptions {
   readonly adapterSpecifier: string;
@@ -125,6 +126,7 @@ export function assertScenarioBuildEvidence(
   else if (scenario === 'routed-storefront') assertRoutedStorefrontBuildEvidence(evidence);
   else if (scenario === 'state-backed-form') assertStateBackedFormBuildEvidence(evidence);
   else if (scenario === 'state-store-list') assertStateStoreListBuildEvidence(evidence);
+  else if (scenario === 'localized-form') assertLocalizedFormBuildEvidence(evidence);
   else if (scenario === 'projects-and-milestones') assertProjectsAndMilestonesBuildEvidence(evidence);
 }
 
@@ -175,6 +177,9 @@ export function assertScenarioBrowserEvidence(
     } else if (scenario === 'state-store-list') {
       assertStateStoreListExpectations(browserBatch.jit);
       assertStateStoreListExpectations(browserBatch.aot);
+    } else if (scenario === 'localized-form') {
+      assertLocalizedFormExpectations(browserBatch.jit);
+      assertLocalizedFormExpectations(browserBatch.aot);
     } else {
       assertProjectsAndMilestonesExpectations(browserBatch.jit);
       assertProjectsAndMilestonesExpectations(browserBatch.aot);
@@ -229,6 +234,8 @@ function defaultFixtureRoot(scenario: AssuranceScenario): string {
       );
     case 'state-store-list':
       return resolve(packageRoot, '..', 'semantic-runtime', 'fixtures', 'pressure', 'app-pattern-state-store-list');
+    case 'localized-form':
+      return resolve(packageRoot, '..', 'semantic-runtime', 'fixtures', 'pressure', 'app-pattern-localized-state-backed-form');
     case 'projects-and-milestones':
       return resolve(packageRoot, '..', '..', 'fixtures', 'projects-and-milestones');
   }

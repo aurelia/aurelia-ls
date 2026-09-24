@@ -124,6 +124,14 @@ State `.state` and `.dispatch` instructions use semantic-runtime's existing pars
 generic leaf emitter. The state plugin, its configuration and action handlers remain native runtime code; default and
 literal named stores have a bounded strict browser golden. This does not claim full state-plugin analysis.
 
+I18n `t.bind` and `t-params.bind` likewise consume existing AST projection. Raw `t` preserves the framework's
+behavior-bearing `CustomExpression`: both complete modules and carrier patches import its genuine constructor.
+Semantic-runtime's i18n parser supplies the interpolation result for the existing runtime lookup table, including
+known `undefined` results for static keys. Unknown requests still throw. Instruction traversal is shared by import
+selection and parser demand, including nested instructions, surrogates and residual spread cases. No generic Custom
+AST support or runtime parser implementation is introduced. The existing localized form is a strict browser golden
+for key/parameter/locale updates, multi-target translation and native converter/behavior execution.
+
 Optional compiler-package links are refused when actual retained registrations still mutate the attribute parser.
 The shared query uses existing configured catalog/admission/operation identities after exact configuration replacement.
 With `allow-c0-fallback`, original framework modules remain while templates stay AOT; with `require-applied`, linking

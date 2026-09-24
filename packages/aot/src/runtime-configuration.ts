@@ -30,12 +30,17 @@ export type AotRuntimeExpressionType =
   | 'IsProperty'
   | 'IsCustom';
 
-export interface AotRuntimeExpressionEntry {
-  readonly expressionType: AotRuntimeExpressionType;
+export type AotRuntimeExpressionEntry = {
   readonly source: string;
+} & ({
+  readonly expressionType: Exclude<AotRuntimeExpressionType, 'Interpolation'>;
   /** The exact framework-shaped AST already projected into the compiled handoff. */
   readonly value: RuntimeExpressionAstValue;
-}
+} | {
+  readonly expressionType: 'Interpolation';
+  /** Undefined records a known source containing no interpolation, not a missing table entry. */
+  readonly value: RuntimeExpressionAstValue | undefined;
+});
 
 export interface AotRuntimeCoercionOptions {
   readonly enableCoercion: boolean;
@@ -140,9 +145,9 @@ export interface AotRuntimeConfigurationModuleArtifact {
   readonly registrations: AotRuntimeRegistrationPlan;
 }
 
-/** A string-only expression service: every admitted runtime request must have an emitted AST. */
+/** A string-only expression service: every admitted runtime request must have an emitted result. */
 export class AotExpressionParser {
-  readonly #lookup = new Map<AotRuntimeExpressionType, Map<string, RuntimeExpressionAstValue>>();
+  readonly #lookup = new Map<AotRuntimeExpressionType, Map<string, RuntimeExpressionAstValue | undefined>>();
 
   public constructor(entries: readonly AotRuntimeExpressionEntry[]) {
     for (const entry of entries) {
@@ -150,7 +155,7 @@ export class AotExpressionParser {
       if (expressions == null) {
         this.#lookup.set(
           entry.expressionType,
-          expressions = new Map<string, RuntimeExpressionAstValue>(),
+          expressions = new Map<string, RuntimeExpressionAstValue | undefined>(),
         );
       }
       if (expressions.has(entry.source)) {
@@ -162,14 +167,16 @@ export class AotExpressionParser {
     }
   }
 
-  public parse(source: string, expressionType: AotRuntimeExpressionType): RuntimeExpressionAstValue {
-    const value = this.#lookup.get(expressionType)?.get(source);
-    if (value === void 0) {
+  public parse(source: string, expressionType: Exclude<AotRuntimeExpressionType, 'Interpolation'>): RuntimeExpressionAstValue;
+  public parse(source: string, expressionType: AotRuntimeExpressionType): RuntimeExpressionAstValue | undefined;
+  public parse(source: string, expressionType: AotRuntimeExpressionType): RuntimeExpressionAstValue | undefined {
+    const expressions = this.#lookup.get(expressionType);
+    if (expressions == null || !expressions.has(source)) {
       throw new Error(
         `AOT expression parser has no precompiled ${expressionType} source ${JSON.stringify(source)}.`,
       );
     }
-    return value;
+    return expressions.get(source);
   }
 }
 

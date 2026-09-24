@@ -11,7 +11,7 @@ therefore run through the generated base-runtime facade instead of retaining the
 The routed storefront additionally requires its exact 11-resource/11-renderer plan and an omitted event modifier, so
 browser parity exercises the optimized configuration rather than only a compile-free conservative fallback.
 
-The default package assurance runs sixteen complementary scenarios:
+The default package assurance runs seventeen complementary scenarios:
 
 - `g0` is the deeply instrumented parser/teardown control and owns the runtime string-parse guard;
 - `content-moves` is strict AOT for relocation of original source-hook descendants. It moves authored content into
@@ -78,6 +78,12 @@ The default package assurance runs sixteen complementary scenarios:
   object-valued, and multiple selects, submission state, and per-request persistence. Its AOT build must emit exactly
   `app-root`, `state-backed-form`, and `field-shell`; custom-matcher identity remains manifest-owned because the
   fixture does not provide an equal-by-id/different-identity runtime value.
+- `localized-form` promotes the existing localized form pressure fixture with its native i18n configuration and
+  inline dictionaries. Seven checkpoints cover literal and interpolated `t`, `t.bind`, translation converter and
+  binding behavior, key and locale changes, changing translation parameters across requests and submissions, and
+  combined text/title targets. It requires all three compiler-final definitions, no application fallback, preservation
+  of the live form through updates, and complete teardown. This is ordinary DI application state, not additional
+  `@aurelia/state` plugin support. The original i18n registration remains responsible for its runtime resources.
 - `state-store-list` runs the existing `@aurelia/state` pressure app with its native plugin and action handlers. Six
   checkpoints exercise default `.state`/`.dispatch`, literal named `.state:filters`/`.dispatch:filters`, and default/named
   `& state` behavior through input dispatch, named-store isolation, repeated task growth and draft reset. Existing rows

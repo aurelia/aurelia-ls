@@ -8,6 +8,7 @@ import type { ContentAttributesApplicationObservation } from './content-attribut
 import type { ContentMovesApplicationObservation } from './content-moves-scenario.js';
 import type { OrdinaryHooksApplicationObservation } from './ordinary-hooks-scenario.js';
 import type { StateStoreListApplicationObservation } from './state-store-list-scenario.js';
+import type { LocalizedFormApplicationObservation } from './localized-form-scenario.js';
 
 export type AssuranceLane = 'jit' | 'aot';
 export type AssuranceScenario =
@@ -26,6 +27,7 @@ export type AssuranceScenario =
   | 'routed-storefront'
   | 'state-backed-form'
   | 'state-store-list'
+  | 'localized-form'
   | 'projects-and-milestones';
 
 export type EmissionFalsifier =
@@ -204,6 +206,7 @@ export type ApplicationObservation =
   | RoutedStorefrontApplicationObservation
   | StateBackedFormApplicationObservation
   | StateStoreListApplicationObservation
+  | LocalizedFormApplicationObservation
   | ProjectsAndMilestonesApplicationObservation;
 
 export interface CheckpointTranscript {

@@ -470,12 +470,18 @@ products; target JavaScript emission remains outside this substrate.
   instruction-ownership helper covers element, attribute, controller, let, iterator-tail, and spread-child edges. The
   current exact corridor materializes property, interpolation, listener, text, template-controller, custom-element,
   let, and static class/style/general-attribute wires, including canonical resource names,
-  child/projection definition references, containerless state, captures, and known `AuSlot` data. Unsupported kinds or
-  AST representations remain typed Pending. Exact values/results are module-constructed and cross-check family
+  child/projection definition references, containerless state, captures, and known `AuSlot` data. All current IR kinds
+  have projection cases; missing authority and unsupported AST representations remain typed Pending. This is not a
+  claim of complete compiler/plugin semantics. Exact values/results are module-constructed and cross-check family
   instruction order plus every row/value link before they can leave semantic-runtime.
   State and dispatch consume their existing IR/parser handles through that same expression authority. Their plugin
   wires carry precompiled ASTs (state.from versus dispatch.ast), target/event names and literal store names; detached
   handoff and AOT emission already handle these leaves generically. This is projection, not execution of state actions.
+  I18n bound keys and parameters share that AST authority. Raw translation keys intentionally have no compiler parse
+  product: `TemplateCompilerRuntimeTranslationKeyValue` carries the original string and the runtime interpolation
+  result, using the existing i18n parser helper. Known absence differs from malformed/unavailable interpolation.
+  This is a constructor/parser-lookup recipe, not a plain Custom AST: realization uses the framework CustomExpression,
+  while generic behavior-bearing Custom projection remains Pending. The unchanged leaf handoff carries this recipe.
   Hydrate-let and let-binding values share `let-element-compiler-semantics.ts` with the authored compiler adapter:
   context-flag exclusion, property versus interpolation/literal parsing, invalid-command posture, and target
   normalization are one law. The live cursor owns fresh allocation/spend/row handoff. Static root surrogates use the

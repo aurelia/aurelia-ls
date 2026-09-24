@@ -29,12 +29,16 @@ import {
   HydrateElementInstruction,
   StateBindingInstruction,
   SpreadTransferedBindingInstruction,
+  TranslationBindingInstruction,
+  TranslationBindBindingInstruction,
+  TranslationParametersBindingInstruction,
 } from '../src/template/instruction-ir.js';
 import { resourceLocalRuntimeSpreadCompilations } from '../src/template/runtime-resource-ownership.js';
 import {
   projectTemplateCompilerRuntimeInstructionClosure,
   TemplateCompilerRuntimeInstructionFamilyState,
   TemplateCompilerRuntimeResourceRepresentation,
+  TemplateCompilerRuntimeTranslationKeyValue,
 } from '../src/template/template-instruction-runtime-value.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -344,6 +348,95 @@ describe('semantic app template compiler handoff', () => {
           args: [],
         }),
       }));
+    } finally {
+      runtime.retireWorkspaceIncarnation();
+    }
+  }, 45_000);
+
+  test('projects configured translation aliases through the same live and durable instruction authority', async () => {
+    const i18nRoot = path.join(packageRoot, 'fixtures/pressure/i18n-custom-translation-alias');
+    const i18nTemplateFileName = path.join(i18nRoot, 'src/i18n-custom-alias-app.html');
+    const overlay = new MutableProjectSourceOverlay();
+    overlay.write(i18nTemplateFileName, [
+      '<h1 i18n="dashboard.title"></h1>',
+      '<p i18n="dashboard.${section}"></p>',
+      '<p i18n.bind="titleKey" t-params.bind="{ name: name }"></p>',
+    ].join('\n'));
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: i18nRoot,
+      projectDiscovery: 'single-root',
+      storeKey: 'semantic-app-template-compiler-handoff-i18n-commands',
+      projectInputAuthority: new SemanticRuntimeProjectInputAuthority(
+        new NodeSemanticRuntimeProjectInputHost(overlay),
+      ),
+    });
+    try {
+      const app = await runtime.openApp({ telemetry: { inquiryProfile: 'aot' } });
+      const semanticResource = app.emission.templates.resources.find((candidate) =>
+        candidate.compilation.definition.name === 'i18n-custom-alias-app'
+      );
+      if (semanticResource == null) throw new Error('Expected the configured i18n semantic resource.');
+      const instructions = semanticResource.compilation.compiledTemplate.instructions.filter((instruction) =>
+        instruction instanceof TranslationBindingInstruction
+        || instruction instanceof TranslationBindBindingInstruction
+        || instruction instanceof TranslationParametersBindingInstruction
+      );
+      const durable = projectTemplateCompilerRuntimeInstructionClosure({
+        rootInstructions: instructions,
+        createdInstructions: instructions,
+        productDetails: runtime.workspace.store,
+        resourceRepresentation: TemplateCompilerRuntimeResourceRepresentation.Name,
+      });
+      expect(durable.reasons).toEqual([]);
+      expect(durable.value?.roots).toEqual([
+        {
+          type: TemplateCompilerFrameworkInstructionType.TranslationBinding,
+          from: new TemplateCompilerRuntimeTranslationKeyValue('dashboard.title', undefined),
+          to: '',
+          mode: 2,
+        },
+        {
+          type: TemplateCompilerFrameworkInstructionType.TranslationBinding,
+          from: new TemplateCompilerRuntimeTranslationKeyValue('dashboard.${section}', {
+            $kind: 'Interpolation',
+            isMulti: false,
+            firstExpression: { $kind: 'AccessScope', name: 'section', ancestor: 0 },
+            parts: ['dashboard.', ''],
+            expressions: [{ $kind: 'AccessScope', name: 'section', ancestor: 0 }],
+          }),
+          to: '',
+          mode: 2,
+        },
+        {
+          type: TemplateCompilerFrameworkInstructionType.TranslationBindBinding,
+          from: { $kind: 'AccessScope', name: 'titleKey', ancestor: 0 },
+          to: 'bind',
+          mode: 2,
+        },
+        {
+          type: TemplateCompilerFrameworkInstructionType.TranslationParametersBinding,
+          from: {
+            $kind: 'ObjectLiteral',
+            keys: ['name'],
+            values: [{ $kind: 'AccessScope', name: 'name', ancestor: 0 }],
+          },
+          to: '',
+          mode: 2,
+        },
+      ]);
+
+      const batch = materializeSemanticAppTemplateCompilerHandoffs({
+        app,
+        templateSourcePaths: [i18nTemplateFileName],
+      });
+      const resource = batch.resources[0];
+      if (resource?.state !== TemplateCompilerCompiledHandoffState.Exact) {
+        throw new Error(resource?.reasons.map((reason) => reason.summary).join(' ') ?? 'No translation handoff.');
+      }
+      const values = flattenInstructionValues(resource.value.definitions.flatMap((definition) =>
+        definition.rows.flat().map((instruction) => instruction.value)
+      ));
+      expect(values).toEqual(durable.value?.roots);
     } finally {
       runtime.retireWorkspaceIncarnation();
     }

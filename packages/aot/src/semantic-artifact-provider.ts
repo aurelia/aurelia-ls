@@ -19,6 +19,7 @@ import {
   RuntimeRegistrationRequirementSelectionKind,
   StandardConfigurationSourceCarrierKind,
   TemplateCompilerCompiledHandoffState,
+  TemplateCompilerFrameworkInstructionType,
   type RuntimeRegistrationRequirementSelection,
   type RuntimeRegistrationRequirementReason,
   type SemanticAppRuntimeRegistrationRequirements,
@@ -68,6 +69,7 @@ import {
   type AotRawSourceMap,
   type AotTemplateModuleArtifact,
 } from './template-module-emitter.js';
+import { visitCompiledHandoffInstructions } from './compiled-instructions.js';
 
 export const AOT_COMPILER_PATCH_PAYLOAD_MODULE_PREFIX = 'virtual:aurelia-aot/payload/';
 
@@ -1018,39 +1020,36 @@ export function collectAotRuntimeExpressions(
   handoffs: readonly TemplateCompilerCompiledHandoffValue[],
 ): readonly AotRuntimeExpressionEntry[] {
   const entries = new Map<string, { readonly entry: AotRuntimeExpressionEntry; readonly ast: string }>();
+  const add = (entry: AotRuntimeExpressionEntry): void => {
+    const key = `${entry.expressionType}\0${entry.source}`;
+    const ast = emitAotJavaScriptValue(entry.value, root);
+    const previous = entries.get(key);
+    if (previous != null && previous.ast !== ast) {
+      throw new AotArtifactError(
+        'AOT_ARTIFACT_INVALID_HANDOFF',
+        `AOT runtime parser demands disagree on precompiled ${entry.expressionType} source ${JSON.stringify(entry.source)}.`,
+        root,
+      );
+    }
+    if (previous == null) entries.set(key, { entry, ast });
+  };
   const visit = (instruction: TemplateCompilerCompiledHandoffInstructionValue): void => {
+    if (instruction.type === TemplateCompilerFrameworkInstructionType.TranslationBinding) {
+      add({ expressionType: 'Interpolation', source: instruction.from.value, value: instruction.from.interpolation });
+    }
     if ('spreadPlan' in instruction && instruction.spreadPlan != null) {
       for (const spreadCase of instruction.spreadPlan.cases) {
         for (const expression of spreadCase.residualExpressions) {
-          const entry: AotRuntimeExpressionEntry = {
+          add({
             expressionType: expression.expressionType,
             source: expression.source,
             value: expression.value,
-          };
-          const key = `${entry.expressionType}\0${entry.source}`;
-          const ast = emitAotJavaScriptValue(entry.value, root);
-          const previous = entries.get(key);
-          if (previous != null && previous.ast !== ast) {
-            throw new AotArtifactError(
-              'AOT_ARTIFACT_INVALID_HANDOFF',
-              `AOT spread plans disagree on precompiled ${entry.expressionType} source ${JSON.stringify(entry.source)}.`,
-              root,
-            );
-          }
-          if (previous == null) entries.set(key, { entry, ast });
+          });
         }
       }
     }
-    if ('props' in instruction) instruction.props.forEach(visit);
-    if ('instructions' in instruction) instruction.instructions.forEach(visit);
-    if ('instruction' in instruction) visit(instruction.instruction);
   };
-  for (const handoff of handoffs) {
-    for (const definition of handoff.definitions) {
-      definition.rows.flat().forEach((instruction) => visit(instruction.value));
-      definition.surrogates.forEach((instruction) => visit(instruction.value));
-    }
-  }
+  for (const handoff of handoffs) visitCompiledHandoffInstructions(handoff, visit);
   return [...entries.values()]
     .map((value) => value.entry)
     .sort((left, right) =>

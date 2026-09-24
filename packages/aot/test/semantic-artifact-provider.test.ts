@@ -10,6 +10,7 @@ import {
   RuntimeRegistrationRequirementReasonKind,
   RuntimeRegistrationRequirementSelectionKind,
   TemplateCompilerFrameworkInstructionType,
+  type TemplateCompilerCompiledHandoffInstructionValue,
   type TemplateCompilerCompiledHandoffSpreadExpressionEntry,
   type TemplateCompilerCompiledHandoffValue,
   type RuntimeRegistrationRequirementReason,
@@ -312,25 +313,27 @@ describe('semantic AOT artifact provider', () => {
       .toMatchObject({ disposition: 'applied' });
   }, 45_000);
 
-  it('compiles the state plugin app while refusing removal of its retained attribute parser', async () => {
-    const root = path.resolve(repositoryRoot, 'packages/semantic-runtime/fixtures/pressure/app-pattern-state-store-list');
-    const stateProvider = new SemanticAotArtifactProvider();
-    const stateSession = await stateProvider.openBuild({
-      root, mode: 'production', environmentName: 'client', sourcemap: false,
-      runtimeConfiguration: 'require-replaceable',
-    });
-    expect(stateProvider.evidence()?.runtimeConfiguration.occurrences.every((entry) => entry.disposition === 'replaced'))
-      .toBe(true);
-    expect(await stateSession.artifactFor({ sourcePath: path.join(root, 'src/app.html') }))
-      .toMatchObject({ payload: { definitionName: 'app-root' } });
-    expect(await stateSession.prepareFrameworkLinks(await exactFrameworkLinkRequest())).toMatchObject({
-      disposition: 'c0-fallback',
-      reason: {
-        kind: 'unsupported-input',
-        summary: expect.stringContaining('framework-link-retained-compiler-registration'),
-      },
-    });
-  }, 45_000);
+  it.each(['app-pattern-state-store-list', 'app-pattern-localized-state-backed-form'])(
+    'compiles %s while refusing removal of its retained attribute parser', async (fixture) => {
+      const root = path.resolve(repositoryRoot, 'packages/semantic-runtime/fixtures/pressure', fixture);
+      const pluginProvider = new SemanticAotArtifactProvider();
+      const pluginSession = await pluginProvider.openBuild({
+        root, mode: 'production', environmentName: 'client', sourcemap: false,
+        runtimeConfiguration: 'require-replaceable',
+      });
+      expect(pluginProvider.evidence()?.runtimeConfiguration.occurrences.every((entry) => entry.disposition === 'replaced'))
+        .toBe(true);
+      expect(await pluginSession.artifactFor({ sourcePath: path.join(root, 'src/app.html') }))
+        .toMatchObject({ payload: { definitionName: 'app-root' } });
+      expect(await pluginSession.prepareFrameworkLinks(await exactFrameworkLinkRequest())).toMatchObject({
+        disposition: 'c0-fallback',
+        reason: {
+          kind: 'unsupported-input',
+          summary: expect.stringContaining('framework-link-retained-compiler-registration'),
+        },
+      });
+    }, 45_000,
+  );
 
   it('preserves nonexact static spread handoffs but refuses generated compiler profiles', () => {
     const handoff = {
@@ -523,8 +526,37 @@ describe('semantic AOT artifact provider', () => {
       spreadExpressionHandoff(conflict),
     ])).toThrow(expect.objectContaining({
       code: 'AOT_ARTIFACT_INVALID_HANDOFF',
-      message: expect.stringContaining('spread plans disagree'),
+      message: expect.stringContaining('runtime parser demands disagree'),
     }));
+  });
+
+  it('collects i18n interpolation and known-negative demands inside residual spread instructions', () => {
+    const literal: TemplateCompilerCompiledHandoffInstructionValue = {
+      type: TemplateCompilerFrameworkInstructionType.TranslationBinding,
+      from: { value: 'greeting', interpolation: undefined }, to: 't', mode: 2,
+    };
+    const expression = { $kind: 'AccessScope', name: 'key', ancestor: 0 } as const;
+    const interpolation = {
+      $kind: 'Interpolation', isMulti: false, firstExpression: expression,
+      parts: ['', ''], expressions: [expression],
+    } as const;
+    const dynamic: TemplateCompilerCompiledHandoffInstructionValue = {
+      type: TemplateCompilerFrameworkInstructionType.TranslationBinding,
+      from: { value: '${key}', interpolation }, to: 't', mode: 2,
+    };
+    const residual = { expressionType: 'IsProperty', source: 'key', value: expression } as const;
+    const input = spreadExpressionHandoff(residual, [literal, {
+      type: TemplateCompilerFrameworkInstructionType.SpreadElementProp,
+      instruction: dynamic,
+    }]);
+    expect(collectAotRuntimeExpressions(fixtureRoot, [input, input])).toEqual([
+      { expressionType: 'Interpolation', source: '${key}', value: interpolation },
+      { expressionType: 'Interpolation', source: 'greeting', value: undefined },
+      residual,
+    ]);
+    expect(() => collectAotRuntimeExpressions(fixtureRoot, [input, spreadExpressionHandoff(residual, [{
+      ...literal, from: { value: 'greeting', interpolation },
+    }])])).toThrow(/runtime parser demands disagree/);
   });
 
   it('lets a convention definition module own the compiled resource without a carrier patch', async () => {
@@ -969,6 +1001,7 @@ function variantPlan(
 
 function spreadExpressionHandoff(
   expression: TemplateCompilerCompiledHandoffSpreadExpressionEntry,
+  instructions: readonly TemplateCompilerCompiledHandoffInstructionValue[] = [],
 ): TemplateCompilerCompiledHandoffValue {
   return {
     definitions: [{
@@ -978,6 +1011,7 @@ function spreadExpressionHandoff(
           spreadPlan: {
             cases: [{
               residualExpressions: [expression],
+              instructions,
             }],
           },
         },

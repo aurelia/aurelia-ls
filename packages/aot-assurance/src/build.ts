@@ -171,6 +171,7 @@ async function buildLane(
         '@aurelia/runtime': frameworkEsmPackage('runtime'),
         '@aurelia/template-compiler': frameworkEsmPackage('template-compiler'),
         '@aurelia/state': frameworkEsmPackage('state'),
+        '@aurelia/i18n': frameworkEsmPackage('i18n'),
         '@aurelia/router': resolve(
           import.meta.dirname,
           '..',
