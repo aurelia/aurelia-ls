@@ -10,8 +10,11 @@ semantic-runtime provider and `aot-vite` preset; there is no hidden JIT fallback
 therefore run through the generated base-runtime facade instead of retaining the ordinary facade defaults.
 The routed storefront additionally requires its exact 11-resource/11-renderer plan and an omitted event modifier, so
 browser parity exercises the optimized configuration rather than only a compile-free conservative fallback.
+Build evidence reports the actual analysis count and final inquiry depth. Ordinary builds stay at runtime topology;
+composition captures can require a deeper binding-observation inquiry on the same semantic runtime. The composition
+scenario asserts that conditional upgrade rather than hiding it behind an invariant count of one.
 
-The default package assurance runs seventeen complementary scenarios:
+The default package assurance runs eighteen complementary scenarios:
 
 - `g0` is the deeply instrumented parser/teardown control and owns the runtime string-parse guard;
 - `content-moves` is strict AOT for relocation of original source-hook descendants. It moves authored content into
@@ -90,6 +93,17 @@ The default package assurance runs seventeen complementary scenarios:
   retain their DOM identity and teardown empties the host. Its strict AOT build emits only `app-root`. This bounded
   scenario does not certify dynamic store selection, custom registries, `@fromState`, middleware, or async state APIs;
   no reducer execution or lifecycle simulation is added to semantic-runtime.
+- `ce-composition` is a curated static named-custom-element corridor, not a replacement for the broader composition
+  pressure fixtures. Captured `message.bind`, host classes, and `id.bind` are applied to two distinct targets where `id`
+  is respectively a host attribute and a bindable. Projected caller input supports live writeback; model replacement
+  calls activation again without replacing composed hosts. Declaring and receiving resource scopes resolve different
+  same-named components through supplied/fallback projections; both capture bound host titles from their respective
+  scopes, exercising target identity rather than the empty-capture path. Four checkpoints and teardown require six separate
+  compiled artifacts (including the two same-named definitions), exact renderer leaves and no compiler fallback.
+  `DefaultResources` is intentionally retained: compiler-only capture plans do not yet supply rendered expression-resource
+  lifecycle demand, so behavior/converter pruning would be unsafe. This is compiled composition parity, not a claim of
+  fully optimized resource selection.
+  Dynamic component values, CE instances, promises, arbitrary templates and component switching are not certified here.
 - `projects-and-milestones` runs a curated ordinary application assembled by the former app-builder program. It covers
   the initial router redirect, four routed list/detail areas, shared DI state, project and assignment creation, boolean
   and numeric-model form channels, async review loading and creation, and object-model selection through a matcher.

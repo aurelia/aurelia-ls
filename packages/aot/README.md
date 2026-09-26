@@ -15,6 +15,9 @@ The current public API is deliberately narrow:
   and recursive declared dependencies. Standalone IDE/MCP authoring templates are not implicitly part of a build.
   Unknown runtime demand still prevents unsafe compiler/configuration removal; this is not whole-program dead-code
   analysis or permission to omit a registered resource merely because no current template names it.
+  Ordinary builds request runtime topology. Actual selected built-in AuCompose instructions raise the same runtime to
+  binding-observation before detaching artifacts, reusing shared composition facts. Evidence reports both inquiries;
+  no authored resource-name scan or AOT-only component evaluator determines that demand.
 - `AotCompilerPatchModuleEmitter` emits only compiler-owned fields while retaining generated controller/projection
   definitions. Source-owned local-template forests allocate every generated Type shell first, then wire the exact
   owner/peer/nested dependency graph before attaching compiler-final definitions and appending only direct local Types

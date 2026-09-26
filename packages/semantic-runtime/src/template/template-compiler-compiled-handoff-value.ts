@@ -61,7 +61,7 @@ import {
 } from './template-instruction-runtime-value.js';
 
 export const TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION =
-  'semantic-runtime/template-compiler-compiled-handoff/v8' as const;
+  'semantic-runtime/template-compiler-compiled-handoff/v9' as const;
 
 export interface TemplateCompilerCompiledHandoffValue {
   readonly schemaVersion: typeof TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION;
@@ -355,12 +355,16 @@ export interface TemplateCompilerCompiledHandoffSpreadTarget {
   readonly targetDefinitionMatch: 'structural' | 'explicit-definition';
   readonly definitionName: string | null;
   readonly definitionKey: string | null;
+  readonly definitionIdentity: IdentityHandle | null;
 }
 
 /** One exact compileSpread result for an emitted HydrateElement captures array and one requestor target. */
 export interface TemplateCompilerCompiledHandoffSpreadCase {
   readonly requestorName: string;
   readonly requestorKey: string;
+  readonly requestorDefinitionIdentity: IdentityHandle | null;
+  /** Exact ordered members of the original emitted HydrateElement captures array. */
+  readonly captureOrdinals: readonly number[];
   readonly target: TemplateCompilerCompiledHandoffSpreadTarget;
   readonly instructions: readonly TemplateCompilerCompiledHandoffInstructionValue[];
   readonly residualExpressions: readonly TemplateCompilerCompiledHandoffSpreadExpressionEntry[];

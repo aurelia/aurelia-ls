@@ -1,4 +1,6 @@
 import type { ProductHandle } from '../kernel/handles.js';
+import { sameHydrateElementOwnership } from './runtime-hydrate-element-ownership.js';
+import { isRuntimeAuComposeInstruction } from './runtime-composition-compiler-demand.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
   projectRuntimeExpressionAstValue,
@@ -98,13 +100,15 @@ export function projectRuntimeSpreadCompilationHandoffs(
   const accumulators = new Map<HydrateElementInstruction, SpreadPlanAccumulator>();
   const instructionClosures: TemplateCompilerRuntimeInstructionClosureValue[] = [];
   const dynamicInstructions = new Map(
-    request.resource.runtimeAnalysis.runtimeRendering.dynamicInstructions.map((instruction) => [
+    [...request.resource.runtimeAnalysis.runtimeRendering.dynamicInstructions,
+      ...request.resource.runtimeAnalysis.runtimeComposition.spreads.instructions].map((instruction) => [
       instruction.productHandle,
       instruction,
     ]),
   );
   const dynamicParses = new Map(
-    request.resource.runtimeAnalysis.runtimeRendering.dynamicExpressionParses.map((parse) => [
+    [...request.resource.runtimeAnalysis.runtimeRendering.dynamicExpressionParses,
+      ...request.resource.runtimeAnalysis.runtimeComposition.spreads.expressionParses].map((parse) => [
       parse.productHandle,
       parse,
     ]),
@@ -113,7 +117,9 @@ export function projectRuntimeSpreadCompilationHandoffs(
     instruction instanceof HydrateElementInstruction
   );
   const compilations = resourceLocalRuntimeSpreadCompilations(request.resource);
-  const coverage = proveOneLevelStaticSpreadCoverage(request, hydrateElements, compilations);
+  const coverage = proveOneLevelStaticSpreadCoverage(request,
+    hydrateElements.filter(instruction => !isRuntimeAuComposeInstruction(request.store, instruction)),
+    compilations.filter(compilation => compilation.origin.kind === 'template'));
   if (coverage instanceof RuntimeSpreadCompilationHandoffReason) {
     return new RuntimeSpreadCompilationHandoffResult(
       coverage.reasonKind === 'spread-invocation-coverage-ambiguous'
@@ -125,8 +131,21 @@ export function projectRuntimeSpreadCompilationHandoffs(
     );
   }
 
+  const ownerByCompilation = new Map(coverage.ownerByCompilation);
+  for (const compilation of compilations.filter(value => value.origin.kind === 'composition-host')) {
+    const sourceOwner = compilation.capturedAttributeContextInstructionProductHandle == null ? null
+      : request.store.readProductDetail(TemplateProductDetails.Instruction, compilation.capturedAttributeContextInstructionProductHandle);
+    const owners = sourceOwner instanceof HydrateElementInstruction
+      ? hydrateElements.filter(owner => sameHydrateElementOwnership(owner, sourceOwner)
+        && isRuntimeAuComposeInstruction(request.store, owner)) : [];
+    if (owners.length !== 1) return unavailable(RuntimeSpreadCompilationHandoffState.Open,
+      'composition-spread-owner-unavailable', 'Composition spread has no unique browser-final capture owner.',
+      [compilation.spreadInstructionProductHandle]);
+    ownerByCompilation.set(compilation, owners[0]!);
+  }
+
   for (const compilation of compilations) {
-    if (compilation.state === RuntimeRendererSpreadCompileState.NoCapturedAttributes) continue;
+    if (compilation.state === RuntimeRendererSpreadCompileState.NoCapturedAttributes && compilation.origin.kind === 'template') continue;
     if (compilation.state === RuntimeRendererSpreadCompileState.Open) {
       return unavailable(
         RuntimeSpreadCompilationHandoffState.Open,
@@ -144,15 +163,23 @@ export function projectRuntimeSpreadCompilationHandoffs(
       );
     }
 
-    const owner = coverage.ownerByCompilation.get(compilation);
+    const owner = ownerByCompilation.get(compilation);
     if (owner == null) {
       throw new Error('Exact one-level spread coverage lost an observed compilation owner.');
     }
-    if (!sameHandles(compilation.capturedSyntaxProductHandles, owner.captureSyntaxProductHandles)) {
+    const captureOrdinals = compilation.capturedSyntaxProductHandles.map(handle => owner.captureSyntaxProductHandles.indexOf(handle));
+    const composition = compilation.origin.kind === 'composition-host' ? compilation.origin : null;
+    const retainedOrdinals = composition?.retainedCaptureSyntaxProductHandles.map(handle => owner.captureSyntaxProductHandles.indexOf(handle)) ?? [];
+    const validPartition = composition == null
+      ? sameHandles(compilation.capturedSyntaxProductHandles, owner.captureSyntaxProductHandles)
+      : orderedCaptureOrdinals(captureOrdinals) && orderedCaptureOrdinals(retainedOrdinals)
+        && new Set([...captureOrdinals, ...retainedOrdinals]).size === owner.captureSyntaxProductHandles.length
+        && captureOrdinals.length + retainedOrdinals.length === owner.captureSyntaxProductHandles.length;
+    if (!validPartition) {
       return unavailable(
         RuntimeSpreadCompilationHandoffState.Ineligible,
         'spread-capture-membership-mismatch',
-        'Runtime spread compilation captures disagree with the browser-final HydrateElement capture order.',
+        'Runtime spread compilation captures do not form the exact browser-final capture sequence or partition.',
         [owner.productHandle, ...compilation.capturedSyntaxProductHandles, ...owner.captureSyntaxProductHandles],
       );
     }
@@ -164,6 +191,10 @@ export function projectRuntimeSpreadCompilationHandoffs(
         [],
         [finalTarget],
       );
+    }
+    if (compilation.state === RuntimeRendererSpreadCompileState.NoCapturedAttributes) {
+      if (!accumulators.has(owner)) accumulators.set(owner, { cases: [], caseByRuntimeKey: new Map() });
+      continue;
     }
 
     const roots = readInstructions(compilation.rootInstructionProductHandles, dynamicInstructions);
@@ -261,6 +292,8 @@ export function projectRuntimeSpreadCompilationHandoffs(
     const spreadCase: TemplateCompilerCompiledHandoffSpreadCase = {
       requestorName: requestor.name,
       requestorKey: requestor.key,
+      requestorDefinitionIdentity: composition == null ? requestor.identityHandle : null,
+      captureOrdinals,
       target: {
         namespaceKind: finalTarget.element.namespace,
         namespaceUri: finalTarget.element.namespaceUri,
@@ -270,6 +303,7 @@ export function projectRuntimeSpreadCompilationHandoffs(
           : 'structural',
         definitionName: targetDefinition?.name ?? null,
         definitionKey: targetDefinition?.key ?? null,
+        definitionIdentity: targetDefinition?.identityHandle ?? null,
       },
       instructions: projected.value.roots.map((value) =>
         projectTemplateCompilerCompiledHandoffInstructionValue(value, emptyDefinitionIds, emptySpreadPlans)
@@ -462,16 +496,6 @@ function proveOneLevelStaticSpreadCoverage(
   return { ownerByCompilation };
 }
 
-function sameHydrateElementOwnership(
-  left: HydrateElementInstruction,
-  right: HydrateElementInstruction,
-): boolean {
-  return left.elementName === right.elementName
-    && left.resourceLookupName === right.resourceLookupName
-    && left.sourceAddressHandle === right.sourceAddressHandle
-    && sameHandles(left.captureSyntaxProductHandles, right.captureSyntaxProductHandles);
-}
-
 /** Runtime-computable lookup identity; effective world lookup is diagnostic-only unless targetDef was explicit. */
 export function runtimeSpreadCompilationHandoffCaseKey(
   spreadCase: TemplateCompilerCompiledHandoffSpreadCase,
@@ -480,11 +504,14 @@ export function runtimeSpreadCompilationHandoffCaseKey(
   return JSON.stringify([
     spreadCase.requestorName,
     spreadCase.requestorKey,
+    spreadCase.requestorDefinitionIdentity,
+    spreadCase.captureOrdinals,
     target.namespaceUri,
     target.localName,
     target.targetDefinitionMatch,
     target.targetDefinitionMatch === 'explicit-definition' ? target.definitionName : null,
     target.targetDefinitionMatch === 'explicit-definition' ? target.definitionKey : null,
+    target.targetDefinitionMatch === 'explicit-definition' ? target.definitionIdentity : null,
   ]);
 }
 
@@ -498,7 +525,7 @@ export function runtimeSpreadCompilationHandoffCasesEquivalent(
 }
 
 interface BrowserFinalSpreadTarget {
-  readonly element: CompilerTransformedTemplateElement;
+  readonly element: Pick<CompilerTransformedTemplateElement, 'tagName' | 'namespace' | 'namespaceUri'>;
   readonly definitionProductHandle: ProductHandle | null;
 }
 
@@ -506,6 +533,28 @@ function reconcileBrowserFinalSpreadTarget(
   request: RuntimeSpreadCompilationHandoffRequest,
   compilation: RuntimeSpreadCompilation,
 ): BrowserFinalSpreadTarget | RuntimeSpreadCompilationHandoffReason {
+  if (compilation.origin.kind === 'composition-host') {
+    const { host, contextProductHandle, retainedCaptureSyntaxProductHandles } = compilation.origin;
+    const context = request.store.readProductDetail(TemplateProductDetails.CompositionContext, contextProductHandle);
+    const targetDefinition = readCustomElementDefinition(request.store, compilation.targetDefinitionProductHandle);
+    const targetFamily = compilation.targetDefinitionProductHandle == null ? null
+      : request.requestorFamiliesByDefinitionProduct.get(compilation.targetDefinitionProductHandle);
+    if (context == null || targetDefinition == null || targetFamily == null
+      || request.store.readProductDetail(TemplateProductDetails.HtmlNode, host.productHandle) !== host
+      || !compilation.targetDefinitionExplicit
+      || runtimeLocalName(targetDefinition.name, host.namespace) !== host.tagName) {
+      return spreadTargetReason('composition-spread-target-unavailable',
+        'Composition spread lost its generated host, context or exact emitted target definition.', [contextProductHandle]);
+    }
+    if (retainedCaptureSyntaxProductHandles.length > 0
+      && targetFamily.instructions.some(instruction => instruction instanceof SpreadTransferedBindingInstruction)) {
+      return spreadTargetReason('composition-forwarded-capture-open',
+        'Composition captures forwarded through the selected component need a downstream spread invocation.',
+        [contextProductHandle, ...retainedCaptureSyntaxProductHandles]);
+    }
+    return { element: { tagName: host.tagName, namespace: host.namespace, namespaceUri: 'http://www.w3.org/1999/xhtml' },
+      definitionProductHandle: targetDefinition.productHandle };
+  }
   const requestorProductHandle = compilation.requestorDefinitionProductHandle;
   const family = requestorProductHandle == null
     ? null
@@ -631,12 +680,15 @@ function runtimeSpreadCompilationComparableCase(
   return {
     requestorName: spreadCase.requestorName,
     requestorKey: spreadCase.requestorKey,
+    requestorDefinitionIdentity: spreadCase.requestorDefinitionIdentity,
+    captureOrdinals: spreadCase.captureOrdinals,
     target: {
       namespaceUri: target.namespaceUri,
       localName: target.localName,
       targetDefinitionMatch: target.targetDefinitionMatch,
       definitionName: target.targetDefinitionMatch === 'explicit-definition' ? target.definitionName : null,
       definitionKey: target.targetDefinitionMatch === 'explicit-definition' ? target.definitionKey : null,
+      definitionIdentity: target.targetDefinitionMatch === 'explicit-definition' ? target.definitionIdentity : null,
     },
     instructions: spreadCase.instructions,
     residualExpressions: spreadCase.residualExpressions,
@@ -715,6 +767,10 @@ export function runtimeSpreadResidualExpressionMatchesParserRequest(
 
 function sameHandles(left: readonly ProductHandle[], right: readonly ProductHandle[]): boolean {
   return left.length === right.length && left.every((handle, index) => handle === right[index]);
+}
+
+function orderedCaptureOrdinals(ordinals: readonly number[]): boolean {
+  return ordinals.every((ordinal, index) => ordinal >= 0 && (index === 0 || ordinal > ordinals[index - 1]!));
 }
 
 function unavailable(

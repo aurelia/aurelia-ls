@@ -24,6 +24,8 @@ import { ITemplateCompiler } from '@aurelia/template-compiler';
 import { describe, expect, it } from 'vitest';
 
 import {
+  AOT_COMPILED_DEFINITION_IDENTITY,
+  AOT_RUNTIME_SPREAD_CAPTURE,
   AOT_CONSERVATIVE_RUNTIME_REGISTRATION_ORDER,
   AOT_RUNTIME_CONFIGURATION_MODULE_PREFIX,
   AOT_RUNTIME_CONFIGURATION_PROTOCOL,
@@ -217,18 +219,19 @@ describe('AOT runtime configuration', () => {
     };
     const instructions = [{ type: 34, value: 'text', to: 'type' }] as const;
     const spreadCase = {
+      captureOrdinals: [0],
       requestorName: requestor.name,
       requestorKey: requestor.key,
+      requestorDefinitionIdentity: null,
       targetNamespaceUri: target.namespaceURI,
       targetLocalName: target.localName,
       targetDefinitionMatch: 'structural',
       targetDefinitionName: null,
       targetDefinitionKey: null,
+      targetDefinitionIdentity: null,
       instructions,
     } satisfies AotRuntimeSpreadPlanCase;
-    Object.defineProperty(captures, AOT_RUNTIME_SPREAD_PLAN, {
-      value: [spreadCase] satisfies AotRuntimeSpreadPlan,
-    });
+    attachSpreadPlan(captures, [spreadCase]);
     const unavailableContainer = new Proxy({}, {
       get() {
         throw new Error('compileSpread consulted the runtime container');
@@ -237,6 +240,8 @@ describe('AOT runtime configuration', () => {
 
     expect(AOT_RUNTIME_SPREAD_PLAN).toBe(Symbol.for(AOT_RUNTIME_SPREAD_PLAN_PROTOCOL));
     expect(AotTemplateCompiler.spreadPlan).toBe(AOT_RUNTIME_SPREAD_PLAN);
+    expect(AotTemplateCompiler.spreadCapture).toBe(AOT_RUNTIME_SPREAD_CAPTURE);
+    expect(AotTemplateCompiler.definitionIdentity).toBe(AOT_COMPILED_DEFINITION_IDENTITY);
     expect(Object.getOwnPropertyDescriptor(captures, AOT_RUNTIME_SPREAD_PLAN)).toMatchObject({
       enumerable: false,
       value: [spreadCase],
@@ -259,21 +264,22 @@ describe('AOT runtime configuration', () => {
     };
     const instructions = [{ type: 34, value: 'text', to: 'type' }] as const;
     const spreadCase = {
+      captureOrdinals: [0],
       requestorName: requestor.name,
       requestorKey: requestor.key,
+      requestorDefinitionIdentity: null,
       targetNamespaceUri: input.namespaceURI,
       targetLocalName: input.localName,
       targetDefinitionMatch: 'structural',
       targetDefinitionName: null,
       targetDefinitionKey: null,
+      targetDefinitionIdentity: null,
       instructions,
     } satisfies AotRuntimeSpreadPlanCase;
     const tagged = [{}];
-    Object.defineProperty(tagged, AOT_RUNTIME_SPREAD_PLAN, { value: [spreadCase] });
+    attachSpreadPlan(tagged, [spreadCase]);
     const ambiguous = [{}];
-    Object.defineProperty(ambiguous, AOT_RUNTIME_SPREAD_PLAN, {
-      value: [spreadCase, { ...spreadCase, instructions: [{ type: 34, value: 'email', to: 'type' }] }],
-    });
+    attachSpreadPlan(ambiguous, [spreadCase, { ...spreadCase, instructions: [{ type: 34, value: 'email', to: 'type' }] }]);
     const customTarget = { ...input, localName: 'target-card' };
     const firstCustomCase = {
       ...spreadCase,
@@ -290,21 +296,16 @@ describe('AOT runtime configuration', () => {
     const explicitSecondCustomCase = {
       ...secondCustomCase,
       targetDefinitionMatch: 'explicit-definition' as const,
+      targetDefinitionIdentity: 'second-target-definition',
     };
     const singleCustomTarget = [{}];
-    Object.defineProperty(singleCustomTarget, AOT_RUNTIME_SPREAD_PLAN, { value: [firstCustomCase] });
+    attachSpreadPlan(singleCustomTarget, [firstCustomCase]);
     const ambiguousCustomTarget = [{}];
-    Object.defineProperty(ambiguousCustomTarget, AOT_RUNTIME_SPREAD_PLAN, {
-      value: [firstCustomCase, secondCustomCase],
-    });
+    attachSpreadPlan(ambiguousCustomTarget, [firstCustomCase, secondCustomCase]);
     const explicitCustomTarget = [{}];
-    Object.defineProperty(explicitCustomTarget, AOT_RUNTIME_SPREAD_PLAN, {
-      value: [firstCustomCase, explicitSecondCustomCase],
-    });
+    attachSpreadPlan(explicitCustomTarget, [firstCustomCase, explicitSecondCustomCase]);
     const explicitOnlyCustomTarget = [{}];
-    Object.defineProperty(explicitOnlyCustomTarget, AOT_RUNTIME_SPREAD_PLAN, {
-      value: [explicitSecondCustomCase],
-    });
+    attachSpreadPlan(explicitOnlyCustomTarget, [explicitSecondCustomCase]);
 
     expect(() => compiler.compileSpread(requestor, [{}], {}, input)).toThrowError(
       'AOT template compiler has no precompiled spread plan for 1 captured attributes on requestor "field-shell" ("au:resource:custom-element:field-shell").',
@@ -323,13 +324,67 @@ describe('AOT runtime configuration', () => {
       .toThrowError(/spread plan has 2 ambiguous cases/u);
     expect(() => compiler.compileSpread(requestor, explicitOnlyCustomTarget, {}, customTarget))
       .toThrowError(/spread plan has no case/u);
+    const explicitDefinition = {
+      name: explicitSecondCustomCase.targetDefinitionName,
+      key: explicitSecondCustomCase.targetDefinitionKey,
+      [AOT_COMPILED_DEFINITION_IDENTITY]: explicitSecondCustomCase.targetDefinitionIdentity,
+    };
     expect(compiler.compileSpread(
       requestor,
       explicitCustomTarget,
       {},
       customTarget,
-      { name: explicitSecondCustomCase.targetDefinitionName, key: explicitSecondCustomCase.targetDefinitionKey },
+      explicitDefinition,
     )).toBe(explicitSecondCustomCase.instructions);
+  });
+
+  it('selects whole precompiled capture partitions by retained syntax and exact definition identity', () => {
+    const compiler = new AotTemplateCompiler();
+    const requestor = { name: 'au-compose', key: 'au:resource:custom-element:au-compose' };
+    const component = {
+      name: 'field', key: 'au:resource:custom-element:field',
+      [AOT_COMPILED_DEFINITION_IDENTITY]: 'field-A',
+    };
+    const otherComponent = { ...component, [AOT_COMPILED_DEFINITION_IDENTITY]: 'field-B' };
+    const host = { namespaceURI: 'http://www.w3.org/1999/xhtml', localName: 'field' };
+    const captures = [{ target: 'value' }, { target: 'class' }, { target: 'title' }];
+    const transferred = [{ type: 51, instruction: { type: 10, value: 'value', to: 'value' } }] as const;
+    const forwarded = [{ type: 35, value: 'field' }, { type: 34, value: 'title', to: 'title' }] as const;
+    const hostCase: AotRuntimeSpreadPlanCase = {
+      captureOrdinals: [0],
+      requestorName: requestor.name, requestorKey: requestor.key, requestorDefinitionIdentity: null,
+      targetNamespaceUri: host.namespaceURI, targetLocalName: host.localName,
+      targetDefinitionMatch: 'explicit-definition', targetDefinitionName: component.name,
+      targetDefinitionKey: component.key, targetDefinitionIdentity: 'field-A', instructions: transferred,
+    };
+    const forwardedCase: AotRuntimeSpreadPlanCase = {
+      captureOrdinals: [1, 2],
+      requestorName: component.name, requestorKey: component.key, requestorDefinitionIdentity: 'field-A',
+      targetNamespaceUri: host.namespaceURI, targetLocalName: 'input', targetDefinitionMatch: 'structural',
+      targetDefinitionName: null, targetDefinitionKey: null, targetDefinitionIdentity: null, instructions: forwarded,
+    };
+    attachSpreadPlan(captures, [hostCase, forwardedCase]);
+    const [captured, transfer] = captures.reduce<[object[], object[]]>((groups, syntax) => {
+      groups[syntax.target === 'value' ? 1 : 0].push(syntax);
+      return groups;
+    }, [[], []]);
+    expect(Object.getOwnPropertySymbols(transfer)).toEqual([]);
+    expect(compiler.compileSpread(requestor, transfer, {}, host, component)).toBe(transferred);
+    expect(compiler.compileSpread(component, captured, {}, { ...host, localName: 'input' })).toBe(forwarded);
+    expect(() => compiler.compileSpread(requestor, transfer, {}, host, otherComponent)).toThrow(/no case/u);
+    expect(() => compiler.compileSpread(requestor, transfer, {}, host, { name: component.name, key: component.key }))
+      .toThrow(/no case/u);
+    expect(() => compiler.compileSpread(otherComponent, captured, {}, { ...host, localName: 'input' })).toThrow(/no case/u);
+    expect(() => compiler.compileSpread(component, [...captured].reverse(), {}, { ...host, localName: 'input' }))
+      .toThrow(/no case/u);
+    expect(() => compiler.compileSpread(component, [captures[1], { ...captures[2] }], {}, { ...host, localName: 'input' }))
+      .toThrow(/one emitted capture origin/u);
+    const foreign = [{ target: 'title' }];
+    attachSpreadPlan(foreign, [forwardedCase]);
+    expect(() => compiler.compileSpread(component, [captures[1], foreign[0]], {}, { ...host, localName: 'input' }))
+      .toThrow(/one emitted capture origin/u);
+    expect(() => compiler.compileSpread(requestor, captures, {}, host, component)).toThrow(/no case/u);
+    expect(compiler.compileSpread(requestor, [], {}, host, component)).toEqual([]);
   });
 
   it('registers the conservative surface in StandardConfiguration-compatible order', () => {
@@ -699,4 +754,11 @@ function importedRegistrationAlias(
     throw new Error(`Missing generated import for ${reference.moduleSpecifier}:${reference.exportName}.`);
   }
   return match[1];
+}
+
+function attachSpreadPlan(captures: readonly object[], plan: AotRuntimeSpreadPlan): void {
+  Object.defineProperty(captures, AOT_RUNTIME_SPREAD_PLAN, { value: plan });
+  captures.forEach((capture, ordinal) => {
+    Object.defineProperty(capture, AOT_RUNTIME_SPREAD_CAPTURE, { value: { plan, ordinal } });
+  });
 }

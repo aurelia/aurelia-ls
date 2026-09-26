@@ -16,13 +16,19 @@ import {
 } from '../src/kernel/project-input.js';
 import { sourceSpanAddressForAddress } from '../src/kernel/source-address.js';
 import {
+  HydrateElementInstruction,
   PropertyBindingInstruction,
   SetAttributeInstruction,
   SetPropertyInstruction,
   SpreadElementPropBindingInstruction,
 } from '../src/template/instruction-ir.js';
-import { HtmlAttributeReference, HtmlIrNodeKind, HtmlNodeReference } from '../src/template/html-ir.js';
+import { HtmlAttributeReference, HtmlElement, HtmlIrNodeKind, HtmlNodeReference } from '../src/template/html-ir.js';
 import { RuntimeBindingTargetKind } from '../src/template/runtime-binding.js';
+import { RuntimeBindingIssuePublisher, type RuntimeBindingIssue } from '../src/template/runtime-binding-issue.js';
+import { TemplateCompilerIssueKind, type TemplateCompilerIssue } from '../src/template/compiler-issue.js';
+import { TemplateCompilerSpreadCompileRequest, TemplateCompilerSpreadCompileState } from '../src/template/compiler-world.js';
+import { RuntimeTemplateCompilerSpreadCompileHost } from '../src/template/runtime-spread-compile-host.js';
+import { RuntimeRenderingSourceSet } from '../src/template/runtime-rendering-source.js';
 import { TemplateProductDetails } from '../src/template/product-details.js';
 import {
   RuntimeRendererSpreadCompileState,
@@ -177,6 +183,9 @@ describe('runtime captured-attribute compilation', () => {
     const rootInstructions = compiledFirstCapture.rootInstructionProductHandles.map((handle) =>
       dynamicInstructionByProduct.get(handle)!
     );
+    expect(rootInstructions.map((instruction) => instruction.attribute?.rawName)).toEqual([
+      'input-mark', 'value.bind', 'active.class', 'click.trigger', 'label.trigger', 'data-note',
+    ]);
     const createdInstructions = compiledFirstCapture.createdInstructionProductHandles.map((handle) =>
       dynamicInstructionByProduct.get(handle)!
     );
@@ -196,6 +205,31 @@ describe('runtime captured-attribute compilation', () => {
       reasonKinds: [],
     });
     expect(invalidSecondCapture?.summary).toContain('does not allow captured template controller');
+
+    // Compile-only composition has a real compiler issue owner but no rendered SpreadBinding to blame.
+    const invalidOwner = contextInstructionByProduct.get(invalidSecondCapture!.capturedAttributeContextInstructionProductHandle!);
+    const invalidTarget = runtime.workspace.store.readProductDetail(TemplateProductDetails.HtmlNode, invalidSecondCapture!.targetHtmlNodeProductHandle!);
+    if (!(invalidOwner instanceof HydrateElementInstruction) || !(invalidTarget instanceof HtmlElement)) {
+      throw new Error('Expected the captured owner and native target of the rejected invocation.');
+    }
+    const invalidSyntax = resource.compilation.authoredAttributeSyntaxes.find(syntax => syntax.target === 'inner-gate')!;
+    const requestor = app.emission.templates.resources.find(candidate => candidate.compilation.definition.name === 'capture-shell')!;
+    const bindingIssues: RuntimeBindingIssue[] = [];
+    const compilerIssues: TemplateCompilerIssue[] = [];
+    const source = resource.runtimeAnalysis.runtimeRendering.records.find(record => record.kind === 'evidence-record')!;
+    const compilerOnly = requestor.compilation.compilerWorld.templateCompiler.compileSpread(
+      new TemplateCompilerSpreadCompileRequest('test:compile-only-spread-refusal', requestor.compilation.definition.productHandle,
+        [invalidSyntax], { kind: 'composition-host', instruction: invalidOwner, target: invalidTarget }, null),
+      new RuntimeTemplateCompilerSpreadCompileHost(runtime.workspace.store, runtime.workspace.store,
+        requestor.compilation.compilerWorld,
+        new RuntimeRenderingSourceSet([], source.handle, resource.runtimeAnalysis.runtimeRendering.rootController.provenanceHandle),
+        new RuntimeBindingIssuePublisher(runtime.workspace.store), null, [], bindingIssues, compilerIssues, [], [], [],
+        invalidOwner.productHandle, resource.runtimeAnalysis.runtimeRendering.rootController.productHandle),
+    );
+    expect(compilerOnly.state).toBe(TemplateCompilerSpreadCompileState.Invalid);
+    expect(compilerOnly.createdInstructions).toEqual([]);
+    expect(compilerIssues.map(issue => issue.issueKind)).toEqual([TemplateCompilerIssueKind.NoSpreadTemplateController]);
+    expect(bindingIssues).toEqual([]);
 
     expect(capturedSyntaxSpans.some((span) => firstCaptureStart <= span.start && span.end <= firstCaptureEnd)).toBe(true);
     expect(capturedSyntaxSpans.some((span) => secondCaptureStart <= span.start && span.end <= secondCaptureEnd)).toBe(false);
@@ -279,7 +313,10 @@ describe('runtime captured-attribute compilation', () => {
         && compilation.targetDefinitionExplicit === false
       )).toBe(true);
       expect(new Set(compilations.map((compilation) => compilation.spreadInstructionProductHandle)).size).toBe(1);
-      expect(new Set(compilations.map((compilation) => compilation.targetRenderTargetProductHandle)).size).toBe(1);
+      expect(new Set(compilations.map((compilation) => {
+        expect(compilation.origin.kind).toBe('template');
+        return compilation.origin.kind === 'template' ? compilation.origin.targetRenderTargetProductHandle : null;
+      })).size).toBe(1);
       expect(new Set(compilations.map((compilation) =>
         compilation.capturedAttributeContextInstructionProductHandle
       )).size).toBe(2);
@@ -359,6 +396,11 @@ describe('runtime captured-attribute compilation', () => {
       created: readonly string[] = [],
     ) => new RuntimeSpreadCompilation({
       state,
+      origin: {
+        kind: 'template',
+        targetRenderTargetProductHandle: handles.product('target'),
+        targetRenderTargetIdentityHandle: handles.identity('target'),
+      },
       requestorDefinitionProductHandle: null,
       requestorDefinitionIdentityHandle: null,
       spreadInstructionProductHandle: handles.product('spread'),
@@ -369,8 +411,6 @@ describe('runtime captured-attribute compilation', () => {
       capturedAttributeContextControllerIdentityHandle: null,
       hydrationContextProductHandle: null,
       hydrationContextIdentityHandle: null,
-      targetRenderTargetProductHandle: handles.product('target'),
-      targetRenderTargetIdentityHandle: handles.identity('target'),
       targetHtmlNodeProductHandle: null,
       targetHtmlNodeIdentityHandle: null,
       targetDefinitionExplicit: false,

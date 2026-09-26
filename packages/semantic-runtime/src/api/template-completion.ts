@@ -234,6 +234,7 @@ import {
   resourceLocalBindingDataFlows,
   resourceLocalBindingTargetAccesses,
   resourceLocalCompilerReachableHtmlAttributeProductHandles,
+  resourceLocalRuntimeCompilerIssues,
 } from '../template/runtime-resource-ownership.js';
 import {
   runtimeExpressionAccessUsesForTemplateExpression,
@@ -3016,6 +3017,15 @@ function templateCompilerIssues(
     ...resource.compilation.compilerWorld.issues,
     ...preTraversalIssues,
     ...resource.compilation.compiledTemplate.issues,
+    // Ordinary spread can mirror a compiler refusal onto its rendered binding. Keep that existing diagnostic;
+    // compiler-only composition has no binding owner and must report the compiler issue itself.
+    ...resourceLocalRuntimeCompilerIssues(store, resource).filter(issue =>
+      !resource.runtimeAnalysis.runtimeRendering.bindingIssues.some(bindingIssue =>
+        issue.frameworkErrorCode != null
+        && bindingIssue.frameworkErrorCode === issue.frameworkErrorCode
+        && bindingIssue.sourceAddressHandle === issue.sourceAddressHandle,
+      ),
+    ),
   ];
 }
 

@@ -24,6 +24,7 @@ import {
 } from '../template/instruction-ir.js';
 import {
   capturedAttributeSyntaxForDynamicInstruction,
+  resourceLocalRuntimeCompilerIssues,
   resourceLocalTemplateInstructions,
 } from '../template/runtime-resource-ownership.js';
 import type { TemplateResourceRuntimeAnalysisEmission } from '../template/template-compilation-project-pass.js';
@@ -442,6 +443,7 @@ function attributeIssues(
     ...resource.compilation.attributeClassification.issues,
     ...resource.compilation.bindingCommandLowering.issues,
     ...resource.compilation.compiledTemplate.issues,
+    ...resourceLocalRuntimeCompilerIssues(store, resource),
   ].filter((issue) =>
     sourceReferenceWithinCarrier(describeAddress(store, issue.sourceAddressHandle), attributeSource)
   );

@@ -1,0 +1,26 @@
+<main>
+  <h1>Static custom-element composition</h1>
+  <label>Message <input id="parent-message" value.bind="message"></label>
+  <label>Host id <input id="host-id" value.bind="hostId"></label>
+  <button id="replace-model" click.trigger="replaceModel()">Replace model</button>
+
+  <section data-case="chart">
+    <au-compose component="chart-widget" model.bind="model" message.bind="message" id.bind="hostId" class="composed-card">
+      <div au-slot>
+        <input id="projected-message" value.bind="message">
+        <strong class="projected-message">${message}</strong>
+      </div>
+    </au-compose>
+  </section>
+  <section data-case="inventory">
+    <au-compose component="inventory-widget" model.bind="model" message.bind="message" id.bind="hostId" class="composed-card"></au-compose>
+  </section>
+
+  <composition-shell data-case="supplied">
+    <div au-slot>
+      <p class="declaring-message">${message}</p>
+      <au-compose component="scoped-compose-widget" title.bind="message"></au-compose>
+    </div>
+  </composition-shell>
+  <composition-shell data-case="fallback"></composition-shell>
+</main>

@@ -8,11 +8,13 @@ import {
   FrameworkDiEffectCoverageState,
   type SemanticAppNominatedEntry,
   type ResourceConventionTransformAdmissionInput,
+  type OpenSemanticAppOptions,
 } from '@aurelia-ls/semantic-runtime';
 import {
   materializeSemanticAppTemplateCompilerHandoffs,
   materializeSemanticAppStandardConfigurationSourceAttachments,
   collectRetainedCompilerRegistrationPressure,
+  semanticAppNeedsRuntimeCompositionAnalysis,
   CustomElementTemplateModuleRole,
   ResourceCarrierKind,
   RuntimeRegistrationRequirementReasonKind,
@@ -167,7 +169,7 @@ export interface SemanticAotVirtualModuleArtifact {
 
 export interface SemanticAotArtifactEvidence {
   readonly generation: string;
-  readonly analysisCount: 1;
+  readonly analysisCount: number;
   readonly analysis: SemanticAotAnalysisEvidence;
   readonly compilation: SemanticAotCompilationEvidence;
   readonly artifacts: readonly {
@@ -185,7 +187,7 @@ export interface SemanticAotArtifactEvidence {
 }
 
 export interface SemanticAotAnalysisEvidence {
-  readonly depth: 'runtime-topology';
+  readonly depth: 'runtime-topology' | 'binding-observation';
   readonly templateBreadth: 'app-aggregate';
 }
 
@@ -272,6 +274,7 @@ export class SemanticAotBuildSession {
       reason: 'This semantic AOT session has no admitted framework-link closure.',
     },
     compilation: SemanticAotCompilationEvidence = { mode: 'strict', fallbackScope: 'none', preserved: [] },
+    private readonly analysisCount = 1,
   ) {
     if (compilation.fallbackScope === 'application'
       && (pending.length > 0 || runtimeConfiguration.replacements.length > 0 || runtimeConfiguration.artifacts.size > 0)) {
@@ -526,7 +529,7 @@ export class SemanticAotBuildSession {
   public evidence(): SemanticAotArtifactEvidence {
     return {
       generation: this.generation,
-      analysisCount: 1,
+      analysisCount: this.analysisCount,
       analysis: this.#analysisEvidence,
       compilation: this.#compilationEvidence,
       artifacts: [...this.#evidenceByVariant.values()],
@@ -548,11 +551,11 @@ export class SemanticAotArtifactProvider {
       storeKey,
     });
     try {
-      const analysis = {
+      let analysis: SemanticAotAnalysisEvidence = {
         depth: 'runtime-topology',
         templateBreadth: 'app-aggregate',
-      } as const satisfies SemanticAotAnalysisEvidence;
-      const app = await runtime.openApp({
+      };
+      const appOptions: OpenSemanticAppOptions = {
         analysisDepth: analysis.depth,
         templateAnalysisBreadth: analysis.templateBreadth,
         // Compile the app's admitted resource worlds, not standalone IDE/MCP authoring examples.
@@ -563,7 +566,14 @@ export class SemanticAotArtifactProvider {
         conventionTransformAdmissions: request.conventionTransformAdmission == null
           ? []
           : [request.conventionTransformAdmission],
-      });
+      };
+      let app = await runtime.openApp(appOptions);
+      let analysisCount = 1;
+      if (semanticAppNeedsRuntimeCompositionAnalysis(app)) {
+        analysis = { depth: 'binding-observation', templateBreadth: 'app-aggregate' };
+        app = await runtime.openApp({ ...appOptions, analysisDepth: analysis.depth });
+        analysisCount += 1;
+      }
       const batch = materializeSemanticAppTemplateCompilerHandoffs({
         app,
         includeAuthoringResources: false,
@@ -655,6 +665,7 @@ export class SemanticAotArtifactProvider {
             disposition: resource.runtimeFallback == null ? 'application-fallback' : 'unsupported-hook',
           })),
         },
+        analysisCount,
       );
     } finally {
       runtime.retireWorkspaceIncarnation();

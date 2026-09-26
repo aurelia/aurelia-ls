@@ -115,7 +115,7 @@ test('compiles owned DOM effects and distinguishes unsupported and abrupt hooks 
     const rangeNodes = (name: string) => {
       const row = resource(name);
       expect(row.state, row.reasons.map(reason => reason.summary).join('\n')).toBe(TemplateCompilerCompiledHandoffState.Exact);
-      expect(row.value?.schemaVersion).toBe('semantic-runtime/template-compiler-compiled-handoff/v8');
+      expect(row.value?.schemaVersion).toBe('semantic-runtime/template-compiler-compiled-handoff/v9');
       return row.value!.definitions.flatMap(definition => definition.tree.nodes)
         .filter((node): node is TemplateCompilerCompiledHandoffElement => node.nodeKind === 'element' && node.tagName === 'input');
     };

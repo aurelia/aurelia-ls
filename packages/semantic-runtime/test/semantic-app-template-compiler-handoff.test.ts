@@ -523,6 +523,7 @@ describe('semantic app template compiler handoff', () => {
             targetDefinitionMatch: 'structural',
             definitionName: null,
             definitionKey: null,
+            definitionIdentity: null,
           },
           instructions: [
             { type: TemplateCompilerFrameworkInstructionType.SetAttribute, value: 'text', to: 'type' },
@@ -549,6 +550,7 @@ describe('semantic app template compiler handoff', () => {
             targetDefinitionMatch: 'structural',
             definitionName: null,
             definitionKey: null,
+            definitionIdentity: null,
           },
           instructions: [
             { type: TemplateCompilerFrameworkInstructionType.SetAttribute, value: 'email', to: 'type' },
@@ -774,6 +776,7 @@ describe('semantic app template compiler handoff', () => {
 function openSpreadCompilation(original: RuntimeSpreadCompilation): RuntimeSpreadCompilation {
   return new RuntimeSpreadCompilation({
     state: RuntimeRendererSpreadCompileState.Open,
+    origin: original.origin,
     requestorDefinitionProductHandle: original.requestorDefinitionProductHandle,
     requestorDefinitionIdentityHandle: original.requestorDefinitionIdentityHandle,
     spreadInstructionProductHandle: original.spreadInstructionProductHandle,
@@ -784,8 +787,6 @@ function openSpreadCompilation(original: RuntimeSpreadCompilation): RuntimeSprea
     capturedAttributeContextControllerIdentityHandle: original.capturedAttributeContextControllerIdentityHandle,
     hydrationContextProductHandle: original.hydrationContextProductHandle,
     hydrationContextIdentityHandle: original.hydrationContextIdentityHandle,
-    targetRenderTargetProductHandle: original.targetRenderTargetProductHandle,
-    targetRenderTargetIdentityHandle: original.targetRenderTargetIdentityHandle,
     targetHtmlNodeProductHandle: original.targetHtmlNodeProductHandle,
     targetHtmlNodeIdentityHandle: original.targetHtmlNodeIdentityHandle,
     targetDefinitionExplicit: original.targetDefinitionExplicit,

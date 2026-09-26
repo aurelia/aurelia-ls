@@ -384,7 +384,7 @@ class AppRootCompilerWorldFrame {
     )) {
       return null;
     }
-    const syntax = syntaxForOperations(operations, this.configuredSyntax);
+    const syntax = configuredSyntaxForOperations(operations, this.configuredSyntax);
     // Rendering resolves IRenderer from the DI root, not from the template compiler's consulting container.
     const renderingOperations = registrationOperationsVisibleToContainer(
       container.root,
@@ -401,7 +401,7 @@ class AppRootCompilerWorldFrame {
     );
     const registeredSyntax = this.registeredSyntaxResourceMaterializer.materialize({
       localKey: `app-root:${appRoot.productHandle}`,
-      admissions: uniqueResourceRegistrationAdmissions(operations),
+      admissions: resourceRegistrationAdmissionsForOperations(operations),
       visibleResources: resourceResolution.resources,
       resourceDefinitions: this.resourceDefinitions,
     });
@@ -546,7 +546,7 @@ function containerForAppRoot(
     : containersByProduct.get(appRoot.container.productHandle) ?? null;
 }
 
-function syntaxForOperations(
+export function configuredSyntaxForOperations(
   operations: readonly ContainerRegistrationOperation[],
   configuredSyntax: ConfiguredBuiltInSyntaxCatalogEmission,
 ): {
@@ -564,7 +564,7 @@ function syntaxForOperations(
   };
 }
 
-function uniqueResourceRegistrationAdmissions(
+export function resourceRegistrationAdmissionsForOperations(
   operations: readonly ContainerRegistrationOperation[],
 ): readonly ResourceRegistrationAdmission[] {
   const byProduct = new Map<ProductHandle, ResourceRegistrationAdmission>();

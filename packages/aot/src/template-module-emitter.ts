@@ -20,6 +20,8 @@ import { pascalCase } from '@aurelia/kernel';
 import { visitCompiledHandoffInstructions } from './compiled-instructions.js';
 
 import {
+  AOT_COMPILED_DEFINITION_IDENTITY_PROTOCOL,
+  AOT_RUNTIME_SPREAD_CAPTURE_PROTOCOL,
   AOT_RUNTIME_SPREAD_PLAN_PROTOCOL,
   type AotRuntimeSpreadPlanCase,
 } from './runtime-spread-plan.js';
@@ -119,6 +121,22 @@ export class AotCompiledTemplateEmission {
     return this.definitions.map((definition) =>
       `const ${this.variableFor(definition.definitionId)} = {};`
     );
+  }
+
+  /** Tag a realized definition (or its compiler patch), never an authored definition name or alias. */
+  public definitionIdentityLines(
+    value: string,
+    definition: TemplateCompilerCompiledHandoffDefinition = this.root,
+  ): readonly string[] {
+    const identity = definition.owner.ownerKind === 'root'
+      ? this.request.handoff.address.definitionIdentityHandle
+      : definition.owner.ownerKind === 'local-template'
+        ? definition.owner.definitionIdentityHandle
+        : null;
+    const token = definitionIdentityToken(identity);
+    return token == null ? [] : [
+      `Object.defineProperty(${value}, Symbol.for(${JSON.stringify(AOT_COMPILED_DEFINITION_IDENTITY_PROTOCOL)}), { value: ${JSON.stringify(token)} });`,
+    ];
   }
 
   public dependencyPlanFor(
@@ -253,6 +271,10 @@ export class AotLocalDefinitionEmission {
       lines.push(
         `${indent}${definitionVariable}.dependencies = [${finalDependencies.join(', ')}];`,
         `${indent}CustomElement.define(${definitionVariable}, ${this.typeVariable(definition.definitionId)});`,
+        ...this.emission.definitionIdentityLines(
+          `CustomElement.getDefinition(${this.typeVariable(definition.definitionId)})`,
+          definition,
+        ).map((line) => `${indent}${line}`),
       );
     }
     return lines;
@@ -301,6 +323,7 @@ export class AotTemplateModuleEmitter {
         ...locals.materializationLines(rootTypeVariable, rootVariable),
         `${rootVariable}.dependencies.push(${locals.directRootTypeVariables().join(', ')});`,
         `const $rootResourceType = CustomElement.define(${rootVariable}, ${rootTypeVariable});`,
+        ...emission.definitionIdentityLines('CustomElement.getDefinition($rootResourceType)'),
       );
     }
     const registrationLines = locals.hasLocals
@@ -312,7 +335,10 @@ export class AotTemplateModuleEmitter {
       : [
           'let $registeredDefinition;',
           'export function register(container) {',
-          `  $registeredDefinition ??= CustomElement.define(${rootVariable});`,
+          '  if ($registeredDefinition == null) {',
+          `    $registeredDefinition = CustomElement.define(${rootVariable});`,
+          ...emission.definitionIdentityLines('CustomElement.getDefinition($registeredDefinition)').map((line) => `    ${line}`),
+          '  }',
           '  container.register($registeredDefinition);',
           '}',
         ];
@@ -613,7 +639,17 @@ function spreadCapturesValue(
   const value = emitJavaScriptValue(captures, request);
   if (plan == null) return value;
   const cases = plan.cases.map((entry) => spreadCaseValue(entry, request, variableByDefinitionId));
-  return `Object.defineProperty(${value}, Symbol.for(${JSON.stringify(AOT_RUNTIME_SPREAD_PLAN_PROTOCOL)}), { value: [${cases.join(', ')}] })`;
+  return [
+    '(() => {',
+    `  const $captures = ${value};`,
+    `  const $plan = [${cases.join(', ')}];`,
+    `  Object.defineProperty($captures, Symbol.for(${JSON.stringify(AOT_RUNTIME_SPREAD_PLAN_PROTOCOL)}), { value: $plan });`,
+    '  for (let $ordinal = 0; $ordinal < $captures.length; $ordinal++) {',
+    `    Object.defineProperty($captures[$ordinal], Symbol.for(${JSON.stringify(AOT_RUNTIME_SPREAD_CAPTURE_PROTOCOL)}), { value: { plan: $plan, ordinal: $ordinal } });`,
+    '  }',
+    '  return $captures;',
+    '})()',
+  ].join('\n');
 }
 
 function spreadCaseValue(
@@ -622,8 +658,10 @@ function spreadCaseValue(
   variableByDefinitionId: ReadonlyMap<string, string>,
 ): string {
   const runtimeCase = {
+    captureOrdinals: value.captureOrdinals,
     requestorName: value.requestorName,
     requestorKey: value.requestorKey,
+    requestorDefinitionIdentity: definitionIdentityToken(value.requestorDefinitionIdentity),
     targetNamespaceUri: value.target.namespaceUri,
     targetLocalName: value.target.localName,
     targetDefinitionMatch: value.target.targetDefinitionMatch,
@@ -633,17 +671,27 @@ function spreadCaseValue(
     targetDefinitionKey: value.target.targetDefinitionMatch === 'explicit-definition'
       ? value.target.definitionKey
       : null,
+    targetDefinitionIdentity: value.target.targetDefinitionMatch === 'explicit-definition'
+      ? definitionIdentityToken(value.target.definitionIdentity)
+      : null,
   } satisfies Omit<AotRuntimeSpreadPlanCase, 'instructions'>;
   return objectLiteral({
+    captureOrdinals: emitJavaScriptValue(runtimeCase.captureOrdinals, request),
     requestorName: emitJavaScriptValue(runtimeCase.requestorName, request),
     requestorKey: emitJavaScriptValue(runtimeCase.requestorKey, request),
+    requestorDefinitionIdentity: emitJavaScriptValue(runtimeCase.requestorDefinitionIdentity, request),
     targetNamespaceUri: emitJavaScriptValue(runtimeCase.targetNamespaceUri, request),
     targetLocalName: emitJavaScriptValue(runtimeCase.targetLocalName, request),
     targetDefinitionMatch: emitJavaScriptValue(runtimeCase.targetDefinitionMatch, request),
     targetDefinitionName: emitJavaScriptValue(runtimeCase.targetDefinitionName, request),
     targetDefinitionKey: emitJavaScriptValue(runtimeCase.targetDefinitionKey, request),
+    targetDefinitionIdentity: emitJavaScriptValue(runtimeCase.targetDefinitionIdentity, request),
     instructions: instructionList(value.instructions, request, variableByDefinitionId),
   });
+}
+
+function definitionIdentityToken(identity: string | null): string | null {
+  return identity == null ? null : createHash('sha256').update(identity).digest('hex');
 }
 
 function emitTemplateNodeValue(

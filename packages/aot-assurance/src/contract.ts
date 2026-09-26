@@ -9,6 +9,7 @@ import type { ContentMovesApplicationObservation } from './content-moves-scenari
 import type { OrdinaryHooksApplicationObservation } from './ordinary-hooks-scenario.js';
 import type { StateStoreListApplicationObservation } from './state-store-list-scenario.js';
 import type { LocalizedFormApplicationObservation } from './localized-form-scenario.js';
+import type { CeCompositionApplicationObservation } from './ce-composition-scenario.js';
 
 export type AssuranceLane = 'jit' | 'aot';
 export type AssuranceScenario =
@@ -28,6 +29,7 @@ export type AssuranceScenario =
   | 'state-backed-form'
   | 'state-store-list'
   | 'localized-form'
+  | 'ce-composition'
   | 'projects-and-milestones';
 
 export type EmissionFalsifier =
@@ -72,7 +74,7 @@ export interface AotArtifactReceipt {
 }
 
 export interface AotBuildEvidence {
-  /** There must be exactly one semantic application analysis for this build. */
+  /** Actual application analyses, including conditional deeper inquiry on the same semantic runtime. */
   readonly analysisCount: number;
   readonly compilation: {
     readonly mode: 'strict' | 'compatible';
@@ -83,8 +85,8 @@ export interface AotBuildEvidence {
     }[];
   };
   readonly analysis: {
-    readonly depth: string;
-    readonly templateBreadth: string;
+    readonly depth: 'runtime-topology' | 'binding-observation';
+    readonly templateBreadth: 'app-aggregate';
   };
   readonly artifacts: readonly AotArtifactReceipt[];
   readonly runtimeConfiguration: AotRuntimeConfigurationEvidence;
@@ -207,6 +209,7 @@ export type ApplicationObservation =
   | StateBackedFormApplicationObservation
   | StateStoreListApplicationObservation
   | LocalizedFormApplicationObservation
+  | CeCompositionApplicationObservation
   | ProjectsAndMilestonesApplicationObservation;
 
 export interface CheckpointTranscript {

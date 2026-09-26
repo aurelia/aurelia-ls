@@ -2,6 +2,7 @@ import { performance } from 'node:perf_hooks';
 
 import type { KernelStore } from '../kernel/store.js';
 import type { KernelPublicationContext } from '../kernel/publication.js';
+import type { ProductHandle } from '../kernel/handles.js';
 import type {
   ProjectBootFrame,
   SourceFileAdmission,
@@ -147,6 +148,13 @@ export class ResourceRecognitionProjectResult {
     return this.definitionSelections.flatMap((selection) =>
       selection.sourceAttachment == null ? [] : [selection.sourceAttachment]
     );
+  }
+
+  /** Join a current definition product to its authored carrier even when commit retained an equivalent detail object. */
+  readDefinitionSourceAttachment(productHandle: ProductHandle | null): ResourceDefinitionSourceAttachment | null {
+    return productHandle == null ? null : this.definitionSelections.find((selection) =>
+      selection.definition.productHandle === productHandle,
+    )?.sourceAttachment ?? null;
   }
 
   readSupersededDefinitionSourceAttachments(): readonly ResourceDefinitionSourceAttachment[] {

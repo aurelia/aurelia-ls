@@ -37,8 +37,9 @@ import {
   collectRuntimeRegistrationClosurePressure,
 } from './runtime-registration-closure-pressure.js';
 import { RuntimeSpreadCompilationHandoffState } from './runtime-spread-compilation-handoff.js';
+import { RuntimeCompositionCompilerDemand } from './runtime-composition-compiler-demand.js';
 import type { TemplateInstruction } from './instruction-ir.js';
-import { TemplateInstructionKind } from './instruction-ir.js';
+import { HydrateElementInstruction, TemplateInstructionKind } from './instruction-ir.js';
 import {
   dedupeRuntimeRegistrationRequirementReasons as dedupeReasons,
   RuntimeRegistrationRequirementGroupKind,
@@ -191,10 +192,19 @@ function collectRuntimeHtmlResourceUses(
     : [[emission.resource.productHandle, emission] as const]
   ));
   const uses = new Map<string, RequirementUse>();
+  const compositionDemand = new RuntimeCompositionCompilerDemand(app, inputs);
   for (const input of inputs) {
     const family = input.family;
     if (family == null) continue;
     const compilerWorldProductHandle = input.resource.compilation.compilerWorld.world.productHandle;
+    const compositionInstructions = input.resource.runtimeAnalysis.runtimeComposition.spreads.instructions;
+    if (compositionInstructions.length > 0) {
+      resourceReasons.push(reason(
+        RuntimeRegistrationRequirementReasonKind.ProgrammaticRuntimeRegistrationUse,
+        'Composition-host instructions are compiled, but their converter/behavior activation resources are not yet part of the runtime expression-resource plan.',
+        compositionInstructions.map((instruction) => instruction.productHandle),
+      ));
+    }
     const spreadPressure = runtimeSpreadRegistrationPressure(input);
     if (spreadPressure != null) {
       resourceReasons.push(spreadPressure);
@@ -222,15 +232,13 @@ function collectRuntimeHtmlResourceUses(
       }
       if (emission.resource.packageId !== BuiltInResourcePackage.RuntimeHtml) continue;
       addRequirementUse(uses, compilerWorldProductHandle, emission, 1);
-      if (emission.resource.targetName === 'AuCompose') {
-        const compileReason = reason(
-          RuntimeRegistrationRequirementReasonKind.RuntimeTemplateCompilationRequired,
-          'AuCompose can compile runtime-selected definitions, so static runtime registration closure is not exact.',
-          [instruction.productHandle, emission.resource.targetName],
-        );
-        resourceReasons.push(compileReason);
-        rendererReasons.push(compileReason);
-        eventReasons.push(compileReason);
+      if (emission.resource.targetName === 'AuCompose' && instruction instanceof HydrateElementInstruction) {
+        const compileReason = compositionDemand.reasonFor(input, instruction);
+        if (compileReason != null) {
+          resourceReasons.push(compileReason);
+          rendererReasons.push(compileReason);
+          eventReasons.push(compileReason);
+        }
       }
     }
 
@@ -325,6 +333,10 @@ function collectRendererUses(
         ? [record.objectHandle as ProductHandle]
         : []
     ));
+    // These invocations have been compiled but have not been rendered; they have no InstructionUsesRuntimeRenderer claim.
+    const compilerOnlyCompositionInstructions = new Set(
+      input.resource.runtimeAnalysis.runtimeComposition.spreads.instructions.map((instruction) => instruction.productHandle),
+    );
     const visit = (value: TemplateCompilerRuntimeInstructionValue): void => {
       const instruction = instructionByValue.get(value) ?? null;
       if (instruction == null) {
@@ -364,7 +376,8 @@ function collectRendererUses(
           claimed == null
           || claimed.productHandle !== candidate.renderer.productHandle
           || candidate.renderer.productHandle == null
-          || !claimedRendererProducts.has(candidate.renderer.productHandle)
+          || (!compilerOnlyCompositionInstructions.has(instruction.productHandle)
+            && !claimedRendererProducts.has(candidate.renderer.productHandle))
         ) {
           rendererReasons.push(reason(
             RuntimeRegistrationRequirementReasonKind.RuntimeRendererClaimMismatch,

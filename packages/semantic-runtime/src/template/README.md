@@ -803,6 +803,15 @@ products; target JavaScript emission remains outside this substrate.
   consumers can use an exact static handoff when spread closure is open, while generated-compiler consumers must
   require exact closure. Recursive pass-through whose ultimate target belongs to a descendant resource family remains
   typed Open until target-family ownership is indexed independently from requestor ownership.
+- `runtime-composition-spread-compilation.ts` invokes that same compiler host for ready, single-CE `AuCompose`
+  contexts. It partitions original captures by the selected CE's bindable property keys and boolean capture policy,
+  and creates an addressless host owned by the composition context. AuCompose is the compiler requestor; its own
+  leaf/root container selects resources, not the enclosing component's dependencies or the composed CE's local scope.
+  These are compiler products, not invented rendered bindings. Shared resource ownership joins their instruction,
+  expression and diagnostic products back to the original attributes; ordinary spread's mirrored binding/compiler
+  refusal is presented once. The detached plan retains ordered capture ordinals and exact selected-definition
+  identity because native composition partitions captures into fresh arrays and scoped definitions can share names.
+  Capture predicates and onward transfer into the composed CE's own spread remain Open in this initial corridor.
 - `runtime-binding-issue.ts` owns binding-lifecycle diagnostics that are not binding-behavior or scope-effect
   diagnostics. `SpreadBinding` currently spends runtime-html `no_spread_scope_context_found` (`AUR9999`) when
   captured-attribute transfer cannot find the next hydration context, and `no_spread_template_controller` (`AUR9998`)
@@ -1692,8 +1701,14 @@ not package-name detection or another registration interpreter. Its reasons affe
 AOT compiler replacement or runtime resource/renderer selection.
 A selective template-source request is conservative unless it still covers the complete runtime resource cohort.
 Captured-spread interface demand is typed separately from general runtime template compilation: an exact AOT spread
-lookup can discharge the former, while `AuCompose`, `enhance`, and programmatic compiler demand still require a general
-runtime compiler. Classified programmatic resource/renderer/event use is likewise distinct from uninspected reachable
+lookup can discharge the former. `runtime-composition-compiler-demand.ts` joins exact browser/authored instruction
+ownership to the shared composition inquiry for literal named-CE and null-template composition. Every selected CE must
+belong to the emitted compiler cohort in its actual DI context; bound component inputs, dynamic markup, reference
+escapes, and unclosed captured-attribute compilation retain compiler demand. Evaluated candidates and TypeScript union
+coverage are not lifetime closure. Compiler-only composition spread instructions use numeric ABI plus the active
+Rendering service, without invented rendered-instruction claims; their not-yet-modeled expression-resource activation
+keeps resource registrations conservative. `enhance` and other programmatic compiler demand remain independent.
+Classified programmatic resource/renderer/event use is likewise distinct from uninspected reachable
 code, unresolved modules, and external package boundaries that can hide compiler use.
 The exactness proof has a separate closure-pressure owner: evaluator reachability selects runtime-code sources, checker-
 owned Program trees provide canonical symbol/type identity, app-root route contexts exclude unresolved executable route

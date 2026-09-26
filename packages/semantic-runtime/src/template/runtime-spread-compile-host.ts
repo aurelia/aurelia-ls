@@ -98,7 +98,8 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     private readonly world: TemplateCompilerWorldEmission,
     private readonly source: RuntimeRenderingSourceSet,
     private readonly bindingIssuePublisher: RuntimeBindingIssuePublisher,
-    private readonly bindingOwner: SpreadBinding,
+    /** Null while a compiler invocation precedes any rendered SpreadBinding. */
+    private readonly bindingOwner: SpreadBinding | null,
     private readonly records: KernelStoreRecord[],
     private readonly bindingIssues: RuntimeBindingIssue[],
     private readonly compilerIssues: TemplateCompilerIssue[],
@@ -126,6 +127,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     }
 
     const targetDefinition = this.targetDefinition(request, targetNode);
+    const attributeInstructions: HydrateAttributeInstruction[] = [];
     const rootInstructions: TemplateInstruction[] = [];
     const createdInstructions: TemplateInstruction[] = [];
     for (const syntax of request.capturedSyntaxes) {
@@ -133,13 +135,16 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
       if (compiled instanceof TemplateCompilerSpreadCompileResult) {
         return compiled;
       }
-      rootInstructions.push(...compiled.rootInstructions);
+      for (const instruction of compiled.rootInstructions) {
+        if (instruction instanceof HydrateAttributeInstruction) attributeInstructions.push(instruction);
+        else rootInstructions.push(instruction);
+      }
       createdInstructions.push(...compiled.createdInstructions);
     }
     this.commitStagedOutputs();
     return TemplateCompilerSpreadCompileResult.compiled(
       request,
-      rootInstructions,
+      [...attributeInstructions, ...rootInstructions],
       createdInstructions,
       targetDefinition?.productHandle ?? null,
     );
@@ -448,6 +453,9 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
       TemplateCompilerFrameworkErrorCode.NoSpreadTemplateController,
       syntax.sourceAddressHandle,
     );
+    this.records.push(...compilerIssue.records);
+    this.compilerIssues.push(compilerIssue.issue);
+    if (this.bindingOwner == null) return;
     const publication = this.bindingIssuePublisher.publish(
       `${request.localKey}:issue:no-spread-template-controller:${syntax.productHandle}`,
       this.bindingOwner.toReference(),
@@ -459,9 +467,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
       RuntimeHtmlBindingFrameworkErrorCode.NoSpreadTemplateController,
       syntax.sourceAddressHandle,
     );
-    this.records.push(...compilerIssue.records);
     this.records.push(...publication.records);
-    this.compilerIssues.push(compilerIssue.issue);
     this.bindingIssues.push(publication.issue);
   }
 
@@ -501,7 +507,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     this.stagedRecords.push(
       new InstructionIdentity(
         allocation.identityHandle,
-        request.spreadInstruction.identityHandle,
+        request.origin.instruction.identityHandle,
         instructionKindKeyFor(kind),
       ),
       new MaterializedProduct(
@@ -632,7 +638,8 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
   }
 
   private targetNode(request: TemplateCompilerSpreadCompileRequest): HtmlElement | null {
-    const productHandle = request.target.htmlNode?.productHandle ?? null;
+    if (request.origin.kind === 'composition-host') return request.origin.target;
+    const productHandle = request.origin.target.htmlNode?.productHandle ?? null;
     if (productHandle == null) {
       return null;
     }

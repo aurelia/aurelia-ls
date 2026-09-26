@@ -6,14 +6,20 @@ import type {
 } from '@aurelia-ls/semantic-runtime/browser-template';
 
 import {
+  type AotRuntimeSpreadCapture,
   type AotRuntimeSpreadPlan,
 } from './runtime-spread-plan.js';
 import { emitAotJavaScriptValue } from './template-module-emitter.js';
 
 export {
+  AOT_COMPILED_DEFINITION_IDENTITY,
+  AOT_COMPILED_DEFINITION_IDENTITY_PROTOCOL,
+  AOT_RUNTIME_SPREAD_CAPTURE,
+  AOT_RUNTIME_SPREAD_CAPTURE_PROTOCOL,
   AOT_RUNTIME_SPREAD_PLAN,
   AOT_RUNTIME_SPREAD_PLAN_PROTOCOL,
   type AotRuntimeSpreadPlan,
+  type AotRuntimeSpreadCapture,
   type AotRuntimeSpreadPlanCase,
   type AotRuntimeSpreadTargetDefinitionMatch,
 } from './runtime-spread-plan.js';
@@ -196,7 +202,9 @@ interface AotSpreadCompileTarget {
 /** Compiler-interface closure for compiler-final definitions and Aurelia's null-template built-ins. */
 export class AotTemplateCompiler {
   /** Keep the literal self-contained: the runtime module emits this class through `Function#toString()`. */
-  public static readonly spreadPlan = Symbol.for('aurelia-aot/runtime-spread-plan/v1');
+  public static readonly spreadPlan = Symbol.for('aurelia-aot/runtime-spread-plan/v2');
+  public static readonly spreadCapture = Symbol.for('aurelia-aot/runtime-spread-capture/v1');
+  public static readonly definitionIdentity = Symbol.for('aurelia-aot/compiled-definition-identity/v1');
 
   public debug = false;
   public resolveResources = true;
@@ -221,9 +229,11 @@ export class AotTemplateCompiler {
   ): TemplateCompilerCompiledHandoffInstructionValue[] {
     if (captures.length === 0) return [];
 
-    const plan = (captures as unknown as Readonly<Record<symbol, AotRuntimeSpreadPlan | undefined>>)[
+    const attachedPlan = (captures as unknown as Readonly<Record<symbol, AotRuntimeSpreadPlan | undefined>>)[
       AotTemplateCompiler.spreadPlan
     ];
+    const firstCapture = captures[0] as Readonly<Record<symbol, AotRuntimeSpreadCapture | undefined>> | null;
+    const plan = attachedPlan ?? firstCapture?.[AotTemplateCompiler.spreadCapture]?.plan;
     const requestorName = requestor.name ?? null;
     const requestorKey = requestor.key ?? null;
     if (plan == null) {
@@ -231,22 +241,42 @@ export class AotTemplateCompiler {
         `AOT template compiler has no precompiled spread plan for ${captures.length} captured attributes on requestor ${JSON.stringify(requestorName ?? '(anonymous)')} (${JSON.stringify(requestorKey ?? '(no key)')}).`,
       );
     }
+    const captureOrdinals = captures.map((capture) => {
+      const origin = (capture as Readonly<Record<symbol, AotRuntimeSpreadCapture | undefined>> | null)?.[
+        AotTemplateCompiler.spreadCapture
+      ];
+      if (origin == null || origin.plan !== plan) {
+        throw new Error('AOT template compiler spread captures do not belong to one emitted capture origin.');
+      }
+      return origin.ordinal;
+    });
 
     const targetNamespaceUri = target.namespaceURI ?? null;
     const targetLocalName = target.localName ?? target.nodeName?.toLowerCase() ?? '';
     const targetDefinitionName = targetDefinition?.name ?? null;
     const targetDefinitionKey = targetDefinition?.key ?? null;
+    const requestorDefinitionIdentity = (requestor as Readonly<Record<symbol, string | undefined>>)[
+      AotTemplateCompiler.definitionIdentity
+    ] ?? null;
+    const targetDefinitionIdentity = (targetDefinition as Readonly<Record<symbol, string | undefined>> | undefined)?.[
+      AotTemplateCompiler.definitionIdentity
+    ] ?? null;
     const matches = plan.filter((candidate) =>
-      candidate.requestorName === requestorName
+      candidate.captureOrdinals.length === captureOrdinals.length
+      && candidate.captureOrdinals.every((ordinal, index) => ordinal === captureOrdinals[index])
+      && candidate.requestorName === requestorName
       && candidate.requestorKey === requestorKey
+      && candidate.requestorDefinitionIdentity === requestorDefinitionIdentity
       && candidate.targetNamespaceUri === targetNamespaceUri
       && candidate.targetLocalName === targetLocalName
       && (
         candidate.targetDefinitionMatch === 'structural'
           ? targetDefinition == null
           : targetDefinition != null
+            && candidate.targetDefinitionIdentity != null
             && candidate.targetDefinitionName === targetDefinitionName
             && candidate.targetDefinitionKey === targetDefinitionKey
+            && candidate.targetDefinitionIdentity === targetDefinitionIdentity
       )
     );
     const request = `requestor ${JSON.stringify(requestorName ?? '(anonymous)')} (${JSON.stringify(requestorKey ?? '(no key)')}), target ${JSON.stringify(`${targetNamespaceUri ?? '(no namespace)'}:${targetLocalName || '(anonymous)'}`)}, target definition ${JSON.stringify(targetDefinitionName ?? '(none)')} (${JSON.stringify(targetDefinitionKey ?? '(no key)')})`;

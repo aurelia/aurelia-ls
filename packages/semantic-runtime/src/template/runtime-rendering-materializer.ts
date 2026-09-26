@@ -140,7 +140,7 @@ import {
   type RuntimeDynamicInstructionContext,
   RuntimeSpreadBindingCreator,
 } from './runtime-spread-binding-creator.js';
-import type { RuntimeSpreadCompilation } from './runtime-spread-compilation.js';
+import { indexRuntimeSpreadInstructionOrigins, type RuntimeSpreadCompilation } from './runtime-spread-compilation.js';
 import type { RuntimeControllerIssue } from './runtime-controller-issue.js';
 import type { RuntimeBindingIssue } from './runtime-binding-issue.js';
 import type { TemplateCompilerIssue } from './compiler-issue.js';
@@ -350,25 +350,7 @@ export class RuntimeRenderingEmission {
         );
       }
     }
-    for (const record of records) {
-      if (
-        record.kind !== 'semantic-claim'
-        || record.predicateKey
-          !== KernelVocabulary.Instruction.DynamicInstructionOriginatesFromCapturedAttributeSyntax.key
-      ) {
-        continue;
-      }
-      const existing = this.dynamicInstructionOriginSyntaxByProduct.get(record.subjectHandle as ProductHandle);
-      if (existing != null && existing !== record.objectHandle) {
-        throw new Error(
-          `Runtime-created instruction '${record.subjectHandle}' has conflicting captured attribute origins.`,
-        );
-      }
-      this.dynamicInstructionOriginSyntaxByProduct.set(
-        record.subjectHandle as ProductHandle,
-        record.objectHandle as ProductHandle,
-      );
-    }
+    indexRuntimeSpreadInstructionOrigins(records, this.dynamicInstructionOriginSyntaxByProduct);
   }
 
   /** Returns the materialized runtime bindings for a lowered instruction across all recursive render contexts. */

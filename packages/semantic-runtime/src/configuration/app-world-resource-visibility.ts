@@ -89,7 +89,7 @@ class AppWorldResourceVisibilityFrame {
   }
 
   addContainerResources(): void {
-    for (const visibleSlot of visibleResourceSlotsForContainer(this.container, this.diWorld)) {
+    for (const visibleSlot of visibleResourceSlotsForContainer(this.container)) {
       this.addVisibleSlotResource(visibleSlot);
     }
   }
@@ -638,43 +638,33 @@ function rootComponentDefinition(
 
 function visibleResourceSlotsForContainer(
   container: Container,
-  diWorld: DiWorldConstructionEmission,
 ): readonly VisibleContainerResourceSlot[] {
-  const containerProductHandle = container.productHandle;
-  const rootProductHandle = container.readRootReference().productHandle;
   const slots: VisibleContainerResourceSlot[] = [];
 
-  for (const slot of diWorld.resourceSlots) {
-    if (slot.container.productHandle === containerProductHandle) {
-      slots.push({
-        resourceKey: slot.resourceKey,
-        resourceProductHandle: slot.resourceProductHandle,
-        resourceIdentityHandle: slot.resourceIdentityHandle,
-        sourceAddressHandle: slot.sourceAddressHandle,
-        keySourceAddressHandle: slot.keySourceAddressHandle,
-        visibilityKind: TemplateResourceVisibilityKind.Local,
-      });
-    }
+  // Read the actual container surface: runtime-created children are newer than the app-world DI emission.
+  for (const slot of container.readResourceSlots()) {
+    slots.push({
+      resourceKey: slot.resourceKey,
+      resourceProductHandle: slot.resourceProductHandle,
+      resourceIdentityHandle: slot.resourceIdentityHandle,
+      sourceAddressHandle: slot.sourceAddressHandle,
+      keySourceAddressHandle: slot.keySourceAddressHandle,
+      visibilityKind: TemplateResourceVisibilityKind.Local,
+    });
   }
 
-  if (rootProductHandle == null || rootProductHandle === containerProductHandle) {
-    return slots;
-  }
+  if (container.root === container) return slots;
 
-  for (const slot of diWorld.resourceSlots) {
-    if (slot.container.productHandle === rootProductHandle) {
-      if (container.hasBlockedResource(slot.resourceKey)) {
-        continue;
-      }
-      slots.push({
-        resourceKey: slot.resourceKey,
-        resourceProductHandle: slot.resourceProductHandle,
-        resourceIdentityHandle: slot.resourceIdentityHandle,
-        sourceAddressHandle: slot.sourceAddressHandle,
-        keySourceAddressHandle: slot.keySourceAddressHandle,
-        visibilityKind: TemplateResourceVisibilityKind.Inherited,
-      });
-    }
+  for (const slot of container.root.readResourceSlots()) {
+    if (container.hasBlockedResource(slot.resourceKey)) continue;
+    slots.push({
+      resourceKey: slot.resourceKey,
+      resourceProductHandle: slot.resourceProductHandle,
+      resourceIdentityHandle: slot.resourceIdentityHandle,
+      sourceAddressHandle: slot.sourceAddressHandle,
+      keySourceAddressHandle: slot.keySourceAddressHandle,
+      visibilityKind: TemplateResourceVisibilityKind.Inherited,
+    });
   }
 
   return slots;

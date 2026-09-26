@@ -1,11 +1,46 @@
 import type { IdentityHandle, ProductHandle } from '../kernel/handles.js';
 import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { RuntimeRendererSpreadCompileState } from './runtime-renderer.js';
+import type { HtmlElement } from './html-ir.js';
+import type { KernelStoreRecord } from '../kernel/store.js';
+import { KernelVocabulary } from '../kernel/vocabulary.js';
+
+/** Index the existing captured-syntax claims without deriving origins from instruction shape or source text. */
+export function indexRuntimeSpreadInstructionOrigins(
+  records: readonly KernelStoreRecord[],
+  origins: Map<ProductHandle, ProductHandle>,
+): void {
+  for (const record of records) {
+    if (record.kind !== 'semantic-claim'
+      || record.predicateKey !== KernelVocabulary.Instruction.DynamicInstructionOriginatesFromCapturedAttributeSyntax.key) continue;
+    const instruction = record.subjectHandle as ProductHandle;
+    const syntax = record.objectHandle as ProductHandle;
+    const previous = origins.get(instruction);
+    if (previous != null && previous !== syntax) throw new Error(`Runtime-created instruction '${instruction}' has conflicting captured attribute origins.`);
+    origins.set(instruction, syntax);
+  }
+}
+
+export type RuntimeSpreadCompilationOrigin = {
+  readonly kind: 'template';
+  readonly targetRenderTargetProductHandle: ProductHandle;
+  readonly targetRenderTargetIdentityHandle: IdentityHandle;
+} | {
+  readonly kind: 'composition-host';
+  readonly contextProductHandle: ProductHandle;
+  readonly contextIdentityHandle: IdentityHandle;
+  /** Addressless host created by AuCompose, rather than a target row in a compiled template. */
+  readonly host: HtmlElement;
+  /** Original captured attributes retained by the composed element, in native partition order. */
+  readonly retainedCaptureSyntaxProductHandles: readonly ProductHandle[];
+};
 
 export interface RuntimeSpreadCompilationInput {
   readonly state: RuntimeRendererSpreadCompileState;
+  readonly origin: RuntimeSpreadCompilationOrigin;
   readonly requestorDefinitionProductHandle: ProductHandle | null;
   readonly requestorDefinitionIdentityHandle: IdentityHandle | null;
+  /** Invocation trigger: a template spread instruction or the original AuCompose hydration instruction. */
   readonly spreadInstructionProductHandle: ProductHandle;
   readonly spreadInstructionIdentityHandle: IdentityHandle;
   readonly capturedAttributeContextInstructionProductHandle: ProductHandle | null;
@@ -14,14 +49,13 @@ export interface RuntimeSpreadCompilationInput {
   readonly capturedAttributeContextControllerIdentityHandle: IdentityHandle | null;
   readonly hydrationContextProductHandle: ProductHandle | null;
   readonly hydrationContextIdentityHandle: IdentityHandle | null;
-  readonly targetRenderTargetProductHandle: ProductHandle;
-  readonly targetRenderTargetIdentityHandle: IdentityHandle;
   readonly targetHtmlNodeProductHandle: ProductHandle | null;
   readonly targetHtmlNodeIdentityHandle: IdentityHandle | null;
   /** Whether compileSpread received targetDef explicitly rather than resolving an effective target from the world. */
   readonly targetDefinitionExplicit: boolean;
   readonly targetDefinitionProductHandle: ProductHandle | null;
   readonly targetDefinitionIdentityHandle: IdentityHandle | null;
+  /** Exact captures supplied to this invocation; composition may transfer only a subset of the original owner. */
   readonly capturedSyntaxProductHandles: readonly ProductHandle[];
   readonly rootInstructionProductHandles: readonly ProductHandle[];
   readonly createdInstructionProductHandles: readonly ProductHandle[];
@@ -38,8 +72,10 @@ export interface RuntimeSpreadCompilationInput {
  */
 export class RuntimeSpreadCompilation {
   readonly state: RuntimeRendererSpreadCompileState;
+  readonly origin: RuntimeSpreadCompilationOrigin;
   readonly requestorDefinitionProductHandle: ProductHandle | null;
   readonly requestorDefinitionIdentityHandle: IdentityHandle | null;
+  /** Invocation trigger: a template spread instruction or the original AuCompose hydration instruction. */
   readonly spreadInstructionProductHandle: ProductHandle;
   readonly spreadInstructionIdentityHandle: IdentityHandle;
   readonly capturedAttributeContextInstructionProductHandle: ProductHandle | null;
@@ -48,8 +84,6 @@ export class RuntimeSpreadCompilation {
   readonly capturedAttributeContextControllerIdentityHandle: IdentityHandle | null;
   readonly hydrationContextProductHandle: ProductHandle | null;
   readonly hydrationContextIdentityHandle: IdentityHandle | null;
-  readonly targetRenderTargetProductHandle: ProductHandle;
-  readonly targetRenderTargetIdentityHandle: IdentityHandle;
   readonly targetHtmlNodeProductHandle: ProductHandle | null;
   readonly targetHtmlNodeIdentityHandle: IdentityHandle | null;
   readonly targetDefinitionExplicit: boolean;
@@ -64,6 +98,7 @@ export class RuntimeSpreadCompilation {
 
   constructor(input: RuntimeSpreadCompilationInput) {
     this.state = input.state;
+    this.origin = input.origin;
     this.requestorDefinitionProductHandle = input.requestorDefinitionProductHandle;
     this.requestorDefinitionIdentityHandle = input.requestorDefinitionIdentityHandle;
     this.spreadInstructionProductHandle = input.spreadInstructionProductHandle;
@@ -74,8 +109,6 @@ export class RuntimeSpreadCompilation {
     this.capturedAttributeContextControllerIdentityHandle = input.capturedAttributeContextControllerIdentityHandle;
     this.hydrationContextProductHandle = input.hydrationContextProductHandle;
     this.hydrationContextIdentityHandle = input.hydrationContextIdentityHandle;
-    this.targetRenderTargetProductHandle = input.targetRenderTargetProductHandle;
-    this.targetRenderTargetIdentityHandle = input.targetRenderTargetIdentityHandle;
     this.targetHtmlNodeProductHandle = input.targetHtmlNodeProductHandle;
     this.targetHtmlNodeIdentityHandle = input.targetHtmlNodeIdentityHandle;
     this.targetDefinitionExplicit = input.targetDefinitionExplicit;

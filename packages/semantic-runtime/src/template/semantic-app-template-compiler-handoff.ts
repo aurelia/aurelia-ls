@@ -289,9 +289,7 @@ function resourceAddress(
     definitionIdentityHandle: compilation.definition.identityHandle,
     compilerWorldProductHandle: compilation.compilerWorld.world.productHandle,
     compilerWorldIdentityHandle: compilation.compilerWorld.world.identityHandle,
-    sourceAttachment: app.emission.resources.definitionSelections.find((selection) =>
-      selection.definition === compilation.definition
-    )?.sourceAttachment ?? null,
+    sourceAttachment: app.emission.resources.readDefinitionSourceAttachment(compilation.definition.productHandle),
   };
 }
 
@@ -407,9 +405,7 @@ function prepareResource(
   }
   const authoredSourceRevision = compilation.definition.template?.authoredSourceRevision
     ?? templateSource.productHandle;
-  const sourceAttachment = app.emission.resources.definitionSelections.find((selection) =>
-    selection.definition === compilation.definition
-  )?.sourceAttachment ?? null;
+  const sourceAttachment = app.emission.resources.readDefinitionSourceAttachment(compilation.definition.productHandle);
   const definitionProductHandle = compilation.definition.productHandle;
   if (definitionProductHandle == null) {
     return unavailablePreparation(unavailableMaterialization(resource, unavailable(
@@ -579,9 +575,7 @@ function prepareOccurrenceResource(
   if (!root.definitions.isCurrent() || localPreparations.some((local) => !local.definitions.isCurrent())) {
     throw new Error(`Occurrence compiled handoff for '${compilation.definition.name}' changed before detachment.`);
   }
-  const sourceAttachment = app.emission.resources.definitionSelections.find((selection) =>
-    selection.definition === compilation.definition
-  )?.sourceAttachment ?? null;
+  const sourceAttachment = app.emission.resources.readDefinitionSourceAttachment(compilation.definition.productHandle);
   const definitionProductHandle = compilation.definition.productHandle;
   if (definitionProductHandle == null) {
     return unavailablePreparation(unavailableMaterialization(resource, unavailable(

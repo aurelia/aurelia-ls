@@ -58,6 +58,7 @@ export class AotCompilerPatchModuleEmitter {
       );
     }
     lines.push(`Object.assign(${rootVariable}, ${emission.compilerPatchValue()});`);
+    lines.push(...emission.definitionIdentityLines(rootVariable));
     if (locals.hasLocals) {
       lines.push(
         'function $materializeCompilerAddedDependencies($ownerType, $ownerDefinition) {',

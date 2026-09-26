@@ -54,6 +54,7 @@ import { assertContentMovesBuildEvidence, assertContentMovesExpectations } from 
 import { assertOrdinaryHooksBuildEvidence, assertOrdinaryHooksExpectations } from './ordinary-hooks-scenario.js';
 import { assertStateStoreListBuildEvidence, assertStateStoreListExpectations } from './state-store-list-scenario.js';
 import { assertLocalizedFormBuildEvidence, assertLocalizedFormExpectations } from './localized-form-scenario.js';
+import { assertCeCompositionBuildEvidence, assertCeCompositionExpectations } from './ce-composition-scenario.js';
 
 export interface RunAssuranceOptions {
   readonly adapterSpecifier: string;
@@ -127,6 +128,7 @@ export function assertScenarioBuildEvidence(
   else if (scenario === 'state-backed-form') assertStateBackedFormBuildEvidence(evidence);
   else if (scenario === 'state-store-list') assertStateStoreListBuildEvidence(evidence);
   else if (scenario === 'localized-form') assertLocalizedFormBuildEvidence(evidence);
+  else if (scenario === 'ce-composition') assertCeCompositionBuildEvidence(evidence);
   else if (scenario === 'projects-and-milestones') assertProjectsAndMilestonesBuildEvidence(evidence);
 }
 
@@ -180,6 +182,9 @@ export function assertScenarioBrowserEvidence(
     } else if (scenario === 'localized-form') {
       assertLocalizedFormExpectations(browserBatch.jit);
       assertLocalizedFormExpectations(browserBatch.aot);
+    } else if (scenario === 'ce-composition') {
+      assertCeCompositionExpectations(browserBatch.jit);
+      assertCeCompositionExpectations(browserBatch.aot);
     } else {
       assertProjectsAndMilestonesExpectations(browserBatch.jit);
       assertProjectsAndMilestonesExpectations(browserBatch.aot);
@@ -236,6 +241,8 @@ function defaultFixtureRoot(scenario: AssuranceScenario): string {
       return resolve(packageRoot, '..', 'semantic-runtime', 'fixtures', 'pressure', 'app-pattern-state-store-list');
     case 'localized-form':
       return resolve(packageRoot, '..', 'semantic-runtime', 'fixtures', 'pressure', 'app-pattern-localized-state-backed-form');
+    case 'ce-composition':
+      return resolve(packageRoot, 'fixtures', 'ce-composition');
     case 'projects-and-milestones':
       return resolve(packageRoot, '..', '..', 'fixtures', 'projects-and-milestones');
   }

@@ -26,6 +26,7 @@ import { runContentMovesLane } from './content-moves-scenario.js';
 import { runOrdinaryHooksLane } from './ordinary-hooks-scenario.js';
 import { runStateStoreListLane } from './state-store-list-scenario.js';
 import { runLocalizedFormLane } from './localized-form-scenario.js';
+import { runCeCompositionLane } from './ce-composition-scenario.js';
 
 export interface BrowserBatchResult {
   readonly browser: Browser;
@@ -74,6 +75,7 @@ async function runLane(
   if (scenario === 'state-backed-form') return runStateBackedFormLane(browser, lane, url);
   if (scenario === 'state-store-list') return runStateStoreListLane(browser, lane, url);
   if (scenario === 'localized-form') return runLocalizedFormLane(browser, lane, url);
+  if (scenario === 'ce-composition') return runCeCompositionLane(browser, lane, url);
   if (scenario === 'projects-and-milestones') return runProjectsAndMilestonesLane(browser, lane, url);
   const context = await browser.newContext();
   const page = await context.newPage();

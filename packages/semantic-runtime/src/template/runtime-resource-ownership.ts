@@ -29,6 +29,7 @@ import type {
   RuntimeBindingTargetOperation,
 } from './runtime-binding.js';
 import type { AttributeSyntax } from './attribute-syntax.js';
+import type { TemplateCompilerIssue } from './compiler-issue.js';
 import {
   htmlElementAttributeOwnersByAttributeProduct,
   type HtmlAttribute,
@@ -93,7 +94,8 @@ export function resourceLocalAuthoredTemplateExpressionParses(
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly TemplateExpressionParse[] {
   return [
-    ...resource.runtimeAnalysis.runtimeRendering.dynamicExpressionParses.filter((parse) =>
+    ...[...resource.runtimeAnalysis.runtimeRendering.dynamicExpressionParses,
+      ...resource.runtimeAnalysis.runtimeComposition.spreads.expressionParses].filter((parse) =>
       dynamicExpressionParseBelongsToResource(store, resource, parse)
     ),
     ...resource.compilation.bindingCommandLowering.expressionParses,
@@ -107,7 +109,8 @@ export function resourceLocalAuthoredTemplateValueSites(
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly TemplateValueSite[] {
   return [
-    ...resource.runtimeAnalysis.runtimeRendering.dynamicValueSites.filter((site) =>
+    ...[...resource.runtimeAnalysis.runtimeRendering.dynamicValueSites,
+      ...resource.runtimeAnalysis.runtimeComposition.spreads.valueSites].filter((site) =>
       dynamicValueSiteBelongsToResource(store, resource, site)
     ),
     ...resource.compilation.bindingCommandLowering.valueSites,
@@ -119,7 +122,8 @@ export function resourceLocalAuthoredTemplateValueSites(
 export function resourceLocalDynamicTemplateInstructions(
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly TemplateInstruction[] {
-  return resource.runtimeAnalysis.runtimeRendering.dynamicInstructions.filter((instruction) =>
+  return [...resource.runtimeAnalysis.runtimeRendering.dynamicInstructions,
+    ...resource.runtimeAnalysis.runtimeComposition.spreads.instructions].filter((instruction) =>
     dynamicInstructionBelongsToResource(resource, instruction)
   );
 }
@@ -131,10 +135,22 @@ export function resourceLocalRuntimeSpreadCompilations(
   const authoredInstructionProductHandles = new Set(
     resource.compilation.compiledTemplate.instructions.map((instruction) => instruction.productHandle),
   );
-  return resource.runtimeAnalysis.runtimeRendering.spreadCompilations.filter((compilation) =>
+  return [...resource.runtimeAnalysis.runtimeRendering.spreadCompilations,
+    ...resource.runtimeAnalysis.runtimeComposition.spreads.compilations].filter((compilation) =>
     compilation.capturedAttributeContextInstructionProductHandle != null
     && authoredInstructionProductHandles.has(compilation.capturedAttributeContextInstructionProductHandle)
   );
+}
+
+/** Runtime compiler refusals belong to the original capture source, not the generated receiving host. */
+export function resourceLocalRuntimeCompilerIssues(
+  store: KernelStoreReadView,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+): readonly TemplateCompilerIssue[] {
+  return [
+    ...resource.runtimeAnalysis.runtimeRendering.compilerIssues,
+    ...resource.runtimeAnalysis.runtimeComposition.spreads.compilerIssues,
+  ].filter(issue => sourceAddressBelongsToResourceTemplate(store, resource, issue.sourceAddressHandle));
 }
 
 /** Exact captured AttrSyntax provenance published for one runtime-compiled spread instruction. */
@@ -143,7 +159,8 @@ export function capturedAttributeSyntaxForDynamicInstruction(
   instruction: TemplateInstruction,
 ): AttributeSyntax | null {
   const syntaxProductHandle = resource.runtimeAnalysis.runtimeRendering
-    .readDynamicInstructionOriginSyntaxProductHandle(instruction.productHandle);
+    .readDynamicInstructionOriginSyntaxProductHandle(instruction.productHandle)
+    ?? resource.runtimeAnalysis.runtimeComposition.spreads.origins.get(instruction.productHandle) ?? null;
   return syntaxProductHandle == null
     ? null
     : resource.compilation.authoredAttributeSyntaxes.find((syntax) =>

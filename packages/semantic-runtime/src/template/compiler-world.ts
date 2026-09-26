@@ -46,6 +46,7 @@ import {
   type TemplateCompilerFrameworkInstructionType,
 } from './template-instruction-runtime-value.js';
 import { sameHtmlNodeReference } from './runtime-ref-target.js';
+import type { HtmlElement } from './html-ir.js';
 import type { AttributeSyntax } from './attribute-syntax.js';
 import {
   TemplateRenderTarget,
@@ -417,6 +418,19 @@ export const enum TemplateCompilerSpreadCompileState {
   Invalid = 'invalid',
 }
 
+/** Framework invocation site and host consumed by the same compileSpread implementation. */
+export type TemplateCompilerSpreadCompileOrigin = {
+  readonly kind: 'template';
+  readonly instruction: SpreadTransferedBindingInstruction;
+  readonly target: TemplateRenderTarget;
+} | {
+  readonly kind: 'composition-host';
+  /** Original AuCompose hydration instruction, not a fabricated template spread instruction. */
+  readonly instruction: HydrateElementInstruction;
+  /** Published runtime-generated element with no authored source span. */
+  readonly target: HtmlElement;
+};
+
 /** Runtime-shaped TemplateCompiler.compileSpread request. */
 export class TemplateCompilerSpreadCompileRequest {
   constructor(
@@ -426,10 +440,7 @@ export class TemplateCompilerSpreadCompileRequest {
     readonly requestorDefinitionProductHandle: ProductHandle | null,
     /** Captured attribute syntaxes from the current hydration context. */
     readonly capturedSyntaxes: readonly AttributeSyntax[],
-    /** Spread-transfer instruction that triggered dynamic compilation. */
-    readonly spreadInstruction: SpreadTransferedBindingInstruction,
-    /** Render target receiving the spread attributes. */
-    readonly target: TemplateRenderTarget,
+    readonly origin: TemplateCompilerSpreadCompileOrigin,
     /** Optional target custom-element definition product, matching runtime's targetDef parameter. */
     readonly targetDefinitionProductHandle: ProductHandle | null,
   ) {}

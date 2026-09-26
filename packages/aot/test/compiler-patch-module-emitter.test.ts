@@ -23,6 +23,8 @@ import {
 } from '../src/compiler-patch-runtime-module.js';
 import { AOT_RUNTIME_MODULE_SPECIFIER } from '../src/source-transform.js';
 import {
+  AOT_COMPILED_DEFINITION_IDENTITY,
+  AOT_RUNTIME_SPREAD_CAPTURE,
   AOT_RUNTIME_SPREAD_PLAN,
   AOT_RUNTIME_SPREAD_PLAN_PROTOCOL,
   AotTemplateCompiler,
@@ -536,6 +538,7 @@ describe('AOT compiler patch module emitter', () => {
     class CarrierComponent {}
     const Type = CustomElement.define({
       name: 'aot-patch-carrier',
+      aliases: ['aot-patch-alias'],
       template: '<p>authored</p>',
       dependencies: [authoredDependency],
       capture: authoredCapture,
@@ -549,6 +552,10 @@ describe('AOT compiler patch module emitter', () => {
     const patched = CustomElement.getDefinition(Type);
     expect(returnedType).toBe(Type);
     expect(patched).toBe(definition);
+    const identity = Object.getOwnPropertyDescriptor(imported.default, AOT_COMPILED_DEFINITION_IDENTITY);
+    expect(identity).toMatchObject({ enumerable: false, value: expect.any(String) });
+    expect(Object.getOwnPropertyDescriptor(patched, AOT_COMPILED_DEFINITION_IDENTITY)).toMatchObject(identity!);
+    expect(patched.aliases).toEqual(['aot-patch-alias']);
     expect(patched.template).toBe(imported.template);
     expect(patched.instructions).toBe(imported.instructions);
     expect(patched.surrogates).toBe(imported.surrogates);
@@ -559,6 +566,30 @@ describe('AOT compiler patch module emitter', () => {
     expect(patched.bindables.value?.set).toBe(authoredSetter);
     expect(patched.watches).toEqual([authoredWatch]);
     expect(patched.processContent).toBe(authoredProcessContent);
+  }, 20_000);
+
+  it('stamps an HTML-only definition when its register function realizes the resource', async () => {
+    const standaloneHandoff: TemplateCompilerCompiledHandoffValue = {
+      ...handoff,
+      definitions: handoff.definitions.map((definition) => definition.definitionId === handoff.rootDefinitionId
+        ? { ...definition, header: { ...definition.header, dependencies: [] } }
+        : definition
+      ),
+    };
+    const artifact = new AotTemplateModuleEmitter().emit({
+      handoff: standaloneHandoff, projectRoot: fixtureRoot, sourcePath: templatePath, sourceText,
+    });
+    const complete = await importPatchModule(artifact.code, artifact.digest) as unknown as {
+      register(container: { register(Type: Function): void }): void;
+    };
+    const registered: Function[] = [];
+    const container = { register(Type: Function) { registered.push(Type); } };
+    complete.register(container);
+    complete.register(container);
+    expect(registered).toHaveLength(2);
+    expect(registered[1]).toBe(registered[0]);
+    expect(Object.getOwnPropertyDescriptor(CustomElement.getDefinition(registered[0]!), AOT_COMPILED_DEFINITION_IDENTITY))
+      .toMatchObject({ enumerable: false, value: expect.any(String) });
   }, 20_000);
 
   it('materializes scoped local Types in two passes with exact owner, peer, and nested dependencies', async () => {
@@ -607,7 +638,17 @@ describe('AOT compiler patch module emitter', () => {
     }, LocalOwner);
     helper.applyCompiledCustomElement(OwnerType, imported.default);
     const ownerDefinition = CustomElement.getDefinition(OwnerType);
+    expect(Object.getOwnPropertyDescriptor(CustomElement.getDefinition(standaloneOwnerType), AOT_COMPILED_DEFINITION_IDENTITY)?.value)
+      .toBe(Object.getOwnPropertyDescriptor(ownerDefinition, AOT_COMPILED_DEFINITION_IDENTITY)?.value);
     const directTypes = ownerDefinition.dependencies.slice(1) as Function[];
+    const localIdentities = directTypes.map((Type) =>
+      Object.getOwnPropertyDescriptor(CustomElement.getDefinition(Type), AOT_COMPILED_DEFINITION_IDENTITY)?.value as string
+    );
+    expect(localIdentities.every((identity) => typeof identity === 'string')).toBe(true);
+    expect(new Set(localIdentities).size).toBe(directTypes.length);
+    expect(complete.dependencies.map((Type) =>
+      Object.getOwnPropertyDescriptor(CustomElement.getDefinition(Type), AOT_COMPILED_DEFINITION_IDENTITY)?.value
+    )).toEqual(localIdentities);
     expect(directTypes.map((Type) => Type.name)).toEqual(['LocalChip', 'LocalIcon', 'OuterLocal']);
     expect(directTypes.map((Type) => CustomElement.getDefinition(Type).name)).toEqual([
       'local-chip',
@@ -638,7 +679,7 @@ describe('AOT compiler patch module emitter', () => {
     ]);
   }, 30_000);
 
-  it('attaches exact state-form spread plans only to their captures arrays', async () => {
+  it('attaches exact state-form spread plans to capture arrays and their retained syntax objects', async () => {
     const semanticCases = stateFormHandoff.definitions.flatMap((definition) => definition.rows.flat())
       .flatMap((instruction) => 'spreadPlan' in instruction.value
         ? instruction.value.spreadPlan?.cases ?? []
@@ -657,7 +698,6 @@ describe('AOT compiler patch module emitter', () => {
       sourcePath: stateFormTemplatePath,
       sourceText: stateFormSourceText,
     });
-    expect(artifact.code.match(/Object\.defineProperty\(/gu)).toHaveLength(2);
     expect(artifact.code).toContain(`Symbol.for(${JSON.stringify(AOT_RUNTIME_SPREAD_PLAN_PROTOCOL)})`);
     expect(artifact.code).not.toContain('spreadPlan:');
     expect(artifact.code).not.toContain('ExpressionParser');
@@ -677,7 +717,14 @@ describe('AOT compiler patch module emitter', () => {
       expect(Object.keys(owner)).not.toContain('spreadPlan');
       const cases = descriptor!.value as readonly RuntimeSpreadPlanCase[];
       expect(cases).toHaveLength(1);
+      for (const [ordinal, capture] of captures.entries()) {
+        expect(Object.getOwnPropertyDescriptor(capture, AOT_RUNTIME_SPREAD_CAPTURE)).toMatchObject({
+          enumerable: false,
+          value: { plan: cases, ordinal },
+        });
+      }
       expect(cases[0]).toMatchObject({
+        captureOrdinals: captures.map((_, ordinal) => ordinal),
         requestorName: 'field-shell',
         requestorKey: 'au:resource:custom-element:field-shell',
         targetNamespaceUri: 'http://www.w3.org/1999/xhtml',
@@ -686,8 +733,12 @@ describe('AOT compiler patch module emitter', () => {
         targetDefinitionName: null,
         targetDefinitionKey: null,
       });
+      const requestor = {
+        name: cases[0]!.requestorName, key: cases[0]!.requestorKey,
+        [AOT_COMPILED_DEFINITION_IDENTITY]: cases[0]!.requestorDefinitionIdentity,
+      };
       const instructions = compiler.compileSpread(
-        { name: cases[0]!.requestorName, key: cases[0]!.requestorKey },
+        requestor,
         captures,
         new Proxy({}, { get() { throw new Error('compileSpread read the runtime container'); } }),
         { namespaceURI: cases[0]!.targetNamespaceUri, localName: cases[0]!.targetLocalName },
@@ -721,8 +772,10 @@ interface RuntimeInstruction extends Record<string, unknown> {
 }
 
 interface RuntimeSpreadPlanCase {
+  readonly captureOrdinals: readonly number[];
   readonly requestorName: string;
   readonly requestorKey: string;
+  readonly requestorDefinitionIdentity: string | null;
   readonly targetNamespaceUri: string | null;
   readonly targetLocalName: string;
   readonly targetDefinitionMatch: 'structural' | 'explicit-definition';

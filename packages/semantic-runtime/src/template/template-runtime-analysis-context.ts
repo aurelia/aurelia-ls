@@ -1,9 +1,26 @@
 import type { ComputationRun } from '../kernel/computation-lifecycle.js';
-import type { ProductHandle } from '../kernel/handles.js';
+import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
+import {
+  configuredSyntaxForOperations,
+  resourceRegistrationAdmissionsForOperations,
+  type AureliaAppWorldEmission,
+} from '../configuration/app-world-composer.js';
+import { AppWorldResourceVisibilityComposer } from '../configuration/app-world-resource-visibility.js';
+import type { Container } from '../di/container.js';
+import { registrationOperationsVisibleToContainer } from '../di/world-construction.js';
 import { MaterializedProduct } from '../kernel/materialization.js';
 import type { ProductDetailSlot } from '../kernel/product-details.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
+import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
+import {
+  TemplateCompilerWorldConstructionRequest,
+  TemplateCompilerWorldMaterializer,
+  type TemplateCompilerWorldEmission,
+} from './compiler-world-materializer.js';
+import { TemplateCompilerWorldKind } from './compiler-world.js';
+import { TemplateResourceVisibilityKind } from './compiler-world-reference.js';
+import { RegisteredSyntaxResourceMaterializer } from './registered-syntax-resource-materializer.js';
 import type { TemplateResourceCompilationEmission } from './template-compilation-project-pass.js';
 import { TemplateProductDetails } from './product-details.js';
 import type {
@@ -26,6 +43,8 @@ export class TemplateRuntimeAnalysisProjectContext {
     private readonly publication: ComputationRun,
     /** Compiled-template entries admitted before runtime analysis begins. */
     readonly resources: readonly TemplateRuntimeAnalysisResource[],
+    private readonly appWorld: AureliaAppWorldEmission,
+    private readonly resourceDefinitions: ResourceDefinitionIndex | null,
   ) {
     for (const resource of resources) {
       const definitionProductHandle = resource.definitionProductHandle;
@@ -47,6 +66,57 @@ export class TemplateRuntimeAnalysisProjectContext {
         this.resourcesByInstruction.set(instruction.productHandle, resource);
       }
     }
+  }
+
+  /** Reuse compiler service authority while selecting resources from the exact runtime consulting container. */
+  compilerWorldForRuntimeContainer(
+    container: Container,
+    inheritedServices: TemplateCompilerWorldEmission,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): TemplateCompilerWorldEmission {
+    const scope = new AppWorldResourceVisibilityComposer().construct(
+      container,
+      this.appWorld.diWorld,
+      this.appWorld.configuredResources,
+      this.resourceDefinitions,
+      null,
+    );
+    const runtimeChain: Container[] = [];
+    for (let current: Container | null = container; current != null; current = current.parent) {
+      runtimeChain.push(current);
+    }
+    const chainFacts = this.appWorld.containerChainFacts.withContainers(this.publication, runtimeChain);
+    const operations = registrationOperationsVisibleToContainer(container, this.appWorld.diWorld, chainFacts);
+    const syntax = configuredSyntaxForOperations(operations, this.appWorld.configuredSyntax);
+    const registeredSyntax = new RegisteredSyntaxResourceMaterializer(this.publication).materialize({
+      localKey,
+      admissions: resourceRegistrationAdmissionsForOperations(operations),
+      visibleResources: scope.resources,
+      resourceDefinitions: this.resourceDefinitions,
+    });
+    return new TemplateCompilerWorldMaterializer(this.publication).construct(new TemplateCompilerWorldConstructionRequest(
+      localKey,
+      TemplateCompilerWorldKind.Component,
+      container,
+      inheritedServices.world.appRoot,
+      scope.resources,
+      [...syntax.attributePatterns, ...registeredSyntax.attributePatterns],
+      [...syntax.bindingCommands, ...registeredSyntax.bindingCommands],
+      inheritedServices.runtimeRenderers,
+      TemplateResourceVisibilityKind.Configured,
+      sourceAddressHandle,
+      inheritedServices.callableBindings,
+      inheritedServices.attributeMapper.configuration,
+      inheritedServices.world.observerLocatorConfiguration,
+      inheritedServices.world.runtimeKeyMappingConfiguration,
+      scope.exclusions,
+      null,
+      scope.lookups,
+      scope.blockedLookups,
+      inheritedServices.compilerHooks.toCandidate(),
+      inheritedServices.cssClassMapping.toCandidate(),
+    ));
   }
 
   /** Spend every exact compiler product required before analyzing one resource. */

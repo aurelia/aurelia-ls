@@ -63,6 +63,7 @@ export {
 } from '../configuration/standard-configuration-source-attachment.js';
 
 export { collectRetainedCompilerRegistrationPressure } from './runtime-registration-closure-pressure.js';
+export { semanticAppNeedsRuntimeCompositionAnalysis } from './runtime-composition-compiler-demand.js';
 
 export { CustomElementTemplateModuleRole } from '../resources/custom-element-definition.js';
 export { ResourceCarrierKind } from '../resources/resource-kind.js';

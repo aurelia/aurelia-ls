@@ -1,3 +1,5 @@
+import { AOT_COMPILED_DEFINITION_IDENTITY_PROTOCOL } from './runtime-spread-plan.js';
+
 /** Virtual module id used by carrier transforms and bundler adapters. */
 export const AOT_COMPILER_PATCH_RUNTIME_MODULE_ID = 'virtual:aurelia-aot/runtime';
 
@@ -8,8 +10,13 @@ export const AOT_COMPILER_PATCH_RUNTIME_MODULE_ID = 'virtual:aurelia-aot/runtime
 export const AOT_COMPILER_PATCH_RUNTIME_MODULE_SOURCE = `
 import { CustomElement } from '@aurelia/runtime-html';
 
+const definitionIdentity = Symbol.for(${JSON.stringify(AOT_COMPILED_DEFINITION_IDENTITY_PROTOCOL)});
+
 export function applyCompiledCustomElement(Type, patch) {
   const definition = CustomElement.getDefinition(Type);
+  if (patch[definitionIdentity] != null) {
+    Object.defineProperty(definition, definitionIdentity, { value: patch[definitionIdentity] });
+  }
   definition.template = patch.template;
   definition.instructions = patch.instructions;
   definition.surrogates = patch.surrogates;

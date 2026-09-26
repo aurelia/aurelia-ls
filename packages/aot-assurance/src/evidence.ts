@@ -7,11 +7,10 @@ import type {
 } from './contract.js';
 
 export function assertAotBuildEvidence(evidence: AotBuildEvidence): void {
-  assert.equal(evidence.analysisCount, 1, 'the AOT lane must perform exactly one application analysis');
-  assert.deepEqual(evidence.analysis, {
-    depth: 'runtime-topology',
-    templateBreadth: 'app-aggregate',
-  });
+  assert.ok(Number.isInteger(evidence.analysisCount) && evidence.analysisCount > 0,
+    'the AOT lane must report its actual positive application analysis count');
+  assert.ok(evidence.analysis.depth === 'runtime-topology' || evidence.analysis.depth === 'binding-observation');
+  assert.equal(evidence.analysis.templateBreadth, 'app-aggregate');
   assert.ok(evidence.runtimeConfiguration.occurrences.length > 0, 'the AOT lane found no runtime configuration');
   if (evidence.compilation.fallbackScope === 'application') {
     assert.equal(evidence.compilation.mode, 'compatible');

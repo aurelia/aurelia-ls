@@ -88,6 +88,7 @@ import { CustomElementDefinition } from '../resources/custom-element-definition.
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import { ResourceProductDetails } from '../resources/product-details.js';
 import { ResourceTargetReference } from '../resources/resource-reference.js';
 import {
   CheckerTypeShapeKind,
@@ -145,10 +146,11 @@ import {
 } from './runtime-composition-activation.js';
 import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
 import type { RuntimeExpressionResourcePlan } from './runtime-expression-resource-plan.js';
+import { RuntimeCompositionSpreadCompiler, RuntimeCompositionSpreadEmission } from './runtime-composition-spread-compilation.js';
+import { isRuntimeAuComposeInstruction } from './runtime-composition-compiler-demand.js';
 import type { TemplateRuntimeAnalysisProjectContext } from './template-runtime-analysis-context.js';
 import type { TemplateScopeConstructionEmission } from './template-controller-scope-materializer.js';
 import {
-  AU_COMPOSE_RESOURCE_NAME,
   AU_COMPOSE_TARGET_NAME,
   AuComposeBindableName,
 } from './au-compose-source.js';
@@ -187,6 +189,7 @@ export class RuntimeCompositionEmission {
     readonly childContainers: readonly ContainerChildMaterializationEmission[],
     readonly openSeams: readonly OpenSeam[],
     readonly records: readonly KernelStoreRecord[],
+    readonly spreads: RuntimeCompositionSpreadEmission = RuntimeCompositionSpreadEmission.empty,
   ) {}
 }
 
@@ -310,6 +313,7 @@ interface ComposedChildControllerMaterializationFrame {
 export class RuntimeCompositionMaterializer {
   private readonly childContainerMaterializer: ContainerChildMaterializer;
   private readonly controllerPublication: RuntimeControllerPublicationMaterializer;
+  private readonly spreadCompiler: RuntimeCompositionSpreadCompiler;
 
   constructor(
     private readonly store: KernelStore,
@@ -317,6 +321,7 @@ export class RuntimeCompositionMaterializer {
   ) {
     this.childContainerMaterializer = new ContainerChildMaterializer(store, publication);
     this.controllerPublication = new RuntimeControllerPublicationMaterializer(store);
+    this.spreadCompiler = new RuntimeCompositionSpreadCompiler(store, publication);
   }
 
   materialize(input: RuntimeCompositionMaterializationRequest): RuntimeCompositionEmission {
@@ -326,6 +331,11 @@ export class RuntimeCompositionMaterializer {
       [
         ...publishProductDetails(TemplateProductDetails.CompositionContext, emission.contexts),
         ...publishProductDetails(TemplateProductDetails.CompositionController, emission.controllers),
+        ...publishProductDetails(TemplateProductDetails.HtmlNode, emission.spreads.hosts),
+        ...publishProductDetails(TemplateProductDetails.Instruction, emission.spreads.instructions),
+        ...publishProductDetails(TemplateProductDetails.ValueSite, emission.spreads.valueSites),
+        ...publishProductDetails(TemplateProductDetails.ExpressionParse, emission.spreads.expressionParses),
+        ...publishProductDetails(TemplateProductDetails.CompilerIssue, emission.spreads.compilerIssues),
         ...publishProductDetails(
           ConfigurationProductDetails.Controller,
           emission.composedControllers.map((controller) => controller.toControllerProduct()),
@@ -343,6 +353,7 @@ export class RuntimeCompositionMaterializer {
     const childContainers: ContainerChildMaterializationEmission[] = [];
     const openSeams: OpenSeam[] = [];
     const records: KernelStoreRecord[] = [...source.records];
+    const spreads = new RuntimeCompositionSpreadEmission();
     const bindingsByProduct = new Map(input.runtimeRendering.bindings.map((binding) => [binding.productHandle, binding]));
     const scopesByInstruction = instructionScopeLookup(input.scopes.instructionScopes);
     const sourceExpressionContexts = new RuntimeBindingSourceExpressionContextProjector(
@@ -357,7 +368,7 @@ export class RuntimeCompositionMaterializer {
     );
 
     input.runtimeRendering.controllers.forEach((controller, index) => {
-      if (!isAuComposeController(controller)) {
+      if (!isAuComposeController(this.publication, controller)) {
         return;
       }
       const local = `${input.localKey}:composition:${index}`;
@@ -479,7 +490,29 @@ export class RuntimeCompositionMaterializer {
       ));
     });
 
-    return new RuntimeCompositionEmission(contexts, controllers, composedControllers, childContainers, openSeams, records);
+    for (const composition of controllers) {
+      const context = contexts.find(candidate => candidate.productHandle === composition.context.productHandle)!;
+      if (context.loadState !== CompositionLoadStateKind.Ready || composition.resolvedComponents.length !== 1) continue;
+      const selected = composition.resolvedComponents[0]!;
+      if (selected.composedController == null) continue;
+      const controller = input.runtimeRendering.readController(context.hostControllerProductHandle);
+      const instruction = context.instructionProductHandle == null ? null
+        : this.publication.readProductDetail(TemplateProductDetails.Instruction, context.instructionProductHandle);
+      if (controller?.containerFrame == null || !(instruction instanceof HydrateElementInstruction)
+        || !isRuntimeAuComposeInstruction(this.publication, instruction)
+        || instruction.captureSyntaxProductHandles.length === 0) continue;
+      const definition = this.publication.readProductDetail(ResourceProductDetails.Definition, selected.definitionProductHandle);
+      const sourceResource = input.projectContext.readResourceForInstruction(instruction.productHandle);
+      if (!(definition instanceof CustomElementDefinition) || sourceResource == null) continue;
+      const localKey = `${input.localKey}:${context.productHandle}`;
+      const world = input.projectContext.compilerWorldForRuntimeContainer(
+        controller.containerFrame, sourceResource.compilerWorld, localKey, context.sourceAddressHandle,
+      );
+      this.spreadCompiler.compile({ localKey, context, controller, instruction, definition, world,
+        source: new RuntimeRenderingSourceSet([], source.evidenceHandle, source.provenanceHandle) }, spreads);
+    }
+    records.push(...spreads.records);
+    return new RuntimeCompositionEmission(contexts, controllers, composedControllers, childContainers, openSeams, records, spreads);
   }
 
   private createContext(
@@ -1255,8 +1288,10 @@ export class RuntimeCompositionMaterializer {
   }
 }
 
-function isAuComposeController(controller: RuntimeControllerFrame): boolean {
-  return controller.name === AU_COMPOSE_RESOURCE_NAME;
+function isAuComposeController(store: ProductDetailReadView, controller: RuntimeControllerFrame): boolean {
+  const instruction = controller.instructionProductHandle == null ? null
+    : store.readProductDetail(TemplateProductDetails.Instruction, controller.instructionProductHandle);
+  return instruction instanceof HydrateElementInstruction && isRuntimeAuComposeInstruction(store, instruction);
 }
 
 function auComposeBindings(

@@ -22,7 +22,6 @@ import {
 } from '../telemetry/phase.js';
 import type { RouteConfigContextMaterializationProjectResult } from '../router/route-context-materialization.js';
 import type {
-  AddressHandle,
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
@@ -363,10 +362,6 @@ export class TemplateResourceRuntimeAnalysisEmission {
     );
   }
 
-  /** Preserve the analyzed products while replacing their closed run-bound expression world. */
-  forCommittedGeneration(expressionWorld: CheckerExpressionTypeWorld): TemplateResourceRuntimeAnalysisEmission {
-    return this.forGeneration(this.compilation, expressionWorld);
-  }
 }
 
 export type TemplateCompilationProjectPhaseName =
@@ -480,6 +475,7 @@ class TemplateCompilationFamilyCarryRebaser {
     private readonly owner: TemplateCompilationOwnerPlan,
     private readonly previous: TemplateCompilationFamilyFrontDoorEmission,
     private readonly project: ProjectBootFrame | null,
+    private readonly publication: ComputationRun,
   ) {
     for (const cohort of owner.cohorts) {
       const world = cohort.parentCompilerWorld;
@@ -545,10 +541,16 @@ class TemplateCompilationFamilyCarryRebaser {
     if (parentCompilerWorld == null || compilerWorld == null) {
       throw new Error(`Carried template family ${this.owner.ownerHandle} lost its current compiler-world container.`);
     }
+    const definition = compilation.definition.productHandle == null
+      ? compilation.definition
+      : this.publication.readProductDetail(ResourceProductDetails.Definition, compilation.definition.productHandle);
+    if (!(definition instanceof CustomElementDefinition)) {
+      throw new Error(`Carried template family ${this.owner.ownerHandle} lost its current custom-element definition.`);
+    }
     return compilation.forGeneration(
       parentCompilerWorld,
       compilerWorld,
-      compilation.definition,
+      definition,
       compilation.registeredReads.map((read) => carry.readFor(read)),
     );
   }
@@ -722,13 +724,50 @@ export class TemplateCompilationProjectEmission {
     readonly profile: TemplateCompilationProjectProfile,
   ) {}
 
-  /** Replace a run-bound expression world with a fresh store-backed world after this generation commits. */
+  /** Attach canonical compiler definitions and a store-backed expression world after this generation commits. */
   forCommittedGeneration(authority: GenerationAuthority): TemplateCompilationProjectEmission {
     const expressionWorld = this.expressionWorld.forCommittedGeneration(authority);
+    // A retained definition may canonicalize to its incumbent object when the candidate commits. Reattach both
+    // front-door membership and runtime analysis to one wrapper, rather than keeping two equivalent object graphs.
+    const compilations = new Map<string, TemplateResourceCompilationEmission>();
+    const committedCompilation = (compilation: TemplateResourceCompilationEmission): TemplateResourceCompilationEmission => {
+      const existing = compilations.get(compilation.localKey);
+      if (existing != null) return existing;
+      const definition = compilation.definition.productHandle == null
+        ? compilation.definition
+        : expressionWorld.projector.publication.readProductDetail(ResourceProductDetails.Definition, compilation.definition.productHandle);
+      if (!(definition instanceof CustomElementDefinition)) {
+        throw new Error(`Committed template '${compilation.localKey}' lost its custom-element definition.`);
+      }
+      const committed = definition === compilation.definition ? compilation : compilation.forGeneration(
+        compilation.parentCompilerWorld,
+        compilation.compilerWorld,
+        definition,
+        compilation.registeredReads,
+      );
+      compilations.set(compilation.localKey, committed);
+      return committed;
+    };
+    const committedPrecedent = (precedent: TemplateCompilerOccurrencePrecedentEmission): TemplateCompilerOccurrencePrecedentEmission => {
+      const compilation = committedCompilation(precedent.compilation);
+      return compilation === precedent.compilation ? precedent : new TemplateCompilerOccurrencePrecedentEmission(
+        compilation, precedent.preLocalCompilerWorld, precedent.sourceRevision, precedent.admissionKind,
+      );
+    };
+    const frontDoor = new TemplateCompilationFrontDoorEmission(
+      this.frontDoor.plan,
+      this.frontDoor.families.map((family) => new TemplateCompilationFamilyFrontDoorEmission(
+        family.ownerHandle, family.cohortKeys,
+        family.appCompilations.map(committedCompilation), family.authoringCompilations.map(committedCompilation),
+        family.appOccurrencePrecedents.map(committedPrecedent), family.authoringOccurrencePrecedents.map(committedPrecedent),
+        family.occurrencePrecedentsRequested,
+      )),
+      this.frontDoor.profile,
+    );
     return new TemplateCompilationProjectEmission(
-      this.frontDoor,
-      this.resources.map((resource) => resource.forCommittedGeneration(expressionWorld)),
-      this.authoringResources.map((resource) => resource.forCommittedGeneration(expressionWorld)),
+      frontDoor,
+      this.resources.map((resource) => resource.forGeneration(committedCompilation(resource.compilation), expressionWorld)),
+      this.authoringResources.map((resource) => resource.forGeneration(committedCompilation(resource.compilation), expressionWorld)),
       expressionWorld,
       this.profile,
     );
@@ -884,6 +923,7 @@ export class TemplateCompilationProjectPass {
     );
     const resources = this.analyzeCompiledResources(
       frontDoor.appCompilations,
+      frontDoor.plan.appWorld,
       options.projectKey ?? null,
       evaluation,
       typeSystem,
@@ -897,6 +937,7 @@ export class TemplateCompilationProjectPass {
     );
     const authoringResources = this.analyzeCompiledResources(
       frontDoor.authoringCompilations,
+      frontDoor.plan.appWorld,
       options.projectKey ?? null,
       evaluation,
       typeSystem,
@@ -990,7 +1031,7 @@ export class TemplateCompilationProjectPass {
       const previousFamily = previous?.familyForOwner(owner.ownerHandle) ?? null;
       const familyRebaser = previousFamily == null
         ? null
-        : new TemplateCompilationFamilyCarryRebaser(owner, previousFamily, project);
+        : new TemplateCompilationFamilyCarryRebaser(owner, previousFamily, project, this.publication);
       if (
         previousFamily?.matches(owner) === true
         && previousFamily.occurrencePrecedentsRequested === includeCompilerOccurrencePrecedents
@@ -1162,6 +1203,7 @@ export class TemplateCompilationProjectPass {
 
   private analyzeCompiledResources(
     compilations: readonly TemplateResourceCompilationEmission[],
+    appWorld: AureliaAppWorldEmission,
     projectKey: string | null,
     evaluation: StaticProjectEvaluationResult | null,
     typeSystem: TypeSystemProject | null,
@@ -1175,7 +1217,7 @@ export class TemplateCompilationProjectPass {
   ): readonly TemplateResourceRuntimeAnalysisEmission[] {
     const resources: TemplateResourceRuntimeAnalysisEmission[] = [];
     for (const cohort of runtimeAnalysisCohorts(compilations)) {
-      const projectContext = templateRuntimeAnalysisProjectContext(this.publication, cohort);
+      const projectContext = templateRuntimeAnalysisProjectContext(this.publication, cohort, appWorld, resourceDefinitions);
       // Current definition details own both scheduling and analysis. The project context spends every exact compiler
       // product at this boundary and serves the same registered resource to recursive runtime consumers.
       const currentCohort = cohort.map((compilation) => projectContext.requireCompilation(compilation));
@@ -2082,10 +2124,14 @@ function originalIndexForKey(
 function templateRuntimeAnalysisProjectContext(
   publication: ComputationRun,
   compilations: readonly TemplateResourceCompilationEmission[],
+  appWorld: AureliaAppWorldEmission,
+  resourceDefinitions: ResourceDefinitionIndex | null,
 ): TemplateRuntimeAnalysisProjectContext {
   return new TemplateRuntimeAnalysisProjectContext(
     publication,
     compilations.map((compilation) => new TemplateRuntimeAnalysisResource(compilation)),
+    appWorld,
+    resourceDefinitions,
   );
 }
 

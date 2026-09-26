@@ -112,6 +112,11 @@ export class RuntimeSpreadBindingCreator {
         : this.publication.readProductDetail(ResourceProductDetails.Definition, targetDefinitionProductHandle);
       state.spreadCompilations.push(new RuntimeSpreadCompilation({
         state: runtimeResult.state,
+        origin: {
+          kind: 'template',
+          targetRenderTargetProductHandle: spread.target.productHandle,
+          targetRenderTargetIdentityHandle: spread.target.identityHandle,
+        },
         requestorDefinitionProductHandle: usage?.requestorDefinitionProductHandle ?? null,
         requestorDefinitionIdentityHandle,
         spreadInstructionProductHandle: spread.instruction.productHandle,
@@ -125,8 +130,6 @@ export class RuntimeSpreadBindingCreator {
           contextController?.identityHandle ?? hydrationContext?.controller.identityHandle ?? null,
         hydrationContextProductHandle: hydrationContext?.productHandle ?? null,
         hydrationContextIdentityHandle: hydrationContext?.identityHandle ?? null,
-        targetRenderTargetProductHandle: spread.target.productHandle,
-        targetRenderTargetIdentityHandle: spread.target.identityHandle,
         targetHtmlNodeProductHandle: spread.target.htmlNode?.productHandle ?? null,
         targetHtmlNodeIdentityHandle: spread.target.htmlNode?.identityHandle ?? null,
         targetDefinitionExplicit: compilerResult?.request.targetDefinitionProductHandle != null,
@@ -180,8 +183,7 @@ export class RuntimeSpreadBindingCreator {
       `${spread.local}:capture-usage`,
       usage.requestorDefinitionProductHandle,
       capturedSyntaxes,
-      spread.instruction,
-      spread.target,
+      { kind: 'template', instruction: spread.instruction, target: spread.target },
       null,
     );
     const result = compilerWorld.templateCompiler.compileSpread(

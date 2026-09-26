@@ -35,7 +35,7 @@ import {
   runtimeSpreadClosureRefusal,
   validateAotCarrierPatchHandoff,
 } from '../src/semantic-artifact-provider.js';
-import { AOT_RUNTIME_SPREAD_PLAN_PROTOCOL } from '../src/runtime-configuration.js';
+import { AOT_RUNTIME_SPREAD_CAPTURE_PROTOCOL, AOT_RUNTIME_SPREAD_PLAN_PROTOCOL } from '../src/runtime-configuration.js';
 import { AOT_COMPILER_PATCH_RUNTIME_MODULE_ID } from '../src/compiler-patch-runtime-module.js';
 import type { AotSourceTransformResourcePlan } from '../src/source-transform.js';
 
@@ -75,6 +75,19 @@ afterEach(async () => {
 });
 
 describe('semantic AOT artifact provider', () => {
+  it('raises composition inquiry only for an admitted built-in use before compiler replacement', async () => {
+    const compositionSession = await new SemanticAotArtifactProvider().openBuild({
+      root: path.resolve(repositoryRoot, 'packages/semantic-runtime/fixtures/pressure/content-projection-topology'),
+      mode: 'production', environmentName: 'client', sourcemap: true, runtimeConfiguration: 'require-replaceable',
+    });
+    expect(compositionSession.evidence()).toMatchObject({
+      analysisCount: 2,
+      analysis: { depth: 'binding-observation', templateBreadth: 'app-aggregate' },
+      compilation: { fallbackScope: 'none' },
+    });
+    expect(compositionSession.evidence().runtimeConfiguration.occurrences.some((entry) => entry.disposition === 'replaced')).toBe(true);
+  }, 30_000);
+
   it('detaches a real paired-file compiler handoff and emits one executable template module', async () => {
     const artifact = await session.artifactFor({ sourcePath: templatePath });
 
@@ -298,8 +311,9 @@ describe('semantic AOT artifact provider', () => {
       : await stateFormSession.virtualModuleFor({ specifier: artifact.payload.payloadSpecifier });
     if (payload == null) throw new Error('State-form compiler payload is unavailable.');
 
-    expect(payload.code.match(/Object\.defineProperty\(/gu)).toHaveLength(2);
+    // Emitter tests execute the plan/ordinal metadata; the provider must preserve both protocols in its virtual payload.
     expect(payload.code).toContain(`Symbol.for(${JSON.stringify(AOT_RUNTIME_SPREAD_PLAN_PROTOCOL)})`);
+    expect(payload.code).toContain(`Symbol.for(${JSON.stringify(AOT_RUNTIME_SPREAD_CAPTURE_PROTOCOL)})`);
     expect(payload.code).not.toContain('spreadPlan:');
     const configurationEvidence = stateFormProvider.evidence()!.runtimeConfiguration.modules;
     expect(configurationEvidence).toHaveLength(1);
