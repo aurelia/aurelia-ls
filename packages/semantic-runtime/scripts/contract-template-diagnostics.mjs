@@ -24,6 +24,9 @@ const syntheticWritebackFixtureRoot = path.join(packageRoot, 'fixtures/pressure/
 const templateOverlayTypeErrorFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-overlay-type-errors');
 const guidanceTruthCanariesFixtureRoot = path.join(packageRoot, 'fixtures/pressure/guidance-truth-canaries');
 const templateCompilerErrorsFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-compiler-errors');
+const templateCompilerErrorsSource = fs.readFileSync(
+  path.join(templateCompilerErrorsFixtureRoot, 'src/template-compiler-errors-app.html'), 'utf8',
+);
 const viewFactoryProviderFixtureRoot = path.join(packageRoot, 'fixtures/pressure/runtime-html-view-factory-provider-errors');
 const unregisteredShorthandFixtureRoot = path.join(packageRoot, 'fixtures/pressure/unregistered-shorthand-syntax');
 const unregisteredPluginSyntaxFixtureRoot = path.join(packageRoot, 'fixtures/pressure/unregistered-plugin-syntax');
@@ -452,21 +455,31 @@ const contracts = [
     templateCompilerErrorsFixtureRoot,
     'template-diagnostics-contract:template-compiler-errors',
     [
-      ExpectedSemanticEffect.exactly(
-        'Removed Aurelia 1 template commands should surface as unknown binding-command compiler diagnostics.',
-        'template-diagnostic',
-        'template',
-        2,
-        null,
-        [
-          effectFilter('diagnosticKind', 'template-compiler-error'),
-          effectFilter('frameworkErrorCode', 'AUR0713'),
-          effectFilter('missingInput', 'template-compiler:AUR0713'),
-          effectFilter('suggestion.suggestionKind', 'fix-template-syntax'),
-          effectFilter('source.path', 'src/template-compiler-errors-app.html'),
-        ],
-        'signature',
-      ),
+      ...[
+        ['click.delegate', 'Removed Aurelia 1 .delegate should identify its authored command token.'],
+        ['click.call', 'Removed Aurelia 1 .call should identify its authored command token.'],
+        ['value.unknown-command', 'A terminal inline multi-binding command error should identify its reached command token.'],
+      ].map(([authoredName, summary]) => {
+        const attributeStart = templateCompilerErrorsSource.indexOf(authoredName);
+        if (attributeStart < 0) throw new Error(`Unknown-command fixture marker '${authoredName}' was not found.`);
+        return ExpectedSemanticEffect.exactly(
+          summary,
+          'template-diagnostic',
+          'template',
+          1,
+          null,
+          [
+            effectFilter('diagnosticKind', 'template-compiler-error'),
+            effectFilter('frameworkErrorCode', 'AUR0713'),
+            effectFilter('missingInput', 'template-compiler:AUR0713'),
+            effectFilter('suggestion.suggestionKind', 'fix-template-syntax'),
+            effectFilter('source.path', 'src/template-compiler-errors-app.html'),
+            effectFilter('source.start', attributeStart + authoredName.lastIndexOf('.') + 1),
+            effectFilter('source.end', attributeStart + authoredName.length),
+          ],
+          'signature',
+        );
+      }),
       ExpectedSemanticEffect.exactly(
         '<let> command diagnostics should mirror the framework compiler policy without advertising unsupported .to-view.',
         'template-diagnostic',

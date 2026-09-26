@@ -202,7 +202,7 @@ const errorRuntime = await createSemanticRuntime({
 const invalid = await explain(
   errorRuntime,
   errorPath,
-  tokenOffset(errorText, 'template-probe="value.bind: enabled; missing.bind: enabled"', 'template-probe', true),
+  tokenOffset(errorText, 'template-probe="value.bind: enabled; missing.bind: enabled; value: neverReached"', 'template-probe', true),
 );
 checkExact(invalid, 'invalid', 'complete', 'invalid inline multi-binding carrier');
 check(
@@ -212,7 +212,7 @@ check(
 const secondarySegment = await explain(
   errorRuntime,
   errorPath,
-  tokenOffset(errorText, 'template-probe="value.bind: enabled; missing.bind: enabled"', 'missing.bind', true),
+  tokenOffset(errorText, 'template-probe="value.bind: enabled; missing.bind: enabled; value: neverReached"', 'missing.bind', true),
 );
 check(
   secondarySegment.selection === 'absent' && secondarySegment.value.explanation === null,
