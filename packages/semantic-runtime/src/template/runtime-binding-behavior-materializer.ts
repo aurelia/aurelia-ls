@@ -63,6 +63,7 @@ import {
   runtimeOperationMayBeReached,
 } from '../runtime-expression/runtime-operation.js';
 import { bindingModeForBindingBehaviorName } from './runtime-binding-mode-behavior.js';
+import { runtimeBindingCapabilities } from './runtime-binding-capabilities.js';
 
 export class RuntimeBindingBehaviorMaterializationRequest {
   constructor(
@@ -202,10 +203,10 @@ export class RuntimeBindingBehaviorMaterializer {
       behavior.name.span,
     );
     const lifecycle = this.lifecyclePublication(`${local}:lifecycle`, entry);
-    const applications = [
-      RuntimeBindingBehaviorApplicationPhase.Bind,
-      RuntimeBindingBehaviorApplicationPhase.Unbind,
-    ].map((phase) => this.applicationProduct(
+    const phases = entry.bindReachability == null
+      ? [RuntimeBindingBehaviorApplicationPhase.Unbind]
+      : [RuntimeBindingBehaviorApplicationPhase.Bind, RuntimeBindingBehaviorApplicationPhase.Unbind];
+    const applications = phases.map((phase) => this.applicationProduct(
       `${local}:phase:${phase}`,
       plan,
       entry,
@@ -214,8 +215,9 @@ export class RuntimeBindingBehaviorMaterializer {
       phase === RuntimeBindingBehaviorApplicationPhase.Bind ? lifecycle.bind : lifecycle.unbind,
       expressionSource.handle,
     ));
-    const bindApplication = applications[0]!;
+    const bindApplication = applications.find((application) => application.phase === RuntimeBindingBehaviorApplicationPhase.Bind);
     const issueProduct = entry.issue == null
+      || bindApplication == null
       || bindApplication.phaseReachability !== RuntimeOperationReachability.Reached
       ? null
       : this.issueProduct(
@@ -238,7 +240,7 @@ export class RuntimeBindingBehaviorMaterializer {
         ),
         ...(issueProduct == null
           ? []
-          : recordsForIssue(issueProduct, bindApplication.identityHandle, source.provenanceHandle)),
+          : recordsForIssue(issueProduct, bindApplication!.identityHandle, source.provenanceHandle)),
       ],
     );
   }
@@ -289,6 +291,17 @@ export class RuntimeBindingBehaviorMaterializer {
     local: string,
     entry: RuntimeBindingBehaviorPlanEntry,
   ): RuntimeBindingBehaviorLifecyclePublication {
+    if (entry.bindReachability == null) {
+      return new RuntimeBindingBehaviorLifecyclePublication(
+        RuntimeExpressionResourceLifecycleEffects.none,
+        new RuntimeExpressionResourceLifecycleEffects(
+          [], RuntimeExpressionResourceValueState.Open, [], null, null, null,
+          'The owning binding calls astUnbind without astBind; this resource is still resolved, but its cleanup may depend on absent bind-time state.',
+          [],
+        ),
+        [],
+      );
+    }
     const records: KernelStoreRecord[] = [];
     const addresses = new Map<string, AddressHandle | null>();
     const signalAddressForSpan = (span: SourceSpan): AddressHandle | null => {
@@ -373,6 +386,9 @@ function bindingBehaviorPhaseReachability(
   entry: RuntimeBindingBehaviorPlanEntry,
   phase: RuntimeBindingBehaviorApplicationPhase,
 ): RuntimeOperationReachability {
+  if (entry.bindReachability == null) {
+    return plan.readCleanupPhaseReachability(entry);
+  }
   if (entry.bindReachability !== RuntimeOperationReachability.Reached) {
     return entry.bindReachability;
   }
@@ -422,7 +438,9 @@ function lifecycleEffectsForBindingBehavior(
       return lifecycleEffectsForSignals(behavior.args, signalAddressForSpan, null);
     case BuiltInBindingBehaviorName.Debounce:
     case BuiltInBindingBehaviorName.Throttle:
-      return lifecycleEffectsForRateLimit(behavior.args, signalAddressForSpan);
+      return runtimeBindingCapabilities(entry.binding).rateLimit
+        ? lifecycleEffectsForRateLimit(behavior.args, signalAddressForSpan)
+        : RuntimeExpressionResourceLifecycleEffects.none;
     case BuiltInBindingBehaviorName.Validate:
       return closedLifecycleEffects([
         RuntimeExpressionResourceLifecycleEffectKind.ValidationConnection,

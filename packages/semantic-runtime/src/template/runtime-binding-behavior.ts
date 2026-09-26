@@ -86,7 +86,8 @@ export class RuntimeBindingBehaviorApplication {
     readonly chainIndex: number,
     readonly authoredChainDepth: number,
     readonly runtimeChainDepth: number,
-    readonly bindReachability: RuntimeOperationReachability,
+    /** null when this resource has no Bind phase, for example an evaluate-only translation key. */
+    readonly bindReachability: RuntimeOperationReachability | null,
     readonly phaseReachability: RuntimeOperationReachability,
     readonly bindOrder: number | null,
     readonly phaseOrder: number | null,

@@ -121,6 +121,7 @@ function runtimeCompositionRow(
     hasTemplateInput: context?.templateBinding != null || context?.staticTemplate != null,
     hasComponentInput: context?.componentBinding != null || context?.staticComponent != null,
     staticComponentName: context?.staticComponent ?? null,
+    loadState: context?.loadState ?? 'open',
     templateInputConsumptionKind: context?.templateInputConsumptionKind ?? 'absent',
     templateInputValueStateKind: context?.templateInputValueStateKind ?? 'absent',
     templateInputSettlementKind: context?.templateInputSettlementKind ?? null,

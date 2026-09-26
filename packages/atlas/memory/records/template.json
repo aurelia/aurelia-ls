@@ -2541,12 +2541,13 @@
         "framework-grounding",
         "ui-virtualization"
       ],
-      "summary": "UI virtualization has exact virtual-repeat.for syntax/lowering, template-controller scope/overlay coverage, static option carriers, and configuration-owned service resolver effects; binding execution, DOM renderer, scroller, collection strategy, and error-policy runtime semantics remain open.",
+      "summary": "UI virtualization has exact syntax/lowering, type-200 renderer and binding identity, iterator scope/source-flow coverage, static option carriers, and configuration-owned service effects; live collection execution, DOM renderer, scroller and scheduling remain open.",
       "rationale": "RC2 DefaultVirtualizationConfiguration registers CollectionStrategyLocator, DefaultDomRenderer, VirtualRepeatForAttributePattern, IterateBindingCommand, IterateBindingRenderer, and VirtualRepeat. Semantic-runtime recognizes that exact plugin syntax catalog, lowers virtual-repeat.for through forof into a type-200 IterateBindingInstruction subtype of the shared iterator abstraction, retains static gap tail data, admits the resource row, projects only BindingIdentifier locals, and spends the service registrations as resolver effects. That closes the shallow authored syntax/instruction/scope and DI surface, but not IterateBinding execution or inner collection observation, the plugin's DOM renderer/scroller/collection-strategy substrate, or framework error-code diagnostics.",
       "guidance": [
         "Start with this frontier when external app pressure or framework error-code pressure involves @aurelia/ui-virtualization beyond ordinary virtual-repeat item-scope typing.",
         "Do not add local virtual-repeat fixture hacks: exact pattern/command admission belongs in the ui-virtualization built-in syntax catalog, resource admission belongs in FrameworkRegistrationKind/Capability plus UiVirtualizationBuiltInResourceCatalogs, and item-scope semantics belong in frameworkTemplateControllerSemantics.",
-        "Treat IterateBinding execution and inner collection observation, scroller lookup, horizontal/table policy, runtime sizing/gap behavior, near-top/near-bottom events, and collection-strategy behavior as deeper runtime/plugin semantics, not as static syntax or template-controller scope facts.",
+        "Dispatch renderers by exact framework instruction type through the shared identity helper, not semantic iterator kind: type15 creates PropertyBinding while type200 creates IterateBinding. Keep the shared iterator scope effect, but do not invent ordinary property target access for the plugin callback binding. Renderer catalogs use Rendering's root-container authority, independently of syntax/resource visibility.",
+        "Treat live IterateBinding execution and inner collection observation, scroller lookup, horizontal/table policy, runtime sizing/gap behavior, near-top/near-bottom events, and collection-strategy behavior as deeper runtime/plugin semantics, not as static syntax or template-controller scope facts. Native plugin configuration supplies its package-internal renderer; no new public export is required for this shared-model correction.",
         "Do not reopen DefaultVirtualizationConfiguration merely because CollectionStrategyLocator and DefaultDomRenderer are services: semantic-runtime spends those as framework resolver effects; further work should target their runtime behavior and diagnostics.",
         "Use Atlas framework error and DI lenses against the ui-virtualization package before adding diagnostics for virtualization errors; the current template-controller contract does not prove renderer/scroller/strategy error authority."
       ],
@@ -2627,7 +2628,7 @@
         }
       ],
       "createdAt": "2026-05-23",
-      "updatedAt": "2026-08-11"
+      "updatedAt": "2026-09-26"
     },
     {
       "id": "frontier:template-overlay-integration-hardening",

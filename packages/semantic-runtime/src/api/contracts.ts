@@ -326,6 +326,7 @@ import type {
   CompositionComponentResolutionKind,
   CompositionInputConsumptionKind,
   CompositionInputValueStateKind,
+  CompositionLoadStateKind,
   CompositionModelResolutionKind,
   CompositionRenderingContextKind,
 } from '../template/runtime-composition.js';
@@ -5740,6 +5741,8 @@ export interface SemanticRuntimeCompositionRow {
   readonly hasTemplateInput: boolean;
   readonly hasComponentInput: boolean;
   readonly staticComponentName: string | null;
+  /** Joint template/component load outcome; ready is not a claim about later activation or replacement. */
+  readonly loadState: CompositionLoadStateKind | `${CompositionLoadStateKind}`;
   readonly templateInputConsumptionKind: CompositionInputConsumptionKind | `${CompositionInputConsumptionKind}`;
   readonly templateInputValueStateKind: CompositionInputValueStateKind | `${CompositionInputValueStateKind}`;
   readonly templateInputSettlementKind: EvaluationPromiseSettlementKind | `${EvaluationPromiseSettlementKind}` | null;
@@ -6114,7 +6117,8 @@ export interface SemanticBindingBehaviorApplicationRow {
   readonly authoredChainDepth: number;
   /** Depth in the effective runtime chain after reached behavior projections. */
   readonly runtimeChainDepth: number;
-  readonly bindReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
+  /** null when the owning binding does not execute astBind; Unbind can still resolve this resource. */
+  readonly bindReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}` | null;
   readonly phaseReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
   readonly bindOrder: number | null;
   /** Nominal execution order within this binding-behavior lifecycle phase. */
@@ -6151,7 +6155,8 @@ export interface SemanticValueConverterApplicationRow {
   readonly authoredChainDepth: number | null;
   /** Depth in the effective runtime chain after reached behavior projections. */
   readonly runtimeChainDepth: number;
-  readonly bindReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
+  /** null when this converter is evaluated without an astBind phase. */
+  readonly bindReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}` | null;
   readonly phaseReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
   readonly bindOrder: number | null;
   /** Nominal execution order within this converter phase. */

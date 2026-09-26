@@ -367,7 +367,15 @@ export function readStaticValueProperty(
   node: ts.Node | null,
   getterReceiver: EvaluationValue = receiver,
 ): StaticValueMemberRead {
-  const ownProperty = readStaticOwnProperty(receiver, propertyName);
+  const property = readStaticOwnProperty(receiver, propertyName);
+  // Instance tables include prototype-visible methods. A derived prototype's ordinary constructor shadows
+  // a base prototype constructor accessor/method, but not an inherited field (which is an own instance slot).
+  const inheritedPrototypeConstructor = receiver.kind === EvaluationValueKind.Instance
+    && propertyName === 'constructor'
+    && property?.node != null
+    && (ts.isMethodDeclaration(property.node) || ts.isGetAccessorDeclaration(property.node))
+    && property.node.parent !== receiver.classValue.declaration;
+  const ownProperty = inheritedPrototypeConstructor ? null : property;
   if (ownProperty != null) {
     const openSeams = compactEvaluationOpenSeams([
       ...(receiver.kind === EvaluationValueKind.Instance ? receiver.constructionOpenSeams : []),
@@ -417,6 +425,15 @@ export function readStaticValueProperty(
   }
   if ((receiver.kind === EvaluationValueKind.Object || receiver.kind === EvaluationValueKind.Instance)
     && !receiver.mayHaveUnknownProperties) {
+    if (receiver.kind === EvaluationValueKind.Instance && propertyName === 'constructor') {
+      const openSeams = compactEvaluationOpenSeams([
+        ...receiver.constructionOpenSeams,
+        ...receiver.shapeOpenSeams,
+      ]);
+      return openSeams.length === 0
+        ? staticValueMemberValue(receiver.classValue)
+        : staticValueMemberCandidate(receiver.classValue, openSeams);
+    }
     return staticValueMemberValue(new EvaluationUndefinedValue(node));
   }
   if (

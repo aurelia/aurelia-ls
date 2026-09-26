@@ -1671,6 +1671,7 @@ function referencesForRuntimeBinding(
         expressionReferences(binding.expressionProductHandle),
         bindingCommandExecutableReferenceReferences(binding.command),
       );
+    case RuntimeBindingKind.Iterate:
     case RuntimeBindingKind.Attribute:
       return mergeKernelDetailReferences(
         common,
@@ -1982,6 +1983,7 @@ function compositionResolvedComponentReferences(
   component: CompositionResolvedComponent,
 ): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
+    resourceTargetReferenceReferences(component.suppliedViewModel),
     detailReferences(ResourceDetailDescriptors.Definition, component.definitionProductHandle),
     detailReferences(TemplateDetailDescriptors.CompiledTemplate, component.compiledTemplateProductHandle),
     controllerReferenceReferences(component.composedController),

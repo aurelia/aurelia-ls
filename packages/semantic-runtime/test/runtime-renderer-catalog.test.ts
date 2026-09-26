@@ -10,6 +10,7 @@ import {
   RuntimeRendererPackage,
   runtimeRendererPackageModuleSpecifier,
   StateDefaultRenderers,
+  UiVirtualizationDefaultRenderers,
 } from '../src/template/runtime-renderer.js';
 import {
   frameworkInstructionTypeFor,
@@ -113,5 +114,11 @@ describe('runtime renderer catalog', () => {
     ].map((renderer) => renderer.targetInstructionType)).not.toContain(200);
     expect(RuntimeHtmlDefaultRenderers.map((renderer) => renderer.targetName))
       .not.toContain('IterateBindingRenderer');
+    expect(UiVirtualizationDefaultRenderers.map(renderer => [
+      runtimeRendererPackageModuleSpecifier(renderer.packageId), renderer.targetName,
+      renderer.targetInstructionType, renderer.exportVisibility,
+    ])).toEqual([
+      ['@aurelia/ui-virtualization', 'IterateBindingRenderer', 200, RuntimeRendererExportVisibility.PackageInternal],
+    ]);
   });
 });

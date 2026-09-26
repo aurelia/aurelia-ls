@@ -20,6 +20,10 @@ import { BuiltInBindingBehaviorName } from '../resources/built-in-resources.js';
 import type { RuntimeExpressionResourcePlan } from '../template/runtime-expression-resource-plan.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
 import { runtimeOperationMayBeReached } from '../runtime-expression/runtime-operation.js';
+import {
+  runtimeBindingCapabilities,
+  RuntimeBindingStateScopeHandoff,
+} from '../template/runtime-binding-capabilities.js';
 
 export class RuntimeBindingExpressionScopeProjection {
   constructor(
@@ -268,6 +272,7 @@ export class RuntimeBindingExpressionScopeProjector implements RuntimeBindingExp
       bindingProductHandle,
     );
     const admitted = planEntry != null
+      && planEntry.bindReachability != null
       && runtimeOperationMayBeReached(planEntry.bindReachability)
       && planEntry.issue == null;
     if (planEntry == null && unwrapped.name.name === STATE_BINDING_BEHAVIOR_NAME) {
@@ -287,8 +292,18 @@ export class RuntimeBindingExpressionScopeProjector implements RuntimeBindingExp
         'The state binding behavior did not reach its source-scope handoff for this rendered binding.',
       );
     }
+    const stateHandoff = planEntry == null
+      ? RuntimeBindingStateScopeHandoff.None
+      : runtimeBindingCapabilities(planEntry.binding).stateScopeHandoff;
     const behaviorScope = admitted && planEntry.builtInResource?.name === BuiltInBindingBehaviorName.State
-      ? this.projectStateBindingBehaviorScope(
+      && stateHandoff !== RuntimeBindingStateScopeHandoff.None
+      ? stateHandoff === RuntimeBindingStateScopeHandoff.AfterInitialEvaluation
+        ? new RuntimeBindingExpressionScopeProjection(
+            unwrapped.expression,
+            null,
+            'The state behavior changes this binding\'s later source scope, but its initial evaluation uses the original bind scope.',
+          )
+        : this.projectStateBindingBehaviorScope(
           unwrapped,
           scope,
           bindingProductHandle,

@@ -3,23 +3,17 @@ import {
 } from './instruction-ir.js';
 import { BuiltInBindingBehaviorName } from '../resources/built-in-resources.js';
 import {
-  AttributeBinding,
-  ContentBinding,
-  InterpolationBinding,
   PropertyBinding,
   type RuntimeBinding,
 } from './runtime-binding.js';
+import { runtimeBindingCapabilities } from './runtime-binding-capabilities.js';
 
 /** Initial runtime-html mode for bindings whose source evaluation actually consults a `mode` field. */
 export function runtimeBindingInitialMode(binding: RuntimeBinding): TemplateBindingMode | null {
   if (binding instanceof PropertyBinding) {
     return binding.bindingMode;
   }
-  return binding instanceof AttributeBinding
-    || binding instanceof InterpolationBinding
-    || binding instanceof ContentBinding
-    ? TemplateBindingMode.ToView
-    : null;
+  return runtimeBindingCapabilities(binding).initialMode;
 }
 
 /** Binding mode selected by runtime-html BindingModeBehavior during astBind(...). */

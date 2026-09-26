@@ -88,6 +88,7 @@ import { CustomElementDefinition } from '../resources/custom-element-definition.
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import { ResourceTargetReference } from '../resources/resource-reference.js';
 import {
   CheckerTypeShapeKind,
   classifyCheckerTypeShape,
@@ -117,6 +118,7 @@ import {
   CompositionController,
   CompositionInputConsumptionKind,
   CompositionInputValueStateKind,
+  CompositionLoadStateKind,
   CompositionModelResolutionKind,
   CompositionRenderingContextKind,
   CompositionResolvedComponent,
@@ -234,7 +236,7 @@ class EvaluatedBinding implements CompositionModelEvaluation {
 const enum RuntimeCompositionInputKind {
   /** Alternate template input consumed by AuCompose view construction. */
   Template = 'template',
-  /** Component identity input that alone qualifies a concrete composed child controller. */
+  /** Component identity input consumed together with the template by ChangeInfo.load. */
   Component = 'component',
   /** Activation/update model handed to the selected component. */
   Model = 'model',
@@ -425,7 +427,8 @@ export class RuntimeCompositionMaterializer {
         controller,
         context,
         componentResolution,
-        inputPressure.filter((pressure) => pressure.inputKind === RuntimeCompositionInputKind.Component),
+        inputPressure.filter((pressure) => pressure.inputKind === RuntimeCompositionInputKind.Component
+          || pressure.inputKind === RuntimeCompositionInputKind.Template),
         source,
         records,
         childContainers,
@@ -575,7 +578,7 @@ export class RuntimeCompositionMaterializer {
     hostController: RuntimeControllerFrame,
     context: CompositionContext,
     resolution: ComponentResolution,
-    componentPressure: readonly CompositionInputPressure[],
+    loadPressure: readonly CompositionInputPressure[],
     source: CompositionSourceSet,
     records: KernelStoreRecord[],
     childContainers: ContainerChildMaterializationEmission[],
@@ -584,13 +587,13 @@ export class RuntimeCompositionMaterializer {
       || resolution.candidates.length !== 1) {
       return new ComposedChildControllerHandoff(resolution, []);
     }
-    if (componentPressure.length > 0) {
+    if (context.loadState !== CompositionLoadStateKind.Ready || resolution.openReason != null) {
       records.push(new MaterializationRecord(
         this.store.handles.materialization(`${local}:composed-child-open`),
         context.identityHandle,
         [],
         [],
-        componentPressure.map((pressure) => pressure.seam.handle),
+        loadPressure.map((pressure) => pressure.seam.handle),
       ));
       return new ComposedChildControllerHandoff(resolution, []);
     }
@@ -725,7 +728,7 @@ export class RuntimeCompositionMaterializer {
       childContainer.container.toReference(),
       childContainer.container,
       frame.definition.productHandle,
-      frame.definition.target,
+      frame.component.suppliedViewModel ?? frame.definition.target,
       frame.context.sourceAddressHandle,
       frame.hostController,
       null,
@@ -886,6 +889,16 @@ export class RuntimeCompositionMaterializer {
         openReasonKinds: [],
       };
     }
+    const consumedValue = component.value?.kind === EvaluationValueKind.Promise
+      ? closedEvaluationPromiseFulfillment(component.value)
+      : component.value;
+    if (consumedValue != null && (
+      consumedValue.kind === EvaluationValueKind.Object
+      || consumedValue.kind === EvaluationValueKind.Instance
+      || consumedValue.kind === EvaluationValueKind.BoundaryObject
+    )) {
+      return this.resolveObjectComponent(local, input, controller, component, componentInputType, consumedValue, model);
+    }
     const valueCandidates = component.value == null
       ? []
       : this.resolveComponentValue(input, controller, component.value, CompositionComponentResolutionKind.StaticValue, model);
@@ -906,7 +919,7 @@ export class RuntimeCompositionMaterializer {
         candidateCoverageKind: CompositionComponentCandidateCoverageKind.NotApplicable,
         objectViewModelActivationHandoff: activationModelHandoffForType(
           input.expressionWorld.projector,
-          component.sourceType,
+          componentInputType,
           model,
           `${local}:object-view-model-activation`,
           component.binding?.sourceAddressHandle ?? controller.sourceAddressHandle,
@@ -945,6 +958,57 @@ export class RuntimeCompositionMaterializer {
       openReasonKinds: component.openReasonKinds.length === 0
         ? [OpenSeamReasonKind.BindingSourceNeedsRuntimeValue]
         : component.openReasonKinds,
+    };
+  }
+
+  private resolveObjectComponent(
+    local: string,
+    input: RuntimeCompositionMaterializationRequest,
+    controller: RuntimeControllerFrame,
+    component: EvaluatedBinding,
+    componentInputType: CheckerTypeReference | null,
+    value: EvaluationValue,
+    model: EvaluatedBinding,
+  ): ComponentResolution {
+    const constructor = component.evaluation?.addressableValue != null && input.sourceValueEvaluator != null
+      ? input.sourceValueEvaluator.readValueProperty(value, 'constructor', compositionConstructionContainer(input, controller))
+      : RuntimeBindingSourceValueEvaluation.open(
+          component.openReason ?? 'AuCompose component constructor could not be read from an admitted evaluator value.',
+          component.openReasonKinds,
+        );
+    const handoff = activationModelHandoffForType(
+      input.expressionWorld.projector,
+      componentInputType,
+      model,
+      `${local}:object-view-model-activation`,
+      component.binding?.sourceAddressHandle ?? controller.sourceAddressHandle,
+      component.binding?.identityHandle ?? controller.identityHandle,
+      'Resolved object view-model component type was not available for AuCompose activate(model) analysis.',
+    );
+    const candidates = resolvedComponentRows(
+      input.expressionWorld.projector,
+      input,
+      [input.resourceDefinitions?.lookupValue(constructor.value) ?? null],
+      CompositionComponentResolutionKind.StaticValue,
+      model,
+      handoff,
+      new ResourceTargetReference(
+        null,
+        component.binding?.sourceAddressHandle ?? controller.sourceAddressHandle,
+        null,
+        componentInputType,
+      ),
+    );
+    const open = constructor.closure === RuntimeBindingSourceValueEvaluationClosure.Open;
+    return {
+      candidates,
+      resolutionKind: candidates.length > 0
+        ? CompositionComponentResolutionKind.StaticValue
+        : open ? CompositionComponentResolutionKind.Open : CompositionComponentResolutionKind.ObjectViewModel,
+      candidateCoverageKind: CompositionComponentCandidateCoverageKind.NotApplicable,
+      objectViewModelActivationHandoff: candidates.length === 0 ? handoff : null,
+      openReason: constructor.openReason,
+      openReasonKinds: constructor.openReasonKinds,
     };
   }
 
@@ -1491,6 +1555,7 @@ function componentWithComposedController(
     controller.toReference(),
     component.resolutionKind,
     component.activationModelHandoff,
+    component.suppliedViewModel,
   );
 }
 
@@ -1542,6 +1607,8 @@ function resolvedComponentRows(
   definitions: readonly (FullResourceDefinition | null)[],
   resolutionKind: CompositionComponentResolutionKind,
   model: EvaluatedBinding,
+  instanceActivationHandoff: CompositionActivationModelHandoff | null = null,
+  suppliedViewModel: ResourceTargetReference | null = null,
 ): readonly CompositionResolvedComponent[] {
   const seen = new Set<string>();
   const rows: CompositionResolvedComponent[] = [];
@@ -1557,12 +1624,13 @@ function resolvedComponentRows(
       input.projectContext.readResourceForDefinition(definition.productHandle)?.compiledTemplateProductHandle ?? null,
       null,
       resolutionKind,
-      activationModelHandoff(
+      instanceActivationHandoff ?? activationModelHandoff(
         projector,
         definition,
         model,
         `runtime-composition:${localKeyPart(definition.productHandle)}:activation:${index}`,
       ),
+      suppliedViewModel,
     ));
   });
   return rows;

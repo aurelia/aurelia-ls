@@ -1064,6 +1064,7 @@ function catalogInputsForAdmission(
       case FrameworkRegistrationCapability.StateStoreResolvers:
       case FrameworkRegistrationCapability.StateStoreTasks:
       case FrameworkRegistrationCapability.UiVirtualizationServiceResolvers:
+      case FrameworkRegistrationCapability.UiVirtualizationRuntimeRenderers:
       case FrameworkRegistrationCapability.AppTask:
         break;
     }

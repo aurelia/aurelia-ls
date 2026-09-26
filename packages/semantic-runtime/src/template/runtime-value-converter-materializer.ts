@@ -58,6 +58,7 @@ import {
 import { appendRuntimeBindingProductValue } from './runtime-binding-product-index.js';
 import { sourceAddressForRuntimeExpressionSpan } from './runtime-expression-source-address.js';
 import { TemplateBindingMode } from './instruction-ir.js';
+import { runtimeBindingCapabilities } from './runtime-binding-capabilities.js';
 import {
   RuntimeValueConverterApplication,
   RuntimeValueConverterApplicationPhase,
@@ -595,6 +596,9 @@ function valueConverterApplicationPhasesForBinding(
   expressionResourcePlan: RuntimeExpressionResourcePlan,
 ): readonly RuntimeValueConverterApplicationPhase[] {
   const conversionPhases = valueConverterConversionPhasesForBinding(binding, expressionResourcePlan);
+  if (!runtimeBindingCapabilities(binding).executesAstBind) {
+    return [...conversionPhases, RuntimeValueConverterApplicationPhase.Unbind];
+  }
   return [
     RuntimeValueConverterApplicationPhase.Bind,
     ...conversionPhases,
@@ -637,6 +641,11 @@ function valueConverterPhaseReachability(
   entry: RuntimeValueConverterPlanEntry,
   phase: RuntimeValueConverterApplicationPhase,
 ): RuntimeOperationReachability {
+  if (entry.bindReachability == null) {
+    return phase === RuntimeValueConverterApplicationPhase.Unbind
+      ? plan.readCleanupPhaseReachability(entry)
+      : plan.readPostBindPhaseReachability(entry);
+  }
   if (entry.bindReachability !== RuntimeOperationReachability.Reached) {
     return entry.bindReachability;
   }

@@ -81,7 +81,8 @@ export class RuntimeValueConverterApplication {
     readonly chainIndex: number,
     readonly authoredChainDepth: number | null,
     readonly runtimeChainDepth: number,
-    readonly bindReachability: RuntimeOperationReachability,
+    /** null when the converter is evaluated without an astBind phase. */
+    readonly bindReachability: RuntimeOperationReachability | null,
     readonly phaseReachability: RuntimeOperationReachability,
     readonly bindOrder: number | null,
     readonly phaseOrder: number | null,

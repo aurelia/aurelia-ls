@@ -26,6 +26,7 @@ import {
   HydrateTemplateControllerInstruction,
   InterpolationInstruction,
   IteratorBindingInstruction,
+  IterateBindingInstruction,
   LetBindingInstruction,
   ListenerBindingInstruction,
   MultiAttrInstruction,
@@ -53,6 +54,7 @@ import {
   ContentBinding,
   InterpolationBinding,
   IteratorBindingScopeEffect,
+  IterateBinding,
   LetBinding,
   LetBindingScopeEffect,
   LetBindingTargetContext,
@@ -101,12 +103,14 @@ export const enum RuntimeRendererPackage {
   RuntimeHtml = 'runtime-html',
   I18n = 'i18n',
   State = 'state',
+  UiVirtualization = 'ui-virtualization',
 }
 
 export const enum RuntimeRendererGroup {
   RuntimeHtmlDefaultRenderers = 'runtime-html-default-renderers',
   I18nTranslationRenderers = 'i18n-translation-renderers',
   StateDefaultRenderers = 'state-default-renderers',
+  UiVirtualizationDefaultRenderers = 'ui-virtualization-default-renderers',
 }
 
 /** Whether a modeled renderer target can be imported from its owning package entrypoint. */
@@ -139,6 +143,8 @@ export function runtimeRendererPackageModuleSpecifier(
       return '@aurelia/i18n';
     case RuntimeRendererPackage.State:
       return '@aurelia/state';
+    case RuntimeRendererPackage.UiVirtualization:
+      return '@aurelia/ui-virtualization';
   }
 }
 
@@ -893,6 +899,50 @@ export class IteratorBindingRenderer {
   }
 }
 
+@auLink('ui-virtualization:IterateBindingRenderer')
+export class IterateBindingRenderer {
+  readonly targetName = 'IterateBindingRenderer';
+  readonly exportVisibility = RuntimeRendererExportVisibility.PackageInternal;
+  readonly rendererKind = RuntimeRendererKind.IterateBinding;
+  readonly targetInstructionType = TemplateCompilerFrameworkInstructionType.VirtualizationIterateBinding;
+  readonly packageId = RuntimeRendererPackage.UiVirtualization;
+  readonly group = RuntimeRendererGroup.UiVirtualizationDefaultRenderers;
+  readonly targetInstructionKind = TemplateInstructionKind.IteratorBinding;
+  readonly runtimeBindingKind = RuntimeBindingKind.Iterate;
+  readonly semanticBindingKindKey = KernelVocabulary.Binding.Iterator.key;
+  readonly scopeEffectKinds = [RuntimeBindingScopeEffectKind.Iterator] as const;
+
+  constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    readonly fieldProvenance: readonly FieldProvenance<RuntimeRendererField>[] = [],
+  ) {}
+
+  toReference(): RuntimeRendererReference {
+    return rendererReference(this);
+  }
+
+  render(input: RuntimeRendererInvocation): RuntimeRendererRenderResult {
+    const instruction = input.instruction;
+    if (!(instruction instanceof IterateBindingInstruction)) return RuntimeRendererRenderResult.none();
+    consumeIteratorTailInstructions(input, instruction);
+    const allocation = input.allocateBinding();
+    const effect = iteratorScopeEffect(input, instruction, allocation, RuntimeBindingKind.Iterate);
+    return new RuntimeRendererRenderResult(new IterateBinding(
+      allocation.productHandle,
+      allocation.identityHandle,
+      instruction.productHandle,
+      input.renderer.toReference(),
+      instruction.node,
+      instruction.attribute,
+      instruction.iterableExpressionProductHandle,
+      [effect.toReference()],
+      instruction.sourceAddressHandle,
+    ), [effect]);
+  }
+}
+
 @auLink('runtime-html:TextBindingRenderer')
 export class TextBindingRenderer {
   readonly targetName = 'TextBindingRenderer';
@@ -1309,6 +1359,7 @@ export type RuntimeRenderer =
   | InterpolationBindingRenderer
   | PropertyBindingRenderer
   | IteratorBindingRenderer
+  | IterateBindingRenderer
   | TextBindingRenderer
   | ListenerBindingRenderer
   | SetAttributeRenderer
@@ -1355,6 +1406,8 @@ export const StateDefaultRenderers = [
   new StateBindingInstructionRenderer(),
   new DispatchBindingInstructionRenderer(),
 ] as const;
+
+export const UiVirtualizationDefaultRenderers = [new IterateBindingRenderer()] as const;
 
 function rendererReference(renderer: RuntimeRenderer): RuntimeRendererReference {
   return new RuntimeRendererReference(
@@ -1520,18 +1573,7 @@ function renderPropertyRuntimeBinding(input: RuntimeRendererInvocation): Runtime
   let effect: IteratorBindingScopeEffect | null = null;
   if (instruction instanceof IteratorBindingInstruction) {
     consumeIteratorTailInstructions(input, instruction);
-    const effectAllocation = input.allocateScopeEffect('iterator-effect');
-    effect = new IteratorBindingScopeEffect(
-      effectAllocation.productHandle,
-      effectAllocation.identityHandle,
-      new RuntimeBindingReference(RuntimeBindingKind.Property, allocation.productHandle, allocation.identityHandle, instruction.sourceAddressHandle),
-      input.owner?.productHandle ?? instruction.productHandle,
-      instruction.localNames,
-      instruction.objectBindingSourceKeys,
-      instruction.iterableExpressionProductHandle,
-      input.owner?.templateControllerName ?? null,
-      instruction.sourceAddressHandle,
-    );
+    effect = iteratorScopeEffect(input, instruction, allocation, RuntimeBindingKind.Property);
   }
 
   return new RuntimeRendererRenderResult(
@@ -1560,6 +1602,26 @@ function renderPropertyRuntimeBinding(input: RuntimeRendererInvocation): Runtime
       instruction.sourceAddressHandle,
     ),
     effect == null ? [] : [effect],
+  );
+}
+
+function iteratorScopeEffect(
+  input: RuntimeRendererInvocation,
+  instruction: IteratorBindingInstruction,
+  allocation: RuntimeRendererAllocation,
+  bindingKind: RuntimeBindingKind,
+): IteratorBindingScopeEffect {
+  const effectAllocation = input.allocateScopeEffect('iterator-effect');
+  return new IteratorBindingScopeEffect(
+    effectAllocation.productHandle,
+    effectAllocation.identityHandle,
+    new RuntimeBindingReference(bindingKind, allocation.productHandle, allocation.identityHandle, instruction.sourceAddressHandle),
+    input.owner?.productHandle ?? instruction.productHandle,
+    instruction.localNames,
+    instruction.objectBindingSourceKeys,
+    instruction.iterableExpressionProductHandle,
+    input.owner?.templateControllerName ?? null,
+    instruction.sourceAddressHandle,
   );
 }
 

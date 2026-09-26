@@ -31,6 +31,12 @@ before later source evaluation, while `astEvaluate(...)` simply unwraps binding 
 are evaluated during bind with no active connectable, so they are not ordinary observed source dependencies. Interpolation
 holes participate through runtime-html `InterpolationPartBinding`: each hole binds its own expression, so `& state`
 inside text interpolation can install the same store-backed scope as a bind-command expression.
+Concrete binding capabilities gate that handoff. I18n parameter bindings call `astBind` but cannot accept `useScope`,
+so their expressions remain view-model-backed even with `& state`. Attribute, spread-value and virtual iterate bindings
+use the original scope for initial evaluation and the replaced scope later; a reached state behavior leaves that
+phase-dependent source scope open rather than claiming one scope for both phases. Ordinary bindings without the
+behavior are unaffected. State command bindings retain their own mode-sensitive source observation: `& oneTime`
+suppresses initial expression dependency collection, not the plugin's separate store subscription or dispatch lifecycle.
 When binding-source value evaluation reads a slot from a modeled state binding scope, it may evaluate the configured
 initial-state expression through the shared static evaluator frame before falling back to type-only slot evaluation.
 This lets consumers such as dynamic composition or route-resource values reuse the same `& state` handoff while keeping

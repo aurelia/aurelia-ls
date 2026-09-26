@@ -23,6 +23,7 @@ import type { RuntimeRendererReference } from './runtime-renderer-reference.js';
 import type { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
 
 export const enum RuntimeBindingKind {
+  Iterate = 'iterate',
   Property = 'property',
   Attribute = 'attribute',
   Let = 'let',
@@ -903,6 +904,33 @@ export class PropertyBinding {
   }
 }
 
+/** Native virtualization IterateBinding: iterable source and scope, not a property-observer target. */
+@auLink('ui-virtualization:IterateBinding')
+export class IterateBinding {
+  readonly bindingKind = RuntimeBindingKind.Iterate;
+
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly instructionProductHandle: ProductHandle,
+    readonly renderer: RuntimeRendererReference,
+    readonly node: HtmlNodeReference,
+    readonly attribute: HtmlAttributeReference | null,
+    readonly expressionProductHandle: ProductHandle | null,
+    readonly scopeEffects: readonly RuntimeBindingScopeEffectReference[],
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingField>[] = [],
+  ) {}
+
+  toReference(): RuntimeBindingReference {
+    return new RuntimeBindingReference(this.bindingKind, this.productHandle, this.identityHandle, this.sourceAddressHandle);
+  }
+
+  readScopeEffects(): readonly RuntimeBindingScopeEffectReference[] {
+    return this.scopeEffects;
+  }
+}
+
 /** Runtime AttributeBinding model produced by attr/class/style command lowering. */
 @auLink('runtime-html:AttributeBinding')
 export class AttributeBinding {
@@ -1371,6 +1399,7 @@ export class StateDispatchBinding {
 
 export type RuntimeBinding =
   | PropertyBinding
+  | IterateBinding
   | AttributeBinding
   | LetBinding
   | ListenerBinding

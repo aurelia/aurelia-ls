@@ -1119,7 +1119,8 @@ export class TemplateCompilerWorldMaterializer {
     return new TemplateRenderingService(
       handles.renderingProductHandle,
       handles.renderingIdentityHandle,
-      input.container.toReference(),
+      // Standalone authoring worlds supply their own synthetic root; component derivations retain the app root.
+      input.container.root.toReference(),
       input.runtimeRenderers.map((renderer) => renderer.renderer),
       source.addressHandle,
       [],

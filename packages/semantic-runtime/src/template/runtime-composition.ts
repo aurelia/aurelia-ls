@@ -9,6 +9,7 @@ import type { RuntimeBindingReference } from './runtime-binding.js';
 import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type { CheckerTypeReference } from '../type-system/type-shape.js';
 import type { EvaluationPromiseSettlementKind } from '../evaluation/values.js';
+import type { ResourceTargetReference } from '../resources/resource-reference.js';
 
 export const enum CompositionComponentResolutionKind {
   /** `component` resolved from a statically evaluated constructable or resource name. */
@@ -66,6 +67,13 @@ export const enum CompositionInputValueStateKind {
   /** A thenable input is known to reject. */
   Rejected = 'rejected',
   /** The input value, thenable settlement, or fulfillment evidence remains open. */
+  Open = 'open',
+}
+
+/** Joint outcome of AuCompose ChangeInfo.load, before component selection can construct a child. */
+export const enum CompositionLoadStateKind {
+  Ready = 'ready',
+  Rejected = 'rejected',
   Open = 'open',
 }
 
@@ -141,6 +149,8 @@ export class CompositionResolvedComponent {
     readonly resolutionKind: CompositionComponentResolutionKind | `${CompositionComponentResolutionKind}`,
     /** Lifecycle/model handoff for this component branch. */
     readonly activationModelHandoff: CompositionActivationModelHandoff,
+    /** Existing object supplied as the view model; null means AuCompose constructs the selected definition's type. */
+    readonly suppliedViewModel: ResourceTargetReference | null = null,
   ) {}
 }
 
@@ -207,6 +217,14 @@ export class CompositionContext {
     readonly tag: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
   ) {}
+
+  get loadState(): CompositionLoadStateKind {
+    if (this.templateInputValueStateKind === CompositionInputValueStateKind.Rejected
+      || this.componentInputValueStateKind === CompositionInputValueStateKind.Rejected) return CompositionLoadStateKind.Rejected;
+    if (this.templateInputValueStateKind === CompositionInputValueStateKind.Open
+      || this.componentInputValueStateKind === CompositionInputValueStateKind.Open) return CompositionLoadStateKind.Open;
+    return CompositionLoadStateKind.Ready;
+  }
 
   toReference(): CompositionContextReference {
     return new CompositionContextReference(

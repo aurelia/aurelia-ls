@@ -17,6 +17,7 @@ import {
   LetBinding,
   ListenerBinding,
   PropertyBinding,
+  IterateBinding,
   RefBinding,
   SpreadValueBinding,
   StateBinding,
@@ -32,6 +33,7 @@ import type {
 
 export type RuntimeExpressionBinding =
   | PropertyBinding
+  | IterateBinding
   | AttributeBinding
   | LetBinding
   | ListenerBinding
@@ -43,14 +45,15 @@ export type RuntimeExpressionBinding =
   | StateBinding
   | StateDispatchBinding;
 
-export type RuntimeValueChannelBinding = Exclude<RuntimeExpressionBinding, TranslationBinding>;
+export type RuntimeValueChannelBinding = Exclude<RuntimeExpressionBinding, TranslationBinding | IterateBinding>;
 
-export type RuntimeDataFlowBinding = RuntimeValueChannelBinding | TranslationBinding;
+export type RuntimeDataFlowBinding = RuntimeValueChannelBinding | TranslationBinding | IterateBinding;
 
 export function isRuntimeExpressionBinding(
   binding: RuntimeBinding,
 ): binding is RuntimeExpressionBinding {
   return binding instanceof PropertyBinding
+    || binding instanceof IterateBinding
     || binding instanceof AttributeBinding
     || binding instanceof LetBinding
     || binding instanceof ListenerBinding
@@ -63,11 +66,11 @@ export function isRuntimeExpressionBinding(
     || binding instanceof StateDispatchBinding;
 }
 
-/** Narrows expression bindings to generic binding value-channel owners; i18n TranslationBinding has its own lifecycle lane. */
+/** Generic accessor/observer channels exclude plugin callback/lifecycle-owned targets. */
 export function isRuntimeValueChannelBinding(
   binding: RuntimeBinding,
 ): binding is RuntimeValueChannelBinding {
-  return isRuntimeExpressionBinding(binding) && !(binding instanceof TranslationBinding);
+  return isRuntimeExpressionBinding(binding) && !(binding instanceof TranslationBinding) && !(binding instanceof IterateBinding);
 }
 
 /** Narrows expression bindings to data-flow owners; i18n parameter bindings are source-only flow while keys stay lifecycle-owned. */
@@ -75,12 +78,14 @@ export function isRuntimeDataFlowBinding(
   binding: RuntimeBinding,
 ): binding is RuntimeDataFlowBinding {
   return isRuntimeValueChannelBinding(binding)
+    || binding instanceof IterateBinding
     || (binding instanceof TranslationBinding && binding.bindingKind === RuntimeBindingKind.TranslationParameters);
 }
 
 /** Identifies binding data-flow rows that expose source expression reads without generic accessor/observer targets. */
 export function isRuntimeSourceOnlyDataFlowBinding(binding: RuntimeDataFlowBinding): boolean {
   return binding instanceof ListenerBinding
+    || binding instanceof IterateBinding
     || binding instanceof StateDispatchBinding
     || (binding instanceof TranslationBinding && binding.bindingKind === RuntimeBindingKind.TranslationParameters);
 }

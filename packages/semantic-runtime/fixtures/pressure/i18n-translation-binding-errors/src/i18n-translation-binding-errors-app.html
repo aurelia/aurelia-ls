@@ -1,4 +1,13 @@
 <template>
+  <input value.state="parameterName & oneTime">
+  <input value.state="parameterName">
+  <input value.state="parameterName & signal:'refresh'">
+  <p t="greeting" t-params.bind="{ name: customerName } & signal:'refresh'"></p>
+  <p t="greeting" t-params.bind="{ name: customerName } & throttle & debounce"></p>
+  <p t.bind="objectKey.viewName & missingBehavior"></p>
+  <p t.bind="objectKey.viewName | t"></p>
+  <p title.attr="parameterName & state"></p>
+  <p title.attr="parameterName"></p>
   <div t-params.bind="{ name: customerName }"></div>
   <p t.bind="numericKey"></p>
   <p t.bind="numericKey & state"></p>

@@ -94,6 +94,7 @@ import { TemplateProductDetails } from '../template/product-details.js';
 import { ObservationProductDetails } from './product-details.js';
 import {
   ListenerBinding,
+  IterateBinding,
   PropertyBinding,
   RefBinding,
   RuntimeBindingTargetAccessStrategy,
@@ -825,7 +826,7 @@ export class RuntimeBindingDataFlowMaterializer {
         KernelVocabulary.Binding.DataFlow.key,
         binding.identityHandle,
         binding.sourceAddressHandle,
-        `${dataFlow.direction}:${dataFlow.sourceName ?? dataFlow.sourceKind}:${target.targetAccess?.targetProperty ?? binding.target}`,
+        `${dataFlow.direction}:${dataFlow.sourceName ?? dataFlow.sourceKind}:${target.targetAccess?.targetProperty ?? (binding instanceof IterateBinding ? 'handleItemsChangeChange' : String(binding.target))}`,
       ),
       new MaterializedProduct(
         dataFlow.productHandle,
@@ -1291,9 +1292,11 @@ class BindingDataFlowSourceProjector {
       : target.valueChannel?.admittedSourceValueType ?? null;
     const sourceTypeOpenReason = sourceInfo.sourceTypeHint != null
       ? null
-      : sourceEvaluation?.kind === CheckerExpressionTypeEvaluationResultKind.Open
-        ? sourceEvaluation.summary
-        : null;
+      : expressionSite?.kind === RuntimeBindingSourceExpressionProjectionKind.Open
+        ? expressionSite.openReason
+        : sourceEvaluation?.kind === CheckerExpressionTypeEvaluationResultKind.Open
+          ? sourceEvaluation.summary
+          : null;
     const sourceTypeOpenKind = sourceInfo.sourceTypeHint != null
       ? null
       : sourceEvaluation?.kind === CheckerExpressionTypeEvaluationResultKind.Open

@@ -65,6 +65,8 @@ export const enum FrameworkRegistrationCapability {
   UiVirtualizationDefaultResources = 'ui-virtualization.default-resources',
   /** UI virtualization plugin service registrations such as `ICollectionStrategyLocator` and `IDomRenderer`. */
   UiVirtualizationServiceResolvers = 'ui-virtualization.service-resolvers',
+  /** Native type-200 IterateBinding renderer, distinct from virtualization DOM/scroller services. */
+  UiVirtualizationRuntimeRenderers = 'ui-virtualization.runtime-renderers',
   /** AppTask admission that is selected by lifecycle-slot dispatch rather than DI world spending. */
   AppTask = 'app-task',
 }
@@ -268,6 +270,7 @@ const frameworkRegistrationDescriptors: readonly FrameworkRegistrationDescriptor
     capabilities: [
       FrameworkRegistrationCapability.UiVirtualizationDefaultResources,
       FrameworkRegistrationCapability.UiVirtualizationServiceResolvers,
+      FrameworkRegistrationCapability.UiVirtualizationRuntimeRenderers,
     ],
   },
   {

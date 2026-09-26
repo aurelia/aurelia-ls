@@ -300,7 +300,25 @@ assert.equal(compilationRow('projection-receiver').compiledTemplateHasSlots, fal
 assert.equal(compilationRow('projection-receiver').compiledTemplateNeedsCompile, false);
 const appCompilationRow = compilationRow('content-projection-topology-app');
 const appCompiledTemplates = appResource.compilation.compiledTemplate.compiledTemplates;
-assert.equal(appCompilationRow.contentProjectionDefinitions, 9);
+// The opaque processContent boundary does not admit its child receiver as a compiled provider.
+// Assert provider identities as well as the aggregate, rather than carrying the stale count recorded on 2026-08-28.
+assert.deepEqual(
+  hydrateElements(appResource).flatMap((instruction) => instruction.projections.map((projection) =>
+    `${instruction.elementName}:${projection.slotName}`
+  )).sort(),
+  [
+    'projection-receiver:actions',
+    'projection-receiver:ambiguous',
+    'projection-receiver:default',
+    'projection-receiver:default',
+    'projection-receiver:heading',
+    'projection-receiver:unused',
+    'projection-relay:forwarded',
+    'shadow-slot-receiver:named',
+  ],
+  'Expected only reached custom-element providers, excluding descendants of opaque processContent.',
+);
+assert.equal(appCompilationRow.contentProjectionDefinitions, 8);
 assert.equal(appCompilationRow.compiledTemplates, appCompiledTemplates.length);
 assert.equal(appCompilationRow.generatedCompiledTemplates, appCompiledTemplates.length - 1);
 assert.equal(
@@ -623,7 +641,7 @@ assert.ok(
 );
 
 const projectionRows = queryRows(SemanticAppQueryKind.TemplateContentProjections, 'handles');
-assert.equal(projectionRows.length, 74);
+assert.equal(projectionRows.length, 72);
 assert.deepEqual(
   Object.fromEntries(
     ['provider-definition', 'au-slot-view', 'native-slot-outlet'].map((surfaceKind) => [
@@ -632,7 +650,7 @@ assert.deepEqual(
     ]),
   ),
   {
-    'provider-definition': 15,
+    'provider-definition': 13,
     'au-slot-view': 55,
     'native-slot-outlet': 4,
   },
@@ -651,6 +669,25 @@ assert.ok(
   'Expected root-only receiver analysis to preserve absence instead of collapsing it into intrinsic empty slots info.',
 );
 const providerRows = projectionRows.filter((row) => row.surfaceKind === 'provider-definition');
+assert.deepEqual(
+  providerRows.map((row) => `${row.renderingDefinitionName}:${row.slotName}`).sort(),
+  [
+    'content-projection-topology-app:actions',
+    'content-projection-topology-app:ambiguous',
+    'content-projection-topology-app:default',
+    'content-projection-topology-app:default',
+    'content-projection-topology-app:forwarded',
+    'content-projection-topology-app:heading',
+    'content-projection-topology-app:named',
+    'content-projection-topology-app:unused',
+    'projection-receiver:default',
+    'projection-receiver:default',
+    'projection-receiver:default',
+    'projection-relay:default',
+    'projection-relay:heading',
+  ],
+  'Expected eight app providers, three reached receiver fallbacks and the relay projection/fallback pair.',
+);
 for (const row of providerRows) {
   const owner = resource(row.renderingDefinitionName);
   assert.ok(

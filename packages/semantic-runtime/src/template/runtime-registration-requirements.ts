@@ -359,7 +359,7 @@ function collectRendererUses(
         ));
       } else {
         const candidate = candidates[0]!;
-        const claimed = compilerWorld.rendering.rendererForInstructionKind(instruction.instructionKind);
+        const claimed = compilerWorld.rendering.rendererForInstruction(instruction);
         if (
           claimed == null
           || claimed.productHandle !== candidate.renderer.productHandle
@@ -534,6 +534,7 @@ function exactRendererSelection(
       [...use.worlds],
       runtimeHtmlCatalog.productHandle,
       app.emission.appWorld.configuredRenderers.selections,
+      'rendering',
     );
     if (provider == null) {
       reasons.push(reason(
@@ -688,6 +689,7 @@ interface ConfiguredSelection {
 
 class ProviderAttributionIndex {
   private readonly operationsByWorld = new Map<ProductHandle, readonly ContainerRegistrationOperation[]>();
+  private readonly renderingContainerByWorld = new Map<ProductHandle, IdentityHandle | null>();
   private readonly providersByCatalogAndWorlds = new Map<string, ProviderIdentity | null>();
   private readonly admissionByProduct: ReadonlyMap<ProductHandle, RegistrationAdmissionProduct>;
 
@@ -701,6 +703,7 @@ class ProviderAttributionIndex {
     ]));
     for (const input of inputs) {
       const world = input.resource.compilation.compilerWorld;
+      this.renderingContainerByWorld.set(world.world.productHandle, world.rendering.container.identityHandle);
       this.operationsByWorld.set(
         world.world.productHandle,
         registrationOperationsVisibleToContainer(
@@ -716,16 +719,17 @@ class ProviderAttributionIndex {
     worldProductHandles: readonly ProductHandle[],
     catalogProductHandle: ProductHandle,
     selections: readonly ConfiguredSelection[],
+    scope: 'compiler' | 'rendering' = 'compiler',
   ): ProviderIdentity | null {
     const worlds = [...new Set(worldProductHandles)].sort();
-    const key = `${catalogProductHandle}\0${worlds.join('\0')}`;
+    const key = `${scope}\0${catalogProductHandle}\0${worlds.join('\0')}`;
     if (this.providersByCatalogAndWorlds.has(key)) {
       return this.providersByCatalogAndWorlds.get(key) ?? null;
     }
     const providers = new Map<ProductHandle, ProviderIdentity>();
     for (const worldProductHandle of worlds) {
       const visibleAdmissions = new Set(
-        this.operations(worldProductHandle).map((operation) => operation.admission.productHandle),
+        this.operations(worldProductHandle, scope).map((operation) => operation.admission.productHandle),
       );
       const candidates = selections.filter((selection) =>
         selection.catalogProductHandles.includes(catalogProductHandle)
@@ -769,8 +773,14 @@ class ProviderAttributionIndex {
     return [...providers.values()];
   }
 
-  private operations(worldProductHandle: ProductHandle): readonly ContainerRegistrationOperation[] {
-    return this.operationsByWorld.get(worldProductHandle) ?? [];
+  private operations(
+    worldProductHandle: ProductHandle,
+    scope: 'compiler' | 'rendering' = 'compiler',
+  ): readonly ContainerRegistrationOperation[] {
+    const operations = this.operationsByWorld.get(worldProductHandle) ?? [];
+    if (scope === 'compiler') return operations;
+    const renderingContainer = this.renderingContainerByWorld.get(worldProductHandle);
+    return operations.filter((operation) => operation.container.identityHandle === renderingContainer);
   }
 }
 

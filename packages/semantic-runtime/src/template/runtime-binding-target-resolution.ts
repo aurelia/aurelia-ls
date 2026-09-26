@@ -4,6 +4,7 @@ import { TemplateProductDetails } from './product-details.js';
 import {
   InterpolationBinding,
   PropertyBinding,
+  IterateBinding,
   RuntimeBindingTarget,
   RuntimeBindingTargetKind,
   SpreadValueBinding,
@@ -28,6 +29,7 @@ export function runtimeBindingAccessTarget(
   targetController: RuntimeControllerFrame | null,
 ): RuntimeBindingTarget {
   if ((binding instanceof PropertyBinding
+    || binding instanceof IterateBinding
     || binding instanceof InterpolationBinding
     || binding instanceof SpreadValueBinding)
     && targetController != null) {

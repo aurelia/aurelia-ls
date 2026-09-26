@@ -35,12 +35,17 @@ import {
   runtimeResourceKeyForKind,
 } from '../resources/resource-kind.js';
 import {
+  HydrateElementInstruction,
   nestedInstructionProductHandlesForInstructions,
   SpreadElementPropBindingInstruction,
   type SpreadTransferedBindingInstruction,
-  type TemplateInstructionKind,
   type TemplateInstruction,
 } from './instruction-ir.js';
+import {
+  frameworkInstructionTypeFor,
+  type TemplateCompilerFrameworkInstructionType,
+} from './template-instruction-runtime-value.js';
+import { sameHtmlNodeReference } from './runtime-ref-target.js';
 import type { AttributeSyntax } from './attribute-syntax.js';
 import {
   TemplateRenderTarget,
@@ -770,7 +775,7 @@ export class TemplateAttributeMapperService {
 /** Runtime Rendering service model used to select instruction renderers. */
 @auLink('runtime-html:Rendering')
 export class TemplateRenderingService {
-  private readonly _rendererByInstructionKind = new Map<TemplateInstructionKind, RuntimeRenderer>();
+  private readonly _rendererByInstructionType = new Map<TemplateCompilerFrameworkInstructionType, RuntimeRenderer>();
 
   constructor(
     /** Product handle for the materialized-product envelope that represents this service. */
@@ -787,18 +792,18 @@ export class TemplateRenderingService {
     readonly fieldProvenance: readonly FieldProvenance<TemplateCompilerServiceField>[] = [],
   ) {
     for (const renderer of renderers) {
-      if (!this._rendererByInstructionKind.has(renderer.targetInstructionKind)) {
-        this._rendererByInstructionKind.set(renderer.targetInstructionKind, renderer);
+      if (!this._rendererByInstructionType.has(renderer.targetInstructionType)) {
+        this._rendererByInstructionType.set(renderer.targetInstructionType, renderer);
       }
     }
   }
 
-  rendererForInstructionKind(kind: TemplateInstructionKind): RuntimeRenderer | null {
-    return this._rendererByInstructionKind.get(kind) ?? null;
+  rendererForInstructionType(type: TemplateCompilerFrameworkInstructionType): RuntimeRenderer | null {
+    return this._rendererByInstructionType.get(type) ?? null;
   }
 
-  rendererReferenceForInstructionKind(kind: TemplateInstructionKind): RuntimeRendererReference | null {
-    return this.rendererForInstructionKind(kind)?.toReference() ?? null;
+  rendererForInstruction(instruction: TemplateInstruction): RuntimeRenderer | null {
+    return this.rendererForInstructionType(frameworkInstructionTypeFor(instruction));
   }
 
   /** Runtime `Rendering.render(...)` dispatch loop over already-lowered instruction products. */
@@ -1008,13 +1013,30 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
         ));
         return;
       }
+      const elementController = renderingController.readChildren().find((controller) => {
+        const hydration = controller.instructionProductHandle == null
+          ? null
+          : this.readInstruction(controller.instructionProductHandle);
+        return hydration instanceof HydrateElementInstruction
+          && sameHtmlNodeReference(hydration.node, instruction.node);
+      });
+      if (elementController == null) {
+        this.recordOpenInstruction(
+          `${local}:missing-spread-element-controller`,
+          instruction.identityHandle,
+          'Spread element prop instruction has no hydrated custom-element controller on its target node.',
+          instruction.sourceAddressHandle,
+          [OpenSeamReasonKind.RuntimeRenderingProductMissing],
+        );
+        return;
+      }
       this.consumeInstruction(wrappedInstruction.productHandle);
       this.renderInstruction(
         `${local}:spread-element-prop`,
         wrappedInstruction,
         owner,
         renderingController,
-        targetController,
+        elementController,
         target,
         bindingOwner,
         hydrationContext,
@@ -1023,12 +1045,12 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
       return;
     }
 
-    const renderer = owner?.rendererOverride ?? this.rendering.rendererForInstructionKind(instruction.instructionKind);
+    const renderer = owner?.rendererOverride ?? this.rendering.rendererForInstruction(instruction);
     if (renderer == null || renderer.productHandle == null) {
       this.openInstructions.push(new TemplateRenderingOpenInstruction(
         `${local}:missing-renderer`,
         instruction.identityHandle,
-        `No configured runtime renderer was available for instruction kind '${instruction.instructionKind}'.`,
+        `No configured runtime renderer was available for instruction type '${frameworkInstructionTypeFor(instruction)}' (${instruction.instructionKind}).`,
         instruction.sourceAddressHandle,
         [OpenSeamReasonKind.RuntimeRenderingRendererUnavailable],
       ));

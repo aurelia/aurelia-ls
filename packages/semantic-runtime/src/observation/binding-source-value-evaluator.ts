@@ -282,6 +282,18 @@ export class RuntimeBindingSourceValueEvaluator {
     return this.evaluationFrame.sourceForNode(node);
   }
 
+  /** Read an already evaluated receiver through the same member/getter authority as binding expressions. */
+  readValueProperty(
+    receiver: EvaluationValue,
+    propertyName: string,
+    activeContainer: Container | null,
+  ): RuntimeBindingSourceValueEvaluation {
+    return this.evaluationFrame.withActiveContainer(
+      activeContainer,
+      () => this.memberValues.property(receiver, propertyName),
+    );
+  }
+
   evaluate(
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {

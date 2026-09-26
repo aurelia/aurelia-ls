@@ -57,6 +57,7 @@ import {
   RuntimeRendererGroup,
   RuntimeRendererPackage,
   StateDefaultRenderers,
+  UiVirtualizationDefaultRenderers,
   type RuntimeRenderer,
   type RuntimeRendererField,
 } from './runtime-renderer.js';
@@ -627,6 +628,9 @@ function runtimeRendererCatalogInputsForAdmission(
       case FrameworkRegistrationCapability.StateRuntimeRenderers:
         inputs.push(RuntimeRendererCatalogs.StateDefaultRenderers);
         break;
+      case FrameworkRegistrationCapability.UiVirtualizationRuntimeRenderers:
+        inputs.push(RuntimeRendererCatalogs.UiVirtualizationDefaultRenderers);
+        break;
       case FrameworkRegistrationCapability.RuntimeHtmlCompilerServices:
       case FrameworkRegistrationCapability.RuntimeHtmlDefaultBindingSyntax:
       case FrameworkRegistrationCapability.RuntimeHtmlShortHandBindingSyntax:
@@ -672,6 +676,11 @@ export const RuntimeRendererCatalogs = {
     group: RuntimeRendererGroup.StateDefaultRenderers,
     renderers: StateDefaultRenderers,
   },
+  UiVirtualizationDefaultRenderers: {
+    packageId: RuntimeRendererPackage.UiVirtualization,
+    group: RuntimeRendererGroup.UiVirtualizationDefaultRenderers,
+    renderers: UiVirtualizationDefaultRenderers,
+  },
 } as const;
 
 function runtimeRendererCatalogInputKey(input: BuiltInRuntimeRendererCatalogInput): string {
@@ -709,7 +718,7 @@ function runtimeRendererCatalogSummaryForFrameworkKind(frameworkKind: FrameworkR
     case FrameworkRegistrationKind.RouterDefaultResources:
       return 'Router DefaultResources admitted resources but no runtime renderers.';
     case FrameworkRegistrationKind.UiVirtualizationDefaultConfiguration:
-      return 'DefaultVirtualizationConfiguration admitted virtual-repeat resources; virtualization DOM renderer services are not cataloged as template renderers.';
+      return 'DefaultVirtualizationConfiguration admitted the IterateBinding template renderer; DOM/scroller services remain separate.';
     case FrameworkRegistrationKind.StateDefaultConfiguration:
       return 'StateDefaultConfiguration admitted state runtime renderers.';
     case FrameworkRegistrationKind.DialogConfiguration:

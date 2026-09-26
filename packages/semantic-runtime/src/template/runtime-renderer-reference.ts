@@ -15,6 +15,7 @@ export const enum RuntimeRendererKind {
   InterpolationBinding = 'interpolation-binding-renderer',
   PropertyBinding = 'property-binding-renderer',
   IteratorBinding = 'iterator-binding-renderer',
+  IterateBinding = 'iterate-binding-renderer',
   TextBinding = 'text-binding-renderer',
   ListenerBinding = 'listener-binding-renderer',
   SetAttribute = 'set-attribute-renderer',

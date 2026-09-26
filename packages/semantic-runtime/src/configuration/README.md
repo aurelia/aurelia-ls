@@ -328,6 +328,11 @@ options and compiler catalogs. Do not reintroduce source containment, call-step 
 to recover that relation. App-root/compiler-world registration visibility uses
 `registrationOperationsVisibleToContainer(...)`, which walks only the consulting container chain and retains exact
 application operations; sibling app roots with the same imports do not share plugin capabilities.
+Renderer catalogs use the same registration facts with a different consumer scope: runtime `Rendering` resolves
+`IRenderer` from the DI root. Child-only plugin registration can therefore contribute compiler syntax/resources
+without contributing a renderer to that root's dispatch table. Renderer provider attribution uses that same root
+authority rather than the compiler's broader consulting chain. Standalone library/authoring worlds retain their
+explicit synthetic root and default renderer assumptions.
 
 Evaluated object values that expose a `register` method are classified as IRegistry-shaped admissions. Imported or
 declaration-only values can also be admitted through the TypeChecker when their static type exposes a callable

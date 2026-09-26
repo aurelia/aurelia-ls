@@ -6,6 +6,7 @@ import {
   ListenerBinding,
   PropertyBinding,
   RefBinding,
+  StateBinding,
   StateDispatchBinding,
 } from '../template/runtime-binding.js';
 import type { RuntimeExpressionResourcePlan } from '../template/runtime-expression-resource-plan.js';
@@ -105,6 +106,20 @@ function runtimeBindingSourceLifecycleForModes(
       : [runtimeBindingInitialMode(binding) ?? TemplateBindingMode.ToView];
     return new RuntimeBindingSourceLifecycle(
       sourceEvaluationKindForAlwaysValueProducingModes(modes),
+      evaluationReachability,
+      false,
+    );
+  }
+  if (binding instanceof StateBinding) {
+    const modes = effectiveModes.length > 0
+      ? effectiveModes
+      : [runtimeBindingInitialMode(binding) ?? TemplateBindingMode.ToView];
+    return new RuntimeBindingSourceLifecycle(
+      modes.some((mode) => mode === TemplateBindingMode.Default || mode === TemplateBindingMode.Open)
+        ? RuntimeBindingSourceEvaluationKind.Open
+        : modes.every((mode) => mode === TemplateBindingMode.OneTime)
+          ? RuntimeBindingSourceEvaluationKind.UntrackedRead
+          : RuntimeBindingSourceEvaluationKind.ConnectableRead,
       evaluationReachability,
       false,
     );

@@ -676,10 +676,11 @@ describe('runtime registration requirements', () => {
     const requirements = await readRequirements(virtualizationRoot, overlay, 'virtualization');
 
     expect(requirements.renderers.selectionKind)
-      .toBe(RuntimeRegistrationRequirementSelectionKind.ConservativeGroup);
-    expect(requirements.renderers.reasons.map((reason) => reason.reasonKind)).toContain(
-      RuntimeRegistrationRequirementReasonKind.RuntimeInstructionAbiUnmodeled,
-    );
+      .toBe(RuntimeRegistrationRequirementSelectionKind.ExactLeaves);
+    expect(requirements.renderers.reasons).toEqual([]);
+    // Native plugin configuration supplies type200; neither it nor the unused core15 is a runtime-html leaf.
+    expect(requirements.renderers.leaves.map(leaf => leaf.exportName)).not.toContain('IteratorBindingRenderer');
+    expect(requirements.renderers.leaves.map(leaf => leaf.exportName)).not.toContain('IterateBindingRenderer');
   }, 20_000);
 
   test('keeps explicitly registered syntax outside replaced StandardConfiguration occurrences', async () => {

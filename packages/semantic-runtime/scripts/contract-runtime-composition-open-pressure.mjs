@@ -69,8 +69,8 @@ for (const row of closedComponentRows) {
   if (controllerSeams.length < contextSeams.length) {
     failures.push('Expected the aggregate CompositionController to retain every open CompositionContext input seam.');
   }
-  if (row.composedChildControllerCount !== 1 || row.composedChildContainerCount !== 1) {
-    failures.push(`Expected non-component pressure not to suppress the closed custom-element child, observed controllers=${row.composedChildControllerCount}, containers=${row.composedChildContainerCount}.`);
+  if (row.loadState !== 'open' || row.composedChildControllerCount !== 0 || row.composedChildContainerCount !== 0) {
+    failures.push(`Expected the open template load to retain the component candidate without inventing a child, observed load=${row.loadState}, controllers=${row.composedChildControllerCount}, containers=${row.composedChildContainerCount}.`);
   }
   if (
     row.componentInputConsumptionKind !== 'await-thenable'

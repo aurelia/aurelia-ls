@@ -697,7 +697,11 @@ products; target JavaScript emission remains outside this substrate.
   stable mutable controller frames. `runtime-renderer.ts` contains the concrete runtime renderer emulators: controller
   renderers request child controller frames and binding renderers return runtime binding instances that are attached to
   the invoking controller, matching `Controller.addBinding` / `Controller.addChild` rather than a loose instruction
-  post-pass. Static renderers now emit renderer-owned target-operation products for property set, attribute set,
+  post-pass. Dispatch uses the exact framework instruction type, not the broader semantic instruction kind: core
+  iterator15 and virtualization200 share scope vocabulary but not native binding behavior. Renderer membership and
+  provider attribution use Rendering's DI-root registry; compiler syntax and resources retain their consulting scopes.
+  Standalone authoring retains its explicit synthetic-root/default-renderer assumption. Static renderers now emit
+  renderer-owned target-operation products for property set, attribute set,
   class-list add, and cssText append; surrogate rows render against the host target lane before ordinary target rows,
   matching Aurelia's `definition.surrogates` pass. Runtime rendering now uses the project compiled-template context to
   expand child custom-element controllers into aggregate child-view render passes; this keeps recursive controller
@@ -729,6 +733,10 @@ products; target JavaScript emission remains outside this substrate.
   controller totals. Only `component` and `template` use Aurelia's await-thenable input contract. `model`,
   `scopeBehavior`, `tag`, and `flushMode` retain their direct values, including Promise values; every input separately
   records absent/closed/fulfilled/rejected/open state.
+  `CompositionContext.loadState` joins the two awaited inputs before child materialization: either known rejection
+  rejects loading, and either open input leaves loading open. A closed component candidate is retained even when its
+  template prevents loading, but no executable child/controller container is invented. Direct model/options pressure
+  remains independent; this is not an async scheduler or an activation-success guarantee.
   Candidate discovery and candidate completeness are separate. An exact named-class type or finite union of those types
   can form a complete basis when every member maps to a custom-element definition. Broader construct signatures may
   still reveal useful resources through their return types, but remain partial because TypeScript's structural
@@ -747,9 +755,13 @@ products; target JavaScript emission remains outside this substrate.
   reference and activation parent independently. TypeChecker-only candidate unions remain candidate rows rather than
   fake selected children. Candidate resource-analysis coverage remains distinct from actual composed-child
   materialization.
-  A statically evaluated object, instance, boundary object, or non-resource constructable component is classified as
-  `object-view-model` instead of remaining open: Aurelia accepts those as ordinary dynamic component instances even
-  when no custom-element definition is involved. For constructable object view-models, activation lookup checks the
+  Object/instance component selection reads `constructor` through the shared binding-source member reader before
+  deciding between a recognized custom element and `object-view-model`. Own properties, getters, abrupt completion,
+  and unknown constructor shadowing retain their evaluator authority; instance class identity is only the ordinary
+  unshadowed inherited constructor fallback in the shared ECMAScript property reader. Existing instances retain their
+  own source/type reference on the child controller and activation handoff rather than borrowing the selected
+  definition's constructor type, including after component Promise fulfillment. Non-resource constructable
+  components remain ordinary object view models. For constructable object view-models, activation lookup checks the
   instance type because the framework invokes the constructor before calling `comp.activate?.(model)`.
   Each resolved component branch and object-view-model branch now records the `comp.activate?.(model)` /
   `update(model)` handoff shape. The activation module owns this TypeChecker-backed lifecycle check separately from
@@ -1188,6 +1200,10 @@ products; target JavaScript emission remains outside this substrate.
   facts and static tail options such as `gap` survive without pretending to model the plugin's collection observer, DOM
   renderer, scroller, measurement, or scheduling behavior. Virtual repeat remains a single-identifier iterator; core
   repeat's binding-pattern support does not widen this plugin boundary.
+  Its configured `IterateBindingRenderer` now produces a distinct `IterateBinding`, retaining the shared iterator
+  scope effect and source-only data flow. It does not invent a property accessor/observer for the native
+  `handleItemsChangeChange` callback target. Native plugin configuration still supplies this package-internal renderer;
+  exact runtime-html leaf selection does not imply extracting or rewriting the plugin registration.
 - `built-in-syntax.ts` records framework-provided attribute-pattern and binding-command handlers as concrete
   runtime-shaped model classes with `auLink` anchors.
 - `built-in-syntax-catalog-materializer.ts` materializes framework-owned syntax catalogs into kernel-backed catalog, executable,

@@ -9,7 +9,7 @@ import {
   projectRuntimeExpressionAstValue,
   RuntimeExpressionAstProjectionState,
 } from '../src/expression/runtime-ast-value.js';
-import { KernelHandleFactory } from '../src/kernel/handles.js';
+import { KernelHandleFactory, type ProductHandle } from '../src/kernel/handles.js';
 import {
   NodeSemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputAuthority,
@@ -22,6 +22,7 @@ import {
   SpreadElementPropBindingInstruction,
 } from '../src/template/instruction-ir.js';
 import { HtmlAttributeReference, HtmlIrNodeKind, HtmlNodeReference } from '../src/template/html-ir.js';
+import { RuntimeBindingTargetKind } from '../src/template/runtime-binding.js';
 import { TemplateProductDetails } from '../src/template/product-details.js';
 import {
   RuntimeRendererSpreadCompileState,
@@ -41,6 +42,63 @@ import {
 } from '../src/template/template-instruction-runtime-value.js';
 
 describe('runtime captured-attribute compilation', () => {
+  test('targets each receiving custom-element controller when unwrapping captured bindable instructions', async () => {
+    const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+    const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-spread-capture-semantics');
+    const appFile = path.join(fixtureRoot, 'src/template-spread-capture-semantics-app.html');
+    const shellFile = path.join(fixtureRoot, 'src/capture-shell.ts');
+    const shellTemplateFile = path.join(fixtureRoot, 'src/capture-shell.html');
+    const shellSource = readFileSync(shellFile, 'utf8')
+      .replace("import template from './capture-shell.html';", "import template from './capture-shell.html';\nimport { SpreadCard } from './spread-card';")
+      .replace('dependencies: [InputMark, InnerGate]', 'dependencies: [InputMark, InnerGate, SpreadCard]');
+    const overlays = new Map([
+      [path.resolve(appFile).toLowerCase(), '<capture-shell title.bind="capturedValue"></capture-shell><capture-shell title.bind="shellLabel"></capture-shell>'],
+      [path.resolve(shellTemplateFile).toLowerCase(), '<spread-card ...$attrs></spread-card>'],
+      [path.resolve(shellFile).toLowerCase(), shellSource],
+    ]);
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'test:runtime-spread-custom-element-target',
+      projectInputAuthority: new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost({
+        readFile: (fileName) => overlays.get(path.resolve(fileName).toLowerCase()),
+        fileExists: (fileName) => overlays.has(path.resolve(fileName).toLowerCase()) ? true : undefined,
+      })),
+    });
+    try {
+      const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+      const resource = app.emission.templates.resources.find((candidate) =>
+        candidate.compilation.definition.name === 'template-spread-capture-semantics-app');
+      if (resource == null) throw new Error('Expected the spread/capture app template resource.');
+      const rendering = resource.runtimeAnalysis.runtimeRendering;
+      const wrappers = rendering.dynamicInstructions.filter((instruction) =>
+        instruction instanceof SpreadElementPropBindingInstruction);
+      expect(wrappers).toHaveLength(2);
+      const receivingControllers = new Set<ProductHandle>();
+      for (const wrapper of wrappers) {
+        const binding = rendering.bindings.find((candidate) =>
+          candidate.instructionProductHandle === wrapper.instructionProductHandle);
+        if (binding == null) throw new Error('Expected a rendered captured property binding.');
+        const context = rendering.requireRenderContextForBinding(binding.productHandle);
+        expect(context.targetController.name).toBe('spread-card');
+        expect(context.targetController.parent).toBe(context.renderingController);
+        expect(context.targetController).not.toBe(context.renderingController);
+        receivingControllers.add(context.targetController.productHandle);
+        const accesses = resource.runtimeAnalysis.controllerBind.targetAccesses.filter((access) =>
+          access.binding.productHandle === binding.productHandle);
+        expect(accesses).toHaveLength(1);
+        expect(accesses[0]).toMatchObject({
+          targetKind: RuntimeBindingTargetKind.ControllerViewModel,
+          targetControllerProductHandle: context.targetController.productHandle,
+          targetProperty: 'title',
+          openReason: null,
+        });
+      }
+      expect(receivingControllers.size).toBe(2);
+    } finally {
+      runtime.retireWorkspaceIncarnation();
+    }
+  }, 45_000);
+
   test('publishes complete dynamic instruction groups and discards rejected prefixes', async () => {
     const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
     const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-spread-capture-semantics');

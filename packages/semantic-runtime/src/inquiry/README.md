@@ -325,8 +325,9 @@ evaluator/cache while preserving the same generation-bound publication and state
 world loses those runtime-discovered facts and makes completions diverge from overlays, diagnostics, and data-flow.
 File-level template diagnostics reuse the same cursor adapter for weak-member rows, so they must not override that
 world either. A diagnostic scan may cache authored source text and row de-duplication state, but expression owner
-typing should still spend the resource runtime-analysis world so `t.bind` evaluate-only, `t-params.bind` bind-time
-source-scope effects, overlays, and cursor completions agree.
+typing should still spend the resource runtime-analysis world so `t.bind` evaluate-only and `t-params.bind` concrete
+binding capabilities, overlays, and cursor completions agree. Calling `astBind` does not imply a source-scope override:
+ParameterBinding lacks `useScope`, so parameters retain view-model scope even with `& state`.
 
 Interpolation completion adds one extra answer-local projection over the same value-site product: when a text value
 contains multiple incomplete `${...}` holes, the cursor adapter reparses that product with an active offset so the

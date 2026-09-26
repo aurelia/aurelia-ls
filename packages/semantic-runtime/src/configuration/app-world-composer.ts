@@ -385,7 +385,13 @@ class AppRootCompilerWorldFrame {
       return null;
     }
     const syntax = syntaxForOperations(operations, this.configuredSyntax);
-    const runtimeRenderers = runtimeRenderersForOperations(operations, this.configuredRenderers);
+    // Rendering resolves IRenderer from the DI root, not from the template compiler's consulting container.
+    const renderingOperations = registrationOperationsVisibleToContainer(
+      container.root,
+      this.diWorld,
+      this.containerChainFacts,
+    );
+    const runtimeRenderers = runtimeRenderersForOperations(renderingOperations, this.configuredRenderers);
     const resourceResolution = this.resourceVisibilityComposer.construct(
       container,
       this.diWorld,

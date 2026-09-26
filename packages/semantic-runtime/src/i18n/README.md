@@ -52,9 +52,16 @@ generic value-channel, and neither should emit generic open seams for missing ac
 The key and parameter expression lifecycles are intentionally different. Framework `TranslationBinding.bind` evaluates
 the dynamic key expression without first calling `astBind(...)`, so binding behaviors such as `& state` unwrap during
 key type diagnostics instead of changing the key source scope. Framework `ParameterBinding.bind` does call
-`astBind(...)`, so `t-params.bind` can use source-scope-changing binding behaviors before static data-flow and
-TypeChecker reads. Both lifecycles still enter through the shared runtime binding source-expression projector; i18n
-does not carry a private evaluate-only TypeChecker rule.
+`astBind(...)`, but does not implement `useScope`: `& state` therefore does not switch parameter evaluation away from
+the view-model scope in the current runtime. Parameter bindings do support `signal` through `handleChange`, but not
+throttle/debounce's `limit` hook. `template/runtime-binding-capabilities.ts` owns these independent concrete-binding
+facts; executing `astBind` is not sufficient evidence of every binding-behavior capability. Both lifecycles still enter
+through the shared runtime binding source-expression projector. The resource plan does not invent bind-time behavior
+applications or converter binding for evaluate-only keys. It still retains both behavior and converter resource demand
+for the framework's `astUnbind` teardown: no Bind phase is represented by null bind reachability, not removal of the
+resource. Behavior cleanup without prior bind state remains explicitly open (a callback can even throw), while explicit
+converters still participate in evaluation. This follows current runtime behavior, not a promise to extend i18n/state
+compatibility upstream.
 
 ## Boundaries
 

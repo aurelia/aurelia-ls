@@ -16,10 +16,7 @@ import {
   type CheckerExpressionTypeEvaluationRuntimeContext,
 } from '../type-system/expression-type-context.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
-import {
-  RuntimeBindingKind,
-  TranslationBinding,
-} from '../template/runtime-binding.js';
+import { runtimeBindingCapabilities } from '../template/runtime-binding-capabilities.js';
 import type { RuntimeExpressionResourcePlan } from '../template/runtime-expression-resource-plan.js';
 import type { RuntimeExpressionBinding } from './runtime-binding-expression.js';
 import type { RuntimeInstructionScopeLookup } from './runtime-binding-expression.js';
@@ -351,9 +348,9 @@ export function checkerContextForRuntimeBindingBehaviorArguments(
 export function bindingBehaviorEvaluationForRuntimeBindingSource(
   binding: RuntimeExpressionBinding,
 ): CheckerExpressionTypeBindingBehaviorEvaluation {
-  return binding instanceof TranslationBinding && binding.bindingKind === RuntimeBindingKind.Translation
-    ? CheckerExpressionTypeBindingBehaviorEvaluation.AstEvaluateOnly
-    : CheckerExpressionTypeBindingBehaviorEvaluation.AstBindThenEvaluate;
+  return runtimeBindingCapabilities(binding).executesAstBind
+    ? CheckerExpressionTypeBindingBehaviorEvaluation.AstBindThenEvaluate
+    : CheckerExpressionTypeBindingBehaviorEvaluation.AstEvaluateOnly;
 }
 
 export function projectRuntimeSourceExpressionWithLifecycle(

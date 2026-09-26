@@ -26,6 +26,39 @@ import {
 } from '../src/evaluation/values.js';
 
 describe('static evaluator value pressure', () => {
+  test('reads inherited instance constructors without bypassing own values, getters, or unknown writes', () => {
+    const evaluation = new StaticEvaluator(undefined, pressureRuntimeHost).evaluateSourceFile(sourceFile([
+      'class Original {}',
+      'class Replacement {}',
+      'class Shadowed { ["constructor"] = Replacement; }',
+      'class Accessor { get ["constructor"]() { return Replacement; } }',
+      'class DerivedAccessor extends Accessor {}',
+      'class DerivedField extends Shadowed {}',
+      'const inherited = new Original().constructor;',
+      'const shadowed = new Shadowed().constructor;',
+      'const getter = new Accessor().constructor;',
+      'const derivedGetter = new DerivedAccessor().constructor;',
+      'const derivedField = new DerivedField().constructor;',
+      'const uncertain = new Original();',
+      'uncertain[unknownKey] = Replacement;',
+      'const uncertainConstructor = uncertain.constructor;',
+      'const pressured = new Original();',
+      'pressured.constructor = pressure(Replacement);',
+      'const pressuredConstructor = pressured.constructor;',
+    ]));
+    expect(evaluation.environment.readValue('inherited')).toBe(evaluation.environment.readValue('Original'));
+    expect(evaluation.environment.readValue('shadowed')).toBe(evaluation.environment.readValue('Replacement'));
+    expect(evaluation.environment.readValue('getter')).toBe(evaluation.environment.readValue('Replacement'));
+    expect(evaluation.environment.readValue('derivedGetter')).toBe(evaluation.environment.readValue('DerivedAccessor'));
+    expect(evaluation.environment.readValue('derivedField')).toBe(evaluation.environment.readValue('Replacement'));
+    expect(evaluation.environment.readValue('uncertainConstructor')?.kind).toBe(EvaluationValueKind.Unknown);
+    expect(bindingSeamSummaries(evaluation.environment.readBinding('uncertainConstructor')).length).toBeGreaterThan(0);
+    expect(evaluation.environment.readValue('pressuredConstructor')).toBe(evaluation.environment.readValue('Replacement'));
+    expect(bindingSeamSummaries(evaluation.environment.readBinding('pressuredConstructor'))).toContain(
+      'pressure(Replacement) retained a best-known value.',
+    );
+  });
+
   test('retains causal pressure on addressable slots without contaminating siblings', () => {
     const source = sourceFile([
       'const objectValue = { closed: 1, pressured: pressure(2) };',

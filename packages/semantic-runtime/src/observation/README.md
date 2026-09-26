@@ -853,7 +853,10 @@ behavior, scope projector, strictness, resource scope, and source container befo
 contract allowlists that owner specifically; it does not admit other bound-controller or observation-local fallbacks.
 The projector also carries the binding-behavior lifecycle policy. Most runtime bindings evaluate source expressions
 after `astBind(...)`, while i18n dynamic translation keys are evaluate-only and `t-params.bind` parameter bindings use
-the normal bind-time path. Keep that distinction here instead of adding i18n or overlay-local binding-behavior rules.
+the normal bind-time path. Concrete behavior capabilities come from `template/runtime-binding-capabilities.ts`:
+`astBind` does not imply `useScope`, and i18n parameters keep their original source scope even with `& state`.
+Bindings whose initial and later evaluation disagree about a replaced scope retain explicit pressure rather than a
+fabricated single scope. Keep that distinction here instead of adding i18n or overlay-local binding-behavior rules.
 That source-expression visibility does not make i18n translation keys ordinary value-channel or data-flow owners:
 generic binding flow starts from accessor/observer/direct-operation products, while i18n translation target writes are
 published by the i18n-specific lifecycle materializers. `t-params.bind` is the exception on the source side: it

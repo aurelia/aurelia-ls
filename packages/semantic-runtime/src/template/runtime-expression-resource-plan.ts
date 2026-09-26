@@ -34,16 +34,10 @@ import {
 import type { TemplateVisibleResource } from './compiler-world-reference.js';
 import { TemplateBindingMode } from './instruction-ir.js';
 import {
-  AttributeBinding,
-  ContentBinding,
-  InterpolationBinding,
-  LetBinding,
   ListenerBinding,
   PropertyBinding,
-  RefBinding,
   RuntimeBindingTargetAccessStrategy,
   RuntimeBindingTargetKind,
-  SpreadValueBinding,
   type RuntimeBinding,
   type RuntimeBindingTarget,
 } from './runtime-binding.js';
@@ -69,6 +63,7 @@ import {
   bindingModeForBindingBehaviorName,
   runtimeBindingInitialMode,
 } from './runtime-binding-mode-behavior.js';
+import { runtimeBindingCapabilities } from './runtime-binding-capabilities.js';
 import { RuntimeHtmlBindingBehaviorFrameworkErrorCode } from './framework-error-code.js';
 import { RuntimeHtmlAstFrameworkErrorCode } from '../type-system/framework-error-code.js';
 import { expressionProductHandlesForRuntimeBinding } from './runtime-binding-expression-products.js';
@@ -134,7 +129,8 @@ export class RuntimeBindingBehaviorPlanEntry {
     readonly authoredChainDepth: number,
     /** Depth in the runtime AST after reached binding-behavior projections. */
     readonly runtimeChainDepth: number,
-    readonly bindReachability: RuntimeOperationReachability,
+    /** null when the owning binding does not execute astBind; the entry still owns runtime cleanup demand. */
+    readonly bindReachability: RuntimeOperationReachability | null,
     readonly bindOrder: number | null,
     readonly issue: BuiltInBindingBehaviorBindIssue | null,
   ) {}
@@ -160,7 +156,8 @@ export class RuntimeValueConverterPlanEntry {
     /** Depth in the runtime AST after reached binding-behavior projections. */
     readonly runtimeChainDepth: number,
     readonly origin: RuntimeExpressionResourceApplicationOrigin,
-    readonly bindReachability: RuntimeOperationReachability,
+    /** null for evaluate-only owners whose converter is used by astEvaluate and astUnbind, not astBind. */
+    readonly bindReachability: RuntimeOperationReachability | null,
     readonly bindOrder: number | null,
   ) {}
 }
@@ -282,7 +279,7 @@ export class RuntimeExpressionResourcePlan {
         entry.expressionProductHandle,
         entry.chainIndex,
       );
-      if (!runtimeOperationMayBeReached(entry.bindReachability)
+      if (!runtimeOperationMayBeReached(entry.bindReachability ?? this.readSourceEvaluationReachability(entry.binding.productHandle))
         || entry.resource == null
         || this.failedBindChains.has(key)) {
         continue;
@@ -383,6 +380,9 @@ export class RuntimeExpressionResourcePlan {
   readPostBindPhaseReachability(
     entry: RuntimeExpressionResourcePlanEntry,
   ): RuntimeOperationReachability {
+    if (entry.bindReachability == null) {
+      return this.readSourceEvaluationReachability(entry.binding.productHandle);
+    }
     if (this.failedBindChains.has(expressionChainKey(
       entry.binding.productHandle,
       entry.expressionProductHandle,
@@ -400,6 +400,9 @@ export class RuntimeExpressionResourcePlan {
   readCleanupPhaseReachability(
     entry: RuntimeExpressionResourcePlanEntry,
   ): RuntimeOperationReachability {
+    if (entry.bindReachability == null) {
+      return this.readSourceEvaluationReachability(entry.binding.productHandle);
+    }
     if (this.completedBindEntries.has(entry)) {
       return entry.bindReachability;
     }
@@ -569,6 +572,7 @@ export class RuntimeExpressionResourcePlanner {
         continue;
       }
       const activationReachability = input.runtimeRendering.readBindingBindReachability(binding.productHandle);
+      const executesAstBind = runtimeBindingCapabilities(binding).executesAstBind;
       const renderContext = input.runtimeRendering.requireRenderContextForBinding(binding.productHandle);
       const resourceScope = renderContext.resourceScope;
       const targetController = runtimeBindingTargetController(input.runtimeRendering, binding);
@@ -636,7 +640,7 @@ export class RuntimeExpressionResourcePlanner {
           }
           const structurallyReached = chainState.blockedBy == null;
           const runtimeChainDepth = chainState.nextRuntimeChainDepth++;
-          const bindOrder = structurallyReached ? chainState.nextBindOrder++ : null;
+          const bindOrder = executesAstBind && structurallyReached ? chainState.nextBindOrder++ : null;
           if (isBindingBehaviorOccurrence(occurrence)) {
             const resource = findVisibleTemplateResource(
               resourceScope,
@@ -646,8 +650,8 @@ export class RuntimeExpressionResourcePlanner {
             const builtInResource = asBuiltInBindingBehaviorResource(
               readBuiltInVisibleTemplateResource(input.expressionWorld.projector.publication, resource),
             );
-            const resourceBindEffects = bindEffects.readEffects(resource);
-            const issue = structurallyReached
+            const resourceBindEffects = bindEffects.readEffects(executesAstBind ? resource : null);
+            const issue = executesAstBind && structurallyReached
               ? this.issueForBindingBehavior(
                   binding,
                   target,
@@ -672,9 +676,9 @@ export class RuntimeExpressionResourcePlanner {
               occurrence,
               occurrence.chainDepth,
               runtimeChainDepth,
-              structurallyReached
-                ? activationReachability
-                : chainState.blockedBy!,
+              executesAstBind
+                ? structurallyReached ? activationReachability : chainState.blockedBy!
+                : null,
               bindOrder,
               issue,
             ));
@@ -682,7 +686,7 @@ export class RuntimeExpressionResourcePlanner {
               chainState.blockedBy = RuntimeOperationReachability.BlockedByOuterFailure;
               continue;
             }
-            if (structurallyReached
+            if (executesAstBind && structurallyReached
               && builtInResource != null
               && bindingBehaviorProjectsThroughValueConverter(occurrence.expression)) {
               const projected = bindingBehaviorValueConverterProjection(occurrence.expression);
@@ -743,9 +747,9 @@ export class RuntimeExpressionResourcePlanner {
             occurrence.chainDepth,
             runtimeChainDepth,
             RuntimeExpressionResourceApplicationOrigin.Authored,
-            structurallyReached
-              ? activationReachability
-              : chainState.blockedBy!,
+            executesAstBind
+              ? structurallyReached ? activationReachability : chainState.blockedBy!
+              : null,
             bindOrder,
           ));
           if (structurallyReached && resource == null) {
@@ -864,7 +868,7 @@ export class RuntimeExpressionResourcePlanner {
         }));
       case BuiltInBindingBehaviorName.Signal:
         return this.afterTargetSubscriberEffects(behavior.name.name, bindState, effects, this.signal.bind({
-          bindingCanHandleChange: bindingSupportsHandleChange(binding),
+          bindingCanHandleChange: runtimeBindingCapabilities(binding).handlesChange,
           signalArgumentCount: behavior.args.length,
         }));
       case BuiltInBindingBehaviorName.Throttle:
@@ -946,7 +950,7 @@ export class RuntimeExpressionResourcePlanner {
     bindState: BindingBehaviorBindState,
     behaviorName: RateLimitBindingBehaviorName,
   ): BuiltInBindingBehaviorBindIssue | null {
-    if (!bindingSupportsRateLimit(binding)) {
+    if (!runtimeBindingCapabilities(binding).rateLimit) {
       return null;
     }
     const behavior = behaviorName === this.debounce.name ? this.debounce : this.throttle;
@@ -1005,7 +1009,8 @@ function chainIndexForPlanEntry(entry: RuntimeExpressionResourcePlanEntry): numb
 }
 
 function expressionResourceBindCompleted(entry: RuntimeExpressionResourcePlanEntry): boolean {
-  if (!runtimeOperationMayBeReached(entry.bindReachability) || entry.resource == null) {
+  if (entry.bindReachability == null
+    || !runtimeOperationMayBeReached(entry.bindReachability) || entry.resource == null) {
     return false;
   }
   return isValueConverterPlanEntry(entry) || entry.issue == null;
@@ -1059,20 +1064,6 @@ function mergeSourceEvaluationReachability(
 
 function bindingModeAllowsTargetToSource(bindingMode: TemplateBindingMode): boolean {
   return bindingMode === TemplateBindingMode.FromView || bindingMode === TemplateBindingMode.TwoWay;
-}
-
-function bindingSupportsHandleChange(binding: RuntimeBinding): boolean {
-  return binding instanceof PropertyBinding
-    || binding instanceof AttributeBinding
-    || binding instanceof LetBinding
-    || binding instanceof InterpolationBinding
-    || binding instanceof RefBinding
-    || binding instanceof ContentBinding
-    || binding instanceof SpreadValueBinding;
-}
-
-function bindingSupportsRateLimit(binding: RuntimeBinding): boolean {
-  return bindingSupportsHandleChange(binding) || binding instanceof ListenerBinding;
 }
 
 function validateTargetIsNodeOrControllerViewModel(target: RuntimeBindingTarget): boolean | null {
