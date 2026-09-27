@@ -118,7 +118,7 @@ for focused product setup, tests, and extension debugging.
 
 ## Status
 
-The current product releases are VS Code 0.5.3 and MCP 0.3.3.
+The current product releases are VS Code 0.5.4 and MCP 0.3.3.
 
 ## License
 

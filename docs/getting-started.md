@@ -33,7 +33,7 @@ Set `aurelia.activationMode` per workspace folder for unusual layouts:
 - `on` explicitly keeps tooling active;
 - `off` excludes the folder and its complete subtree from Aurelia tooling.
 
-VS Code 0.5.3 supports VS Code 1.91+ and filesystem-backed local workspaces.
+VS Code 0.5.4 supports VS Code 1.91+ and filesystem-backed local workspaces.
 Virtual workspaces are unsupported; remote development is outside the
 release-tested host envelope.
 
