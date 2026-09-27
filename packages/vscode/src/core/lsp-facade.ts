@@ -67,13 +67,27 @@ export class LspFacade implements Disposable {
   #notificationHandlers = new Map<string, Set<NotificationHandler>>();
   #rawNotificationSubscriptions: Disposable[] = [];
   #sessionSubscription: Disposable;
+  #lastResourceInventoryIssues = new Map<string, {
+    readonly client: AureliaLanguageClientSession["client"];
+    readonly incarnation: number;
+    readonly signature: string;
+  }>();
   #resourceDiscoveryHostControl: ResourceDiscoveryHostControl | undefined;
   #disposed = false;
 
   constructor(clients: AureliaLanguageClient, logger: ClientLogger) {
     this.#clients = clients;
     this.#logger = logger.child("lsp");
-    this.#sessionSubscription = clients.onDidChangeSessions(() => this.#rebindNotifications());
+    this.#sessionSubscription = clients.onDidChangeSessions((sessions) => {
+      for (const [workspaceKey, previous] of this.#lastResourceInventoryIssues) {
+        if (!sessions.some((session) => session.workspace.key === workspaceKey
+          && session.client === previous.client
+          && session.incarnation === previous.incarnation)) {
+          this.#lastResourceInventoryIssues.delete(workspaceKey);
+        }
+      }
+      this.#rebindNotifications();
+    });
     this.#resourceDiscoveryHostControl = createResourceDiscoveryHostControl({
       admittedWorkspaceKeys: () => this.#clients.sessions.map((session) => session.workspace.key),
     });
@@ -89,6 +103,7 @@ export class LspFacade implements Disposable {
     }
     this.#disposeRawNotifications();
     this.#notificationHandlers.clear();
+    this.#lastResourceInventoryIssues.clear();
     this.#resourceDiscoveryHostControl?.dispose();
     this.#resourceDiscoveryHostControl = undefined;
   }
@@ -414,11 +429,15 @@ export class LspFacade implements Disposable {
       if (workspace.status === "error") {
         // #sendRequest already recorded the transport exception with workspace
         // context before it was conserved as an error row.
+        this.#lastResourceInventoryIssues.delete(workspace.key);
         continue;
       }
+      const issues: Record<string, unknown>[] = [];
+      let hasFailure = false;
       for (const project of workspace.response.projects) {
         if (project.status === "error") {
-          this.#logger.warn("resource-inventory.project.issue", {
+          hasFailure = true;
+          issues.push({
             workspace: workspace.key,
             project: project.project.projectKey,
             status: project.status,
@@ -433,7 +452,8 @@ export class LspFacade implements Disposable {
         ) {
           continue;
         }
-        this.#logger.warn("resource-inventory.project.issue", {
+        hasFailure ||= project.answer.result !== "answered";
+        issues.push({
           workspace: workspace.key,
           project: project.project.projectKey,
           result: project.answer.result,
@@ -442,6 +462,26 @@ export class LspFacade implements Disposable {
           completeness: project.completeness,
         });
       }
+      const session = this.#clients.sessions.find((candidate) => candidate.workspace.key === workspace.key);
+      if (issues.length === 0 || hasFailure || session == null) {
+        // A healthy (even partial) observation or any failure ends suppression.
+        // Keep every actual failure visible, including repeated identical ones.
+        this.#lastResourceInventoryIssues.delete(workspace.key);
+      } else {
+        // Retain only the last successful warning state per active workspace.
+        // Semantic fingerprints and resource rows do not describe a new issue.
+        const signature = JSON.stringify(issues);
+        const previous = this.#lastResourceInventoryIssues.get(workspace.key);
+        if (previous?.client === session.client
+          && previous.incarnation === session.incarnation
+          && previous.signature === signature) continue;
+        this.#lastResourceInventoryIssues.set(workspace.key, {
+          client: session.client,
+          incarnation: session.incarnation,
+          signature,
+        });
+      }
+      for (const issue of issues) this.#logger.warn("resource-inventory.project.issue", issue);
     }
   }
 
@@ -509,7 +549,12 @@ export class LspFacade implements Disposable {
         attempt: attempt + 1,
       });
       try {
-        const result = await session.client.sendRequest<T>(method, params, token);
+        // String-method requests are variadic: a trailing undefined is serialized
+        // as a second positional parameter and displaces the server's token.
+        // Keep the params slot even when absent: custom handlers take (params, token).
+        const result = token == null
+          ? await session.client.sendRequest<T>(method, params)
+          : await session.client.sendRequest<T>(method, params, token);
         this.#assertSessionCurrent(session);
         this.#logger.debug("response", {
           method,

@@ -1,4 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
+import type { CancellationToken, TextDocument } from "vscode";
+import { LSPErrorCodes, ResponseError } from "vscode-languageserver-protocol";
 import {
   EXTENSION_HOST_OBSERVATION_EVENT,
   type ExtensionHostObservation,
@@ -21,13 +23,13 @@ function available(role: string, line: number) {
   return { state: "available" as const, location: location(role, line) };
 }
 
-function inventory(options: { readonly pathless?: boolean } = {}) {
+function inventory(options: { readonly pathless?: boolean; readonly workspaceKey?: string } = {}) {
   const navigation = options.pathless
     ? { state: "unavailable" as const, reason: "external-catalog" as const }
     : available("public-name", 3);
   return {
     workspaces: [{
-      key: "file:///repo",
+      key: options.workspaceKey ?? "file:///repo",
       name: "repo",
       uri: "file:///repo",
       status: "ready" as const,
@@ -80,7 +82,9 @@ function request(
 function harness(response: unknown) {
   const { vscode: stubVscode, recorded } = createVscodeApi();
   const logger = { debug: vi.fn() };
-  const lsp = { getResourceInventory: vi.fn(async () => response) };
+  const lsp = {
+    getResourceInventory: vi.fn(async (_options?: unknown, _token?: CancellationToken) => response),
+  };
   return {
     lsp,
     logger,
@@ -236,10 +240,10 @@ describe("openResourceNavigation", () => {
       request(role, child),
     )).resolves.toBe(true);
 
-    expect(current.lsp.getResourceInventory).toHaveBeenCalledWith({
-      workspaceKey: "file:///repo",
-      projectKey: "app",
-    });
+    expect(current.lsp.getResourceInventory).toHaveBeenCalledWith(
+      { workspaceKey: "file:///repo", projectKey: "app" },
+      expect.objectContaining({ isCancellationRequested: false }),
+    );
     expect(current.recorded.shownDocuments[0]?.opts).toEqual(expect.objectContaining({
       preview: true,
       selection: expect.objectContaining({
@@ -262,6 +266,136 @@ describe("openResourceNavigation", () => {
       preview: true,
       viewColumn: current.vscode.ViewColumn.Beside,
     }));
+  });
+
+  test.each([
+    { workspaceKey: "file:///repo", placement: "preview" },
+    { workspaceKey: "file:///other", placement: "preview" },
+    { workspaceKey: "file:///repo", placement: "beside" },
+  ] as const)("keeps only the latest editor intent for $workspaceKey / $placement", async (next) => {
+    const firstInventory = deferred<unknown>();
+    const current = harness(inventory({ workspaceKey: next.workspaceKey }));
+    current.lsp.getResourceInventory.mockImplementationOnce(() => firstInventory.promise);
+
+    const first = openResourceNavigation(current.vscode, current.lsp as never, current.logger as never, request("resource"));
+    const firstToken = current.lsp.getResourceInventory.mock.calls[0]?.[1];
+    const latest = openResourceNavigation(current.vscode, current.lsp as never, current.logger as never, {
+      ...request("implementation"), ...next,
+    });
+    const cancelledBeforeResponse = firstToken?.isCancellationRequested;
+    await expect(latest).resolves.toBe(true);
+    // The RPC deliberately ignores cancellation and returns its old answer late.
+    firstInventory.resolve(inventory());
+    await expect(first).resolves.toBe(false);
+
+    expect(cancelledBeforeResponse).toBe(true);
+    expect(current.recorded.shownDocuments).toHaveLength(1);
+    expect(current.recorded.shownDocuments[0]?.opts).toEqual(expect.objectContaining({
+      selection: expect.objectContaining({ start: expect.objectContaining({ line: 11 }) }),
+      ...(next.placement === "beside" ? { viewColumn: current.vscode.ViewColumn.Beside } : {}),
+    }));
+    expect(current.recorded.infoMessages).toEqual([]);
+  });
+
+  test("does not supersede navigation owned by another LSP facade", async () => {
+    const firstInventory = deferred<unknown>();
+    const current = harness(inventory());
+    const unrelated = harness(inventory());
+    current.lsp.getResourceInventory.mockImplementationOnce(() => firstInventory.promise);
+    const first = openResourceNavigation(current.vscode, current.lsp as never, current.logger as never, request("resource"));
+    const firstToken = current.lsp.getResourceInventory.mock.calls[0]?.[1];
+
+    await expect(openResourceNavigation(unrelated.vscode, unrelated.lsp as never, unrelated.logger as never,
+      request("implementation"))).resolves.toBe(true);
+    firstInventory.resolve(inventory());
+    await expect(first).resolves.toBe(true);
+    expect(firstToken?.isCancellationRequested).toBe(false);
+    expect(current.recorded.shownDocuments).toHaveLength(1);
+    expect(unrelated.recorded.shownDocuments).toHaveLength(1);
+  });
+
+  test("settling an old request leaves its successor cancellable by a third intent", async () => {
+    const firstInventory = deferred<unknown>();
+    const secondInventory = deferred<unknown>();
+    const current = harness(inventory());
+    current.lsp.getResourceInventory
+      .mockImplementationOnce(() => firstInventory.promise)
+      .mockImplementationOnce(() => secondInventory.promise);
+    const open = (role: ResourceNavigationRequest["role"]) =>
+      openResourceNavigation(current.vscode, current.lsp as never, current.logger as never, request(role));
+    const first = open("resource");
+    const second = open("implementation");
+    const secondToken = current.lsp.getResourceInventory.mock.calls[1]?.[1];
+    firstInventory.resolve(inventory());
+    const firstResult = await first;
+    const successorCancelledByCleanup = secondToken?.isCancellationRequested;
+
+    const third = open("resource");
+    const successorCancelledByThird = secondToken?.isCancellationRequested;
+    secondInventory.resolve(inventory());
+    await expect(second).resolves.toBe(false);
+    await expect(third).resolves.toBe(true);
+    expect(firstResult).toBe(false);
+    expect(successorCancelledByCleanup).toBe(false);
+    expect(successorCancelledByThird).toBe(true);
+    expect(current.recorded.shownDocuments).toHaveLength(1);
+  });
+
+  test("does not focus a superseded document after openTextDocument resolves", async () => {
+    const current = harness(inventory());
+    const oldDocument = await current.vscode.workspace.openTextDocument("file:///repo/src/product-card.ts");
+    const opening = deferred<TextDocument>();
+    const openDocument = vi.spyOn(current.vscode.workspace, "openTextDocument").mockReturnValueOnce(opening.promise);
+    const first = openResourceNavigation(current.vscode, current.lsp as never, current.logger as never, request("resource"));
+    await vi.waitFor(() => expect(openDocument).toHaveBeenCalledOnce());
+    await expect(openResourceNavigation(current.vscode, current.lsp as never, current.logger as never,
+      request("implementation"))).resolves.toBe(true);
+    opening.resolve(oldDocument);
+    await expect(first).resolves.toBe(false);
+    expect(current.recorded.shownDocuments).toHaveLength(1);
+    expect(current.recorded.shownDocuments[0]?.opts).toEqual(expect.objectContaining({
+      selection: expect.objectContaining({ start: expect.objectContaining({ line: 11 }) }),
+    }));
+    expect(current.recorded.infoMessages).toEqual([]);
+  });
+
+  test("treats protocol cancellation silently but preserves ordinary inventory failures", async () => {
+    const current = harness(inventory());
+    const failure = new Error("inventory unavailable");
+    current.lsp.getResourceInventory
+      .mockRejectedValueOnce(new ResponseError(LSPErrorCodes.RequestCancelled, "cancelled"))
+      .mockRejectedValueOnce(failure);
+    await expect(openResourceNavigation(current.vscode, current.lsp as never, current.logger as never,
+      request("resource"))).resolves.toBe(false);
+    await expect(openResourceNavigation(current.vscode, current.lsp as never, current.logger as never,
+      request("resource"))).rejects.toBe(failure);
+    expect(current.recorded.infoMessages).toEqual([]);
+    expect(current.recorded.shownDocuments).toEqual([]);
+  });
+
+  test.each(["completed", "failed"] as const)("disposes %s navigation without cancelling it on a later intent", async (outcome) => {
+    const current = harness(inventory());
+    const dispose = vi.spyOn(current.vscode.CancellationTokenSource.prototype, "dispose");
+    const cancel = vi.spyOn(current.vscode.CancellationTokenSource.prototype, "cancel");
+    try {
+      const failure = new Error("inventory unavailable");
+      if (outcome === "failed") current.lsp.getResourceInventory.mockRejectedValueOnce(failure);
+      const first = openResourceNavigation(current.vscode, current.lsp as never, current.logger as never, request("resource"));
+      const firstToken = current.lsp.getResourceInventory.mock.calls[0]?.[1];
+      if (outcome === "failed") await expect(first).rejects.toBe(failure);
+      else await expect(first).resolves.toBe(true);
+      const disposalsAfterFirst = dispose.mock.calls.length;
+
+      await expect(openResourceNavigation(current.vscode, current.lsp as never, current.logger as never,
+        request("implementation"))).resolves.toBe(true);
+      expect(firstToken?.isCancellationRequested).toBe(false);
+      expect(disposalsAfterFirst).toBe(1);
+      expect(dispose).toHaveBeenCalledTimes(2);
+      expect(cancel).not.toHaveBeenCalled();
+    } finally {
+      dispose.mockRestore();
+      cancel.mockRestore();
+    }
   });
 
   test("keeps pathless and retired identities actionless without a fallback open", async () => {
@@ -510,6 +644,12 @@ describe("openResourceNavigation", () => {
     expect([...workspaceHarness.recorded.infoMessages, ...projectHarness.recorded.infoMessages]).toEqual([]);
   });
 });
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => { resolve = resolvePromise; });
+  return { promise, resolve };
+}
 
 function captureNavigationObservations(): {
   readonly events: ExtensionHostObservation[];
