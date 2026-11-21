@@ -1,3 +1,6 @@
+import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { once } from "node:events";
 import {
   existsSync,
   lstatSync,
@@ -9,6 +12,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createConnection } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -293,36 +297,52 @@ describe("Extension Host tail collector", () => {
 
   test("bounds a child and removes its descendant process tree on timeout", async () => {
     const collector = await loadCollector();
-    const root = temporaryRoot("aurelia-host-tail-process-tree-");
-    const descendantMarker = path.join(root, "descendant-survived.txt");
+    const endpoint = process.platform === "win32"
+      ? `\\\\.\\pipe\\aurelia-tree-${randomUUID()}`
+      : path.join(temporaryRoot("au-tree-"), "descendant.sock");
     const descendant = [
-      `const fs = require("node:fs")`,
-      `setTimeout(() => fs.writeFileSync(${JSON.stringify(descendantMarker)}, "survived"), 450)`,
-      `setInterval(() => {}, 1000)`,
+      'const server = require("node:net").createServer(connection => connection.end())',
+      `server.listen(${JSON.stringify(endpoint)}, () => process.stdout.write("ready"))`,
+      'setTimeout(() => server.close(), 20_000).unref()',
     ].join(";");
     const parent = [
       `const { spawn } = require("node:child_process")`,
-      `spawn(process.execPath, ["-e", ${JSON.stringify(descendant)}], { stdio: "ignore" })`,
-      `setInterval(() => {}, 1000)`,
+      // A Windows job would otherwise kill its child automatically when the parent alone exits.
+      `spawn(process.execPath, ["-e", ${JSON.stringify(descendant)}], { stdio: ["ignore", "inherit", "ignore"], detached: process.platform === "win32", windowsHide: true })`,
     ].join(";");
-
-    const result = await collector.runBoundedChildProcess({
-      command: process.execPath,
-      args: ["-e", parent],
-      cwd: process.cwd(),
-      env: process.env,
-      timeoutMilliseconds: 75,
-      cleanupGraceMilliseconds: 2_000,
+    const detached = process.platform !== "win32";
+    const child = spawn(process.execPath, ["-e", parent], {
+      stdio: ["ignore", "pipe", "pipe"], detached, windowsHide: true,
     });
-
-    expect(result).toMatchObject({
-      timedOut: true,
-      timeoutMilliseconds: 75,
-      cleanup: { status: "passed", pid: expect.any(Number) },
-    });
-    await new Promise((resolve) => setTimeout(resolve, 650));
-    expect(existsSync(descendantMarker)).toBe(false);
-  });
+    try {
+      const [ready] = await once(child.stdout, "data", { signal: AbortSignal.timeout(10_000) });
+      expect(String(ready)).toBe("ready");
+      const result = await collector.runBoundedChildProcess({
+        command: process.execPath,
+        args: ["-e", parent],
+        cwd: process.cwd(),
+        env: process.env,
+        timeoutMilliseconds: 75,
+        spawnProcess: (_command: string, _args: string[], options: { detached: boolean }) => {
+          expect(options.detached).toBe(detached);
+          return child;
+        },
+      });
+      expect(result).toMatchObject({
+        timedOut: true,
+        timeoutMilliseconds: 75,
+        cleanup: { status: "passed", pid: child.pid },
+      });
+      const probe = createConnection(endpoint);
+      try {
+        await expect(once(probe, "connect")).rejects.toMatchObject({ code: expect.stringMatching(/^(ENOENT|ECONNREFUSED)$/u) });
+      } finally {
+        probe.destroy();
+      }
+    } finally {
+      child.kill();
+    }
+  }, 25_000);
 
   test("keeps the cleanup boundary bounded when process-tree termination never settles", async () => {
     const collector = await loadCollector();

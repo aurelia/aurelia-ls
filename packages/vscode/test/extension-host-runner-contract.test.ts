@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   cpSync,
   existsSync,
@@ -131,28 +131,35 @@ describe("Extension Host support runner", () => {
   });
 
   test("enters installed acceptance without an unresolved top-level await", () => {
-    const environment = { ...process.env };
-    for (const key of Object.keys(environment)) {
-      if (key.toLowerCase() === "npm_execpath") delete environment[key];
+    const root = join(contractTempRoot, randomUUID());
+    mkdirSync(root, { recursive: true });
+    const env = {
+      ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.toUpperCase().startsWith("GIT_"))),
+      GIT_DIR: join(root, ".git"), GIT_WORK_TREE: root,
+    };
+    try {
+      execFileSync("git", ["init", "--quiet"], { cwd: root, env });
+      const marker = join(root, "entry-control.txt");
+      writeFileSync(marker, "initial release input");
+      execFileSync("git", ["add", "--force", "--", "entry-control.txt"], { cwd: root, env });
+      execFileSync("git", [
+        "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "core.hooksPath=.git/no-hooks",
+        "commit", "--no-gpg-sign", "--quiet", "-m", "Initialize fixture",
+      ], { cwd: root, env });
+      writeFileSync(marker, "changed release input");
+      const result = spawnSync(process.execPath, [runnerPath, "--worker", "--current-stable", "--installed-vsix"], {
+        cwd: root, env, encoding: "utf8", timeout: 10_000, windowsHide: true,
+      });
+      const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+      expect(result.error).toBeUndefined();
+      expect(result.signal).toBeNull();
+      expect(result.status).toBe(1);
+      expect(output).toContain("VSIX packaging requires a clean repository including untracked files and submodules:");
+      expect(output).toContain(" M entry-control.txt");
+      expect(output).not.toContain("unsettled top-level await");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
     }
-    const result = spawnSync(
-      process.execPath,
-      [runnerPath, "--worker", "--current-stable", "--installed-vsix"],
-      {
-        cwd: resolve(dirname(runnerPath), "../../.."),
-        encoding: "utf8",
-        env: environment,
-        timeout: 10_000,
-        windowsHide: true,
-      },
-    );
-    const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
-
-    expect(result.error).toBeUndefined();
-    expect(result.signal).toBeNull();
-    expect(result.status).toBe(1);
-    expect(output).toContain("VSIX packaging must run from a pnpm lifecycle with npm_execpath available.");
-    expect(output).not.toContain("unsettled top-level await");
   });
 
   test("binds recovery presentations to their navigation fault controls", () => {
