@@ -444,7 +444,7 @@ export type SemanticTypeSystemDependencyCacheSourceBucket =
   | 'node-modules'
   | 'external-declarations';
 
-export const enum SemanticAppQueryKind {
+export enum SemanticAppQueryKind {
   Summary = 'summary',
   AppOverview = 'app-overview',
   SourceFiles = 'source-files',
@@ -1988,6 +1988,8 @@ export interface SemanticSourceFileRow {
 
 export interface SemanticSourceFilesResult {
   readonly rows: readonly SemanticSourceFileRow[];
+  /** Admitted sources before pagination. */
+  readonly totalRows: number;
 }
 
 export interface SemanticUnresolvedModuleRow {
@@ -4919,7 +4921,8 @@ export enum SemanticTemplateBindableUsageModeAuthority {
 }
 
 export interface SemanticTemplateCursorBindableRow extends SemanticBindableDefinitionRow {
-  readonly ownerDefinitionProductHandle: ProductHandle | null;
+  /** Compatibility alias for handles.ownerDefinitionProductHandle in explicit handles detail. */
+  readonly ownerDefinitionProductHandle?: ProductHandle | null;
   /** Mode this exact usage has when its binding activates after modeled mode behaviors; not proof evaluation occurred. */
   readonly usageEffectiveMode: SemanticTemplateUsageEffectiveBindingMode | null;
   /** Exact authority for the usage mode; null when the cursor selects only bindable declaration metadata. */

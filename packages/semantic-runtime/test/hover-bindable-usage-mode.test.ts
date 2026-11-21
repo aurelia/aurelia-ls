@@ -120,6 +120,15 @@ describe('hover bindable usage-effective mode', () => {
       }
       return row;
     };
+    const compact = app.ask({
+      kind: SemanticAppQueryKind.TemplateCursorInfo,
+      cursor: cursorAtMarker(templateText, 'title.bind="titleText"', 'title'),
+    }).value as SemanticTemplateCursorInfoResult;
+    expect(compact.selectedBindable?.name).toBe('title');
+    expect(compact.selectedBindable).not.toHaveProperty('handles');
+    expect(compact.selectedBindable).not.toHaveProperty('ownerDefinitionProductHandle');
+    const detailed = bindable('title.bind="titleText"', 'title');
+    expect(detailed.ownerDefinitionProductHandle).toBe(detailed.handles?.ownerDefinitionProductHandle);
 
     expectUsage(bindable('title.bind="titleText"', 'title'), {
       mode: 'toView',
