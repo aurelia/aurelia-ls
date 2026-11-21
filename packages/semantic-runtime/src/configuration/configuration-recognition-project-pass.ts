@@ -1,3 +1,4 @@
+import type ts from 'typescript';
 import type {
   ProjectBootFrame,
   SourceFileAdmission,
@@ -82,6 +83,21 @@ export class ConfigurationRecognitionProjectResult {
 
   readObservations(): readonly ConfigurationSequenceObservation[] {
     return this.sources.flatMap((source) => source.observations);
+  }
+
+  /** Checker-owned call nodes admitted as Aurelia/container registration operations. */
+  readRegistrationCalls(typeSystem: TypeSystemProject): ReadonlySet<ts.Node> {
+    const calls = new Set<ts.Node>();
+    for (const sequence of this.readObservations()) {
+      for (const step of sequence.steps) {
+        if (step.stepKind === ConfigurationStepKind.AureliaRegister || step.stepKind === ConfigurationStepKind.ContainerRegister
+          || step.stepKind === ConfigurationStepKind.RegistryRegister) {
+          const node = typeSystem.readProgramNode(step.sourceNode);
+          if (node != null) calls.add(node);
+        }
+      }
+    }
+    return calls;
   }
 
   readEmissions(): readonly ConfigurationKernelEmission[] {

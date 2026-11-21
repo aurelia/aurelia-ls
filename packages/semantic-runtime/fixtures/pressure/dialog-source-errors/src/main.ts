@@ -92,3 +92,8 @@ new Aurelia()
     component: DialogSourceErrorsApp,
   })
   .start();
+
+const localDialog = new LocalDialogService();
+void localDialog.createChild({}).open({});
+const localRegistry = { register(_configuration: unknown) {} };
+localRegistry.register(DialogConfiguration);

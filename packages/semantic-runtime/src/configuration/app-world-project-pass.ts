@@ -1,4 +1,5 @@
 import { performance } from 'node:perf_hooks';
+import type ts from 'typescript';
 import type {
   SemanticRuntimeSupport,
 } from '../framework/framework-support-authority.js';
@@ -669,7 +670,8 @@ class AureliaAppWorldProjectConstructionFrame {
       routeRecognizer,
     );
     const i18n = this.materializeI18nTranslationCatalog(configuration);
-    const stateBase = this.materializeStateBase(configuration, appWorld, typeSystem);
+    const registrationCalls = configuration.readRegistrationCalls(typeSystem);
+    const stateBase = this.materializeStateBase(configuration, appWorld, typeSystem, registrationCalls);
     const recognizedSourceApiRoots = this.recognizeSourceApiRoots(typeSystem, configuration);
     const serviceRoots = this.materializeFrameworkServiceRoots(
       typeSystem,
@@ -679,7 +681,7 @@ class AureliaAppWorldProjectConstructionFrame {
     const sourceApiRoots = serviceRoots.sourceApiRoots;
     const validation = this.materializeValidationSourceIssues(typeSystem, configuration, sourceApiRoots);
     const fetchClient = this.materializeFetchClientSourceIssues(typeSystem, sourceApiRoots);
-    const dialog = this.materializeDialogSourceIssues(typeSystem, sourceApiRoots);
+    const dialog = this.materializeDialogSourceIssues(typeSystem, sourceApiRoots, registrationCalls);
     const serviceRootEnrichment = this.enrichFrameworkServiceRoots(
       serviceRoots,
       appWorld.containerChainFacts,
@@ -1251,9 +1253,10 @@ class AureliaAppWorldProjectConstructionFrame {
     configuration: ConfigurationRecognitionProjectResult,
     appWorld: AureliaAppWorldEmission,
     typeSystem: TypeSystemProject,
+    registrationCalls: ReadonlySet<ts.Node>,
   ): StateProjectResult {
     const stores = this.materializeStateStoreConfigurations(configuration, appWorld, typeSystem);
-    const sourceIssues = this.materializeStateSourceIssues(typeSystem);
+    const sourceIssues = this.materializeStateSourceIssues(typeSystem, registrationCalls);
     const getterBindings = this.materializeStateGetterBindings(stores, typeSystem);
     return new StateProjectResult(
       stores.stores,
@@ -1308,13 +1311,14 @@ class AureliaAppWorldProjectConstructionFrame {
 
   private materializeStateSourceIssues(
     typeSystem: TypeSystemProject,
+    registrationCalls: ReadonlySet<ts.Node>,
   ): StateSourceIssueProjectResult {
     return this.measure('state-source-issues', () =>
       mergeStateSourceIssueProjectResults([
         new FromStateDecoratorIssueMaterializer(this.store, this.publication)
           .materializeAndEmit(this.project, typeSystem),
         new WithStoreAfterRegistrationIssueMaterializer(this.store, this.publication)
-          .materializeAndEmit(this.project, typeSystem),
+          .materializeAndEmit(this.project, typeSystem, registrationCalls),
       ])
     );
   }
@@ -1404,12 +1408,14 @@ class AureliaAppWorldProjectConstructionFrame {
   private materializeDialogSourceIssues(
     typeSystem: TypeSystemProject,
     sourceApiRoots: AureliaSourceApiRootFacts,
+    registrationCalls: ReadonlySet<ts.Node>,
   ): DialogSourceIssueProjectResult {
     return this.measure('dialog-source-issues', () =>
       new DialogSourceIssueMaterializer(this.store, this.publication).materializeAndEmit(
         this.project,
         typeSystem,
         sourceApiRoots,
+        registrationCalls,
       )
     );
   }

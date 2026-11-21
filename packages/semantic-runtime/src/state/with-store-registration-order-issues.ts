@@ -68,8 +68,9 @@ export class WithStoreAfterRegistrationIssueMaterializer {
   materializeAndEmit(
     project: ProjectBootFrame,
     typeSystem: TypeSystemProject,
+    registrationCalls: ReadonlySet<ts.Node>,
   ): StateSourceIssueProjectResult {
-    const publications = readWithStoreAfterRegistrationSites(project, typeSystem)
+    const publications = readWithStoreAfterRegistrationSites(project, typeSystem, registrationCalls)
       .map((site, index) => this.publicationForSite(project, site, index));
     const records = publications.flatMap((publication) => publication.records);
     this.publication.publish(new KernelPublicationPlan(
@@ -109,12 +110,13 @@ export class WithStoreAfterRegistrationIssueMaterializer {
 function readWithStoreAfterRegistrationSites(
   project: ProjectBootFrame,
   typeSystem: TypeSystemProject,
+  registrationCalls: ReadonlySet<ts.Node>,
 ): readonly WithStoreAfterRegistrationSite[] {
   return project.sourceFiles.flatMap((source) => {
     const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     return sourceFile == null
       ? []
-      : readSourceFileWithStoreAfterRegistrationSites(source.path, source.addressHandle, sourceFile);
+      : readSourceFileWithStoreAfterRegistrationSites(source.path, source.addressHandle, sourceFile, typeSystem.checker, registrationCalls);
   });
 }
 
@@ -122,41 +124,57 @@ function readSourceFileWithStoreAfterRegistrationSites(
   sourcePath: string,
   sourceFileAddressHandle: AddressHandle,
   sourceFile: ts.SourceFile,
+  checker: ts.TypeChecker,
+  registrationCalls: ReadonlySet<ts.Node>,
 ): readonly WithStoreAfterRegistrationSite[] {
   const bindings = readSourceImportBindings(
     sourceFile,
     STATE_CONFIGURATION_MODULES,
     STATE_CONFIGURATION_EXPORTS,
   );
-  const stateConfigLocals = new Set<string>();
-  const registeredLocals = new Set<string>();
+  const stateConfigLocals = new Set<ts.Symbol>();
+  const registeredIn = new Map<ts.Symbol, Set<ts.Node>>();
   const sites: WithStoreAfterRegistrationSite[] = [];
 
   const visit = (node: ts.Node): void => {
+    // JavaScript evaluates the receiver and arguments before a registration takes effect.
+    ts.forEachChild(node, visit);
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer != null) {
       if (isStateDefaultConfigurationBuilderExpression(node.initializer, bindings)) {
-        stateConfigLocals.add(node.name.text);
+        const symbol = checker.getSymbolAtLocation(node.name);
+        if (symbol != null) stateConfigLocals.add(symbol);
       }
     }
 
-    if (ts.isCallExpression(node)) {
-      const withStoreReceiver = stateConfigurationWithStoreReceiver(node);
-      if (withStoreReceiver != null && registeredLocals.has(withStoreReceiver)) {
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+      const callee = node.expression;
+      const receiver = unwrapExpression(callee.expression);
+      const target = ts.isIdentifier(receiver) ? checker.getSymbolAtLocation(receiver) : undefined;
+      const scopes = target == null ? undefined : registeredIn.get(target);
+      if (callee.name.text === 'withStore' && target != null && scopes != null && followsRegistration(node, scopes)) {
         sites.push(new WithStoreAfterRegistrationSite(
           sourcePath,
           sourceFileAddressHandle,
           node.getStart(sourceFile),
           node.end,
-          withStoreReceiver,
+          target.name,
         ));
       }
 
-      for (const localName of registeredStateConfigurationLocals(node, stateConfigLocals)) {
-        registeredLocals.add(localName);
+      if (callee.name.text === 'register') {
+        const scope = registrationExecutionScope(node);
+        if (scope == null) return;
+        const targets = registrationCalls.has(node)
+          ? node.arguments.filter(ts.isIdentifier).map(argument => checker.getSymbolAtLocation(argument))
+          : [target];
+        for (const symbol of targets) {
+          if (symbol == null || !stateConfigLocals.has(symbol)) continue;
+          const scopes = registeredIn.get(symbol) ?? new Set<ts.Node>();
+          scopes.add(scope);
+          registeredIn.set(symbol, scopes);
+        }
       }
     }
-
-    ts.forEachChild(node, visit);
   };
   visit(sourceFile);
   return sites;
@@ -181,31 +199,24 @@ function isStateDefaultConfigurationBuilderExpression(
     && isStateDefaultConfigurationBuilderExpression(callee.expression, bindings);
 }
 
-function stateConfigurationWithStoreReceiver(call: ts.CallExpression): string | null {
-  const callee = unwrapExpression(call.expression);
-  return ts.isPropertyAccessExpression(callee)
-    && callee.name.text === 'withStore'
-    && ts.isIdentifier(unwrapExpression(callee.expression))
-    ? (unwrapExpression(callee.expression) as ts.Identifier).text
-    : null;
+/** An unconditional call within this statement list establishes registration for subsequent statements. */
+function registrationExecutionScope(call: ts.CallExpression): ts.Node | null {
+  for (let node: ts.Node = call; node.parent != null; node = node.parent) {
+    if (ts.isFunctionLike(node) || ts.isConditionalExpression(node) || ts.isBinaryExpression(node)) return null;
+    if (ts.isStatement(node)) {
+      return (ts.isExpressionStatement(node) || ts.isVariableStatement(node))
+        && (ts.isBlock(node.parent) || ts.isSourceFile(node.parent)) ? node.parent : null;
+    }
+  }
+  return null;
 }
 
-function registeredStateConfigurationLocals(
-  call: ts.CallExpression,
-  stateConfigLocals: ReadonlySet<string>,
-): readonly string[] {
-  const callee = unwrapExpression(call.expression);
-  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'register') {
-    return [];
+function followsRegistration(call: ts.CallExpression, scopes: ReadonlySet<ts.Node>): boolean {
+  for (let node: ts.Node | undefined = call.parent; node != null; node = node.parent) {
+    if (scopes.has(node)) return true;
+    if (ts.isFunctionLike(node)) return false;
   }
-  const receiver = unwrapExpression(callee.expression);
-  if (ts.isIdentifier(receiver) && stateConfigLocals.has(receiver.text)) {
-    return [receiver.text];
-  }
-  return call.arguments
-    .filter(ts.isIdentifier)
-    .map((argument) => argument.text)
-    .filter((localName) => stateConfigLocals.has(localName));
+  return false;
 }
 
 function withStoreAfterRegistrationIssueLocalKey(

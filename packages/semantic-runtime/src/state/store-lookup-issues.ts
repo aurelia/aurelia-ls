@@ -26,6 +26,8 @@ import {
   runtimeBindingSourceExpressionForProduct,
 } from '../observation/runtime-binding-expression.js';
 import { resourceLocalRuntimeBindings } from '../template/runtime-resource-ownership.js';
+import type { RuntimeExpressionResourcePlan } from '../template/runtime-expression-resource-plan.js';
+import { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
 import {
   bindingBehaviorResourceOccurrences,
   staticStringLiteralExpression,
@@ -50,8 +52,6 @@ import {
   StateIssuePublisher,
   type StateIssuePublication,
 } from './state-issue-publication.js';
-
-const STATE_BINDING_BEHAVIOR_NAME: string = BuiltInBindingBehaviorName.State;
 
 /** Source surface that can name a configured @aurelia/state store. */
 export enum StateStoreLookupSiteKind {
@@ -190,6 +190,7 @@ function templateStoreLookupSites(
       return bindingStateStoreLookupSites(
         publication,
         binding,
+        resource.runtimeAnalysis.expressionResourcePlan,
         storeVisibility.selectionForContainer(renderContext.sourceController.containerFrame),
       );
     })
@@ -199,11 +200,12 @@ function templateStoreLookupSites(
 function bindingStateStoreLookupSites(
   publication: KernelPublicationContext,
   binding: RuntimeBinding,
+  plan: RuntimeExpressionResourcePlan,
   storeVisibility: StateStoreVisibilitySelection,
 ): readonly StateStoreLookupSite[] {
   return [
     ...stateCommandStoreLookupSites(binding, storeVisibility),
-    ...stateBindingBehaviorStoreLookupSites(publication, binding, storeVisibility),
+    ...stateBindingBehaviorStoreLookupSites(publication, binding, plan, storeVisibility),
   ];
 }
 
@@ -239,6 +241,7 @@ function stateCommandStoreLookupSites(
 function stateBindingBehaviorStoreLookupSites(
   publication: KernelPublicationContext,
   binding: RuntimeBinding,
+  plan: RuntimeExpressionResourcePlan,
   storeVisibility: StateStoreVisibilitySelection,
 ): readonly StateStoreLookupSite[] {
   return expressionProductHandlesForRuntimeBinding(binding).flatMap((productHandle) => {
@@ -251,7 +254,11 @@ function stateBindingBehaviorStoreLookupSites(
     }
     const sourceAddressHandle = parse.sourceAddressHandle;
     return bindingBehaviorResourceOccurrences(ast).flatMap(({ expression: behavior }) => {
-      if (behavior.name.name !== STATE_BINDING_BEHAVIOR_NAME) {
+      const reached = plan.readBindingBehaviorEntries(productHandle, behavior).some(entry =>
+        entry.binding.productHandle === binding.productHandle
+        && entry.builtInResource?.name === BuiltInBindingBehaviorName.State
+        && entry.bindReachability === RuntimeOperationReachability.Reached);
+      if (!reached) {
         return [];
       }
       const storeExpression = behavior.args[0] ?? null;

@@ -58,12 +58,12 @@ modeled product that cites it; otherwise leave the row visible in Atlas' `framew
 
 Current closed raw authority rows:
 
-- `StateDefaultConfiguration.withStore(...)` after registration -> builder mutation happened too late.
+- `StateDefaultConfiguration.withStore(...)` after registration identifies a late mutation of the same configuration in an ordered statement list. An unrelated object's `register` method supplies no framework registration evidence.
 - `StateDefaultConfiguration.withStore('default', ...)` -> reserved default store name.
 - `StoreRegistry.registerStore(...)` -> duplicate store name during AppTask store registration.
 - `fromState(...)` invalid decorator usage -> decorator target is not a field or setter.
 - `IStoreRegistry.getStore(...)` missing store lookup -> named store lookup from `@fromState(...)`, state/dispatch
-  binding commands, or static `& state:'name'` behavior arguments.
+  binding commands, or static `& state:'name'` behavior arguments when the resolved state behavior's bind hook is reached.
 
 - `.state` and `.dispatch` binding commands are first-class value-site/data-flow rows. `StateBinding` reads are evaluated
   against the configured store-state scope and publish ordinary target accessor/value-channel flow; `StateDispatchBinding`
