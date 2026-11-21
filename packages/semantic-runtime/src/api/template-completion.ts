@@ -2243,11 +2243,7 @@ function bindingDataFlowDiagnosticRowsForSelection(
         return [];
       }
       const diagnosticSource = diagnostic.source ?? source;
-      const failure = dataFlow.sourceTypeOpenExpression;
-      const receiver = (diagnostic.frameworkErrorCode === 'AUR0114' && failure?.$kind === 'AccessMember')
-        || (diagnostic.frameworkErrorCode === 'AUR0115' && failure?.$kind === 'AccessKeyed')
-        ? failure.object.span
-        : null;
+      const operand = runtimeFailureOperand(diagnostic.frameworkErrorCode, dataFlow.sourceTypeOpenExpression);
       const key = templateDiagnosticRowKey(diagnostic, diagnosticSource);
       if (context.seenRows.has(key)) {
         return [];
@@ -2269,10 +2265,10 @@ function bindingDataFlowDiagnosticRowsForSelection(
         ),
         siteKind: TemplateCompletionSiteKind.Expression,
         valueSiteKind: valueSiteKindForDataFlow(store, dataFlow.expressionProductHandle),
-        subject: receiver?.file != null ? {
+        subject: operand?.span.file != null ? {
           subjectKind: 'template-expression' as const,
           subjectName: null,
-          source: sourceReferenceForParserSpan(receiver.file.path, receiver, 'nullish-receiver'),
+          source: sourceReferenceForParserSpan(operand.span.file.path, operand.span, operand.role),
         } : templateExpressionDiagnosticSubject(
           store,
           selection.resource,
@@ -2287,6 +2283,17 @@ function bindingDataFlowDiagnosticRowsForSelection(
       }];
     });
   });
+}
+
+function runtimeFailureOperand(code: string | null, failure: RuntimeBindingDataFlow['sourceTypeOpenExpression']) {
+  if ((code === 'AUR0114' && failure?.$kind === 'AccessMember')
+    || (code === 'AUR0115' && failure?.$kind === 'AccessKeyed')) {
+    return { span: failure.object.span, role: 'nullish-receiver' };
+  }
+  if (code === 'AUR0111' && (failure?.$kind === 'CallScope' || failure?.$kind === 'CallMember')) {
+    return { span: failure.name.span, role: 'call-target' };
+  }
+  return null;
 }
 
 function registrationCanHideDataFlowExpressionResource(
@@ -4446,7 +4453,6 @@ function cursorBindableRow(
     }),
     ...projectBindableDefinitionSources(store, bindable.definition),
     ...usageMode,
-    ownerDefinitionProductHandle: bindable.reference.ownerDefinitionProductHandle,
     source: describeAddress(store, bindable.reference.sourceAddressHandle),
     nameSource: describeAddress(store, bindable.reference.nameSourceAddressHandle),
     attributeSource: describeAddress(store, bindable.reference.attributeSourceAddressHandle),
@@ -4456,6 +4462,7 @@ function cursorBindableRow(
     modeSource: describeAddress(store, bindable.definition.modeSourceAddressHandle),
     setSource: describeAddress(store, bindable.definition.setSourceAddressHandle),
     ...(includeHandles ? {
+      ownerDefinitionProductHandle: bindable.reference.ownerDefinitionProductHandle,
       handles: {
         ownerDefinitionProductHandle: bindable.reference.ownerDefinitionProductHandle,
         sourceAddressHandle: bindable.reference.sourceAddressHandle,
