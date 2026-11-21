@@ -283,6 +283,9 @@ importers:
 
   packages/semantic-runtime:
     dependencies:
+      '@csstools/css-tokenizer':
+        specifier: 3.0.4
+        version: 3.0.4
       '@jridgewell/trace-mapping':
         specifier: ^0.3.31
         version: 0.3.31
