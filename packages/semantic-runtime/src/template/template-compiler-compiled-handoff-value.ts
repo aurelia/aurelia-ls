@@ -194,11 +194,11 @@ export interface TemplateCompilerCompiledHandoffDependencyReference {
   readonly keyName: string | null;
   readonly moduleKey: string | null;
   readonly localName: string | null;
+  /** Component-scoped main/named resource registrations requested by an HTML module import. */
+  readonly importAliases?: Readonly<Record<string, string>>;
   readonly dependencyKind: ResourceDependencyReference['dependencyKind'];
   readonly registryKind: ResourceDependencyReference['registryKind'];
   readonly cssModulesInput: null | {
-  /** Component-scoped main/named resource registrations requested by an HTML module import. */
-  readonly importAliases?: Readonly<Record<string, string>>;
     readonly mappingArguments: readonly {
       readonly entries: readonly { readonly className: string; readonly mappedClassName: string }[];
       readonly mayHaveUnknownMappings: boolean;
@@ -980,6 +980,7 @@ function dependencyReference(
     keyName: dependency.keyName,
     moduleKey: dependency.moduleKey,
     localName: dependency.localName,
+    ...(dependency.htmlModule?.aliases.size ? { importAliases: Object.fromEntries(dependency.htmlModule.aliases) } : {}),
     dependencyKind: dependency.dependencyKind,
     registryKind: dependency.registryKind,
     cssModulesInput: dependency.cssModulesInput == null ? null : {
@@ -999,7 +1000,6 @@ function dependencyReference(
 
 function bindableValue(
   bindable: BindableDefinition,
-    ...(dependency.htmlModule?.aliases.size ? { importAliases: Object.fromEntries(dependency.htmlModule.aliases) } : {}),
   store: KernelStore,
 ): TemplateCompilerCompiledHandoffBindable {
   return {
