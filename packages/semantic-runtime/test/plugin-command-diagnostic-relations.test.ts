@@ -2,6 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
 import { appDiagnosticPresentation, createSemanticRuntime, SemanticAppQueryKind } from '../src/index.js';
+import type { SemanticAppDiagnosticsResult } from '../src/api/contracts.js';
 import { NodeSemanticRuntimeProjectInputHost, SemanticRuntimeProjectInputAuthority } from '../src/kernel/project-input.js';
 import { MutableProjectSourceOverlay } from './support/incremental-conformance.js';
 
@@ -23,7 +24,7 @@ test('attaches each missing plugin command to its own capability and leaves unkn
       analysisDepth: 'binding-observation',
       page: { size: 100 },
     });
-    const rows = result.value.rows;
+    const { rows } = result.value as SemanticAppDiagnosticsResult;
     const groups = appDiagnosticPresentation(rows, true).groups;
     const commands = rows.filter(row => row.frameworkErrorCode === 'AUR0713');
     expect(commands).toHaveLength(tokens.length);
