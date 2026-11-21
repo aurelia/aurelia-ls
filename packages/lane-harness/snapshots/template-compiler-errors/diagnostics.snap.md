@@ -20,7 +20,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 10,
+  "diagnosticCount": 11,
   "diagnostics": [
     {
       "anomaly": null,
@@ -274,68 +274,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     },
     {
       "anomaly": null,
-      "code": "binding-target-assignment-strictness",
-      "data": {
-        "diagnosticAuthority": "semantic-runtime-product",
-        "diagnosticDomain": "template",
-        "diagnosticKind": "binding-target-assignment-strictness",
-        "frameworkErrorCode": null,
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "binding-target-assignment:source-to-target-type-mismatch",
-        "missingInputs": [
-          "binding-target-assignment:source-to-target-type-mismatch"
-        ],
-        "phase": null,
-        "presentation": {
-          "contextual": [],
-          "maxRawSeverity": "warning",
-          "primarySeverity": "warning",
-          "rawRowCount": 1
-        },
-        "relatedInformation": [],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "rewrite-expression",
-          "actionability": "guided",
-          "changeDomain": "app-source",
-          "planKind": "template-expression-rewrite",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
-        },
-        "sourceRole": "template",
-        "subject": {
-          "source": {
-            "end": 323,
-            "kind": "source-span-address",
-            "label": "src/template-compiler-errors-app.html@316..323",
-            "path": "src/template-compiler-errors-app.html",
-            "role": "binding-source-assignment",
-            "start": 316
-          },
-          "span": null,
-          "subjectKind": "template-expression",
-          "uri": null
-        },
-        "typeScriptDiagnosticCode": null
-      },
-      "message": "Binding source type boolean is not assignable to target 'value' of type string.",
-      "range": {
-        "end": {
-          "character": 40,
-          "line": 5
-        },
-        "start": {
-          "character": 33,
-          "line": 5
-        }
-      },
-      "rangeText": "enabled",
-      "relatedInformation": [],
-      "severity": "warning",
-      "source": "aurelia"
-    },
-    {
-      "anomaly": null,
       "code": "AUR0707",
       "data": {
         "diagnosticAuthority": "framework-error-code",
@@ -386,6 +324,106 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     },
     {
       "anomaly": null,
+      "code": "AUR0713",
+      "data": {
+        "diagnosticAuthority": "framework-error-code",
+        "diagnosticDomain": "template",
+        "diagnosticKind": "template-compiler-error",
+        "frameworkErrorCode": "AUR0713",
+        "frameworkRawErrorAuthority": null,
+        "missingInput": "template-compiler:AUR0713",
+        "missingInputs": [
+          "template-compiler:AUR0713"
+        ],
+        "phase": "binding-command-lowering",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
+        "relatedInformation": [],
+        "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "rewrite-template-syntax",
+          "actionability": "guided",
+          "changeDomain": "app-source",
+          "planKind": "template-syntax-rewrite",
+          "readiness": "ready-to-plan",
+          "targetSourceCoverage": "all"
+        },
+        "sourceRole": "template",
+        "subject": null,
+        "typeScriptDiagnosticCode": null
+      },
+      "message": "Unknown binding command: \"unknown-command\".",
+      "range": {
+        "end": {
+          "character": 63,
+          "line": 6
+        },
+        "start": {
+          "character": 48,
+          "line": 6
+        }
+      },
+      "rangeText": "unknown-command",
+      "relatedInformation": [],
+      "severity": "error",
+      "source": "aurelia"
+    },
+    {
+      "anomaly": null,
+      "code": "AUR0168",
+      "data": {
+        "diagnosticAuthority": "framework-error-code",
+        "diagnosticDomain": "template",
+        "diagnosticKind": "template-compiler-error",
+        "frameworkErrorCode": "AUR0168",
+        "frameworkRawErrorAuthority": null,
+        "missingInput": "template-compiler:AUR0168",
+        "missingInputs": [
+          "template-compiler:AUR0168"
+        ],
+        "phase": "binding-command-lowering",
+        "presentation": {
+          "contextual": [],
+          "maxRawSeverity": "error",
+          "primarySeverity": "error",
+          "rawRowCount": 1
+        },
+        "relatedInformation": [],
+        "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "rewrite-template-syntax",
+          "actionability": "guided",
+          "changeDomain": "app-source",
+          "planKind": "template-syntax-rewrite",
+          "readiness": "ready-to-plan",
+          "targetSourceCoverage": "all"
+        },
+        "sourceRole": "template",
+        "subject": null,
+        "typeScriptDiagnosticCode": null
+      },
+      "message": "Unexpected character in binding expression.",
+      "range": {
+        "end": {
+          "character": 55,
+          "line": 7
+        },
+        "start": {
+          "character": 42,
+          "line": 7
+        }
+      },
+      "rangeText": "value.bind: #",
+      "relatedInformation": [],
+      "severity": "error",
+      "source": "aurelia"
+    },
+    {
+      "anomaly": null,
       "code": "AUR0704",
       "data": {
         "diagnosticAuthority": "framework-error-code",
@@ -422,11 +460,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 17,
-          "line": 6
+          "line": 8
         },
         "start": {
           "character": 10,
-          "line": 6
+          "line": 8
         }
       },
       "rangeText": "trigger",
@@ -472,11 +510,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 22,
-          "line": 7
+          "line": 9
         },
         "start": {
           "character": 14,
-          "line": 7
+          "line": 9
         }
       },
       "rangeText": "delegate",
@@ -522,11 +560,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 18,
-          "line": 8
+          "line": 10
         },
         "start": {
           "character": 14,
-          "line": 8
+          "line": 10
         }
       },
       "rangeText": "call",

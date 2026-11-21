@@ -1308,7 +1308,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 16,
+  "diagnosticCount": 15,
   "diagnostics": [
     {
       "anomaly": null,
@@ -1440,68 +1440,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "data": {
         "diagnosticAuthority": "framework-error-code",
         "diagnosticDomain": "template",
-        "diagnosticKind": "expression-runtime-evaluation-error",
-        "frameworkErrorCode": "AUR0103",
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "runtime-ast:AUR0103",
-        "missingInputs": [
-          "runtime-ast:AUR0103"
-        ],
-        "phase": null,
-        "presentation": {
-          "contextual": [],
-          "maxRawSeverity": "error",
-          "primarySeverity": "error",
-          "rawRowCount": 1
-        },
-        "relatedInformation": [],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "register-resource",
-          "actionability": "guided",
-          "changeDomain": "app-source",
-          "planKind": "resource-registration",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
-        },
-        "sourceRole": "template",
-        "subject": {
-          "source": {
-            "end": 593,
-            "kind": "source-span-address",
-            "label": "src/resource-combinator-gallery.html@588..593",
-            "path": "src/resource-combinator-gallery.html",
-            "role": "binding-source-assignment",
-            "start": 588
-          },
-          "span": null,
-          "subjectKind": "template-expression",
-          "uri": null
-        },
-        "typeScriptDiagnosticCode": null
-      },
-      "message": "Value converter 'missingConverter' was not resolved through the current compiler resource scope.",
-      "range": {
-        "end": {
-          "character": 77,
-          "line": 7
-        },
-        "start": {
-          "character": 72,
-          "line": 7
-        }
-      },
-      "rangeText": "count",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "aurelia"
-    },
-    {
-      "anomaly": null,
-      "code": "AUR0103",
-      "data": {
-        "diagnosticAuthority": "framework-error-code",
-        "diagnosticDomain": "template",
         "diagnosticKind": "runtime-value-converter-framework-error",
         "frameworkErrorCode": "AUR0103",
         "frameworkRawErrorAuthority": null,
@@ -1511,10 +1449,52 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         ],
         "phase": "bind",
         "presentation": {
-          "contextual": [],
+          "contextual": [
+            {
+              "diagnostic": {
+                "diagnosticAuthority": "framework-error-code",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "expression-runtime-evaluation-error",
+                "frameworkErrorCode": "AUR0103",
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "runtime-ast:AUR0103",
+                "missingInputs": [
+                  "runtime-ast:AUR0103"
+                ],
+                "phase": null,
+                "relatedInformation": [],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "register-resource",
+                  "actionability": "guided",
+                  "changeDomain": "app-source",
+                  "planKind": "resource-registration",
+                  "readiness": "ready-to-plan",
+                  "targetSourceCoverage": "all"
+                },
+                "severity": "error",
+                "sourceRole": "template",
+                "subject": {
+                  "source": {
+                    "end": 648,
+                    "kind": "source-span-address",
+                    "label": "src/resource-combinator-gallery.html@632..648",
+                    "path": "src/resource-combinator-gallery.html",
+                    "role": "expression",
+                    "start": 632
+                  },
+                  "span": null,
+                  "subjectKind": "template-expression",
+                  "uri": null
+                },
+                "typeScriptDiagnosticCode": null
+              },
+              "relation": "semantic-explanation"
+            }
+          ],
           "maxRawSeverity": "error",
           "primarySeverity": "error",
-          "rawRowCount": 1
+          "rawRowCount": 2
         },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
@@ -1542,7 +1522,25 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "rangeText": "missingConverter",
-      "relatedInformation": [],
+      "relatedInformation": [
+        {
+          "anomaly": null,
+          "file": "src/resource-combinator-gallery.html",
+          "message": "Value converter 'missingConverter' was not resolved through the current compiler resource scope.",
+          "range": {
+            "end": {
+              "character": 132,
+              "line": 7
+            },
+            "start": {
+              "character": 116,
+              "line": 7
+            }
+          },
+          "rangeText": "missingConverter",
+          "uri": "fixtures://pressure/template-expression-resource-combinators/src/resource-combinator-gallery.html"
+        }
+      ],
       "severity": "error",
       "source": "aurelia"
     },
@@ -1947,10 +1945,52 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         ],
         "phase": "bind",
         "presentation": {
-          "contextual": [],
+          "contextual": [
+            {
+              "diagnostic": {
+                "diagnosticAuthority": "framework-error-code",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "expression-runtime-evaluation-error",
+                "frameworkErrorCode": "AUR0103",
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "runtime-ast:AUR0103",
+                "missingInputs": [
+                  "runtime-ast:AUR0103"
+                ],
+                "phase": null,
+                "relatedInformation": [],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "register-resource",
+                  "actionability": "guided",
+                  "changeDomain": "app-source",
+                  "planKind": "resource-registration",
+                  "readiness": "ready-to-plan",
+                  "targetSourceCoverage": "all"
+                },
+                "severity": "error",
+                "sourceRole": "template",
+                "subject": {
+                  "source": {
+                    "end": 1600,
+                    "kind": "source-span-address",
+                    "label": "src/resource-combinator-gallery.html@1584..1600",
+                    "path": "src/resource-combinator-gallery.html",
+                    "role": "expression",
+                    "start": 1584
+                  },
+                  "span": null,
+                  "subjectKind": "template-expression",
+                  "uri": null
+                },
+                "typeScriptDiagnosticCode": null
+              },
+              "relation": "semantic-explanation"
+            }
+          ],
           "maxRawSeverity": "error",
           "primarySeverity": "error",
-          "rawRowCount": 1
+          "rawRowCount": 2
         },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
@@ -1978,7 +2018,25 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "rangeText": "missingConverter",
-      "relatedInformation": [],
+      "relatedInformation": [
+        {
+          "anomaly": null,
+          "file": "src/resource-combinator-gallery.html",
+          "message": "Value converter 'missingConverter' was not resolved through the current compiler resource scope.",
+          "range": {
+            "end": {
+              "character": 57,
+              "line": 18
+            },
+            "start": {
+              "character": 41,
+              "line": 18
+            }
+          },
+          "rangeText": "missingConverter",
+          "uri": "fixtures://pressure/template-expression-resource-combinators/src/resource-combinator-gallery.html"
+        }
+      ],
       "severity": "error",
       "source": "aurelia"
     },
@@ -1997,10 +2055,52 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         ],
         "phase": "bind",
         "presentation": {
-          "contextual": [],
+          "contextual": [
+            {
+              "diagnostic": {
+                "diagnosticAuthority": "framework-error-code",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "expression-runtime-evaluation-error",
+                "frameworkErrorCode": "AUR0103",
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "runtime-ast:AUR0103",
+                "missingInputs": [
+                  "runtime-ast:AUR0103"
+                ],
+                "phase": null,
+                "relatedInformation": [],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "register-resource",
+                  "actionability": "guided",
+                  "changeDomain": "app-source",
+                  "planKind": "resource-registration",
+                  "readiness": "ready-to-plan",
+                  "targetSourceCoverage": "all"
+                },
+                "severity": "error",
+                "sourceRole": "template",
+                "subject": {
+                  "source": {
+                    "end": 1702,
+                    "kind": "source-span-address",
+                    "label": "src/resource-combinator-gallery.html@1686..1702",
+                    "path": "src/resource-combinator-gallery.html",
+                    "role": "expression",
+                    "start": 1686
+                  },
+                  "span": null,
+                  "subjectKind": "template-expression",
+                  "uri": null
+                },
+                "typeScriptDiagnosticCode": null
+              },
+              "relation": "semantic-explanation"
+            }
+          ],
           "maxRawSeverity": "error",
           "primarySeverity": "error",
-          "rawRowCount": 1
+          "rawRowCount": 2
         },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
@@ -2028,7 +2128,25 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "rangeText": "missingConverter",
-      "relatedInformation": [],
+      "relatedInformation": [
+        {
+          "anomaly": null,
+          "file": "src/resource-combinator-gallery.html",
+          "message": "Value converter 'missingConverter' was not resolved through the current compiler resource scope.",
+          "range": {
+            "end": {
+              "character": 96,
+              "line": 19
+            },
+            "start": {
+              "character": 80,
+              "line": 19
+            }
+          },
+          "rangeText": "missingConverter",
+          "uri": "fixtures://pressure/template-expression-resource-combinators/src/resource-combinator-gallery.html"
+        }
+      ],
       "severity": "error",
       "source": "aurelia"
     },
@@ -2047,10 +2165,52 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         ],
         "phase": "bind",
         "presentation": {
-          "contextual": [],
+          "contextual": [
+            {
+              "diagnostic": {
+                "diagnosticAuthority": "framework-error-code",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "expression-runtime-evaluation-error",
+                "frameworkErrorCode": "AUR0103",
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "runtime-ast:AUR0103",
+                "missingInputs": [
+                  "runtime-ast:AUR0103"
+                ],
+                "phase": null,
+                "relatedInformation": [],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "register-resource",
+                  "actionability": "guided",
+                  "changeDomain": "app-source",
+                  "planKind": "resource-registration",
+                  "readiness": "ready-to-plan",
+                  "targetSourceCoverage": "all"
+                },
+                "severity": "error",
+                "sourceRole": "template",
+                "subject": {
+                  "source": {
+                    "end": 1794,
+                    "kind": "source-span-address",
+                    "label": "src/resource-combinator-gallery.html@1778..1794",
+                    "path": "src/resource-combinator-gallery.html",
+                    "role": "expression",
+                    "start": 1778
+                  },
+                  "span": null,
+                  "subjectKind": "template-expression",
+                  "uri": null
+                },
+                "typeScriptDiagnosticCode": null
+              },
+              "relation": "semantic-explanation"
+            }
+          ],
           "maxRawSeverity": "error",
           "primarySeverity": "error",
-          "rawRowCount": 1
+          "rawRowCount": 2
         },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
@@ -2078,7 +2238,25 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "rangeText": "missingConverter",
-      "relatedInformation": [],
+      "relatedInformation": [
+        {
+          "anomaly": null,
+          "file": "src/resource-combinator-gallery.html",
+          "message": "Value converter 'missingConverter' was not resolved through the current compiler resource scope.",
+          "range": {
+            "end": {
+              "character": 86,
+              "line": 20
+            },
+            "start": {
+              "character": 70,
+              "line": 20
+            }
+          },
+          "rangeText": "missingConverter",
+          "uri": "fixtures://pressure/template-expression-resource-combinators/src/resource-combinator-gallery.html"
+        }
+      ],
       "severity": "error",
       "source": "aurelia"
     },

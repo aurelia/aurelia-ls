@@ -6,8 +6,8 @@
         "id": "compiler-main-template-errors",
         "file": "src/template-compiler-errors-app.html",
         "verdict": "correct",
-        "reason": "The full document-diagnostic pull returns the expected compiler rows with framework-code authority; AUR0707 points at the offending segment target `missing`, and the independent boolean-to-string assignment warning correctly points at `enabled`.",
-        "note": "NEW 2026-07-07. File-level compiler diagnostics covering reserved spread/bindables syntax, invalid class binding syntax, au-slot/slot misuse, non-bindable attribute segment, invalid <let> command, and removed Aurelia 1 binding commands. VERDICT 2026-07-07: flipped partially wrong -> correct after multi-binding segments gained a target source address and AUR0707 spent that address. UPDATED 2026-07-12: source-to-target assignment policy adds the correct boolean-to-string warning without changing compiler-row authority or the projected item set."
+        "reason": "The pull reports each terminal multi-binding error on its failing segment (AUR0707, AUR0713, AUR0168). A failed attribute publishes no runtime binding for the earlier value.bind prefix. On removal of the failing suffix the boolean-to-string warning returns at enabled.",
+        "note": "The preceding valid segment is staged during compilation. No assignment is executed when the containing multi-binding fails."
       },
       {
         "id": "compiler-local-bindable-errors",

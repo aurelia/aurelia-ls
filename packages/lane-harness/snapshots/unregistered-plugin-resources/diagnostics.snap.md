@@ -292,6 +292,47 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "diagnostic": {
                 "diagnosticAuthority": "framework-error-code",
                 "diagnosticDomain": "template",
+                "diagnosticKind": "expression-runtime-evaluation-error",
+                "frameworkErrorCode": "AUR0103",
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "runtime-ast:AUR0103",
+                "missingInputs": [
+                  "runtime-ast:AUR0103"
+                ],
+                "phase": null,
+                "relatedInformation": [],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "register-resource",
+                  "actionability": "guided",
+                  "changeDomain": "app-source",
+                  "planKind": "resource-registration",
+                  "readiness": "ready-to-plan",
+                  "targetSourceCoverage": "all"
+                },
+                "severity": "error",
+                "sourceRole": "template",
+                "subject": {
+                  "source": {
+                    "end": 244,
+                    "kind": "source-span-address",
+                    "label": "src/unregistered-plugin-resources-app.html@243..244",
+                    "path": "src/unregistered-plugin-resources-app.html",
+                    "role": "expression",
+                    "start": 243
+                  },
+                  "span": null,
+                  "subjectKind": "template-expression",
+                  "uri": null
+                },
+                "typeScriptDiagnosticCode": null
+              },
+              "relation": "derived-consequence"
+            },
+            {
+              "diagnostic": {
+                "diagnosticAuthority": "framework-error-code",
+                "diagnosticDomain": "template",
                 "diagnosticKind": "runtime-value-converter-framework-error",
                 "frameworkErrorCode": "AUR0103",
                 "frameworkRawErrorAuthority": null,
@@ -320,7 +361,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           ],
           "maxRawSeverity": "error",
           "primarySeverity": "error",
-          "rawRowCount": 2
+          "rawRowCount": 3
         },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
@@ -510,11 +551,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "sourceRole": "template",
                 "subject": {
                   "source": {
-                    "end": 335,
+                    "end": 343,
                     "kind": "source-span-address",
-                    "label": "src/unregistered-plugin-resources-app.html@321..335",
+                    "label": "src/unregistered-plugin-resources-app.html@321..343",
                     "path": "src/unregistered-plugin-resources-app.html",
-                    "role": "binding-source-assignment",
+                    "role": "binding-source-expression",
                     "start": 321
                   },
                   "span": null,
@@ -592,7 +633,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "message": "Binding source type { ready: boolean; } is not assignable to target 'textContent' of type string.",
           "range": {
             "end": {
-              "character": 41,
+              "character": 49,
               "line": 13
             },
             "start": {
@@ -600,7 +641,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "line": 13
             }
           },
-          "rangeText": "dashboardState",
+          "rangeText": "dashboardState & state",
           "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
         },
         {
