@@ -390,23 +390,65 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     },
     {
       "anomaly": null,
-      "code": "TS18047",
+      "code": "AUR0114",
       "data": {
-        "diagnosticAuthority": "typescript",
+        "diagnosticAuthority": "framework-error-code",
         "diagnosticDomain": "template",
-        "diagnosticKind": "template-expression-typescript-diagnostic",
-        "frameworkErrorCode": null,
+        "diagnosticKind": "expression-runtime-evaluation-error",
+        "frameworkErrorCode": "AUR0114",
         "frameworkRawErrorAuthority": null,
-        "missingInput": "typescript:TS18047",
+        "missingInput": "runtime-ast:AUR0114",
         "missingInputs": [
-          "typescript:TS18047"
+          "runtime-ast:AUR0114"
         ],
-        "phase": "semantic",
+        "phase": null,
         "presentation": {
-          "contextual": [],
+          "contextual": [
+            {
+              "diagnostic": {
+                "diagnosticAuthority": "typescript",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "template-expression-typescript-diagnostic",
+                "frameworkErrorCode": null,
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "typescript:TS18047",
+                "missingInputs": [
+                  "typescript:TS18047"
+                ],
+                "phase": "semantic",
+                "relatedInformation": [],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "rewrite-expression",
+                  "actionability": "guided",
+                  "changeDomain": "app-source",
+                  "planKind": "template-expression-rewrite",
+                  "readiness": "ready-to-plan",
+                  "targetSourceCoverage": "all"
+                },
+                "severity": "error",
+                "sourceRole": "template",
+                "subject": {
+                  "source": {
+                    "end": 292,
+                    "kind": "source-span-address",
+                    "label": "src/template-overlay-type-errors-app.html@277..292",
+                    "path": "src/template-overlay-type-errors-app.html",
+                    "role": "template-member-access",
+                    "start": 277
+                  },
+                  "span": null,
+                  "subjectKind": "template-member-access",
+                  "uri": null
+                },
+                "typeScriptDiagnosticCode": 18047
+              },
+              "relation": "checker-evidence"
+            }
+          ],
           "maxRawSeverity": "error",
           "primarySeverity": "error",
-          "rawRowCount": 1
+          "rawRowCount": 2
         },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
@@ -421,23 +463,23 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "sourceRole": "template",
         "subject": {
           "source": {
-            "end": 292,
+            "end": 286,
             "kind": "source-span-address",
-            "label": "src/template-overlay-type-errors-app.html@277..292",
+            "label": "src/template-overlay-type-errors-app.html@277..286",
             "path": "src/template-overlay-type-errors-app.html",
-            "role": "template-member-access",
+            "role": "nullish-receiver",
             "start": 277
           },
           "span": null,
-          "subjectKind": "template-member-access",
+          "subjectKind": "template-expression",
           "uri": null
         },
-        "typeScriptDiagnosticCode": 18047
+        "typeScriptDiagnosticCode": null
       },
-      "message": "TS18047: 'maybeItem' is possibly 'null'.",
+      "message": "Member access 'label' can reach nullish owner type 'OverlayItem | null'.",
       "range": {
         "end": {
-          "character": 16,
+          "character": 22,
           "line": 14
         },
         "start": {
@@ -445,8 +487,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 14
         }
       },
-      "rangeText": "maybeItem",
-      "relatedInformation": [],
+      "rangeText": "maybeItem.label",
+      "relatedInformation": [
+        {
+          "anomaly": null,
+          "file": "src/template-overlay-type-errors-app.html",
+          "message": "TS18047: 'maybeItem' is possibly 'null'.",
+          "range": {
+            "end": {
+              "character": 16,
+              "line": 14
+            },
+            "start": {
+              "character": 7,
+              "line": 14
+            }
+          },
+          "rangeText": "maybeItem",
+          "uri": "fixtures://pressure/template-overlay-type-errors/src/template-overlay-type-errors-app.html"
+        }
+      ],
       "severity": "error",
       "source": "aurelia"
     },

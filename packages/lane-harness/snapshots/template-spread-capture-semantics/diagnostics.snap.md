@@ -109,7 +109,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "kind": "source-span-address",
             "label": "src/template-spread-capture-semantics-app.html@761..775",
             "path": "src/template-spread-capture-semantics-app.html",
-            "role": "binding-source-assignment",
+            "role": "binding-source-expression",
             "start": 761
           },
           "span": null,
@@ -171,7 +171,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "kind": "source-span-address",
             "label": "src/template-spread-capture-semantics-app.html@822..844",
             "path": "src/template-spread-capture-semantics-app.html",
-            "role": "binding-source-assignment",
+            "role": "binding-source-expression",
             "start": 822
           },
           "span": null,

@@ -6,8 +6,8 @@
         "id": "typechecking-read-expressions",
         "file": "src/read-expressions.html",
         "verdict": "correct",
-        "reason": "The full document-diagnostic pull returns proven missing members as semantic Warning primaries with matching TS2339 facts contextual, while independent nullish, call, overload, return, global, and object-literal checker failures remain direct Errors on authored spans.",
-        "note": "NEW 2026-07-12. Representative standard document-pull adapter replay for the dedicated expression/typechecking corpus. The callback `missingLabel` duplicate joins the existing causal groups, conserving 17 raw facts as 13 visible Problems without leaking generated TypeScript loci; dense semantic truth remains in semantic-conformance."
+        "reason": "The full pull preserves missing-member and checker evidence. Nullish access and the non-callable expression each have one framework primary with the matching checker evidence at the receiver. Independent call, overload, return, global and object-literal failures remain on their authored spans.",
+        "note": "The read-expression fixture conserves 19 raw facts as 13 Problems. TS18047 is contextual under AUR0114 and TS2349 under AUR0111."
       },
       {
         "id": "typechecking-write-bindings",

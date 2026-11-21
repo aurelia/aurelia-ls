@@ -146,23 +146,65 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     },
     {
       "anomaly": null,
-      "code": "TS18047",
+      "code": "AUR0114",
       "data": {
-        "diagnosticAuthority": "typescript",
+        "diagnosticAuthority": "framework-error-code",
         "diagnosticDomain": "template",
-        "diagnosticKind": "template-expression-typescript-diagnostic",
-        "frameworkErrorCode": null,
+        "diagnosticKind": "expression-runtime-evaluation-error",
+        "frameworkErrorCode": "AUR0114",
         "frameworkRawErrorAuthority": null,
-        "missingInput": "typescript:TS18047",
+        "missingInput": "runtime-ast:AUR0114",
         "missingInputs": [
-          "typescript:TS18047"
+          "runtime-ast:AUR0114"
         ],
-        "phase": "semantic",
+        "phase": null,
         "presentation": {
-          "contextual": [],
+          "contextual": [
+            {
+              "diagnostic": {
+                "diagnosticAuthority": "typescript",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "template-expression-typescript-diagnostic",
+                "frameworkErrorCode": null,
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "typescript:TS18047",
+                "missingInputs": [
+                  "typescript:TS18047"
+                ],
+                "phase": "semantic",
+                "relatedInformation": [],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "rewrite-expression",
+                  "actionability": "guided",
+                  "changeDomain": "app-source",
+                  "planKind": "template-expression-rewrite",
+                  "readiness": "ready-to-plan",
+                  "targetSourceCoverage": "all"
+                },
+                "severity": "error",
+                "sourceRole": "template",
+                "subject": {
+                  "source": {
+                    "end": 222,
+                    "kind": "source-span-address",
+                    "label": "src/read-expressions.html@207..222",
+                    "path": "src/read-expressions.html",
+                    "role": "template-member-access",
+                    "start": 207
+                  },
+                  "span": null,
+                  "subjectKind": "template-member-access",
+                  "uri": null
+                },
+                "typeScriptDiagnosticCode": 18047
+              },
+              "relation": "checker-evidence"
+            }
+          ],
           "maxRawSeverity": "error",
           "primarySeverity": "error",
-          "rawRowCount": 1
+          "rawRowCount": 2
         },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
@@ -177,23 +219,23 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "sourceRole": "template",
         "subject": {
           "source": {
-            "end": 222,
+            "end": 216,
             "kind": "source-span-address",
-            "label": "src/read-expressions.html@207..222",
+            "label": "src/read-expressions.html@207..216",
             "path": "src/read-expressions.html",
-            "role": "template-member-access",
+            "role": "nullish-receiver",
             "start": 207
           },
           "span": null,
-          "subjectKind": "template-member-access",
+          "subjectKind": "template-expression",
           "uri": null
         },
-        "typeScriptDiagnosticCode": 18047
+        "typeScriptDiagnosticCode": null
       },
-      "message": "TS18047: 'maybeItem' is possibly 'null'.",
+      "message": "Member access 'label' can reach nullish owner type 'CorpusItem | null'.",
       "range": {
         "end": {
-          "character": 40,
+          "character": 46,
           "line": 4
         },
         "start": {
@@ -201,8 +243,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 4
         }
       },
-      "rangeText": "maybeItem",
-      "relatedInformation": [],
+      "rangeText": "maybeItem.label",
+      "relatedInformation": [
+        {
+          "anomaly": null,
+          "file": "src/read-expressions.html",
+          "message": "TS18047: 'maybeItem' is possibly 'null'.",
+          "range": {
+            "end": {
+              "character": 40,
+              "line": 4
+            },
+            "start": {
+              "character": 31,
+              "line": 4
+            }
+          },
+          "rangeText": "maybeItem",
+          "uri": "fixtures://pressure/template-typechecking-corpus/src/read-expressions.html"
+        }
+      ],
       "severity": "error",
       "source": "aurelia"
     },
@@ -638,32 +698,74 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     },
     {
       "anomaly": null,
-      "code": "TS2349",
+      "code": "AUR0111",
       "data": {
-        "diagnosticAuthority": "typescript",
+        "diagnosticAuthority": "framework-error-code",
         "diagnosticDomain": "template",
-        "diagnosticKind": "template-expression-typescript-diagnostic",
-        "frameworkErrorCode": null,
+        "diagnosticKind": "expression-runtime-evaluation-error",
+        "frameworkErrorCode": "AUR0111",
         "frameworkRawErrorAuthority": null,
-        "missingInput": "typescript:TS2349",
+        "missingInput": "runtime-ast:AUR0111",
         "missingInputs": [
-          "typescript:TS2349"
+          "runtime-ast:AUR0111"
         ],
-        "phase": "semantic",
+        "phase": null,
         "presentation": {
-          "contextual": [],
+          "contextual": [
+            {
+              "diagnostic": {
+                "diagnosticAuthority": "typescript",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "template-expression-typescript-diagnostic",
+                "frameworkErrorCode": null,
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "typescript:TS2349",
+                "missingInputs": [
+                  "typescript:TS2349"
+                ],
+                "phase": "semantic",
+                "relatedInformation": [],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "inspect-type-surface",
+                  "actionability": "manual",
+                  "changeDomain": "inspection",
+                  "planKind": "manual-inspection",
+                  "readiness": "inspection-required",
+                  "targetSourceCoverage": "all"
+                },
+                "severity": "error",
+                "sourceRole": "template",
+                "subject": {
+                  "source": {
+                    "end": 1098,
+                    "kind": "source-span-address",
+                    "label": "src/read-expressions.html@1087..1098",
+                    "path": "src/read-expressions.html",
+                    "role": "typescript-overlay:semantic",
+                    "start": 1087
+                  },
+                  "span": null,
+                  "subjectKind": "template-expression",
+                  "uri": null
+                },
+                "typeScriptDiagnosticCode": 2349
+              },
+              "relation": "checker-evidence"
+            }
+          ],
           "maxRawSeverity": "error",
           "primarySeverity": "error",
-          "rawRowCount": 1
+          "rawRowCount": 2
         },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "changeDomain": "inspection",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
+          "actionKind": "rewrite-expression",
+          "actionability": "guided",
+          "changeDomain": "app-source",
+          "planKind": "template-expression-rewrite",
+          "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
         "sourceRole": "template",
@@ -673,19 +775,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "kind": "source-span-address",
             "label": "src/read-expressions.html@1087..1098",
             "path": "src/read-expressions.html",
-            "role": "typescript-overlay:semantic",
+            "role": "call-target",
             "start": 1087
           },
           "span": null,
           "subjectKind": "template-expression",
           "uri": null
         },
-        "typeScriptDiagnosticCode": 2349
+        "typeScriptDiagnosticCode": null
       },
-      "message": "TS2349: This expression is not callable.\nType 'String' has no call signatures.",
+      "message": "Type '\"not callable\"' has no call signature to project.",
       "range": {
         "end": {
-          "character": 47,
+          "character": 49,
           "line": 21
         },
         "start": {
@@ -693,8 +795,26 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 21
         }
       },
-      "rangeText": "notCallable",
-      "relatedInformation": [],
+      "rangeText": "notCallable()",
+      "relatedInformation": [
+        {
+          "anomaly": null,
+          "file": "src/read-expressions.html",
+          "message": "TS2349: This expression is not callable.\nType 'String' has no call signatures.",
+          "range": {
+            "end": {
+              "character": 47,
+              "line": 21
+            },
+            "start": {
+              "character": 36,
+              "line": 21
+            }
+          },
+          "rangeText": "notCallable",
+          "uri": "fixtures://pressure/template-typechecking-corpus/src/read-expressions.html"
+        }
+      ],
       "severity": "error",
       "source": "aurelia"
     },
@@ -907,7 +1027,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         },
         "typeScriptDiagnosticCode": null
       },
-      "message": "Template method call \"acceptPredicate(...)\" reads this.items inside an undecorated method. Aurelia observes the template call and its arguments, but not arbitrary method bodies; add @computed(...), convert the read to a getter, or bind the dependency directly when the result must update with those reads.",
+      "message": "Template method call \"acceptPredicate(...)\" reads this.items inside an undecorated method. Aurelia does not subscribe to these reads when the method runs; add @computed(...), convert the read to a getter, or bind the dependency directly when the result must update with those reads.",
       "range": {
         "end": {
           "character": 54,
@@ -1655,7 +1775,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "kind": "source-span-address",
             "label": "src/write-bindings.html@1273..1278",
             "path": "src/write-bindings.html",
-            "role": "binding-source-assignment",
+            "role": "binding-source-expression",
             "start": 1273
           },
           "span": null,
@@ -1717,7 +1837,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "kind": "source-span-address",
             "label": "src/write-bindings.html@1360..1372",
             "path": "src/write-bindings.html",
-            "role": "binding-source-assignment",
+            "role": "binding-source-expression",
             "start": 1360
           },
           "span": null,
@@ -1982,10 +2102,52 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         ],
         "phase": "bind",
         "presentation": {
-          "contextual": [],
+          "contextual": [
+            {
+              "diagnostic": {
+                "diagnosticAuthority": "framework-error-code",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "expression-runtime-evaluation-error",
+                "frameworkErrorCode": "AUR0103",
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "runtime-ast:AUR0103",
+                "missingInputs": [
+                  "runtime-ast:AUR0103"
+                ],
+                "phase": null,
+                "relatedInformation": [],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "register-resource",
+                  "actionability": "guided",
+                  "changeDomain": "app-source",
+                  "planKind": "resource-registration",
+                  "readiness": "ready-to-plan",
+                  "targetSourceCoverage": "all"
+                },
+                "severity": "error",
+                "sourceRole": "template",
+                "subject": {
+                  "source": {
+                    "end": 506,
+                    "kind": "source-span-address",
+                    "label": "src/resource-boundaries.html@491..506",
+                    "path": "src/resource-boundaries.html",
+                    "role": "expression",
+                    "start": 491
+                  },
+                  "span": null,
+                  "subjectKind": "template-expression",
+                  "uri": null
+                },
+                "typeScriptDiagnosticCode": null
+              },
+              "relation": "semantic-explanation"
+            }
+          ],
           "maxRawSeverity": "error",
           "primarySeverity": "error",
-          "rawRowCount": 1
+          "rawRowCount": 2
         },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
@@ -2013,7 +2175,25 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "rangeText": "absentConverter",
-      "relatedInformation": [],
+      "relatedInformation": [
+        {
+          "anomaly": null,
+          "file": "src/resource-boundaries.html",
+          "message": "Value converter 'absentConverter' was not resolved through the current compiler resource scope.",
+          "range": {
+            "end": {
+              "character": 69,
+              "line": 8
+            },
+            "start": {
+              "character": 54,
+              "line": 8
+            }
+          },
+          "rangeText": "absentConverter",
+          "uri": "fixtures://pressure/template-typechecking-corpus/src/resource-boundaries.html"
+        }
+      ],
       "severity": "error",
       "source": "aurelia"
     },
