@@ -20,8 +20,8 @@ The first modeled lane is validation rule construction and model-rule hydration:
   direct property/keyed-access path.
 - Default `ModelValidationExpressionHydrator` model-rule objects spend `AUR4105` for unsupported rule keys and `AUR4106`
   for empty property names. These diagnostics are suppressed when configuration proves a custom `HydratorType`.
-- Closed `ensureGroup(...)` callbacks spend `AUR4108` only when the returned object literal names a property outside the
-  statically closed group, or omits the `property` key entirely.
+- Closed `ensureGroup(...)` callbacks spend `AUR4108` when a return in the group callback names a property outside the
+  statically closed group or proves the `property` key absent. A later spread or computed key can supply or replace the property.
 
 Rule API recognition is import/DI/declaration-backed; local `ValidationRules` or `PropertyRule` lookalikes are not
 enough to spend validation framework authority.

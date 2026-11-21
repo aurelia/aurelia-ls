@@ -31,13 +31,18 @@ export class FetchClientConfigErrorsApp {
     this.client.configure(() => 1 as any);
     this.client.configure({ headers: new Headers() } as any);
     this.client.configure({ headers: new LocalFetch.Headers() } as any);
-    this.client.configure({ interceptors: [new RetryInterceptor(), new RetryInterceptor()] } as any);
+    this.client.configure(config => ({ ...config, interceptors: [new RetryInterceptor(), new RetryInterceptor()] }) as any);
     this.client.configure(config => config.withRetry().withInterceptor({ request: request => request }));
     this.client.configure(config => config.withRetry({ strategy: RetryStrategy.exponential, interval: 1000 } as any));
     this.client.configure(config => config.withRetry({ strategy: 42 } as any));
     this.erasedContainer.get(IHttpClient).configure(42 as any);
     this.decoratorFactoryIsNotClient.configure(42);
     this.localClient.configure(42);
+    this.client.configure({ interceptors: [new RetryInterceptor(), new RetryInterceptor()] } as any);
+    this.client.configure(config => config.withRetry().withBaseUrl('/'));
+    this.client.configure(config => { config.withInterceptor({}); config.withRetry(); });
+    const validInterval = 2500;
+    this.client.configure(config => config.withRetry({ strategy: RetryStrategy.exponential, interval: validInterval } as any));
   }
 }
 

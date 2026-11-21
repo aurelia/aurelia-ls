@@ -9,7 +9,7 @@ import {
 } from '../evaluation/import-bindings.js';
 import {
   isParameterProperty,
-  readObjectPropertyExpression,
+  readEffectiveObjectProperty,
   sourceSiteForNode,
   unwrapExpression,
 } from '../evaluation/ts-syntax.js';
@@ -138,7 +138,7 @@ interface HttpClientConfigurationAction {
 
 interface RetryInterceptorFact {
   readonly node: ts.Node;
-  readonly config: ts.Expression | null;
+  readonly index: number;
 }
 
 /** Materializes source-backed diagnostics for @aurelia/fetch-client configuration APIs. */
@@ -340,15 +340,16 @@ function readConfigureObjectIssues(
     return;
   }
 
-  const defaultsExpression = readObjectPropertyExpression(current, 'defaults');
+  if (!normalizedConfigurationObject) {
+    readDefaultHeaderIssues(context, current, 'headers', ownerIdentityHandle);
+    return;
+  }
+  const defaultsExpression = readEffectiveObjectProperty(current, 'defaults');
   if (defaultsExpression != null) {
     readDefaultHeaderIssues(context, defaultsExpression, 'defaults.headers', ownerIdentityHandle);
   }
-  if (!normalizedConfigurationObject) {
-    readDefaultHeaderIssues(context, current, 'headers', ownerIdentityHandle);
-  }
 
-  const interceptorsExpression = readObjectPropertyExpression(current, 'interceptors');
+  const interceptorsExpression = readEffectiveObjectProperty(current, 'interceptors');
   if (interceptorsExpression != null) {
     readInterceptorCollectionIssues(context, interceptorsExpression, ownerIdentityHandle);
   }
@@ -444,6 +445,7 @@ function readConfigurationActionIssues(
     return;
   }
   const retryFacts: RetryInterceptorFact[] = [];
+  let interceptorCount = 0;
   for (const action of actions) {
     switch (action.name) {
       case 'withDefaults':
@@ -452,26 +454,26 @@ function readConfigurationActionIssues(
         }
         break;
       case 'withRetry':
-        retryFacts.push({
-          node: action.call,
-          config: action.call.arguments[0] ?? null,
-        });
+        retryFacts.push({ node: action.call, index: interceptorCount });
+        interceptorCount++;
         readRetryConfigurationIssues(context, action.call.arguments[0] ?? null, action.call, ownerIdentityHandle);
         break;
       case 'withInterceptor': {
         const interceptor = action.call.arguments[0] ?? null;
         if (interceptor != null && expressionCreatesRetryInterceptor(interceptor, context.bindings)) {
-          retryFacts.push({
-            node: action.call,
-            config: retryInterceptorConfig(interceptor),
-          });
+          retryFacts.push({ node: action.call, index: interceptorCount });
           readRetryConfigurationIssues(context, retryInterceptorConfig(interceptor), action.call, ownerIdentityHandle);
         }
+        interceptorCount++;
         break;
       }
+      case 'rejectErrorResponses':
+      case 'useStandardConfiguration':
+        interceptorCount++;
+        break;
     }
   }
-  readRetryInterceptorOrderingIssues(context, retryFacts, actions.length, ownerIdentityHandle);
+  readRetryInterceptorOrderingIssues(context, retryFacts, interceptorCount, ownerIdentityHandle);
 }
 
 function readDefaultHeaderIssues(
@@ -484,7 +486,7 @@ function readDefaultHeaderIssues(
   if (!ts.isObjectLiteralExpression(current)) {
     return;
   }
-  const headers = readObjectPropertyExpression(current, 'headers');
+  const headers = readEffectiveObjectProperty(current, 'headers');
   if (headers == null || !expressionCreatesHeadersInstance(context, headers)) {
     return;
   }
@@ -513,7 +515,7 @@ function readInterceptorCollectionIssues(
   }
   const retryFacts: RetryInterceptorFact[] = [];
   let hasSpread = false;
-  for (const element of current.elements) {
+  for (const [index, element] of current.elements.entries()) {
     if (ts.isSpreadElement(element)) {
       hasSpread = true;
       continue;
@@ -521,7 +523,7 @@ function readInterceptorCollectionIssues(
     if (expressionCreatesRetryInterceptor(element, context.bindings)) {
       retryFacts.push({
         node: element,
-        config: retryInterceptorConfig(element),
+        index,
       });
       readRetryConfigurationIssues(context, retryInterceptorConfig(element), element, ownerIdentityHandle);
     }
@@ -554,22 +556,19 @@ function readRetryInterceptorOrderingIssues(
     return;
   }
   const onlyRetry = retryFacts[0] ?? null;
-  if (onlyRetry != null) {
-    const retryIndex = retryInterceptorIndex(onlyRetry.node);
-    if (retryIndex >= 0 && retryIndex !== interceptorCount - 1) {
-      context.sites.push(sourceSiteForNode(
-        context,
-        onlyRetry.node,
-        {
-          phase: FetchClientIssuePhase.HttpClientConfiguration,
-          issueKind: FetchClientIssueKind.RetryInterceptorNotLast,
-          frameworkErrorCode: FetchClientFrameworkErrorCode.RetryInterceptorNotLast,
-          message: 'HttpClient.configure(...) statically configures a RetryInterceptor before another interceptor.',
-          localName: 'interceptors',
-          ownerIdentityHandle,
-        },
-      ));
-    }
+  if (onlyRetry != null && onlyRetry.index !== interceptorCount - 1) {
+    context.sites.push(sourceSiteForNode(
+      context,
+      onlyRetry.node,
+      {
+        phase: FetchClientIssuePhase.HttpClientConfiguration,
+        issueKind: FetchClientIssueKind.RetryInterceptorNotLast,
+        frameworkErrorCode: FetchClientFrameworkErrorCode.RetryInterceptorNotLast,
+        message: 'HttpClient.configure(...) statically configures a RetryInterceptor before another interceptor.',
+        localName: 'interceptors',
+        ownerIdentityHandle,
+      },
+    ));
   }
 }
 
@@ -583,17 +582,13 @@ function readRetryConfigurationIssues(
   if (retryConfig != null && !ts.isObjectLiteralExpression(retryConfig)) {
     return;
   }
-  const strategy = retryConfig == null
-    ? RETRY_STRATEGY_VALUES.fixed
-    : staticRetryStrategyValue(context, readObjectPropertyExpression(retryConfig, 'strategy'));
-  const interval = retryConfig == null
-    ? 1000
-    : staticNumberValue(readObjectPropertyExpression(retryConfig, 'interval')) ?? 1000;
+  const strategyExpression = retryConfig == null ? undefined : readEffectiveObjectProperty(retryConfig, 'strategy');
+  const strategy = strategyExpression === null ? null : staticRetryStrategyValue(context, strategyExpression ?? null);
+  const intervalExpression = retryConfig == null ? undefined : readEffectiveObjectProperty(retryConfig, 'interval');
+  const interval = intervalExpression === undefined ? 1000 : staticNumberValue(intervalExpression, context.checker);
 
-  if (strategy === RETRY_STRATEGY_VALUES.exponential && interval <= 1000) {
-    const intervalSourceNode = retryConfig == null
-      ? siteNode
-      : readObjectPropertyExpression(retryConfig, 'interval') ?? siteNode;
+  if (strategy === RETRY_STRATEGY_VALUES.exponential && interval != null && interval <= 1000) {
+    const intervalSourceNode = intervalExpression ?? siteNode;
     context.sites.push(sourceSiteForNode(
       context,
       intervalSourceNode,
@@ -609,9 +604,7 @@ function readRetryConfigurationIssues(
   }
 
   if (strategy === 'invalid') {
-    const strategySourceNode = retryConfig == null
-      ? siteNode
-      : readObjectPropertyExpression(retryConfig, 'strategy') ?? siteNode;
+    const strategySourceNode = strategyExpression ?? siteNode;
     context.sites.push(sourceSiteForNode(
       context,
       strategySourceNode,
@@ -859,11 +852,16 @@ function retryStrategyNumberIsValid(
 
 function staticNumberValue(
   expression: ts.Expression | null,
+  checker?: ts.TypeChecker,
 ): number | null {
   if (expression == null) {
     return null;
   }
   const current = unwrapExpression(expression);
+  if (checker != null && ts.isIdentifier(current)) {
+    const value = checker.getTypeAtLocation(current);
+    return value.isNumberLiteral() ? value.value : null;
+  }
   if (ts.isNumericLiteral(current)) {
     return Number(current.text);
   }
@@ -874,35 +872,6 @@ function staticNumberValue(
   ) {
     const value = Number(current.operand.text);
     return current.operator === ts.SyntaxKind.MinusToken ? -value : value;
-  }
-  return null;
-}
-
-function retryInterceptorIndex(
-  node: ts.Node,
-): number {
-  if (ts.isExpression(node) && ts.isArrayLiteralExpression(node.parent)) {
-    return node.parent.elements.indexOf(node as ts.Expression);
-  }
-  if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
-    const chain = readHttpClientConfigurationActionChain(node, readLeftmostIdentifier(node.expression.expression) ?? '');
-    return chain == null ? -1 : chain.findIndex((action) => action.call === node);
-  }
-  return -1;
-}
-
-function readLeftmostIdentifier(
-  expression: ts.Expression,
-): string | null {
-  const current = unwrapExpression(expression);
-  if (ts.isIdentifier(current)) {
-    return current.text;
-  }
-  if (ts.isCallExpression(current) && ts.isPropertyAccessExpression(current.expression)) {
-    return readLeftmostIdentifier(current.expression.expression);
-  }
-  if (ts.isPropertyAccessExpression(current)) {
-    return readLeftmostIdentifier(current.expression);
   }
   return null;
 }

@@ -114,6 +114,21 @@ export function authoredPropertyNameSpan(
   return end < start ? null : { start, end };
 }
 
+/** Last authored initializer for a key. Undefined means absent, null means the value is open. */
+export function readEffectiveObjectProperty(object: ts.ObjectLiteralExpression, key: string): ts.Expression | null | undefined {
+  for (let index = object.properties.length - 1; index >= 0; index--) {
+    const member = object.properties[index]!;
+    if (ts.isSpreadAssignment(member)) return null;
+    const name = ts.isComputedPropertyName(member.name) && ts.isStringLiteralLike(member.name.expression)
+      ? member.name.expression.text : readPropertyName(member.name);
+    if (name == null) return null;
+    if (name !== key) continue;
+    if (ts.isPropertyAssignment(member)) return member.initializer;
+    return ts.isShorthandPropertyAssignment(member) ? member.name : null;
+  }
+  return undefined;
+}
+
 export function readObjectPropertyExpression(
   object: ts.ObjectLiteralExpression,
   propertyName: string,

@@ -173,11 +173,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "message": "HttpClient.configure(...) statically configures more than one RetryInterceptor.",
       "range": {
         "end": {
-          "character": 89,
+          "character": 111,
           "line": 33
         },
         "start": {
-          "character": 67,
+          "character": 89,
           "line": 33
         }
       },

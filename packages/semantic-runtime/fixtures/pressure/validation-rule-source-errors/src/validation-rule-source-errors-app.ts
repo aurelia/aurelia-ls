@@ -82,6 +82,15 @@ class ValidationRuleSourceErrors {
     this.decoratorFactoryIsNotRules
       .ensure('name')
       .withMessage('The inject decorator factory is not a validation rules service root.');
+    this.rules.ensureGroup(['name', 'age'], () => {
+      const unused = () => { return { property: 'email' }; };
+      void unused;
+      return true;
+    });
+    this.rules.ensureGroup(['name', 'age'], () => {
+      const detail = { property: 'name', message: 'required' };
+      return { ...detail };
+    });
   }
 }
 

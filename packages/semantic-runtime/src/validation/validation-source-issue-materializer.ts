@@ -19,6 +19,7 @@ import {
 } from '../framework/source-api-root-recognition.js';
 import {
   isParameterProperty,
+  readEffectiveObjectProperty,
   readObjectPropertyExpression,
   readPropertyName,
   sourceSiteForNode,
@@ -583,8 +584,9 @@ function readValidationGroupRuleResultIssues(
     return;
   }
   for (const result of closedGroupRuleResultObjects(callback)) {
-    const property = readObjectPropertyExpression(result, 'property');
-    if (property == null) {
+    // Later spreads or computed keys can replace an earlier explicit property.
+    const property = readEffectiveObjectProperty(result, 'property');
+    if (property === undefined) {
       context.sites.push(sourceSiteForNode(
         context,
         result,
@@ -599,6 +601,7 @@ function readValidationGroupRuleResultIssues(
       ));
       continue;
     }
+    if (property === null) continue;
     const propertyName = staticStringValue(property);
     if (propertyName == null) {
       continue;
@@ -667,6 +670,7 @@ function closedGroupRuleResultObjects(
   if (ts.isBlock(body)) {
     const objects: ts.ObjectLiteralExpression[] = [];
     const visit = (node: ts.Node): void => {
+      if (ts.isFunctionLike(node)) return;
       if (ts.isReturnStatement(node) && node.expression != null) {
         const expression = unwrapExpression(node.expression);
         if (ts.isObjectLiteralExpression(expression)) {
