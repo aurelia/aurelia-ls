@@ -1,8 +1,7 @@
 import ts from 'typescript';
 import type { ProductDetailReadView } from '../kernel/product-details.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
-import { readCheckerTypeShapeByProductHandle } from '../type-system/checker-type-shape-access.js';
-import type { CheckerTypeMember, CheckerTypeShape } from '../type-system/type-shape.js';
+import { checkerMemberForOwnerType, readCheckerTypeShapeByProductHandle } from '../type-system/checker-type-shape-access.js';
 import { readVisibleTemplateResourceDefinition } from './compiler-resource-lookup.js';
 import type { TemplateVisibleResource } from './compiler-world-reference.js';
 
@@ -45,11 +44,10 @@ export class RuntimeBindingBehaviorBindEffectReader {
     if (targetType == null) {
       return noBindingBehaviorBindEffects;
     }
-    return new RuntimeBindingBehaviorBindEffects(
-      targetType.members
-        .filter((member) => member.name === 'bind')
-        .reduce((count, member) => count + directTargetSubscriberCallsForBindMember(member), 0),
-    );
+    const declarations = targetType.members.find(member => member.name === 'bind')?.carrier?.declarations
+      ?? checkerMemberForOwnerType(targetType, 'bind')?.declarations ?? [];
+    return new RuntimeBindingBehaviorBindEffects(declarations.reduce(
+      (count, declaration) => count + directTargetSubscriberCallsForBindDeclaration(declaration), 0));
   }
 }
 
@@ -59,11 +57,6 @@ function resourceEffectCacheKey(resource: TemplateVisibleResource): string {
   return resource.definitionProductHandle
     ?? resource.resourceProductHandle
     ?? `${resource.resourceKind}:${resource.name}`;
-}
-
-function directTargetSubscriberCallsForBindMember(member: CheckerTypeMember): number {
-  return member.carrier?.declarations.reduce((count, declaration) =>
-    count + directTargetSubscriberCallsForBindDeclaration(declaration), 0) ?? 0;
 }
 
 function directTargetSubscriberCallsForBindDeclaration(declaration: ts.Declaration): number {
@@ -104,15 +97,21 @@ function directTargetSubscriberCallsForStatements(
   bindingParameterName: string,
 ): number {
   let count = 0;
-  for (const statement of statements) {
-    if (ts.isReturnStatement(statement) || ts.isThrowStatement(statement)) {
-      break;
+  const continued = (statement: ts.Statement): boolean => {
+    if (ts.isBlock(statement)) return statement.statements.every(continued);
+    if (ts.isIfStatement(statement)) {
+      const test = unwrapExpressionStatementExpression(statement.expression);
+      if (test.kind === ts.SyntaxKind.TrueKeyword) return continued(statement.thenStatement);
+      if (test.kind === ts.SyntaxKind.FalseKeyword) return statement.elseStatement == null || continued(statement.elseStatement);
+      return false;
     }
     if (ts.isExpressionStatement(statement)
       && isBindingUseTargetSubscriberCall(statement.expression, bindingParameterName)) {
       count += 1;
     }
-  }
+    return ts.isExpressionStatement(statement) || ts.isVariableStatement(statement) || ts.isEmptyStatement(statement);
+  };
+  statements.every(continued);
   return count;
 }
 

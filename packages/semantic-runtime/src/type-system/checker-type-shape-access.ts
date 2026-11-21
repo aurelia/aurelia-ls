@@ -1126,7 +1126,7 @@ interface CheckerTypeShapeCheckerMember {
   readonly declarations: readonly ts.Declaration[];
 }
 
-function checkerMemberForOwnerType(
+export function checkerMemberForOwnerType(
   ownerType: CheckerTypeShape,
   memberName: string,
 ): CheckerTypeShapeCheckerMember | null {
