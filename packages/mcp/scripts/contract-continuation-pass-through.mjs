@@ -215,6 +215,28 @@ expect(
 
 await adapter.dispose();
 
+const aliasAdapter = new AureliaMcpSemanticRuntimeAdapter();
+try {
+  const workspaceRoot = path.join(packageRoot, 'semantic-runtime/fixtures/pressure/aliased-bindable-surfaces');
+  const cursor = { filePath: 'src/product-card.ts', line: 9, character: 45 };
+  const rename = await aliasAdapter.appQuery({ workspaceRoot, queryKind: 'template-rename-from-typescript',
+    cursor, newName: 'headlineText' }, projectDetachedAureliaMcpResponse);
+  expect(rename.value.value?.edits?.length === 2, 'TypeScript rename must identify the field and template edits.');
+  const next = rename.value.continuations ?? [];
+  expect(!next.some(row => row.targetQueryKind === 'template-cursor-info' || row.targetQueryKind === 'template-diagnostics'),
+    'The declaration must not be recommended as a template token or template file.');
+  const target = next.find(row => row.targetQueryKind === 'template-references')?.targetQuery;
+  expect(target?.cursor?.filePath === cursor.filePath, 'The TypeScript declaration must retain its reference follow-up.');
+  if (target != null) {
+    const { kind: queryKind, ...selectors } = target;
+    const followed = await aliasAdapter.appQuery({ workspaceRoot, queryKind, ...selectors }, projectDetachedAureliaMcpResponse);
+    expect(followed.value.selection === 'exact' && followed.value.value?.rows?.some(row => row.source?.path === 'src/product-card.html'),
+      'Following references must reach the actual template usage.');
+  }
+} finally {
+  await aliasAdapter.dispose();
+}
+
 if (failures.length > 0) {
   console.error(failures.join('\n'));
   process.exit(1);

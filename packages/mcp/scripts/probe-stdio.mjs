@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { probeWorkspaceQueries } from './probe-workspace-queries.mjs';
 import {
   expectedPatternCatalogCount,
   patternReleaseSentinels,
@@ -144,11 +145,7 @@ try {
   assert(Array.isArray(docsFetchValue?.sections) && docsFetchValue.sections.length >= 1, 'docs fetch returned at least one section');
   assert(Array.isArray(docsFetchValue?.availableSections) && docsFetchValue.availableSections.length >= 1, 'docs fetch returned section navigation summaries');
 
-  const workspaceOverview = await client.callTool({
-    name: 'aurelia_workspace_overview',
-    arguments: { workspaceRoot: minimalFixtureWorkspaceRoot },
-  });
-  assert(structuredValue(workspaceOverview) != null, 'workspace overview returned structured content');
+  await probeWorkspaceQueries(client, minimalFixtureWorkspaceRoot);
 
   const projectConfigurations = await client.callTool({
     name: 'aurelia_project_configurations',
@@ -191,7 +188,8 @@ try {
       diagnosticProjection: 'available-products',
     },
   });
-  assert(structuredValue(diagnostics) != null, 'diagnostic overview returned structured content');
+  assert(!diagnostics.isError && diagnostics.structuredContent?.value?.result === 'answered'
+    && Number.isSafeInteger(structuredValue(diagnostics)?.totalDiagnosticRows), 'diagnostic overview returned a diagnostic count');
 
   const orientPrompt = await client.getPrompt({
     name: 'aurelia_orient_workspace',

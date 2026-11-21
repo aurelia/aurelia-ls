@@ -192,7 +192,13 @@ export class AureliaMcpSemanticRuntimeAdapter {
           continuationFilteredQueries(input.queries, input.continuationIntents),
           input.sourceFilePath,
         ),
-      }),
+      }).then(answer => ({
+        ...answer,
+        value: {
+          ...answer.value,
+          rows: answer.value.rows.map(row => ({ ...row, answer: publicAppQueryAnswer(row.answer) })),
+        },
+      })),
       project,
     );
   }
@@ -327,7 +333,7 @@ export class AureliaMcpSemanticRuntimeAdapter {
         inquiryProfile: 'mcp-orientation',
         ...(input.appRetention == null ? {} : { appRetention: input.appRetention }),
         pagePolicy: MCP_PAGE_POLICY,
-      });
+      }).then(publicAppQueryAnswer);
     }, project);
   }
 
@@ -344,6 +350,12 @@ export class AureliaMcpSemanticRuntimeAdapter {
       return project(projectDetachedAureliaMcpResponse(toolResponse(toolName, descriptor, answered)));
     });
   }
+}
+
+/** App-builder queries remain available to internal consumers; MCP only registers app queries. */
+function publicAppQueryAnswer<T>(answer: SemanticRuntimeAnswer<T>): SemanticRuntimeAnswer<T> {
+  if (!answer.continuations?.some(row => row.targetAppBuilderQuery != null)) return answer;
+  return { ...answer, continuations: answer.continuations.filter(row => row.targetAppBuilderQuery == null) };
 }
 
 function continuationFilteredQueries(

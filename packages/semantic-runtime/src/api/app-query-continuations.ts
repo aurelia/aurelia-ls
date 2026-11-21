@@ -721,8 +721,15 @@ function addTemplateContinuations(
           ),
         );
         break;
-      case SemanticAppQueryKind.TemplateRename:
       case SemanticAppQueryKind.TemplateRenameFromTypeScript:
+        // References accepts the declaration cursor. Template cursor context and
+        // diagnostics need an authored template locus, which the field does not select.
+        seeds.push(navigate(
+          'Inspect template references for the selected TypeScript declaration.',
+          cursorQuery(SemanticAppQueryKind.TemplateReferences, query),
+        ));
+        break;
+      case SemanticAppQueryKind.TemplateRename:
         seeds.push(
           inspect(
             'Inspect semantic cursor context for this rename plan.',

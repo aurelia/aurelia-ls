@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { probeWorkspaceQueries } from './probe-workspace-queries.mjs';
 import {
   expectedPatternCatalogCount,
   patternReleaseSentinels,
@@ -151,11 +152,7 @@ try {
     assert(docsFetchValue?.documentPath === docsSearchItem.documentPath, 'installed package docs fetch returned the requested document');
     assert(Array.isArray(docsFetchValue?.sections) && docsFetchValue.sections.length >= 1, 'installed package docs fetch returned bounded sections');
 
-    const overview = await client.callTool({
-      name: 'aurelia_workspace_overview',
-      arguments: { workspaceRoot: fixtureWorkspaceRoot },
-    });
-    assert(overview?.structuredContent?.value != null, 'workspace overview returned structured content');
+    await probeWorkspaceQueries(client, fixtureWorkspaceRoot);
 
     console.log([
       'MCP release tarball probe passed.',
