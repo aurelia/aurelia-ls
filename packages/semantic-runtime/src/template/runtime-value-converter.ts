@@ -158,6 +158,7 @@ export type RuntimeValueConverterIssueDraft = {
 
 export type SanitizeValueConverterToViewContext = {
   readonly hasCustomSanitizer: boolean;
+  readonly nullishInput: boolean;
 };
 
 /**
@@ -172,7 +173,7 @@ export class SanitizeValueConverter {
   readonly name = BuiltInValueConverterName.Sanitize;
 
   toView(context: SanitizeValueConverterToViewContext): RuntimeValueConverterIssueDraft | null {
-    if (context.hasCustomSanitizer) {
+    if (context.nullishInput || context.hasCustomSanitizer) {
       return null;
     }
     return {

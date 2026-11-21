@@ -458,10 +458,14 @@ export class RuntimeValueConverterMaterializer {
     container: Container,
   ): RuntimeValueConverterIssueDraft | null {
     switch (entry.builtInResource?.name) {
-      case BuiltInValueConverterName.Sanitize:
+      case BuiltInValueConverterName.Sanitize: {
+        let value = entry.expression.expression;
+        while (value.$kind === 'Paren') value = value.expression;
         return this.sanitize.toView({
           hasCustomSanitizer: hasResolverForInterface(this.publication, container, 'ISanitizer'),
+          nullishInput: value.$kind === 'PrimitiveLiteral' && value.value == null,
         });
+      }
       default:
         return null;
     }

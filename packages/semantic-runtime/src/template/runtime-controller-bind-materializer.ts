@@ -827,7 +827,8 @@ export class RuntimeControllerBindMaterializer {
     binding: RefBinding,
     elementName: string | null,
   ): RuntimeControllerFrame | null {
-    for (const controller of input.runtimeRendering.controllers) {
+    const owner = input.runtimeRendering.requireRenderContextForBinding(binding.productHandle).renderingController;
+    for (const controller of owner.readChildren()) {
       if (controller.instructionProductHandle == null) {
         continue;
       }
@@ -853,7 +854,8 @@ export class RuntimeControllerBindMaterializer {
     binding: RefBinding,
     attributeName: string,
   ): RuntimeControllerFrame | null {
-    for (const controller of input.runtimeRendering.controllers) {
+    const owner = input.runtimeRendering.requireRenderContextForBinding(binding.productHandle).renderingController;
+    for (const controller of owner.readChildren()) {
       if (controller.instructionProductHandle == null) {
         continue;
       }
