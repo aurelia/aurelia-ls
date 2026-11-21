@@ -766,7 +766,6 @@
         "Semantic-runtime now publishes source-level ProxyObservableEscape rows for direct ProxyObservable.getRaw(...) and ProxyObservable.unwrap(...) calls. Treat these as neutral proxy-exit facts that can feed future diagnostics or authoring policy, not as automatic evidence that the escape is correct or incorrect.",
         "Recent compact external app and cursor-locus checks show runtime watcher/computed/proxy rows visible at app scale. When remaining cursor partials are weak expression-member owner types (`any` or index-signature-only), route that pressure to diagnostics/template repair policy and TypeChecker expression semantics rather than reopening proxy-observation plumbing."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "lens",
@@ -1221,7 +1220,6 @@
         "Atlas bridge auLink exposes runtime:computed / ComputedPropertyInfo / ComputedMethodOptions role evidence through framework.observation computed-decorator relationships. Keep ComputedObservationDefinition as the single semantic-runtime source declaration lane rather than adding product-side duplicate placements for decorator metadata.",
         "The current semantic-runtime lane is static and source-backed. If deeper runtime emulation becomes necessary, add a concrete lookup/use join rather than pretending source-observer projection alone is runtime execution."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "lens",
@@ -2414,7 +2412,6 @@
         "Resource-local access aggregation follows the rendered binding owner before source locality. Trackable method-body uses keep TypeScript source but belong to the invoking template binding.",
         "Do not add empty fieldProvenance arrays to access, observation, value-channel, or data-flow hot records. Product provenance, source addresses, target links, resolution lineage, and access-use lineage already own current witnesses; add field provenance only for a genuinely distinct field witness."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",

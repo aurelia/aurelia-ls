@@ -33,8 +33,6 @@ export interface InquirySurfaceMap {
   readonly packageName: "@aurelia-ls/atlas";
   /** Answer schema version emitted by inquiry lenses. */
   readonly contractVersion: typeof ANSWER_SCHEMA_VERSION;
-  /** Principles that explain the current contract shape. */
-  readonly activePrinciples: readonly string[];
   /** Shared answer and continuation classifier lists. */
   readonly contractShape: {
     /** Outcome values carried by every answer. */
@@ -64,14 +62,6 @@ export function createSurfaceMap(
   return {
     packageName: contracts.packageName ?? "@aurelia-ls/atlas",
     contractVersion: ANSWER_SCHEMA_VERSION,
-    activePrinciples: [
-      "Prefer a small inquiry algebra over a large operation/aspect matrix.",
-      "Treat product substrate and vocabulary as the allowed product self-description layer.",
-      "Make basis, evidence, open seams, and continuations explicit on every answer.",
-      "Use declared navigation routes to keep cross-lens hops auditable instead of answer-local folklore.",
-      "Let TypeScript, product, framework, bridge, and Atlas maintenance lenses compose through one answer shape.",
-      "Declare Atlas self-description through controlled vocabulary so self-analysis can inspect design pressure directly.",
-    ],
     contractShape: {
       outcomes: OUTCOME_KINDS,
       continuations: CONTINUATION_KINDS,

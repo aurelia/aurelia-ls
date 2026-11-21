@@ -391,8 +391,6 @@ export interface AtlasSelfContinuationRow {
   readonly continuationId: string | null;
   /** ContinuationKind member name when static. */
   readonly kind: string | null;
-  /** ContinuationPriority member name when static. */
-  readonly priority: string | null;
   /** Function that owns the continuation object. */
   readonly functionName: string;
   /** Source file that owns the continuation object. */

@@ -6,7 +6,6 @@ import {
 } from "../../framework/admission-world.js";
 import { FrameworkRelationshipEndpointKind } from "../../framework/relationships.js";
 import {
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import type { Evidence } from "../evidence.js";
@@ -57,7 +56,6 @@ export class FrameworkAdmissionContinuationPlanner {
               rationale:
                 "Inspect DI provider and registration atoms behind the admitted key.",
               routeSummary: "DI provider atoms behind an admitted DI key.",
-              priority: ContinuationPriority.Secondary,
             },
           ),
         ];
@@ -89,7 +87,6 @@ export class FrameworkAdmissionContinuationPlanner {
                 "Follow the admitted resource into the framework resource catalog.",
               routeSummary:
                 "Admitted resource to framework resource carrier catalog.",
-              priority: ContinuationPriority.Secondary,
             },
           ),
         ];
@@ -136,7 +133,6 @@ export class FrameworkAdmissionContinuationPlanner {
               rationale:
                 "Follow the admitted lifecycle task into the AppTask entity catalog.",
               routeSummary: "Admitted AppTask to framework AppTask catalog.",
-              priority: ContinuationPriority.Secondary,
             },
           ),
         ];

@@ -29,7 +29,6 @@ import {
 import { lowerFirst } from "../../text-case.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
 import {
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import {
@@ -1898,7 +1897,6 @@ function childControllerActivationContinuations(
               "Inspect normalized rendering relationship rows for controller child admission.",
             routeSummary:
               "Child activation back to controller child-admission relationships.",
-            priority: ContinuationPriority.Secondary,
           },
         ),
       ];
@@ -1966,7 +1964,6 @@ function resourceSiteContinuations(
           rationale:
             "Return to the resource materialization row that contributed this lifecycle site.",
           routeSummary: "Resource lifecycle site back to materialization row.",
-          priority: ContinuationPriority.Secondary,
         },
       ),
     ),
@@ -2007,7 +2004,6 @@ function appTaskExecutionContinuations(
           rationale:
             "Return to the AppTask/lifecycle task entity catalog behind this execution site.",
           routeSummary: "AppTask execution site back to AppTask entity catalog.",
-          priority: ContinuationPriority.Secondary,
         },
       ),
     ),
@@ -2044,7 +2040,6 @@ function hookDispatchContinuations(
             hookName: row.hookName,
           },
           evidence: evidenceForLifecycleRow(row),
-          priority: ContinuationPriority.Secondary,
           summary: "Lifecycle hook dispatch row to relationship projection.",
         },
       ),

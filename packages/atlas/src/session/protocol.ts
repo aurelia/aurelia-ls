@@ -184,7 +184,7 @@ export interface InquirySessionSelfCheckResult {
   readonly terrainOutcome: OutcomeKind;
   /** Outcome returned by the self-maintenance call. */
   readonly selfOutcome: OutcomeKind;
-  /** Outcome returned by following the first map continuation, when available. */
+  /** Outcome returned by following the terrain answer back to the contract map. */
   readonly followedOutcome?: OutcomeKind;
   /** Number of open seams surfaced by atlas.self. */
   readonly selfOpenSeams: number;

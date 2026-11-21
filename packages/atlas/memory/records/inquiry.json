@@ -46,12 +46,6 @@
           "summary": "Parser-owned authored object-key locus and occupied-key inspection for completion consumers."
         },
         {
-          "kind": "lens",
-          "lensId": "atlas.memory",
-          "projection": "next",
-          "summary": "Use memory:next to discover active cursor/inquiry pressure before adding answer-local heuristics."
-        },
-        {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:template-completion-member-metadata",
           "summary": "Contract proving public completion candidates expose checker member kind, visibility, readonly/optional flags, and Aurelia hook categories."
@@ -215,26 +209,7 @@
         "Generated component-pair templates may carry `sourceLoweringTemplateInvocations` beside a higher-level template composition; use `component-pair-task-draft-reset-button` to review native button event/type/text fields in realistic generated app source. Do not chase the remaining generated-app unused request fields mechanically: `bindingExpression` is pressure-covered for direct invocations, `bindingRootExpression` is covered by rooted draft-object generation but does not prove full edit-buffer semantics, and `matcherExpression` is covered by object-valued relationship controls while richer object-valued choice arrays remain deferred.",
         "Generated fixture indexes include `sourceLoweringRequestFieldReviewSummary` and `sourceLoweringRequestFieldReviewRows` for unused generated-app request fields. Treat those rows as fixture-review posture: they can say a field is pressure-covered, covered by rooted draft-object generation, deferred for full edit-buffer modeling, or deferred for object-valued choice/domain relationship modeling without turning optional request-field counts into mechanical generated-fixture obligations; a nonzero needs-review count is the canary to classify new unused fields."
       ],
-      "nextActionPolicy": "hidden",
       "anchors": [
-        {
-          "kind": "lens",
-          "lensId": "atlas.memory",
-          "projection": "next",
-          "filters": {
-            "domain": "app-builder"
-          },
-          "summary": "App-builder ontology memory owns reusable pattern intent and reference-domain separation."
-        },
-        {
-          "kind": "lens",
-          "lensId": "atlas.memory",
-          "projection": "next",
-          "filters": {
-            "domain": "edits"
-          },
-          "summary": "Semantic IDE affordance memory owns strict reference/edit requirements."
-        },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/fixture-verification/expected-effect.ts",
@@ -322,7 +297,8 @@
         }
       ],
       "createdAt": "2026-05-23",
-      "updatedAt": "2026-06-04"
+      "updatedAt": "2026-11-21",
+      "archived": true
     },
     {
       "id": "frontier:query-claim-graph",
@@ -542,10 +518,10 @@
         "framework-corpus"
       ],
       "summary": "Semantic contract verification should provide route-scoped regression witnesses without turning Aurelia framework tests or public DTOs into one large snapshot suite.",
-      "rationale": "auLink has been valuable as fast framework grounding, but inquiry policy, query-claim retention, invalidation, fixture expected effects, and public MCP answers now need behavior-level regression confidence. The durable shape should assert semantic products and expected effects selected by Work Router routes, while preserving the ability to refactor Atlas and semantic-runtime boldly when an ontology is wrong.",
+      "rationale": "A framework link identifies the source of an obligation. The contract runner lets an owner verify observable semantic products, query behavior or expected effects using a focused fixture.",
       "guidance": [
         "Start here when testing strategy, semantic-runtime regression coverage, fixture verification, or public query budget checks are under discussion.",
-        "Use Work Router routes to select focused witnesses for changed observation, router, template, diagnostics, app-builder, inquiry, or MCP surfaces.",
+        "The semantic-runtime contract-suite.mjs runner selects witnesses by route, domain and tier. Its entries name the script and the behavior each checks.",
         "Assert semantic effects and product facts rather than source snapshots or whole DTO dumps: resources, routes, bindings, controller topology, value channels, diagnostics, expected effects, retention policy, and answer budgets.",
         "Use expected-effect descriptor rows when a caller or route needs to explain which public query families and verifier observation surfaces prove an ExpectedSemanticEffectKind.",
         "Runtime watcher, watcher observed-dependency, binding-owned trackable method dependency, template collection observation, computed-observer-source, and computed-observer-observed-dependency rows are now expected-effect targets. Use the proxy-observation, trackable-method-observation, template-collection-observation, and computed-observer-source contracts as the first patterns for row-backed observation witnesses.",
@@ -557,7 +533,6 @@
         "Prefer a fast route-health/schema lane, a route-scoped semantic lane, a selected framework-corpus witness lane, and a slower confidence lane over one mandatory all-in suite.",
         "Use `pnpm --filter @aurelia-ls/semantic-runtime contract:suite -- --list` or a route/domain filter before manually assembling contract scripts. The current suite is a first harness, not the final Atlas-selected contract algebra; it keeps child output compact on success and exposes `--verbose` for debugging."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -607,12 +582,6 @@
           "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
           "symbolName": "QueryClaimGraph",
           "summary": "Query materialization and retention policy should become contractable for public answers."
-        },
-        {
-          "kind": "lens",
-          "lensId": "atlas.work-router",
-          "projection": "route-plan",
-          "summary": "Route-scoped witness selection should start from Work Router rather than a monolithic test command."
         },
         {
           "kind": "lens",
@@ -671,7 +640,7 @@
         }
       ],
       "createdAt": "2026-05-18",
-      "updatedAt": "2026-07-31"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:evidence-gated-continuations",
@@ -719,10 +688,8 @@
         "Continuation cost should reuse app-query materialization policy. Query options can remove TypeChecker projection cost, but they do not erase the app-world/project-frame/runtime-static boundary.",
         "`next-page` continuations still expose target-query epoch dependencies; paging is cheap, but its cursor remains bound to the target row universe. App-world targets retain project-input plus app-world dependencies, and cursor/source-file/source-locus targets add source-input rather than replacing broader authorities.",
         "Route query-local continuation state through QueryClaimGraph when following a continuation changes materialization cost, retention, or invalidation.",
-        "Kernel-side inquiry continuations should carry `InquiryContinuationApplicability`; leaving applicability null means the low-level lane has not been grounded in the shared intent/evidence vocabulary yet.",
-        "Use `atlas.work-router --projection=coverage --coverageDimension=intent-aware-continuations` to find adjacent routes whose query families are missing or partial, and update those route coverage rows when a query family is threaded."
+        "Kernel-side inquiry continuations should carry `InquiryContinuationApplicability`; leaving applicability null means the low-level lane has not been grounded in the shared intent/evidence vocabulary yet."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -820,24 +787,6 @@
           "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
           "symbolName": "QueryClaimGraph",
           "summary": "Answer-boundary storage for continuation-following cost and invalidation policy."
-        },
-        {
-          "kind": "lens",
-          "lensId": "atlas.work-router",
-          "projection": "route-plan",
-          "filters": {
-            "routeId": "semantic-runtime.intent-aware-continuations"
-          },
-          "summary": "Dedicated Work Router route for this frontier."
-        },
-        {
-          "kind": "lens",
-          "lensId": "atlas.work-router",
-          "projection": "coverage",
-          "filters": {
-            "coverageDimension": "intent-aware-continuations"
-          },
-          "summary": "Coverage-discovery lane for adjacent routes that still need intent-aware continuation threading."
         },
         {
           "kind": "source",
@@ -1046,7 +995,6 @@
         "LSP completion `isIncomplete` means the client should requery an intentionally narrowed list after more typing. It is neither transport continuation nor semantic open coverage and must not be set for missing inputs or handler failure.",
         "Store every answer axis and page fact in the query claim graph so invalidation and replay do not reintroduce the collapsed vocabulary."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -1153,7 +1101,6 @@
         "Consumer policy spends product pressure by exact impact key. Evidence-only seams and pressure on unrelated products proceed; an exact impacted transform uses a semantics-preserving runtime fallback when available and blocks only that transform otherwise.",
         "Do not add global seam severity, diagnostics, or AOT-blocking flags to kernel or public seam facts. IDE, MCP, and future AOT contracts choose presentation and fallback while preserving the same causal evidence."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",

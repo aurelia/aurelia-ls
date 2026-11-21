@@ -2297,12 +2297,6 @@ function continuationForObjectLiteral(
     return null;
   }
   const continuationId = objectLiteralStringPropertyValue(node, "id");
-  const priority = enumMemberProperty(
-    node,
-    "priority",
-    "ContinuationPriority",
-    sourceFile,
-  );
   const inquiry = objectLiteralObjectPropertyValue(node, "inquiry");
   const targetLens =
     inquiry === null
@@ -2320,7 +2314,6 @@ function continuationForObjectLiteral(
     id: `atlas-self:continuation:${filePath}:${currentFunction}:${node.pos}`,
     continuationId,
     kind,
-    priority,
     functionName: currentFunction,
     filePath,
     targetLens,
@@ -2366,15 +2359,6 @@ function continuationForHelperCall(
       id: `atlas-self:continuation:${filePath}:${currentFunction}:${node.pos}`,
       continuationId: stringLiteralArgument(node, 1),
       kind: targetLens === null ? "SwitchProjection" : null,
-      priority:
-        options === null
-          ? "Primary"
-          : enumMemberProperty(
-              options,
-              "priority",
-              "ContinuationPriority",
-              sourceFile,
-            ) ?? "Primary",
       functionName: currentFunction,
       filePath,
       targetLens,
@@ -2384,20 +2368,10 @@ function continuationForHelperCall(
     };
   }
   if (helperName === "nextPageContinuation") {
-    const options = objectArgument(node, 5);
     return {
       id: `atlas-self:continuation:${filePath}:${currentFunction}:${node.pos}`,
       continuationId: stringLiteralArgument(node, 1),
       kind: "NextPage",
-      priority:
-        options === null
-          ? "Primary"
-          : enumMemberProperty(
-              options,
-              "priority",
-              "ContinuationPriority",
-              sourceFile,
-            ) ?? "Primary",
       functionName: currentFunction,
       filePath,
       targetLens: null,
@@ -2412,28 +2386,24 @@ function continuationForHelperCall(
 const rowContinuationBuilderMethodSpecs = {
   source: {
     kind: "InspectEvidence",
-    priority: "Primary",
     targetLens: "TsSource",
     targetProjection: "text",
     routeRelationMember: "SourceFor",
   },
   typeFacts: {
     kind: "SwitchLens",
-    priority: "Secondary",
     targetLens: "TsType",
     targetProjection: "facts",
     routeRelationMember: "TypeFactsFor",
   },
   callSites: {
     kind: "SwitchLens",
-    priority: "Secondary",
     targetLens: "TsType",
     targetProjection: "call-sites",
     routeRelationMember: "CallSitesOf",
   },
   effects: {
     kind: "SwitchLens",
-    priority: "Primary",
     targetLens: "FrameworkEvaluator",
     targetProjection: "effects",
     routeRelationMember: "EffectsOf",
@@ -2469,20 +2439,10 @@ function continuationForRowContinuationBuilderCall(
   if (methodSpec === undefined) {
     return null;
   }
-  const options = objectArgument(node, 4);
   return {
     id: `atlas-self:continuation:${filePath}:${currentFunction}:${node.pos}`,
     continuationId: stringLiteralArgument(node, 0),
     kind: methodSpec.kind,
-    priority:
-      options === null
-        ? methodSpec.priority
-        : enumMemberProperty(
-            options,
-            "priority",
-            "ContinuationPriority",
-            sourceFile,
-          ) ?? methodSpec.priority,
     functionName: currentFunction,
     filePath,
     targetLens: methodSpec.targetLens,
@@ -2545,15 +2505,6 @@ function continuationForSemanticRouteBuilderCall(
             instance,
             "kind",
             "ContinuationKind",
-            sourceFile,
-          ),
-    priority:
-      instance === null
-        ? null
-        : enumMemberProperty(
-            instance,
-            "priority",
-            "ContinuationPriority",
             sourceFile,
           ),
     functionName: currentFunction,

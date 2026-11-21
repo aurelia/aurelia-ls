@@ -76,9 +76,7 @@ The old families include:
   and style detail;
 - source-lowering preflight, invocation, composition, and SourcePlan preview.
 
-These functions should stay compact and selector-sensitive while they exist.
-They should not re-expand into MCP startup schemas, prompts, Work Router
-guidance, or user-facing docs.
+Keep these functions compact and selector-sensitive for their internal consumers.
 
 ## Status And Policy
 
@@ -148,10 +146,8 @@ authority.
 
 ## Ground Rules
 
-App-builder ontology code can continue to be maintained where it protects
-semantic-runtime regressions or helps harvest better patterns. It should not
-drive the MCP public contract, Atlas public guidance, Work Router routing, or
-new pattern vocabulary by inertia.
+Maintain app-builder ontology code where it protects semantic-runtime
+regressions or supplies evidence for a curated pattern.
 
 Exact implementation details live in the source files. This README intentionally
 documents the boundary and ownership model instead of reproducing the retired

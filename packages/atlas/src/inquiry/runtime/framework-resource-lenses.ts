@@ -20,7 +20,6 @@ import {
   type Basis,
 } from "../basis.js";
 import {
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import {
@@ -744,7 +743,6 @@ function resourceContinuations(
           row.declarationSource,
           "Inspect the backing declaration or source-export header for this resource.",
           "Resource convergence row to backing declaration source.",
-          { priority: ContinuationPriority.Secondary },
         ),
       );
     }
@@ -760,7 +758,6 @@ function resourceContinuations(
           site.source,
           site.summary,
           `Resource convergence row to exact ${site.role} source.`,
-          { priority: ContinuationPriority.Secondary },
         ),
       );
     }
@@ -813,7 +810,6 @@ function resourceContinuations(
               "Inspect compiler instruction products produced by this resource carrier.",
             routeSummary:
               "Resource convergence row to compiler instruction products.",
-            priority: ContinuationPriority.Primary,
           },
         ),
       );
@@ -831,7 +827,6 @@ function resourceContinuations(
             rationale:
               "Inspect syntax products produced by this resource carrier.",
             routeSummary: "Resource convergence row to syntax products.",
-            priority: ContinuationPriority.Secondary,
           },
         ),
       );

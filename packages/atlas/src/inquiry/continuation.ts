@@ -43,24 +43,12 @@ export const CONTINUATION_KINDS = [
   ContinuationKind.Reroute,
 ] as const satisfies readonly ContinuationKind[];
 
-/** Priority class used to keep continuation lists intentional. */
-export const enum ContinuationPriority {
-  /** Primary next move for completing or explaining the current answer. */
-  Primary = "primary",
-  /** Useful but not required follow-up. */
-  Secondary = "secondary",
-  /** Opportunistic exploration edge for related work. */
-  Opportunistic = "opportunistic",
-}
-
 /** Typed next inquiry suggested by an answer. */
 export interface Continuation<TInquiry extends Inquiry = Inquiry> {
   /** Optional stable id for `follow`-style tools. */
   readonly id?: string;
   /** Semantic move this continuation represents. */
   readonly kind: ContinuationKind;
-  /** Priority used by agents to choose between many valid moves. */
-  readonly priority?: ContinuationPriority;
   /** Grounded explanation of why this follow-up is useful. */
   readonly rationale: string;
   /** Next inquiry to run. */

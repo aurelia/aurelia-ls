@@ -18,7 +18,7 @@ import {
 import type { SourceRange } from "../locus.js";
 import { calleeTail, isNestedExecutionBoundary } from "./framework-ts-utils.js";
 
-export const FRAMEWORK_ERROR_ANALYSIS_VERSION = "framework-error-analysis.v1" as const;
+export const FRAMEWORK_ERROR_ANALYSIS_VERSION = "framework-error-analysis.v2" as const;
 
 const frameworkErrorAnalysisMemo =
   new SourceProjectMemo<FrameworkErrorAnalysis>();
@@ -152,7 +152,6 @@ export interface FrameworkErrorFamilyRow {
   readonly thrownUsageCount: number;
   readonly warningUsageCount: number;
   readonly unusedCodeCount: number;
-  readonly pressureScore: number;
   readonly codeLabels: readonly string[];
   readonly codeNames: readonly string[];
   readonly filePath: string;
@@ -198,12 +197,10 @@ export interface FrameworkErrorDiagnosticFrontierRow {
   readonly dormantCodeSummaries: readonly string[];
   readonly actionableUncoveredCodeCount: number;
   readonly semanticRuntimeCoverage: FrameworkErrorDiagnosticCoverage;
-  readonly frontierScore: number;
   readonly codeLabels: readonly string[];
   readonly codeNames: readonly string[];
   readonly rawAuthorityGapSummaries: readonly string[];
   readonly likelySemanticRuntimeOwner: string | null;
-  readonly recommendedNextStep: string;
   readonly filePath: string;
   readonly source: SourceRange;
   readonly summary: string;
@@ -242,9 +239,7 @@ export interface FrameworkErrorDiagnosticCodeRow {
   readonly diagnosticDisposition: FrameworkErrorDiagnosticCodeDisposition;
   readonly intentionalUnclaimedReason: string | null;
   readonly intentionalUnclaimedKind: FrameworkErrorIntentionalUnclaimedKind | null;
-  readonly diagnosticScore: number;
   readonly likelySemanticRuntimeOwner: string | null;
-  readonly recommendedNextStep: string;
   readonly filePath: string;
   readonly source: SourceRange;
   readonly summary: string;
@@ -590,7 +585,7 @@ export function frameworkErrorDiagnosticFrontiersForRows(
       semanticRuntimeReferences,
       semanticRuntimeRawReferences,
     ))
-    .sort(compareDiagnosticFrontierRows);
+    .sort(compareFamilyRows);
 }
 
 export function frameworkErrorDiagnosticCodeRowsForRows(
@@ -616,7 +611,7 @@ export function frameworkErrorDiagnosticCodeRowsForRows(
         ownerHintsByFamily.get(frameworkErrorScopedKey(code.packageId, code.enumName, code.namePrefix)) ?? null,
       ),
     ))
-    .sort(compareDiagnosticCodeRows);
+    .sort(compareCodeRows);
 }
 
 function readSemanticRuntimeCodeReferences(
@@ -1511,7 +1506,6 @@ function frameworkErrorFamilyForGroup(
   const unusedCodeCount = countWhere(codes, (code) => code.usageCount === 0);
   const thrownUsageCount = countWhere(matchingUsages, (usage) => usage.effect === "throw");
   const warningUsageCount = countWhere(matchingUsages, (usage) => usage.effect === "warning");
-  const pressureScore = codes.length * 4 + matchingUsages.length + thrownUsageCount * 2 + unusedCodeCount;
   const codeLabels = uniqueSortedStrings(codes.map((code) => code.codeLabel));
   const codeNames = uniqueSortedStrings(codes.map((code) => code.name));
   return {
@@ -1526,7 +1520,6 @@ function frameworkErrorFamilyForGroup(
     thrownUsageCount,
     warningUsageCount,
     unusedCodeCount,
-    pressureScore,
     codeLabels,
     codeNames,
     filePath: first.filePath,
@@ -1616,15 +1609,6 @@ function frameworkErrorDiagnosticFrontierForFamily(
     ),
   );
   const likelySemanticRuntimeOwner = diagnosticFrontierOwnerHint(family);
-  const frontierScore =
-    family.codeCount * 2 +
-    family.usageCount * 3 +
-    family.thrownUsageCount * 2 +
-    family.warningUsageCount * 2 +
-    actionableUncoveredCodeCount * 2 +
-    intentionalUnclaimedFutureSubstrateCodes.length * 8 +
-    rawAuthorityGaps.length * 10 +
-    unresolvedExactReferenceCount * 12;
   return {
     id: `framework-error-diagnostic-frontier:${family.packageId}:${family.enumName}:${family.namePrefix}`,
     packageId: family.packageId,
@@ -1656,25 +1640,10 @@ function frameworkErrorDiagnosticFrontierForFamily(
     dormantCodeSummaries,
     actionableUncoveredCodeCount,
     semanticRuntimeCoverage,
-    frontierScore,
     codeLabels: family.codeLabels,
     codeNames: family.codeNames,
     rawAuthorityGapSummaries,
     likelySemanticRuntimeOwner,
-    recommendedNextStep: frameworkErrorDiagnosticFrontierRecommendation(
-      family,
-      rawAuthorityGaps.length,
-      linkedCodeNames.size,
-      intentionalUnclaimedCodes.length,
-      intentionalUnclaimedSummaries,
-      intentionalUnclaimedFutureSubstrateCodes.length,
-      intentionalUnclaimedFutureSubstrateSummaries,
-      dormantCodes.length,
-      dormantCodeSummaries,
-      actionableUncoveredCodeCount,
-      unresolvedExactReferenceCount,
-      likelySemanticRuntimeOwner,
-    ),
     filePath: family.filePath,
     source: family.source,
     summary: `${family.packageName} ${family.enumName}.${family.namePrefix}* diagnostic frontier: ${family.codeCount} code(s), ${family.usageCount} usage(s), ${linkedCodeNames.size}/${family.codeCount} used exact semantic-runtime code link(s), ${intentionalUnclaimedCodes.length} intentionally unclaimed code(s), ${intentionalUnclaimedFutureSubstrateCodes.length} future-substrate code(s), ${dormantCodes.length} dormant code(s), ${actionableUncoveredCodeCount} actionable uncovered code(s), ${rawAuthorityGaps.length} raw authority gap(s).`,
@@ -1728,15 +1697,6 @@ function frameworkErrorDiagnosticCodeForCode(
     unresolvedExactReferenceCount,
     intentionalUnclaimedReason != null,
   );
-  const diagnosticScore = diagnosticCodeScore(
-    code,
-    rawAuthorityGaps.length,
-    resolvedExactReferences.length,
-    usedExactReferences.length,
-    unresolvedExactReferenceCount,
-    ambiguousLabelReferenceCount,
-    diagnosticDisposition,
-  );
   return {
     id: `framework-error-diagnostic-code:${code.packageId}:${code.enumName}:${code.name}`,
     packageId: code.packageId,
@@ -1761,14 +1721,7 @@ function frameworkErrorDiagnosticCodeForCode(
     diagnosticDisposition,
     intentionalUnclaimedReason,
     intentionalUnclaimedKind,
-    diagnosticScore,
     likelySemanticRuntimeOwner: ownerHint,
-    recommendedNextStep: diagnosticCodeRecommendation(
-      diagnosticDisposition,
-      code,
-      ownerHint,
-      intentionalUnclaimedReason,
-    ),
     filePath: code.filePath,
     source: code.source,
     summary: `${code.packageName} ${code.enumName}.${code.name} ${code.codeLabel}: ${diagnosticDisposition}; ${code.usageCount} usage(s), ${usedExactReferences.length} used exact semantic-runtime link(s), ${rawAuthorityGaps.length} raw authority gap(s).`,
@@ -1868,83 +1821,6 @@ function diagnosticCodeDispositionForCode(
     unresolvedExactReferenceCount,
     intentionalUnclaimedFrameworkErrorReason(code) != null,
   );
-}
-
-function diagnosticCodeScore(
-  code: FrameworkErrorCodeRow,
-  rawAuthorityGapCount: number,
-  exactReferenceCount: number,
-  usedExactReferenceCount: number,
-  unresolvedExactReferenceCount: number,
-  ambiguousLabelReferenceCount: number,
-  disposition: FrameworkErrorDiagnosticCodeDisposition,
-): number {
-  if (disposition === "intentionally-unclaimed-framework-authority") {
-    return Math.max(1, code.usageCount + code.thrownUsageCount + code.warningUsageCount);
-  }
-  const unmodeledScore = usedExactReferenceCount === 0 ? 12 : 0;
-  const declaredButUnspentScore = exactReferenceCount > 0 && usedExactReferenceCount === 0 ? 6 : 0;
-  const dormantPenalty = code.usageCount === 0 ? -8 : 0;
-  return Math.max(0,
-    code.usageCount * 5 +
-    code.thrownUsageCount * 4 +
-    code.warningUsageCount * 3 +
-    rawAuthorityGapCount * 14 +
-    unresolvedExactReferenceCount * 24 +
-    ambiguousLabelReferenceCount * 2 +
-    unmodeledScore +
-    declaredButUnspentScore +
-    dormantPenalty,
-  );
-}
-
-function diagnosticCodeRecommendation(
-  disposition: FrameworkErrorDiagnosticCodeDisposition,
-  code: FrameworkErrorCodeRow,
-  ownerHint: string | null,
-  intentionalUnclaimedReason: string | null,
-): string {
-  const specific = diagnosticCodeSpecificRecommendation(disposition, code);
-  if (specific != null) {
-    return specific;
-  }
-  switch (disposition) {
-    case "broken-exact-link":
-      return "Repair the semantic-runtime framework-error link before using this code as diagnostic authority.";
-    case "modeled-exact":
-      return "Keep this exact framework code linked to its owning semantic-runtime product; revisit only when the framework usage path changes.";
-    case "declared-unspent":
-      return "Either spend this exact framework code through an owning product diagnostic or remove the bookkeeping constant until the modeled behavior exists.";
-    case "raw-authority-gap":
-      return ownerHint == null
-        ? "Inspect the raw framework Error usage before deciding whether semantic-runtime needs a product diagnostic or Atlas needs better error authority modeling."
-        : `Inspect the raw framework Error usage, then check ${ownerHint} before adding semantic-runtime diagnostic authority.`;
-    case "intentionally-unclaimed-framework-authority":
-      return intentionalUnclaimedReason == null
-        ? "Leave this framework authority unclaimed for now; revisit only if semantic-runtime grows the matching runtime product path."
-        : `Leave this framework authority unclaimed for now: ${intentionalUnclaimedReason}`;
-    case "dormant-framework-authority":
-      return "Treat this as dormant or duplicated framework authority until a source usage path or external pressure justifies modeling it.";
-    case "unmodeled-used-framework-authority":
-      return ownerHint == null
-        ? "Inspect the exact framework usage row, choose the owning semantic-runtime substrate, then add a product-owned diagnostic only for the statically modeled path."
-        : `Inspect the exact framework usage row, then check ${ownerHint} before adding a product-owned static diagnostic.`;
-  }
-}
-
-function diagnosticCodeSpecificRecommendation(
-  disposition: FrameworkErrorDiagnosticCodeDisposition,
-  code: FrameworkErrorCodeRow,
-): string | null {
-  if (
-    disposition === "unmodeled-used-framework-authority" &&
-    code.packageId === "runtime" &&
-    code.enumName === "ErrorNames" &&
-    (code.name === "ast_unknown_binary_operator" || code.name === "ast_unknown_unary_operator")
-  ) {
-    return "Treat this as a malformed runtime-AST guard for now: ordinary semantic-runtime parser and AST products admit only the framework operator set, so claim it only if a product starts admitting raw, hydrated, or otherwise externally constructed AST objects.";
-  }
-  return null;
 }
 
 function intentionalUnclaimedFrameworkErrorReason(
@@ -2491,25 +2367,6 @@ function intentionalUnclaimedFrameworkRawErrorReason(
   return null;
 }
 
-function diagnosticCodeDispositionRank(
-  disposition: FrameworkErrorDiagnosticCodeDisposition,
-): number {
-  switch (disposition) {
-    case "broken-exact-link":
-      return 5;
-    case "raw-authority-gap":
-    case "unmodeled-used-framework-authority":
-      return 4;
-    case "declared-unspent":
-      return 3;
-    case "intentionally-unclaimed-framework-authority":
-    case "dormant-framework-authority":
-      return 1;
-    case "modeled-exact":
-      return 0;
-  }
-}
-
 function semanticRuntimeFrameworkErrorReferenceBelongsToFamily(
   reference: FrameworkErrorSemanticRuntimeReferenceRow,
   family: FrameworkErrorFamilyRow,
@@ -2542,75 +2399,6 @@ function diagnosticCoverageForFamily(
     return dormantCodeCount > 0 ? "dormant-closed" : "complete";
   }
   return linkedCodeCount === 0 ? "none" : "partial";
-}
-
-function frameworkErrorDiagnosticFrontierRecommendation(
-  family: FrameworkErrorFamilyRow,
-  rawAuthorityGapCount: number,
-  linkedCodeCount: number,
-  intentionalUnclaimedCodeCount: number,
-  intentionalUnclaimedSummaries: readonly string[],
-  intentionalUnclaimedFutureSubstrateCodeCount: number,
-  intentionalUnclaimedFutureSubstrateSummaries: readonly string[],
-  dormantCodeCount: number,
-  dormantCodeSummaries: readonly string[],
-  actionableUncoveredCodeCount: number,
-  unresolvedExactReferenceCount: number,
-  ownerHint: string | null,
-): string {
-  if (unresolvedExactReferenceCount > 0) {
-    return "Repair semantic-runtime framework-error links before treating these labels as diagnostic authority.";
-  }
-  if (rawAuthorityGapCount > 0) {
-    return ownerHint == null
-      ? "Audit raw Error authority gaps against the framework source before adding semantic-runtime diagnostics."
-      : `Audit raw Error authority gaps against the framework source, then inspect ${ownerHint} before adding semantic-runtime diagnostics.`;
-  }
-  if (family.usageCount === 0) {
-    return "Treat this as dormant or duplicated framework authority until a source usage path or external pressure shows the behavior that semantic-runtime should model.";
-  }
-  if (intentionalUnclaimedFutureSubstrateCodeCount > 0) {
-    const futureSummary = intentionalUnclaimedFutureSubstrateSummaries.length === 0
-      ? `${intentionalUnclaimedFutureSubstrateCodeCount} intentionally unclaimed code(s) are future substrate pressure.`
-      : intentionalUnclaimedFutureSubstrateSummaries.join(" | ");
-    if (linkedCodeCount === 0) {
-      return ownerHint == null
-        ? `Treat this as a future semantic-runtime substrate frontier, not a closed diagnostic family: ${futureSummary}`
-        : `Treat this as a future semantic-runtime substrate frontier for ${ownerHint}, not a closed diagnostic family: ${futureSummary}`;
-    }
-    return ownerHint == null
-      ? `Keep modeled exact rows stable, but leave this frontier visible because future substrate pressure remains: ${futureSummary}`
-      : `Keep modeled exact rows stable in ${ownerHint}, but leave this frontier visible because future substrate pressure remains: ${futureSummary}`;
-  }
-  if (linkedCodeCount + intentionalUnclaimedCodeCount >= family.codeCount && intentionalUnclaimedCodeCount > 0) {
-    const intentionalSummary = intentionalUnclaimedSummaries.length === 0
-      ? `${intentionalUnclaimedCodeCount} code(s) are intentionally unclaimed.`
-      : intentionalUnclaimedSummaries.join(" | ");
-    return `Treat this frontier as closed for now: ${intentionalSummary} Revisit only if semantic-runtime grows the matching runtime product path.`;
-  }
-  if (actionableUncoveredCodeCount === 0 && dormantCodeCount > 0) {
-    const dormantSummary = dormantCodeSummaries.length === 0
-      ? `${dormantCodeCount} code(s) are unused framework definitions.`
-      : dormantCodeSummaries.join(" | ");
-    if (intentionalUnclaimedSummaries.length > 0) {
-      return `Treat this frontier as closed for now: ${intentionalUnclaimedSummaries.join(" | ")} Dormant definitions: ${dormantSummary}. Revisit only if a framework source usage appears or semantic-runtime grows the matching runtime product path.`;
-    }
-    return `Treat this frontier as dormant-closed for now: ${dormantSummary}. Revisit only if a framework source usage appears or external/product pressure admits the matching behavior.`;
-  }
-  if (linkedCodeCount === 0) {
-    return ownerHint == null
-      ? "Choose the semantic-runtime subsystem that owns this framework behavior, then add exact framework-error links only where the static diagnostic matches the runtime error."
-      : `Inspect ${ownerHint} as the likely semantic-runtime owner, then add exact framework-error links only where static analysis matches the runtime error.`;
-  }
-  if (linkedCodeCount < family.codeCount) {
-    return ownerHint == null
-      ? "Complete exact semantic-runtime links for the remaining framework codes that are truly modeled; leave runtime-only codes unclaimed."
-      : `Continue in ${ownerHint} for the remaining framework codes that are truly modeled; leave runtime-only codes unclaimed.`;
-  }
-  if (family.unusedCodeCount > 0) {
-    return "Verify whether unused framework codes are dormant public authority or dead framework definitions before mirroring them.";
-  }
-  return "Keep this family as source-backed authority and revisit when external app pressure reaches the same framework behavior.";
 }
 
 function diagnosticFrontierOwnerHint(family: FrameworkErrorFamilyRow): string | null {
@@ -2898,42 +2686,14 @@ function frameworkErrorScopedKey(
 function compareCodeRows(left: FrameworkErrorCodeRow, right: FrameworkErrorCodeRow): number {
   return left.packageId.localeCompare(right.packageId) ||
     (left.code ?? Number.MAX_SAFE_INTEGER) - (right.code ?? Number.MAX_SAFE_INTEGER) ||
-    left.name.localeCompare(right.name);
+    left.name.localeCompare(right.name) ||
+    left.enumName.localeCompare(right.enumName);
 }
 
 function compareFamilyRows(left: FrameworkErrorFamilyRow, right: FrameworkErrorFamilyRow): number {
-  return right.pressureScore - left.pressureScore ||
-    right.codeCount - left.codeCount ||
-    left.packageId.localeCompare(right.packageId) ||
+  return left.packageId.localeCompare(right.packageId) ||
     left.enumName.localeCompare(right.enumName) ||
     left.namePrefix.localeCompare(right.namePrefix);
-}
-
-function compareDiagnosticFrontierRows(
-  left: FrameworkErrorDiagnosticFrontierRow,
-  right: FrameworkErrorDiagnosticFrontierRow,
-): number {
-  return right.semanticRuntimeUnresolvedExactReferenceCount - left.semanticRuntimeUnresolvedExactReferenceCount ||
-    right.rawAuthorityGapCount - left.rawAuthorityGapCount ||
-    right.actionableUncoveredCodeCount - left.actionableUncoveredCodeCount ||
-    right.intentionalUnclaimedFutureSubstrateCodeCount - left.intentionalUnclaimedFutureSubstrateCodeCount ||
-    right.frontierScore - left.frontierScore ||
-    right.codeCount - left.codeCount ||
-    left.packageId.localeCompare(right.packageId) ||
-    left.enumName.localeCompare(right.enumName) ||
-    left.namePrefix.localeCompare(right.namePrefix);
-}
-
-function compareDiagnosticCodeRows(
-  left: FrameworkErrorDiagnosticCodeRow,
-  right: FrameworkErrorDiagnosticCodeRow,
-): number {
-  return diagnosticCodeDispositionRank(right.diagnosticDisposition) - diagnosticCodeDispositionRank(left.diagnosticDisposition) ||
-    right.diagnosticScore - left.diagnosticScore ||
-    right.usageCount - left.usageCount ||
-    left.packageId.localeCompare(right.packageId) ||
-    (left.code ?? Number.MAX_SAFE_INTEGER) - (right.code ?? Number.MAX_SAFE_INTEGER) ||
-    left.name.localeCompare(right.name);
 }
 
 function compareUsageRows(left: FrameworkErrorUsageRow, right: FrameworkErrorUsageRow): number {

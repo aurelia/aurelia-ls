@@ -17,9 +17,9 @@ const selfAnswer = await api.ask({
   locus: RepoRootLocus,
   projection: "summary",
 });
-const followedAnswer = mapAnswer.continuations[0] === undefined
+const followedAnswer = terrainAnswer.continuations[0] === undefined
   ? undefined
-  : await api.follow(mapAnswer.continuations[0]);
+  : await api.follow(terrainAnswer.continuations[0]);
 
 console.log(JSON.stringify({
   world: {

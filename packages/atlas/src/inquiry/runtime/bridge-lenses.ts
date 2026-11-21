@@ -8,7 +8,6 @@ import {
 } from "../basis.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import {
@@ -472,7 +471,6 @@ function auLinkSummaryContinuations(
     {
       id: "bridge.aulink:mirror",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
       rationale:
         "Join auLink anchors to exact framework semantic roles and emulation obligations.",
       inquiry: {
@@ -489,7 +487,6 @@ function auLinkSummaryContinuations(
     {
       id: "bridge.aulink:usage-comparison",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
       rationale:
         "Compare Aurelia-side framework API usage with semantic-runtime usage for unqualified auLink correspondences.",
       inquiry: {
@@ -506,7 +503,6 @@ function auLinkSummaryContinuations(
     {
       id: "bridge.aulink:usage-consumers",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Secondary,
       rationale:
         "Group framework and semantic-runtime usage by the declaration that consumes each auLink target.",
       inquiry: {
@@ -523,7 +519,6 @@ function auLinkSummaryContinuations(
     {
       id: "bridge.aulink:anchors",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
       rationale: "Inspect exact auLink decorator placements.",
       inquiry: {
         lens: LensId.BridgeAuLink,
@@ -539,10 +534,6 @@ function auLinkSummaryContinuations(
     {
       id: "bridge.aulink:gaps",
       kind: ContinuationKind.SwitchProjection,
-      priority:
-        model.gaps.length === 0
-          ? ContinuationPriority.Secondary
-          : ContinuationPriority.Primary,
       rationale: "Inspect exact catalog and placement gaps.",
       inquiry: {
         lens: LensId.BridgeAuLink,
@@ -558,7 +549,6 @@ function auLinkSummaryContinuations(
     {
       id: "bridge.aulink:role-evidence",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Secondary,
       rationale:
         "Inspect exact framework rows that attach semantic roles to auLink targets.",
       inquiry: {
@@ -575,11 +565,6 @@ function auLinkSummaryContinuations(
     {
       id: "bridge.aulink:targets",
       kind: ContinuationKind.SwitchProjection,
-      priority:
-        model.rollup.unresolvedFrameworkTargets > 0 ||
-        model.rollup.ambiguousFrameworkTargets > 0
-          ? ContinuationPriority.Primary
-          : ContinuationPriority.Secondary,
       rationale: "Resolve auLink ids to exact Aurelia framework declarations.",
       inquiry: {
         lens: LensId.BridgeAuLink,
@@ -640,7 +625,6 @@ function auLinkAnchorContinuations(
     continuations.push({
       id: "bridge.aulink:anchors:next-page",
       kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Primary,
       rationale: "Continue the auLink anchor page.",
       inquiry: {
         ...inquiry,
@@ -652,7 +636,6 @@ function auLinkAnchorContinuations(
   continuations.push({
     id: "bridge.aulink:mirror",
     kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Primary,
     rationale:
       "Join these anchors to framework semantic roles and emulation obligations.",
     inquiry: {
@@ -665,7 +648,6 @@ function auLinkAnchorContinuations(
   continuations.push({
     id: "bridge.aulink:usage-comparison",
     kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Primary,
     rationale:
       "Compare Aurelia-side API usage with semantic-runtime usage for the same auLink filters.",
     inquiry: {
@@ -678,7 +660,6 @@ function auLinkAnchorContinuations(
   continuations.push({
     id: "bridge.aulink:usage-consumers",
     kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Secondary,
     rationale:
       "Group framework and semantic-runtime usage sites by owner declaration for the same auLink filters.",
     inquiry: {
@@ -692,7 +673,6 @@ function auLinkAnchorContinuations(
   continuations.push({
     id: "bridge.aulink:gaps",
     kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Secondary,
     rationale: "Inspect catalog and placement gaps for the same filters.",
     inquiry: {
       ...inquiry,
@@ -704,7 +684,6 @@ function auLinkAnchorContinuations(
   continuations.push({
     id: "bridge.aulink:targets",
     kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Secondary,
     rationale: "Resolve these anchors against Aurelia framework declarations.",
     inquiry: {
       ...inquiry,
@@ -737,7 +716,6 @@ function auLinkAnchorContinuations(
     continuations.push({
       id: `bridge.aulink:anchors:type:${index}`,
       kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
       rationale:
         "Inspect TypeChecker facts for the decorated product declaration.",
       inquiry: {
@@ -769,7 +747,6 @@ function targetContinuations(
     continuations.push({
       id: "bridge.aulink:targets:next-page",
       kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Primary,
       rationale: "Continue the auLink framework target page.",
       inquiry: {
         ...inquiry,
@@ -781,7 +758,6 @@ function targetContinuations(
   continuations.push({
     id: "bridge.aulink:mirror",
     kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Primary,
     rationale:
       "Join these framework targets to semantic role and emulation evidence.",
     inquiry: {
@@ -794,7 +770,6 @@ function targetContinuations(
   continuations.push({
     id: "bridge.aulink:anchors",
     kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Secondary,
     rationale: "Return to product-side auLink placements for the same filters.",
     inquiry: {
       ...inquiry,
@@ -823,7 +798,6 @@ function targetContinuations(
     continuations.push({
       id: `bridge.aulink:targets:source:${index}`,
       kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
       rationale:
         "Inspect the framework declaration resolved by this auLink id.",
       inquiry: {
@@ -841,7 +815,6 @@ function targetContinuations(
     continuations.push({
       id: `bridge.aulink:targets:type:${index}`,
       kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect TypeChecker facts for the framework declaration.",
       inquiry: {
         lens: LensId.TsType,
@@ -872,7 +845,6 @@ function gapContinuations(
     continuations.push({
       id: "bridge.aulink:gaps:next-page",
       kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Primary,
       rationale: "Continue the auLink gap page.",
       inquiry: {
         ...inquiry,
@@ -884,7 +856,6 @@ function gapContinuations(
   continuations.push({
     id: "bridge.aulink:anchors",
     kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Secondary,
     rationale: "Inspect decorator placements for the same filters.",
     inquiry: {
       ...inquiry,
@@ -901,7 +872,6 @@ function gapContinuations(
     continuations.push({
       id: `bridge.aulink:gaps:source:${index}`,
       kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect the source behind this auLink gap.",
       inquiry: {
         lens: LensId.TsSource,
@@ -925,7 +895,6 @@ function auLinkSourceContinuation(
   return {
     id,
     kind: ContinuationKind.InspectEvidence,
-    priority: ContinuationPriority.Secondary,
     rationale,
     inquiry: {
       lens: LensId.TsSource,
@@ -1407,7 +1376,6 @@ function mirrorContinuations(
     continuations.push({
       id: "bridge.aulink:mirror:next-page",
       kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Primary,
       rationale: "Continue the auLink mirror page.",
       inquiry: {
         ...inquiry,
@@ -1492,7 +1460,6 @@ function roleEvidenceContinuations(
     continuations.push({
       id: "bridge.aulink:role-evidence:next-page",
       kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Primary,
       rationale: "Continue the auLink mirror role evidence page.",
       inquiry: {
         ...inquiry,
@@ -1551,7 +1518,6 @@ function obligationContinuations(
     continuations.push({
       id: "bridge.aulink:obligations:next-page",
       kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Primary,
       rationale: "Continue the auLink mirror obligation page.",
       inquiry: {
         ...inquiry,

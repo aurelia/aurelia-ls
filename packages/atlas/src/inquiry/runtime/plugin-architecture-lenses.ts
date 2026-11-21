@@ -8,7 +8,6 @@ import {
 } from "../basis.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import {
@@ -135,7 +134,6 @@ function answerPluginRows<TRow>(
     evidenceForRow,
     continuationsForPage: (inquiry, rows, nextOffset, limit) => [
       ...optionalNextPageContinuation(inquiry, nextOffset, limit, {
-        priority: ContinuationPriority.Secondary,
         rationale: "Continue the paged plugin architecture row family.",
         routeSummary: "Next public plugin architecture row page.",
       }),
@@ -315,7 +313,6 @@ function pluginArchitectureContinuations(inquiry: Inquiry): readonly Continuatio
     {
       id: "plugin.architecture:packages",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
       rationale: "Inspect package-level public plugin surface rollups.",
       inquiry: {
         ...inquiry,
@@ -325,7 +322,6 @@ function pluginArchitectureContinuations(inquiry: Inquiry): readonly Continuatio
     {
       id: "plugin.architecture:surfaces",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
       rationale:
         "Inspect exact public plugin source surfaces that pressure semantic-runtime app analysis.",
       inquiry: {
@@ -336,7 +332,6 @@ function pluginArchitectureContinuations(inquiry: Inquiry): readonly Continuatio
     {
       id: "plugin.architecture:map",
       kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
       rationale: "Return to the Atlas surface map.",
       inquiry: {
         lens: LensId.RepoMap,

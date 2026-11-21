@@ -2,7 +2,6 @@ import { BasisKind } from "../basis.js";
 import { FrameworkLifecycleControllerCallKind } from "../../framework/lifecycle.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import type { Evidence } from "../evidence.js";
@@ -123,7 +122,6 @@ export function syntaxProductContinuations(
             filters: { instructionName: row.instructionName },
             rationale:
               "Inspect compiler instruction products that produce this instruction.",
-            priority: ContinuationPriority.Secondary,
           },
         ),
       );
@@ -278,7 +276,6 @@ export function instructionDispatchContinuations(
             filters: { instructionName: row.instructionName },
             rationale:
               "Inspect compiler instruction products that produce this rendered instruction.",
-            priority: ContinuationPriority.Secondary,
           },
         ),
       );
@@ -343,7 +340,6 @@ export function controllerCreationContinuations(
   continuations.push({
     id: "framework.rendering:controller-creations:activation",
     kind: ContinuationKind.SwitchLens,
-    priority: ContinuationPriority.Primary,
     rationale:
       "Inspect controller activation rows that later spend admitted child controllers.",
     inquiry: {
@@ -383,7 +379,6 @@ export function controllerCreationContinuations(
     continuations.push({
       id: `framework.rendering:controller-creations:resource:${index}`,
       kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Primary,
       rationale:
         "Inspect resource convergence rows for resources hydrated by this renderer kind.",
       inquiry: {
@@ -416,7 +411,6 @@ export function controllerCreationContinuations(
             filters: { rendererName: row.rendererName },
             evidence,
             basis: [BasisKind.TypeScriptChecker],
-            priority: ContinuationPriority.Secondary,
             summary: "Recursive renderer dispatch sites inside one renderer flow.",
           },
         ),
@@ -474,7 +468,6 @@ export function hydrationFlowContinuations(
       filters: { methodName: "compile" },
       rationale:
         "Inspect the JIT compiler flow that produces definitions and instruction rows consumed by hydration.",
-      priority: ContinuationPriority.Secondary,
     }),
   );
 
@@ -526,7 +519,6 @@ function pushHydrationSemanticContinuations(
           filters: hydrationCompilerFlowFilters(row),
           rationale:
             "Inspect the JIT compiler flow that produces the compiled definition consumed by this hydration step.",
-          priority: ContinuationPriority.Secondary,
         },
       ),
     );
@@ -544,7 +536,6 @@ function pushHydrationSemanticContinuations(
           filters: { key: "IRenderer" },
           evidence,
           basis: [BasisKind.TypeScriptChecker],
-          priority: ContinuationPriority.Secondary,
         },
       ),
       projectionContinuation(
@@ -608,7 +599,6 @@ function pushHydrationSemanticContinuations(
           filters: bindingFilters,
           rationale:
             "Inspect binding products reached by this renderer binding hand-off.",
-          priority: ContinuationPriority.Secondary,
         },
       ),
     );
@@ -628,7 +618,6 @@ function pushHydrationSemanticContinuations(
             filters: { resourceKind },
             evidence,
             basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
-            priority: ContinuationPriority.Secondary,
           },
         ),
       );
@@ -647,7 +636,6 @@ function pushHydrationSemanticContinuations(
           filters: row.targetName === null ? {} : { query: row.targetName },
           evidence,
           basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
-          priority: ContinuationPriority.Secondary,
         },
       ),
     );
@@ -665,7 +653,6 @@ function pushHydrationSemanticContinuations(
           filters: row.targetName === null ? {} : { query: row.targetName },
           evidence,
           basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
-          priority: ContinuationPriority.Secondary,
         },
       ),
     );
@@ -1143,7 +1130,6 @@ function pushRenderConsequenceCrossLensContinuations(
           },
           rationale:
             "Enter observation-owned binding lookup rows for this renderer consequence.",
-          priority: ContinuationPriority.Secondary,
         },
       ),
     );
@@ -1161,7 +1147,6 @@ function pushRenderConsequenceCrossLensContinuations(
           },
           rationale:
             "Enter observation-owned setup rows for this renderer consequence.",
-          priority: ContinuationPriority.Secondary,
         },
       ),
     );
@@ -1316,7 +1301,6 @@ function pushRenderingRelationshipSemanticContinuations(
             filters: { instructionName: row.to.name },
             rationale:
               "Inspect compiler instruction products that produce this dispatched instruction.",
-            priority: ContinuationPriority.Secondary,
           },
         ),
         route.continuation(

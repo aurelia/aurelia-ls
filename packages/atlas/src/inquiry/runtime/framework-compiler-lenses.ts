@@ -8,7 +8,6 @@ import { uniqueFirstByKey } from "../../collections.js";
 import { createAnswer, type Answer } from "../answer.js";
 import { BasisKind } from "../basis.js";
 import {
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import {
@@ -252,7 +251,6 @@ export function answerFrameworkCompiler(
           {
             filters: { methodName: "_classifyAttributes" },
             basis: CHECKER_PROJECTION_BASIS,
-            priority: ContinuationPriority.Secondary,
           },
         ),
         projectionContinuation(
@@ -462,7 +460,6 @@ function compilerCompileFlowContinuations(
         {
           filters: { methodName: "_classifyAttributes" },
           basis: CHECKER_PROJECTION_BASIS,
-          priority: ContinuationPriority.Secondary,
         },
       ),
     );
@@ -500,7 +497,6 @@ function compilerCompileFlowContinuations(
             filters: hydrationFiltersForCompileFlowRow(row),
             rationale:
               "Return to the hydration/runtime rendering corridor that consumes this compile-flow stage.",
-            priority: ContinuationPriority.Secondary,
           },
         ),
       );
@@ -533,7 +529,6 @@ function compilerCompileFlowContinuations(
             filters: { methodName },
             evidence,
             basis: CHECKER_PROJECTION_BASIS,
-            priority: ContinuationPriority.Secondary,
           },
         ),
       );
@@ -551,7 +546,6 @@ function compilerCompileFlowContinuations(
             filters: { instructionName },
             evidence,
             basis: CHECKER_PROJECTION_BASIS,
-            priority: ContinuationPriority.Secondary,
           },
         ),
       );
@@ -618,7 +612,6 @@ function compilerAttributeClassificationContinuations(
             filters: { instructionName },
             evidence,
             basis: CHECKER_PROJECTION_BASIS,
-            priority: ContinuationPriority.Secondary,
           },
         ),
       );
@@ -646,7 +639,6 @@ function pushAttributeBranchContinuations(
           filters: { methodName: "_compileCustomAttributeBindables" },
           evidence,
           basis: CHECKER_PROJECTION_BASIS,
-          priority: ContinuationPriority.Secondary,
         },
       ),
     );
@@ -662,7 +654,6 @@ function pushAttributeBranchContinuations(
           filters: { producerKind: "binding-command" },
           evidence,
           basis: CHECKER_PROJECTION_BASIS,
-          priority: ContinuationPriority.Secondary,
         },
       ),
       projectionContinuation(
@@ -675,7 +666,6 @@ function pushAttributeBranchContinuations(
           filters: { resourceKind: "binding-command" },
           evidence,
           basis: CHECKER_PROJECTION_BASIS,
-          priority: ContinuationPriority.Secondary,
         },
       ),
     );
@@ -692,7 +682,6 @@ function pushAttributeBranchContinuations(
           filters: { resourceKind: "custom-attribute" },
           evidence,
           basis: CHECKER_PROJECTION_BASIS,
-          priority: ContinuationPriority.Secondary,
         },
       ),
       projectionContinuation(
@@ -705,7 +694,6 @@ function pushAttributeBranchContinuations(
           filters: { resourceKind: "template-controller" },
           evidence,
           basis: CHECKER_PROJECTION_BASIS,
-          priority: ContinuationPriority.Secondary,
         },
       ),
     );

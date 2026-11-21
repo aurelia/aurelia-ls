@@ -626,15 +626,10 @@
           "filePath": "packages/semantic-runtime/src/application/style-topology.ts",
           "symbolName": "readApplicationStyleAssetSites",
           "summary": "Application topology style asset reader that reuses the shared style registry classifier."
-        },
-        {
-          "kind": "lens",
-          "lensId": "atlas.work-router",
-          "summary": "Route semantic-runtime.resource-style-dependencies before touching resource/style dependency behavior."
         }
       ],
       "createdAt": "2026-05-15",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "decision:resource-registration-identity-vs-taxonomy",

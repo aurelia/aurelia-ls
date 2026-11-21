@@ -8,7 +8,6 @@ import {
 } from "../basis.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import type { Evidence } from "../evidence.js";
@@ -114,7 +113,6 @@ export function atlasProjectionContinuation(
   return {
     id,
     kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Secondary,
     rationale,
     inquiry: {
       ...inquiry,

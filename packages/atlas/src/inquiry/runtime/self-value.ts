@@ -30,7 +30,6 @@ import type {
   AtlasSelfVariableSurfaceRow,
 } from "./self-analysis.js";
 import type { SelfContractRow } from "./self-contracts.js";
-import type { AtlasSelfRecipeRow } from "./self-recipes.js";
 import type { InquiryWorld } from "./world.js";
 
 /** Summary returned by the atlas.self runtime lens. */
@@ -57,8 +56,6 @@ export interface SelfValue {
   readonly unimplementedLensIds: readonly LensId[];
   /** Source-backed Atlas taxonomy rollup when requested or useful for orientation. */
   readonly taxonomy?: SelfTaxonomyValue;
-  /** Calibrated hop graphs for using Atlas to analyze and evolve Atlas itself. */
-  readonly recipes?: readonly AtlasSelfRecipeRow[];
   /** Enum declaration rows for enum/taxonomy projections. */
   readonly enums?: readonly AtlasSelfEnumRow[];
   /** Exact Enum.Member reference rows. */

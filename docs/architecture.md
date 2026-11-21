@@ -306,10 +306,9 @@ semantic product that should own the fact. First restore lost provenance or
 reconnect an existing implementation. Add a new derivation only when the model
 needs one.
 
-Use the folder-level [semantic-runtime source map](../packages/semantic-runtime/src/README.md)
-for local ownership and Atlas for queryable repository/framework navigation.
-Keep release chronology in changelogs and recent implementation context in
-workbench notes; this document owns the present-tense system shape.
+The [semantic-runtime source map](../packages/semantic-runtime/src/README.md) identifies code owners.
+[Atlas](../packages/atlas/README.md) supports targeted source, memory and framework queries.
+Changelogs record release history.
 
 ## Related documentation
 

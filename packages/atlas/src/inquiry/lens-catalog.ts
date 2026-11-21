@@ -16,11 +16,11 @@ export const LensCatalog: readonly LensSpec[] = [
     family: LensFamily.Repo,
     stage: LensStage.Implemented,
     summary:
-      "Orient around repository terrain, substrates, lenses, and active semantic priorities.",
+      "Inspect the repository terrain, substrates, and available inquiry contracts.",
     supportedLoci: [LocusKind.Repo],
     requiredSubstrates: [SubstrateId.RepoTerrain, SubstrateId.AtlasContracts],
     projections: [
-      { id: "summary", summary: "Compact orientation map." },
+      { id: "summary", summary: "Repository inquiry surface map." },
       {
         id: "contracts",
         summary: "Terrain, substrate, and lens contract inventory.",
@@ -1653,7 +1653,7 @@ export const LensCatalog: readonly LensSpec[] = [
     family: LensFamily.Framework,
     stage: LensStage.Implemented,
     summary:
-      "Read the Aurelia framework discovery seeds: semantic domains, behavior flows, seed anchors, and next inquiry routes.",
+      "Inspect Aurelia behavior flows, source anchors, package exports and their relationships.",
     supportedLoci: [
       LocusKind.Repo,
       LocusKind.RepoArea,
@@ -1664,11 +1664,6 @@ export const LensCatalog: readonly LensSpec[] = [
     requiredSubstrates: [SubstrateId.AtlasContracts],
     projections: [
       { id: "summary", summary: "Framework discovery rollup." },
-      {
-        id: "recipes",
-        summary:
-          "Calibrated cross-lens recipes that combine framework semantic projections with TypeScript source, type, call-site, and continuation hops.",
-      },
       { id: "flows", summary: "Framework behavior flow definitions." },
       {
         id: "anchors",
@@ -1746,11 +1741,6 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "rendering-structures",
         summary:
           "Framework rendering, hydration, controller, view, and lifecycle structure exports.",
-      },
-      {
-        id: "open-questions",
-        summary:
-          "Discovery questions that should remain visible during long-running work.",
       },
     ],
     parameters: [
@@ -3252,17 +3242,17 @@ export const LensCatalog: readonly LensSpec[] = [
       {
         id: "families",
         summary:
-          "Grouped framework error-code families by package, enum, and member prefix for choosing diagnostic substrate work.",
+          "Framework error-code families grouped by package, enum, and member prefix.",
       },
       {
         id: "diagnostic-frontiers",
         summary:
-          "Framework error-code families joined to semantic-runtime exact AUR-link coverage, raw authority pressure, and recommended diagnostic substrate next steps.",
+          "Framework error-code families joined to semantic-runtime exact AUR-link coverage and raw authority gaps.",
       },
       {
         id: "diagnostic-codes",
         summary:
-          "Code-level diagnostic intake rows classifying each framework code as modeled, unmodeled, dormant, raw-authority, declared-unspent, or link-broken.",
+          "Code-level diagnostic rows classifying each framework code as modeled, unmodeled, dormant, raw-authority, declared-unspent, or link-broken.",
       },
       {
         id: "codes",
@@ -4005,12 +3995,7 @@ export const LensCatalog: readonly LensSpec[] = [
       SubstrateId.TypeScriptProgram,
     ],
     projections: [
-      { id: "summary", summary: "Maintenance orientation." },
-      {
-        id: "recipes",
-        summary:
-          "Stored maintenance recipes that combine self-analysis rows with TypeScript source, type, module, and diagnostic reads.",
-      },
+      { id: "summary", summary: "Atlas source and inquiry contract summary." },
       {
         id: "taxonomy",
         summary:
@@ -4156,11 +4141,6 @@ export const LensCatalog: readonly LensSpec[] = [
         role: ParameterRole.Filter,
         summary:
           "Filter self-analysis rows by exact substring across names, files, fields, or literal values.",
-      },
-      {
-        id: "domain",
-        role: ParameterRole.Filter,
-        summary: "Filter Atlas self-analysis recipe rows by broad maintenance domain.",
       },
       {
         id: "lensId",
@@ -4552,22 +4532,12 @@ export const LensCatalog: readonly LensSpec[] = [
       {
         id: "summary",
         summary:
-          "Compact rollup of durable records, live frontiers, untracked pressure, and storage issues.",
+          "Compact rollup of durable record status and storage issues.",
       },
       {
         id: "records",
         summary:
           "Durable records joined to computed live status.",
-      },
-      {
-        id: "frontiers",
-        summary:
-          "Live active, intentional, stale, and untracked work frontiers.",
-      },
-      {
-        id: "next",
-        summary:
-          "Ranked next actions computed from storage issues, stale records, live frontiers, and untracked product pressure.",
       },
       {
         id: "guidance",
@@ -4612,23 +4582,13 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "kind",
         role: ParameterRole.Filter,
         summary:
-          "Filter durable records by memory kind or frontier discriminator.",
+          "Filter durable records by memory kind.",
         values: [
           "pressure-frontier",
           "intentional-shape",
           "reuse-guide",
           "decision",
           "doc-shard",
-          "memory-record",
-          "untracked-product-class",
-          "repair-storage",
-          "review-stale-memory",
-          "seed-untracked-area",
-          "inspect-untracked-frontier",
-          "continue-live-frontier",
-          "consult-live-frontier",
-          "consult-memory-record",
-          "consult-reuse-guide",
         ],
       },
       {
@@ -4644,8 +4604,6 @@ export const LensCatalog: readonly LensSpec[] = [
           "out-of-scope",
           "stale-source",
           "stale-check",
-          "untracked",
-          "storage-issue",
         ],
       },
       {
@@ -4654,32 +4612,21 @@ export const LensCatalog: readonly LensSpec[] = [
         summary: "Filter rows by exact durable memory record id.",
       },
       {
+        id: "archived",
+        role: ParameterRole.Filter,
+        summary: "Select archived or current durable memory records.",
+      },
+      {
         id: "path",
         role: ParameterRole.Filter,
         summary:
-          "Filter memory rows by source/doc anchor path, durable shard path, live-check path, or untracked frontier source path.",
-      },
-      {
-        id: "surfaceRole",
-        role: ParameterRole.Filter,
-        summary:
-          "Filter untracked product class frontier rows by product.architecture class role.",
-        values: [
-          "product-owner",
-          "publisher",
-          "work-frame",
-          "data-carrier",
-          "service-surface",
-          "epoch-context",
-          "semantic-model",
-          "other",
-        ],
+          "Filter memory rows by source/doc anchor path, durable shard path, or live-check path.",
       },
       {
         id: "liveCheckKind",
         role: ParameterRole.Filter,
         summary:
-          "Filter durable memory records and computed next actions by the live-check mechanism that keeps the record honest.",
+          "Filter durable memory records by live-check kind.",
         values: [
           "product-large-class",
           "source-file-exists",
@@ -4701,19 +4648,19 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "anchorLensId",
         role: ParameterRole.Filter,
         summary:
-          "Filter durable memory records and computed next actions by exact lens anchor id.",
+          "Filter durable memory records by exact lens anchor id.",
       },
       {
         id: "symbolName",
         role: ParameterRole.Filter,
         summary:
-          "Filter durable memory records and computed next actions by source anchor or live-check symbol name.",
+          "Filter durable memory records by source anchor or live-check symbol name.",
       },
       {
         id: "auLinkId",
         role: ParameterRole.Filter,
         summary:
-          "Filter durable memory records and computed next actions by auLink anchor or auLink-exists live check id.",
+          "Filter durable memory records by auLink anchor or auLink-exists live check id.",
       },
     ],
     outputKinds: [
@@ -4722,195 +4669,6 @@ export const LensCatalog: readonly LensSpec[] = [
       EvidenceKind.OpenSeam,
     ],
     defaultBudget: { rows: 80, evidencePerSubject: 3 },
-  },
-  {
-    id: LensId.AtlasWorkRouter,
-    family: LensFamily.Atlas,
-    stage: LensStage.Implemented,
-    summary:
-      "Route autonomous work through typed domains, roles, source anchors, lens anchors, memory domains, auLink ids, and framework corpus concepts before falling back to visibly weak prose matches.",
-    supportedLoci: [
-      LocusKind.Repo,
-      LocusKind.RepoArea,
-      LocusKind.Package,
-      LocusKind.SourceFile,
-      LocusKind.Symbol,
-    ],
-    requiredSubstrates: [
-      SubstrateId.AtlasWorkRouter,
-      SubstrateId.AtlasMemory,
-      SubstrateId.ProductArchitecture,
-      SubstrateId.FrameworkCorpus,
-      SubstrateId.TypeScriptProgram,
-    ],
-    projections: [
-      {
-        id: "summary",
-        summary:
-          "Compact matched route rows plus a small number of live route plans for orientation.",
-      },
-      {
-        id: "routes",
-        summary:
-          "Paged route rows with explicit match authority and anchor counts.",
-      },
-      {
-        id: "next",
-        summary:
-          "Checkpoint-friendly alias for selected route plans with memory next actions and route-specific next questions.",
-      },
-      {
-        id: "route-plan",
-        summary:
-          "Selected routes joined to live source anchors, Atlas memory, and framework corpus seeds.",
-      },
-      {
-        id: "next-questions",
-        summary:
-          "Selected route plans with route-specific next questions foregrounded for autonomous continuation.",
-      },
-      {
-        id: "route-health",
-        summary:
-          "Selected routes checked for missing source anchors and empty memory/corpus joins.",
-      },
-      {
-        id: "coverage",
-        summary:
-          "Route-local coverage rows for cross-cutting dimensions such as intent-aware continuation threading.",
-      },
-      {
-        id: "workset",
-        summary:
-          "Current git worktree files joined to work routes through source/doc anchors and memory shards.",
-      },
-      {
-        id: "memory-coverage",
-        summary:
-          "Atlas memory next actions joined back to typed work routes, exposing unrouted live frontiers.",
-      },
-      {
-        id: "schema",
-        summary:
-          "Machine-readable route schema, catalog definitions, anchor vocabulary, and match semantics.",
-      },
-    ],
-    parameters: [
-      {
-        id: "routeId",
-        role: ParameterRole.Filter,
-        summary:
-          "Select an exact typed work route by ID or declared alias.",
-      },
-      {
-        id: "relatedTo",
-        role: ParameterRole.Filter,
-        summary:
-          "Select routes that explicitly declare adjacency to another route id.",
-      },
-      {
-        id: "query",
-        role: ParameterRole.Filter,
-        summary:
-          "Match declared route vocabulary first and descriptive prose only as a weak-text open seam.",
-      },
-      {
-        id: "domain",
-        role: ParameterRole.Filter,
-        summary:
-          "Filter by route-owned product/problem domains such as authoring, forms, router, evaluator, or atlas.",
-      },
-      {
-        id: "domainMode",
-        role: ParameterRole.Filter,
-        summary:
-          "Choose all-of or any-of semantics for multi-domain route filters.",
-        values: ["all", "any"],
-      },
-      {
-        id: "role",
-        role: ParameterRole.Filter,
-        summary:
-          "Filter by work role such as orient, author, analyze, refactor, verify, document, or improve-atlas.",
-        values: [
-          "orient",
-          "author",
-          "analyze",
-          "refactor",
-          "verify",
-          "document",
-          "improve-atlas",
-        ],
-      },
-      {
-        id: "lensId",
-        role: ParameterRole.Filter,
-        summary:
-          "Filter routes that declare an exact Atlas lens anchor.",
-      },
-      {
-        id: "path",
-        role: ParameterRole.Filter,
-        summary:
-          "Filter routes by a source, documentation or workset path anchor. File, package and terrain loci scope this path.",
-      },
-      {
-        id: "symbolName",
-        role: ParameterRole.Filter,
-        summary:
-          "Filter by a source, auLink or memory symbol. A scoped path and symbol must match the same anchor.",
-      },
-      {
-        id: "auLinkId",
-        role: ParameterRole.Filter,
-        summary:
-          "Filter routes that declare a matching auLink or memory auLink anchor.",
-      },
-      {
-        id: "concept",
-        role: ParameterRole.Filter,
-        summary:
-          "Filter routes that declare a framework corpus concept anchor such as forms, router, observation, or templates.",
-      },
-      {
-        id: "effectKind",
-        role: ParameterRole.Filter,
-        summary:
-          "Filter routes that declare an expected semantic effect kind anchor.",
-      },
-      {
-        id: "appPatternKey",
-        role: ParameterRole.Filter,
-        summary:
-          "Filter routes that declare an app-pattern pressure key anchor.",
-      },
-      {
-        id: "seedUse",
-        role: ParameterRole.Filter,
-        summary:
-          "Filter routes and fixture seeds by corpus authority lane, such as authoring-taste or behavior-grounding.",
-      },
-      {
-        id: "coverageDimension",
-        role: ParameterRole.Filter,
-        summary:
-          "Filter routes by a declared cross-cutting coverage dimension.",
-        values: ["intent-aware-continuations"],
-      },
-      {
-        id: "coverageState",
-        role: ParameterRole.Filter,
-        summary:
-          "Filter routes by coverage state for the selected cross-cutting dimension.",
-        values: ["covered", "partial", "missing", "not-applicable"],
-      },
-    ],
-    outputKinds: [
-      EvidenceKind.MaintenanceSignal,
-      EvidenceKind.SourceSpan,
-      EvidenceKind.OpenSeam,
-    ],
-    defaultBudget: { rows: 24, evidencePerSubject: 4 },
   },
 ];
 

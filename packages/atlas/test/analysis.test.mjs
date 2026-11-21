@@ -28,7 +28,7 @@ test("the analysis build preserves source and evaluation identity and excludes t
   assert(modules.includes("src/inquiry/runtime/framework-di-lenses.ts"));
   assert(modules.includes("src/source/project.ts"));
   const fullOnly = modules.filter(file => file.startsWith("src/session/") || file.startsWith("src/scripts/") ||
-    file === "src/inquiry/runtime/engine.ts" || file.startsWith("src/inquiry/runtime/atlas-work-router"));
+    file === "src/inquiry/runtime/engine.ts");
   assert.deepEqual(fullOnly, []);
 });
 

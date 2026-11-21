@@ -8,7 +8,6 @@ import {
 } from "../basis.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import {
@@ -200,7 +199,7 @@ export function answerFrameworkErrors(
       return answerFrameworkErrorRows(
         inquiry,
         "framework.errors:diagnostic-codes",
-        "Aurelia framework diagnostic code intake row(s)",
+        "Aurelia framework diagnostic code row(s)",
         diagnosticCodes,
         basis,
         (rows) => ({ version: analysis.version, rollup, diagnosticCodes: rows }),
@@ -308,7 +307,6 @@ function answerFrameworkErrorRows<TRow>(
     evidenceForRow,
     continuationsForPage: (inquiry, rows, nextOffset, limit) => [
       ...optionalNextPageContinuation(inquiry, nextOffset, limit, {
-        priority: ContinuationPriority.Secondary,
         rationale: "Continue the paged framework error row family.",
         routeSummary: "Next Aurelia framework error row page.",
       }),
@@ -910,7 +908,6 @@ function frameworkErrorFamilyContinuations(row: FrameworkErrorFamilyRow): readon
     {
       id: `${row.id}:codes`,
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
       rationale: "Inspect the code definitions in this framework error-code family.",
       inquiry: {
         lens: LensId.FrameworkErrors,
@@ -926,7 +923,6 @@ function frameworkErrorFamilyContinuations(row: FrameworkErrorFamilyRow): readon
     {
       id: `${row.id}:usages`,
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect mapped usage sites in this framework error-code family.",
       inquiry: {
         lens: LensId.FrameworkErrors,
@@ -957,7 +953,6 @@ function frameworkErrorDiagnosticFrontierContinuations(row: FrameworkErrorDiagno
     {
       id: `${row.id}:codes`,
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
       rationale: "Inspect the source-backed framework codes that define this diagnostic frontier.",
       inquiry: {
         lens: LensId.FrameworkErrors,
@@ -969,7 +964,6 @@ function frameworkErrorDiagnosticFrontierContinuations(row: FrameworkErrorDiagno
     {
       id: `${row.id}:usages`,
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
       rationale: "Inspect the framework usage sites that show the runtime effect and message authority for this diagnostic frontier.",
       inquiry: {
         lens: LensId.FrameworkErrors,
@@ -981,7 +975,6 @@ function frameworkErrorDiagnosticFrontierContinuations(row: FrameworkErrorDiagno
     {
       id: `${row.id}:semantic-references`,
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect semantic-runtime exact AUR links for this framework diagnostic frontier.",
       inquiry: {
         lens: LensId.FrameworkErrors,
@@ -1009,7 +1002,6 @@ function frameworkErrorDiagnosticCodeContinuations(row: FrameworkErrorDiagnostic
     {
       id: `${row.id}:usages`,
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
       rationale: "Inspect framework usage sites for this diagnostic code before spending it in semantic-runtime.",
       inquiry: {
         lens: LensId.FrameworkErrors,
@@ -1021,7 +1013,6 @@ function frameworkErrorDiagnosticCodeContinuations(row: FrameworkErrorDiagnostic
     {
       id: `${row.id}:semantic-references`,
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect semantic-runtime links for this exact framework diagnostic code.",
       inquiry: {
         lens: LensId.FrameworkErrors,
@@ -1046,7 +1037,6 @@ function frameworkErrorContinuations(inquiry: Inquiry): readonly Continuation[] 
     {
       id: "framework.errors:codes",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
       rationale: "Inspect framework error/event code definitions.",
       inquiry: {
         ...inquiry,
@@ -1056,8 +1046,7 @@ function frameworkErrorContinuations(inquiry: Inquiry): readonly Continuation[] 
     {
       id: "framework.errors:families",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect framework error-code families before selecting diagnostic substrate work.",
+      rationale: "Inspect framework error-code families by package, enum, and member prefix.",
       inquiry: {
         ...inquiry,
         projection: "families",
@@ -1066,7 +1055,6 @@ function frameworkErrorContinuations(inquiry: Inquiry): readonly Continuation[] 
     {
       id: "framework.errors:diagnostic-frontiers",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
       rationale: "Inspect framework diagnostic frontiers joined to semantic-runtime AUR-link coverage.",
       inquiry: {
         ...inquiry,
@@ -1076,8 +1064,7 @@ function frameworkErrorContinuations(inquiry: Inquiry): readonly Continuation[] 
     {
       id: "framework.errors:diagnostic-codes",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect code-level framework diagnostic intake rows with modeled/dormant/raw/unmodeled disposition.",
+      rationale: "Inspect the semantic-runtime disposition and framework usage of each diagnostic code.",
       inquiry: {
         ...inquiry,
         projection: "diagnostic-codes",
@@ -1086,7 +1073,6 @@ function frameworkErrorContinuations(inquiry: Inquiry): readonly Continuation[] 
     {
       id: "framework.errors:usages",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
       rationale: "Inspect framework error-code usage sites.",
       inquiry: {
         ...inquiry,
@@ -1096,7 +1082,6 @@ function frameworkErrorContinuations(inquiry: Inquiry): readonly Continuation[] 
     {
       id: "framework.errors:semantic-references",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
       rationale: "Inspect semantic-runtime references to framework error-code labels.",
       inquiry: {
         ...inquiry,
@@ -1106,7 +1091,6 @@ function frameworkErrorContinuations(inquiry: Inquiry): readonly Continuation[] 
     {
       id: "framework.errors:semantic-raw-references",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
       rationale: "Inspect semantic-runtime references to raw framework Error usage sites.",
       inquiry: {
         ...inquiry,
@@ -1116,7 +1100,6 @@ function frameworkErrorContinuations(inquiry: Inquiry): readonly Continuation[] 
     {
       id: "framework.errors:packages",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect package-level framework error-code rollups.",
       inquiry: {
         ...inquiry,
@@ -1145,7 +1128,6 @@ function frameworkErrorGapContinuation(
   return {
     id: `framework.errors:${gap}`,
     kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Secondary,
     rationale,
     inquiry: {
       ...inquiry,

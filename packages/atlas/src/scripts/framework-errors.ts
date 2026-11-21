@@ -140,7 +140,7 @@ function printFamilyRows(
   printEmptyRows(rows, "no framework error family rows returned");
   for (const row of rows.slice(0, limit)) {
     console.log(
-      `- ${row.packageId} ${row.enumName}.${row.namePrefix}*; score=${row.pressureScore}; codes=${row.codeCount}; usages=${row.usageCount}; unused=${row.unusedCodeCount}; ${sourceLabel(row)}`,
+      `- ${row.packageId} ${row.enumName}.${row.namePrefix}*; codes=${row.codeCount}; usages=${row.usageCount}; unused=${row.unusedCodeCount}; ${sourceLabel(row)}`,
     );
     if (includeDetail) {
       console.log(`  codes=${row.codeNames.join(", ")}`);
@@ -162,9 +162,8 @@ function printDiagnosticFrontierRows(
   printEmptyRows(rows, "no framework diagnostic frontier rows returned");
   for (const row of rows.slice(0, limit)) {
     console.log(
-      `- ${row.packageId} ${row.enumName}.${row.namePrefix}*; score=${row.frontierScore}; coverage=${row.semanticRuntimeCoverage}; usedExact=${row.semanticRuntimeLinkedCodeCount}/${row.codeCount}; declaredExact=${row.semanticRuntimeExactReferenceCount}; intentional=${row.intentionalUnclaimedCodeCount}; futureSubstrate=${row.intentionalUnclaimedFutureSubstrateCodeCount}; runtimeBoundary=${row.intentionalUnclaimedRuntimeBoundaryCodeCount}; dormant=${row.dormantCodeCount}; actionable=${row.actionableUncoveredCodeCount}; rawGaps=${row.rawAuthorityGapCount}; ${sourceLabel(row)}`,
+      `- ${row.packageId} ${row.enumName}.${row.namePrefix}*; coverage=${row.semanticRuntimeCoverage}; usedExact=${row.semanticRuntimeLinkedCodeCount}/${row.codeCount}; declaredExact=${row.semanticRuntimeExactReferenceCount}; intentional=${row.intentionalUnclaimedCodeCount}; futureSubstrate=${row.intentionalUnclaimedFutureSubstrateCodeCount}; runtimeBoundary=${row.intentionalUnclaimedRuntimeBoundaryCodeCount}; dormant=${row.dormantCodeCount}; actionable=${row.actionableUncoveredCodeCount}; rawGaps=${row.rawAuthorityGapCount}; ${sourceLabel(row)}`,
     );
-    console.log(`  next=${row.recommendedNextStep}`);
     if (includeDetail) {
       if (row.likelySemanticRuntimeOwner != null) {
         console.log(`  owner=${row.likelySemanticRuntimeOwner}`);
@@ -200,9 +199,8 @@ function printDiagnosticCodeRows(
   printEmptyRows(rows, "no framework diagnostic code rows returned");
   for (const row of rows.slice(0, limit)) {
     console.log(
-      `- ${row.packageId} ${row.enumName}.${row.name} ${row.codeLabel}; disposition=${row.diagnosticDisposition}; score=${row.diagnosticScore}; usages=${row.usageCount}; usedExact=${row.semanticRuntimeUsedExactReferenceCount}; declaredExact=${row.semanticRuntimeExactReferenceCount}; rawGaps=${row.rawAuthorityGapCount}; ${sourceLabel(row)}`,
+      `- ${row.packageId} ${row.enumName}.${row.name} ${row.codeLabel}; disposition=${row.diagnosticDisposition}; usages=${row.usageCount}; usedExact=${row.semanticRuntimeUsedExactReferenceCount}; declaredExact=${row.semanticRuntimeExactReferenceCount}; rawGaps=${row.rawAuthorityGapCount}; ${sourceLabel(row)}`,
     );
-    console.log(`  next=${row.recommendedNextStep}`);
     if (includeDetail) {
       if (row.likelySemanticRuntimeOwner != null) {
         console.log(`  owner=${row.likelySemanticRuntimeOwner}`);

@@ -8,7 +8,6 @@ import {
 import type { Budget } from "../budget.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import type { Evidence } from "../evidence.js";
@@ -131,7 +130,6 @@ export function mirrorProjectionContinuation(
   return {
     id,
     kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Secondary,
     rationale,
     inquiry: {
       ...inquiry,
@@ -159,7 +157,6 @@ export function auLinkMemoryContinuation(
   return {
     id,
     kind: ContinuationKind.SwitchLens,
-    priority: ContinuationPriority.Secondary,
     rationale,
     inquiry: {
       lens: LensId.AtlasMemory,
@@ -195,7 +192,6 @@ export function ownerProjectionContinuation(
       lens === inquiry.lens
         ? ContinuationKind.SwitchProjection
         : ContinuationKind.SwitchLens,
-    priority: ContinuationPriority.Primary,
     rationale,
     inquiry: {
       lens,
@@ -224,7 +220,6 @@ export function sourceRangeContinuation(
   return {
     id,
     kind: ContinuationKind.InspectEvidence,
-    priority: ContinuationPriority.Secondary,
     rationale,
     inquiry: {
       lens: LensId.TsSource,
@@ -250,7 +245,6 @@ export function callSitesRangeContinuation(
   return {
     id,
     kind: ContinuationKind.SwitchLens,
-    priority: ContinuationPriority.Secondary,
     rationale,
     inquiry: {
       lens: LensId.TsType,

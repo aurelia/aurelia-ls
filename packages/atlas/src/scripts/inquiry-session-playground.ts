@@ -17,9 +17,9 @@ const terrainAnswer = await api.ask({
   projection: "areas",
 });
 const selfCheck = await api.selfCheck();
-const followedAnswer = mapAnswer.continuations[0] === undefined
+const followedAnswer = terrainAnswer.continuations[0] === undefined
   ? undefined
-  : await api.follow(mapAnswer.continuations[0]);
+  : await api.follow(terrainAnswer.continuations[0]);
 const shutdown = await api.shutdown("session playground complete");
 
 console.log(JSON.stringify({

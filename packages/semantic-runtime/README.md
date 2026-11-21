@@ -79,11 +79,5 @@ Large selected apps can still need an explicit Node heap while app-world memory 
 $env:NODE_OPTIONS='--max-old-space-size=8192'
 ```
 
-Keep durable semantics in typed records, vocabulary, claims, provenance,
-materialized products, and open seams. Atlas is the live orientation and
-inspection layer over this package. Promote durable guidance into
-`packages/atlas/memory` and link it to the owning README or workbench.
-
-For the durable folder map, read [src/README.md](src/README.md). For recent context while the package is still settling,
-read [src/WORKBENCH.md](src/WORKBENCH.md). Pressure fixtures, including current app-builder pressure fixtures, are
-documented in [fixtures/pressure/README.md](fixtures/pressure/README.md).
+The [source map](src/README.md) identifies the layer that owns each semantic decision.
+The [pressure fixture guide](fixtures/pressure/README.md) describes the applications and checks that exercise them.

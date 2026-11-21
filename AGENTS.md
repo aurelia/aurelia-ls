@@ -1,41 +1,12 @@
 # AGENTS.md
 
-## Atlas By Scope
+## Working in this repository
 
-For broad product or architecture work, or when resuming without a current domain packet, start by orienting through Atlas:
-
-```powershell
-pnpm --filter @aurelia-ls/atlas orient
-```
-
-Atlas is the live self-description layer for the repo and should be treated as the first read before broad product or architecture work.
-The default orientation output is compact; use `pnpm --filter @aurelia-ls/atlas orient:json` only when a tool needs the full request-shaped payload.
-
-For a focused task with a current tracker, domain note, or explicit entry files, do not expand context through broad orientation. Use targeted Atlas memory, framework corpus, flow, or pressure query when a concrete semantic question needs grounding. Atlas is navigation and queryable memory, not a substitute for reading the owning code, framework evidence, and current contracts.
-
-Useful Atlas follow-up commands:
-
-```powershell
-pnpm --filter @aurelia-ls/atlas pressure:self
-pnpm --filter @aurelia-ls/atlas pressure:product-architecture
-pnpm --filter @aurelia-ls/atlas profile:product-architecture
-```
-
-Use compact `pressure:self` before Atlas maintenance refactors, compact `pressure:product-architecture` before semantic-runtime cleanup passes, and `profile:product-architecture` before adding cache, warmup, or split points to semantic-runtime architecture queries. Run `pnpm --filter @aurelia-ls/atlas pressure:self:detail` or `pnpm --filter @aurelia-ls/atlas pressure:product-architecture:detail` when compact rows hide a needed metric. The pressure commands print source line anchors when available; `pressure:self` focuses its high mapper lane on multi-axis framework-semantic pressure, and the profile command prints structure, core, symbol, and full lanes.
+Start with the package that owns the change and the caller or test that observes it. The [architecture overview](docs/architecture.md) describes the package boundaries. [Atlas](packages/atlas/README.md) can look up a past decision, trace a TypeScript declaration across explicitly selected packages, or check an interpretation against Aurelia framework evidence.
 
 ## Semantic Runtime
 
-`packages/semantic-runtime/` is the Aurelia semantic substrate. It owns the product model: kernel records, vocabulary, auLink anchors, static evaluation, resources, configuration, DI, templates, expressions, TypeChecker-backed projection, and inquiry contracts.
-
-Ground author-facing Aurelia semantics by triangulating framework documentation, framework tests, compiler lowering, runtime behavior, and logical ownership. Do not infer public policy solely from optimized implementation shape, private mutability, fallback behavior, or compatibility tolerance. Tooling may be stricter than incidental runtime permissiveness only when the rule is well-grounded, low-noise, and actionable.
-
-Build it with:
-
-```powershell
-pnpm --filter @aurelia-ls/semantic-runtime build
-```
-
-Before adding carriers, helpers, or backup paths, search for existing products, provenance, vocabulary, and inquiry surfaces. Prefer restoring dropped data, reconnecting isolated implementations, and deleting duplicate derivations. Prefer strengthening `semantic-runtime` and Atlas over reintroducing snapshot/query CLI layers.
+Ground author-facing rules in Aurelia documentation, tests, compiler lowering and runtime behavior. Implementation fallbacks alone cannot establish a public rule. Before introducing a new representation, trace the existing semantic product and its provenance through to its consumer. A missing connection can often be repaired at its owner. See the [semantic-runtime README](packages/semantic-runtime/README.md).
 
 ## External Checkouts
 

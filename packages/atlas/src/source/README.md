@@ -1,123 +1,19 @@
-# Source Substrate
+# TypeScript source analysis
 
-The source substrate owns the hot TypeScript world for Atlas, semantic-runtime, Aurelia Patterns, the MCP shell,
-admitted Aurelia framework packages, and admitted Aurelia framework tooling packages. It admits source into a shared
-LanguageService-backed Program, builds source-epoch indexes, keeps the current TypeChecker available, and gives higher
-lenses stable source and declaration addresses without importing package runtime exports.
+A `SourceProject` owns one immutable TypeScript Program, checker, LanguageService and declaration index. Its package definitions supply roots and tsconfig paths. Inspect `project.summary().packages` to see what was admitted. A Program file can belong to no admitted package and carry `packageId: null`. Filesystem text reads can also cover current Markdown, JSON or a template outside the Program. [Project](project.ts) · [Host file cache](project-file-cache.ts)
 
-## Responsibilities
+## Find cross-package readers
 
-A `ts.source:text` page shares its character budget across the selected targets. Following the
-next-page continuation resumes at the first unread UTF-16 character, including inside a file.
-Program-backed text belongs to the checker's epoch. Filesystem-only source reads such as Markdown
-and Atlas memory JSON read the current file.
+Admit the caller and provider packages explicitly. For example, to find AOT readers of `@aurelia-ls/semantic-runtime/browser-template`:
 
-The shared Program combines admitted roots under one compiler configuration.
-`ts.type:diagnostics` reports the number of files the LanguageService checked and counts by
-diagnostic category, including editor suggestions. Use the package's own tsconfig and build
-for judgments about its build diagnostics.
+1. Build the provider's declaration outputs, then call `createSourceProject` with the AOT and semantic-runtime tsconfigs.
+2. Use `readModuleGraph` on the caller's import site. Inspect the resolved file. A package export can resolve to an emitted declaration barrel.
+3. Pass the resolved file and export name to `readReferences`. Use its total and page bounds to determine whether all references in this project were returned.
 
-For cross-package readers, admit the consumer's tsconfig into the analysis first.
-`ts.structure:module-graph` on its import site returns the file TypeScript selected for the
-specifier and resolution mode. If a package export points to an emitted declaration barrel, use
-that file and export name as the subject of `ts.type:references` to inspect consumers in the
-same Program. `product.architecture:modules.localImportInCount` counts static import declarations
-within semantic-runtime's `src` cohort. It cannot establish that a public export has no consumers.
+The [analysis entry point](../analysis.ts) exports these functions and `sourceSelectorFromSubject`. The [source regression](../../test/source.test.mjs) checks module resolution and package identities. For build diagnostics use the package's actual tsconfig. The combined analysis Program has its own compiler options.
 
-- Admit `packages/atlas`, `packages/semantic-runtime`, `packages/patterns`, `packages/mcp`, the `aurelia` framework submodule packages,
-  selected `aurelia/packages-tooling` packages, and public
-  `aurelia2-plugins` workspace packages when that submodule is present through their tsconfigs for TypeChecker-first
-  internal, framework, framework-tooling, and plugin-pressure analysis.
-- Optionally admit external authored source packages through `ATLAS_EXTERNAL_SOURCE_ROOTS`. This is an environment
-  hook for clean-room pressure runs, not a checked-in project list: Atlas scans package roots with `package.json` and
-  `tsconfig.json`, skips dependency/build directories, and keeps external paths outside durable repo docs.
-- Keep source epoch identities non-extractive. `SourceProject.identity()` reports package/admission counts, not package
-  ids or external package names, so daemon status and source-host profile logs can stay useful during clean-room runs
-  without recording external app structure.
-- Keep a hot TypeScript `Program`, `TypeChecker`, LanguageService, file index, declaration index, and top-level
-  declaration index in the daemon process. `SourceProject` is an immutable source epoch: it materializes the
-  LanguageService `Program` and `TypeChecker` once during construction, then returns those fixed objects from its
-  getters. Do not re-ask the LanguageService for a current program unless Atlas grows an explicit source-editing epoch.
-- Keep TypeScript host filesystem answers in [project-file-cache.ts](project-file-cache.ts). That cache owns script
-  versions, snapshots, host reads, existence checks, directory checks, and realpath answers for the immutable source
-  epoch; `SourceProject` should coordinate it, not absorb its implementation details.
-- Normalize file, span, declaration, symbol, and package identities into source-level records.
-- Treat exported destructuring as multiple declaration rows, not one broad pattern-shaped declaration. For example,
-  `export const { value } = ...` should expose `value` as a top-level variable row with a binding-name span so
-  framework bridges such as `auLink` can resolve destructured Aurelia exports with exact provenance.
-- Treat source identity as a real invariant. Lenses that walk admitted source should use
-  `SourceProject.requiredSourceFileIdentity(...)`; call sites that already hold a `SourceFileIdentity` should use
-  `SourceProject.requiredSourceFileForIdentity(...)` to recover the source file. Semantic-surface source-range helpers
-  delegate to the same project primitives. `SourceProject` issues identities for every current TypeScript Program file;
-  files outside an admitted package carry `packageId: null`, so TypeScript LanguageService adapters do not need to
-  synthesize source identities from paths when tsserver returns lib or external files. LanguageService edit plans can
-  still name transient new-file paths, but those should be explicit edit targets rather than source-file fallbacks.
-- Read source text for repository-local non-Program evidence such as Aurelia docs and framework tests through
-  `SourceProject.readTextFile(...)`. `ts.source` may inspect those files and exact ranges, but TypeChecker,
-  LanguageService, structure, diagnostics, and refactor projections remain Program-only.
-- Attribute files to the most-specific admitted package root so nested monorepo packages are not swallowed by a parent
-  workspace package.
-- Preserve package admission role strongly enough that higher lenses such as `workspace.architecture` can distinguish
-  external authored packages from public plugin packages and framework packages before inferring the separate Aurelia
-  shape axis (`aurelia-app`, `aurelia-resource-library`, `aurelia-package`, or `non-aurelia`).
-- Let workspace-level lenses project conservative source roles over admitted files. Source roles are pressure axes for
-  app-source/test/tooling/declaration/generated separation; they are not a substitute for package ownership or Aurelia
-  runtime semantics.
-- Let architecture lenses recognize source-surface signals from explicit framework shapes before falling back to broad
-  text shapes. For example, router surfaces should come from `@aurelia/router` imports, route decorators, static route
-  config fields and nested child route objects on route-bearing classes, `getRouteConfig` hooks, or receiver bindings
-  proven from router imports, type annotations, or `resolve(IRouter)`-style calls rather than a generic `.load(...)`
-  method name.
-- Treat `SourceProject` as a source epoch: script versions, script snapshots, TypeScript host `readFile`/`fileExists`/
-  `directoryExists`/`realpath` answers, and normalized file keys are cached for that epoch so TypeScript up-to-date
-  checks, module resolution, and Atlas indexes do not repeatedly hit filesystem stat/path work. Set
-  `ATLAS_PROFILE_SOURCE_HOST=1` to print per-epoch host cache counters when the daemon shuts down.
-- Keep both "owned files" and "owned implementation files" available by package. Generated declaration files remain
-  useful for public checker surfaces, but framework/resource/bundle scans that need bodies should use implementation
-  files so declaration output does not steal source spans or erase method bodies.
-- Use [memo.ts](memo.ts) for source-epoch memoization. `SourceProjectMemo` owns one derived value per source epoch;
-  `SourceProjectKeyedMemo` owns keyed derived rows per source epoch. Keep this as hot in-memory memoization near the
-  owning reader, not persisted cache policy.
-- Resolve exact TypeScript selectors into current-epoch source targets, then project serializable source, structure, and
-  checker-fact rows for Atlas lenses.
-- Keep the source-read contract in [typescript-contracts.ts](typescript-contracts.ts). That file is the public selector,
-  target, row, and option vocabulary; [typescript.ts](typescript.ts) should stay focused on resolving those contracts
-  against the current TypeScript Program epoch.
-- Expose IDE-shaped TypeScript LanguageService primitives: document symbols, quick info, signature help, references with
-  exact syntactic roles, definitions, implementations, call hierarchy, highlights, diagnostics, rename locations,
-  refactor affordances, code fixes, refactor edit plans, organize-import edit plans, and file-rename edit plans.
-- Expose exact call-site facts over source ranges, declarations, files, packages, or the workspace: callee expression,
-  resolved signature, argument spans, argument text, argument types, primitive literals, object keys, and array counts.
-- Expose the [TypeScript semantic surface](semantic-surface/README.md): exact source ranges, symbol identity, source
-  declaration mirrors, exported declaration surfaces, normalized member slots, usage roles, usage-owner declarations,
-  and AST walking primitives that multiple higher lenses can share without inventing local compatibility layers.
-- Expose package-scoped enum usage indexes: enum/member declarations, exact `Enum.Member` reference sites, raw literal
-  value-space overlap, and exact enum-to-enum translation edges. This is source substrate, not `atlas.self`
-  diagnostics; higher lenses decide what the value-space pressure means. The checker resolves candidate
-  member references to enum declarations and supplies constant values, including constant expressions.
-  Runtime-computed values remain open. In `profile:self`, the remaining enum pressure should usually be read as
-  raw-literal contextual narrowing (`call-argument`, `comparison`, `object-value`, etc.), not member-reference symbol
-  resolution.
-- Build source-index bases such as `auLink` anchors and framework discovery seeds on demand within the current
-  source-project epoch. auLink framework target rows preserve raw candidate lists and also expose type/value
-  composition (`interface-class-pair`, `interface-variable-pair`, `function-overload-set`, etc.) plus preferred
-  type/value candidates. Declaration merges with one type side and one value side, and same-symbol function overload
-  sets, are treated as conceptually resolved targets, so callers can distinguish honest TypeScript merges and overloads
-  from unresolved bridge ambiguity without losing the underlying declarations. Framework
-  projection rows should fill on demand unless profiling proves their owning substrate cannot be made cheap.
-- Stay semantics-neutral: source declarations are not vocabulary facts, product claims, DI facts, or framework facts.
-- Provide a boring base that TypeChecker-driven product, self-analysis, and source navigation lenses can share.
+The [semantic surface](semantic-surface/index.ts) supplies checker-resolved symbols, declaration ranges, member slots, import/type/value usages and call-site arguments. Framework and product queries interpret those facts in their own domains. Import counts for one source directory exclude consumers found through a public export in another package.
 
-## Non-Responsibilities
+## External source roots
 
-- Executing or importing `@aurelia-ls/semantic-runtime`.
-- Inferring Aurelia semantics from private pattern tables.
-- Owning ECMAScript static evaluation, TypeChecker projection policy, or product materialization.
-- Serving as a user-facing lens by itself.
-
-## Pressure
-
-This substrate should remain less clever than the lenses above it. Its job is to pay compiler and indexing cost during
-daemon boot, then make source facts addressable cheaply. Internal package semantics should prefer explicit types and
-TypeChecker projection. Framework and public plugin analysis can spend this same source project as basis, but evaluator
-closure belongs to the framework-facing evaluation substrate rather than this source map.
+`ATLAS_EXTERNAL_SOURCE_ROOTS` optionally admits external checkouts for local inspection. Keep external source text, paths, package and component names, identifying application structure, and derived copies of private fixtures out of tracked evidence. Preserve the general framework mechanism and reproduce it using an independently authored fixture.

@@ -26,7 +26,7 @@
         "Use `enum:usage -- --projection=member-usage --enumName=...` for one-row-per-member spend audits. It aggregates role counts, containing functions/classes, control-flow carriers, translation edges, and coupled enums before you page exact reference rows.",
         "Use `enum:usage -- --projection=enum-references --controlFlowKind=switch-case-label|if-condition` when the question is whether enum members drive branches or only appear in passive vocabulary. Use `--projection=enum-couplings` for enum pairs joined by translation, shared control-flow carriers, declared type surfaces, or checker-backed shared value-space evidence; broad shared raw labels remain value-space rows, not coupling rows.",
         "Use `enum:usage -- --projection=enum-couplings --relation=type-surface-cooccurrence --query=...` when the question is whether separate enum value spaces form one typed protocol through an interface, type alias, class, or function signature. For example, `SemanticRuntimeContinuationRow` structurally couples public continuation kind, app-query kind, next-move intent, and continuation cost without requiring any enum member to appear in a branch.",
-        "Do not infer product purpose from enum usage alone. Use enum usage to reveal declared-versus-spent shape, then ground interpretation in owning README, Atlas memory, Work Router route, and reviewed `.temp` intent docs when the primitive is tied to a parked or future direction.",
+        "An enum reference establishes a use in the admitted TypeScript project. Follow the declaration to the owner and the actual consumer to establish the member's purpose.",
         "Do not replace enum usage with text matching; symbol-backed member references and contextual raw-value counts are the point of this substrate.",
         "If more profiling helpers are needed, extend shared PhaseProfiler rather than adding local profiler classes."
       ],
@@ -118,23 +118,22 @@
         "inquiry",
         "context-economics"
       ],
-      "summary": "Atlas core source-analysis and lens implementation files remain large, high-pressure substrates; use atlas.self/profile lanes before local splitting.",
-      "rationale": "The long autonomous runs repeatedly rely on Atlas to maintain orientation while semantic-runtime grows. Large Atlas analysis files are not automatically wrong, but they need durable handles so future sessions do not rediscover the same pressure through raw file browsing.",
+      "summary": "Atlas source-analysis costs can be traced to specific phases and query projections.",
+      "rationale": "The self and product queries traverse large source graphs. Exclusive phase timings and the requested projection help distinguish repeated work from the cost of inspecting an entire source world.",
       "guidance": [
-        "Start with pressure:self and the relevant lens/profile script before opening these files directly.",
         "Do not split these files only by line count; split around substrate responsibility, cache boundary, analysis phase, or reusable inquiry continuation.",
         "If a local feature needs a capability that one of these files already owns, improve the existing substrate rather than adding a parallel helper.",
         "When context or timing cost rises, profile first and treat repeated primitive work as substrate/cache pressure.",
         "Use the self-analysis phase timings in profile:self or atlas.self:phase-profile to decide whether the next payoff is enum usage indexing, source walking, finalization, or projection paging. The profiler separates exclusive time from child time, so optimize the exclusive phase body rather than an inclusive parent label.",
         "profile:self is compact by default and prints the highest exclusive-cost phases plus compact enum hotspot summaries first; use profile:self:detail, --phaseRows=..., or --enumRoleRows=... only when the lower-cost tail is the actual question.",
-        "Use product:architecture for targeted class/function/module rows when Work Router route plans name product.architecture lens anchors; prefer exact structural filters (`--className`, `--pathPrefix`, `--surfaceRole`, `--area`, `--functionKind`) before broad `--query`, and do not fall back to throwaway AST scripts for method breakdowns.",
+        "For a specific class, function or module, product:architecture accepts structural filters including --className, --pathPrefix, --surfaceRole and --area.",
         "The product:architecture script should reject unknown flags instead of silently widening a narrowed inquiry; use exact file filters such as `--fromFilePath`, `--toFilePath`, `--filePath`, and `--pathPrefix`, and extend the shared script-output argument guard when a real new filter is added.",
         "`product:architecture -- --projection=functions --detail` prints bounded callee symbol/expression samples; use it to inspect large coordinator methods before paging raw call sites, and use `--minDistinctCalleeCount=...` when dependency fan-out is the question.",
         "`product:architecture -- --projection=function-duplicates` prints duplicate helper groups directly and respects `--pathPrefix` through grouped file paths; use it to distinguish real same-name split brain from global noise before opening source.",
-        "`product:architecture -- --projection=call-sites` prints call-site rows directly and forwards exact call filters such as `--calleeName`, `--callKind`, `--targetPackageId`, `--local`, `--crossesArea`, and `--includeCallDetails=true`; use that lane before opening source when a route needs concrete product call edges.",
+        "The product.architecture call-sites projection supports --calleeName, --callKind, --targetPackageId and --crossesArea. Its source project determines which callers it can see.",
         "profile:product-architecture is compact by default and prints only the selected lane/phase head; use profile:product-architecture:detail, --laneRows=..., --phaseRows=..., or --rows=... when product architecture cost diagnosis needs the lower-ranked lanes or phases.",
         "product.architecture treats function body fingerprints and switch topology as an explicit body-analysis lane. Cheap structure and call-pressure reads skip it; duplicate/control-flow projections and `--includeFunctionBodyAnalysis=true` ask for it deliberately.",
-        "atlas.self separates source-surface reads from semantic taxonomy reads: Work Router and memory live checks can use source-file/class/function/variable surfaces without enum/string/contract taxonomy, while summary/taxonomy/enum/string/contract projections still opt into taxonomy deliberately.",
+        "Memory live checks use atlas.self source-file, class, function and variable surfaces. Enum, string and contract classification run for projections that request those facts.",
         "atlas.self now follows the same body-analysis policy: ordinary summary/function rows skip function body fingerprints and switch topology, while `function-shapes`, `function-control-flow-shapes`, fingerprint/switch filters, and `--includeFunctionBodyAnalysis=true` opt into the expensive AST body lane.",
         "Use `product.architecture:function-control-flow-shapes` or `atlas.self:function-control-flow-shapes` when a cleanup exposes parallel switch walkers or dispatch surfaces with different names; the switch-topology grouping is a structural canary, not a duplicate verdict.",
         "When atlas.self repeated body-shape rows point at real shared semantics, prefer a named shared substrate such as framework-corpus-classification over parallel helper bodies in route and lens code.",
@@ -227,7 +226,7 @@
         {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/atlas product:architecture",
-          "summary": "Targeted product.architecture row CLI for following route-plan lens anchors."
+          "summary": "CLI for inspecting classes, functions, modules and call sites in the admitted product source."
         }
       ],
       "liveChecks": [
@@ -267,7 +266,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "intentional:atlas-lens-catalog",
@@ -310,187 +309,6 @@
       "updatedAt": "2026-05-12"
     },
     {
-      "id": "frontier:atlas-memory-substrate",
-      "kind": "pressure-frontier",
-      "domains": [
-        "atlas",
-        "memory",
-        "inquiry",
-        "autonomy",
-        "self-analysis"
-      ],
-      "summary": "Atlas memory is a live self-navigation substrate and should keep its store, integrity, normalization, live-check, row/filter, routing, next-action, lens, read script, and write script pressure visible through atlas.self checks.",
-      "rationale": "The memory lane originally tracked semantic-runtime product class pressure but could not keep Atlas-owned memory tooling honest. That made future autonomous Atlas work depend on prose-only docs even though atlas.self already exposes source-file pressure.",
-      "guidance": [
-        "Use atlas-self-* live checks for Atlas-owned memory pressure; use source/file/auLink existence checks only when presence, not pressure, is the durable fact.",
-        "Presence live checks report `present` and should ground records without making pressure-frontiers active; pair them with product-large-class or atlas-self-* checks when they should keep work live.",
-        "When memory:next becomes flat or noisy, improve atlas-memory-next-actions, row filters, or routing continuations before adding another workbench note.",
-        "Keep record-backed `memory:next` rows self-contained: the answer payload should include the backing memory records, and detailed script output should print anchors before bounded guidance so a checkpoint can jump to source, docs, scripts, lenses, or auLink handles without opening raw JSON. Use `--guidanceRows`, `--liveCheckRows`, `--anchorRows`, or explicit `--all-*` switches when the human output needs full expansion.",
-        "Keep query semantics aligned across records, frontiers, untracked frontiers, and next actions: explicit consultable filters should join matching record-backed rows into `memory:next` even when computed next actions exist, exact all-token hits should rank first, query relevance should outrank broad base pressure, and significant adjacent partial hits should be available for broad checkpoint phrases.",
-        "Use separated CLI filters freely: memory scripts accept `--name value` as an exact record-id filter that defaults to `records`, `--limit` as a row-budget alias, and repeated `--domain` filters as all-of narrowing by default. Reach for `--domainMode=any` only when a deliberately broad OR-style sweep is more useful.",
-        "Memory read scripts should reject unsupported flags instead of silently widening a narrowed inquiry; if a commonly attempted flag is useful, add it as a typed filter or documented alias.",
-        "Keep the store, integrity policy, normalization, live-check evaluator, row filters/search, routing/evidence, lens projection answering, next-action ranking, read-script output, and write-script storage updates aligned; they are one substrate with separate responsibilities, not independent helpers.",
-        "When adding durable memory from workbenches or .temp notes, use memory:write or an equivalent structured path so duplicate ids and shard placement do not drift.",
-        "If these files shrink below pressure thresholds, review whether the record is resolved, should become intentional-shape, or needs a narrower live check."
-      ],
-      "anchors": [
-        {
-          "kind": "source",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-contracts.ts",
-          "symbolName": "AtlasMemoryRecord",
-          "summary": "Durable JSON schema, row contracts, live-check contracts, and analysis contracts."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-store.ts",
-          "symbolName": "readAtlasMemoryAnalysis",
-          "summary": "Filesystem store reading, live analysis joining, shard provenance, and rollups."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-integrity.ts",
-          "symbolName": "atlasMemoryIntegrityIssues",
-          "summary": "Durable record integrity checks for anchors, lens projections, package scripts, and live-check coverage."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-product-class-key.ts",
-          "symbolName": "atlasMemoryProductClassKey",
-          "summary": "Shared product-class identity helper for memory live checks and untracked frontier coverage."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-normalization.ts",
-          "symbolName": "normalizeAtlasMemoryManifest",
-          "summary": "Durable JSON manifest, shard, record, anchor, and live-check normalization."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-live-checks.ts",
-          "symbolName": "evaluateAtlasMemoryLiveCheck",
-          "summary": "Live check evaluation against product.architecture, atlas.self, and source existence."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-lenses.ts",
-          "symbolName": "answerAtlasMemory",
-          "summary": "Queryable Atlas memory lens projection dispatch and answer assembly."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-rows.ts",
-          "symbolName": "filterMemoryRows",
-          "summary": "Atlas memory row families, filters, search text, path matching, and live frontier row construction."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-routing.ts",
-          "symbolName": "memoryRowContinuations",
-          "summary": "Atlas memory evidence, source routing, projection continuations, and storage open seams."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-next-actions.ts",
-          "symbolName": "atlasMemoryNextActionRows",
-          "summary": "Computed checkpoint-friendly next-action ranking."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/atlas/src/scripts/atlas-memory.ts",
-          "summary": "Human-readable script output for the memory lens."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/atlas/src/scripts/atlas-memory-write.ts",
-          "symbolName": "upsertRecord",
-          "summary": "Structured memory record template, upsert, shard selection, and remove script."
-        },
-        {
-          "kind": "lens",
-          "lensId": "atlas.memory",
-          "projection": "next",
-          "filters": {
-            "domain": "atlas"
-          },
-          "summary": "Atlas-owned memory next actions."
-        },
-        {
-          "kind": "script",
-          "command": "pnpm --filter @aurelia-ls/atlas memory:next -- --domain atlas --detail",
-          "summary": "Checkpoint lane for Atlas-owned memory substrate work."
-        },
-        {
-          "kind": "script",
-          "command": "pnpm --filter @aurelia-ls/atlas memory:write",
-          "summary": "Structured storage update lane for durable memory records."
-        }
-      ],
-      "liveChecks": [
-        {
-          "kind": "atlas-self-source-file",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-contracts.ts",
-          "minLineCount": 180
-        },
-        {
-          "kind": "atlas-self-source-file",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-store.ts",
-          "minLineCount": 250
-        },
-        {
-          "kind": "atlas-self-source-file",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-integrity.ts",
-          "minLineCount": 180
-        },
-        {
-          "kind": "source-declaration-exists",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-product-class-key.ts",
-          "symbolName": "atlasMemoryProductClassKey"
-        },
-        {
-          "kind": "atlas-self-source-file",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-normalization.ts",
-          "minLineCount": 200
-        },
-        {
-          "kind": "atlas-self-source-file",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-live-checks.ts",
-          "minLineCount": 120
-        },
-        {
-          "kind": "atlas-self-source-file",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-lenses.ts",
-          "minLineCount": 250
-        },
-        {
-          "kind": "atlas-self-source-file",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-rows.ts",
-          "minLineCount": 200
-        },
-        {
-          "kind": "atlas-self-source-file",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-routing.ts",
-          "minLineCount": 160
-        },
-        {
-          "kind": "atlas-self-source-file",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-next-actions.ts",
-          "minLineCount": 120
-        },
-        {
-          "kind": "atlas-self-source-file",
-          "filePath": "packages/atlas/src/scripts/atlas-memory.ts",
-          "minLineCount": 150
-        },
-        {
-          "kind": "source-declaration-exists",
-          "filePath": "packages/atlas/src/scripts/atlas-memory-write.ts",
-          "symbolName": "upsertRecord"
-        }
-      ],
-      "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-23"
-    },
-    {
       "id": "reuse:product-architecture-field-provenance-pressure",
       "kind": "reuse-guide",
       "domains": [
@@ -527,11 +345,6 @@
         },
         {
           "kind": "doc",
-          "path": "packages/atlas/src/inquiry/runtime/README.md",
-          "summary": "product.architecture field-provenance lane guidance."
-        },
-        {
-          "kind": "doc",
           "path": "packages/semantic-runtime/src/observation/README.md",
           "summary": "Observation note explaining why generated value-channel fields use product-level provenance."
         },
@@ -554,7 +367,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-13"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "decision:atlas-pressure-is-navigation-not-lint",
@@ -629,16 +442,14 @@
       "rationale": "The May 2026 pass found zero gaps on its inputs. At Aurelia LS d5305caef with Aurelia 4ff609065, pressure:framework-errors reports two active mapped diagnostic gaps and thirteen raw Error authority gaps. The raw rows span route-recognizer and router. Review the exact throw, its reachability and the public contract before proposing a diagnostic.",
       "guidance": [
         "Rerun pressure:framework-errors for the current checkout when reviewing diagnostic coverage. An uncovered framework throw can describe a runtime-only state.",
-        "Run `pnpm --filter @aurelia-ls/atlas pressure:framework-errors` before introducing `framework-error-code` diagnostics or framework-shaped semantic-runtime errors; use the `framework.errors` `gap` filter to inspect source-row gaps such as code-without-message, unused-code, unresolved-usage-code, raw-new-error, raw-error-factory-call, raw-error-usage, raw-error-authority-gap, intentionally-unclaimed-raw-authority, and unresolved-semantic-runtime-reference, or diagnostic-row filters such as actionable-uncovered, future-substrate, runtime-product-boundary, and dormant-framework-authority.",
-        "Use `pnpm --filter @aurelia-ls/atlas framework:errors -- --projection=diagnostic-frontiers --packageId=template-compiler --codeNamePrefix=compiler --detail` for family-level substrate choice, `--projection=diagnostic-codes` for code-level modeled/unmodeled/dormant/raw/link-broken intake, or the sibling `codes`, `usages`, and `semantic-references` projections when a diagnostic family needs exact rows instead of the broad pressure summary.",
-        "Use the framework error-code corpus as a systematic diagnostic-completeness canary across all Aurelia packages, not as a mechanical coverage checklist; spend real source-reading time on high-pressure families and let unmapped or hard-to-place codes point at missing semantic-runtime substrates.",
+        "The framework.errors gap filter distinguishes code-without-message, unused-code, unresolved-usage-code, raw-error-authority-gap, intentionally-unclaimed-raw-authority and unresolved-semantic-runtime-reference.",
+        "The diagnostic-frontiers projection groups coverage by package and family. The diagnostic-codes, codes, usages and semantic-references projections expose the individual definitions and references.",
         "Treat codes without mapped messages, unresolved usage code definitions, unused codes, and raw Error authority gaps as framework-completeness pressure that may require a deeper framework/source pass; mapped error wrapper calls and raw Error factory calls are symbol-resolved, so indirect helpers such as dialog cancel errors and expression-parser utilities should remain visible.",
         "Use the `families` projection for an upfront code-family map by package, enum, and member prefix. Then narrow with `codeNamePrefix` to inspect families such as parse, ast, compiler, router, or lifecycle hook prefixes before deciding which semantic-runtime diagnostic substrate should own the corresponding static analysis.",
-        "Use the `diagnostic-frontiers` projection when selecting the next implementation target: it joins framework code families to exact semantic-runtime AUR-link coverage, reports dormant and actionable uncovered counts, uses `coverage=dormant-closed` for families whose remaining uncovered labels are unused framework definitions, and records recommended next steps without claiming that every framework code should become a static diagnostic.",
-        "Use the `diagnostic-codes` projection after a frontier is chosen or when external app pressure mentions a specific code: it reports the exact code disposition (`modeled-exact`, `unmodeled-used-framework-authority`, `dormant-framework-authority`, `declared-unspent`, `broken-exact-link`, or `raw-authority-gap`), usage effects, semantic-runtime exact-link counts, likely owner hints, and source continuations.",
-        "The `diagnostic-frontiers` recommendation text carries coarse likely-owner hints for common framework families. Use those hints to navigate toward controller/resource/observation/router/DI/i18n/validation/package-specific substrates, but always inspect the framework usage row and semantic-runtime owner before adding a `framework-code-link`.",
+        "The diagnostic-frontiers projection joins framework code families to exact semantic-runtime AUR links. A dormant-closed family has unused framework definitions among its remaining uncovered labels.",
+        "For a specific code, diagnostic-codes reports its disposition, usage effects, exact semantic-runtime links and likely owner. Inspect the framework usage and the semantic-runtime owner before adding a code link.",
         "Diagnostic-frontier coverage must use spent semantic-runtime references, not merely declared framework-code constants. `pressure:framework-errors` prints both `usedExact` and `declaredExact`; an unspent constant is bookkeeping, not modeled diagnostic authority.",
-        "Semantic-runtime references that carry an exact framework package, enum, and member target are not ambiguous even when the human AUR label is duplicated across framework packages; only bare label references with multiple framework definitions should contribute to ambiguous-label pressure or diagnostic-code scoring.",
+        "When an AUR label appears in multiple framework packages, a package, enum and member resolve the intended reference. A bare label can remain ambiguous.",
         "The `query` filter must search row families directly, not pre-filter packages first; `pressure:framework-errors` samples `query=binding` as a canary because package-level text can otherwise hide relevant code rows.",
         "`rawErrorKind=mapped-error-factory-implementation` is the implementation of normal ErrorNames/Events authority, not a bypass. Prioritize `gap=raw-error-authority-gap`, `rawErrorKind=inline-aur-code`, and `inlineCodeLabel` when looking for hard-coded or unmapped framework diagnostic authority.",
         "Use diagnostic-codes with disposition=unmodeled-used-framework-authority and gap=raw-error-authority-gap for the current inventory. The semantic-raw-references projection follows product-owned raw error links; intentionally-unclaimed-raw-authority records preserve decisions about runtime, platform, and other boundaries.",
@@ -668,7 +479,6 @@
         "Runtime-html `node*` failures are intentionally split by owner. As of 2026-05-13 `node_observer_mapping_existed` / `AUR0653` is claimed through configuration `ConfigurationIssue` products, and `node_observer_strategy_not_found` / `AUR0652` is claimed through observation target-access products and template diagnostics only for the exact dirty-check-disabled observer lookup path. Host-node controller errors remain unclaimed until controller topology semantics model those framework paths.",
         "New semantic-runtime diagnostics can still be valid, but record whether they are framework-runtime behavior, framework-error-code authority, or product authoring policy."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "lens",
@@ -723,11 +533,6 @@
           "summary": "Semantic-runtime diagnostic authority boundary."
         },
         {
-          "kind": "doc",
-          "path": "packages/semantic-runtime/src/WORKBENCH.md",
-          "summary": "Cursor/file diagnostic pressure notes and framework-grounding reminders."
-        },
-        {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/expression/framework-error-code.ts",
           "symbolName": "ExpressionFrameworkErrorCode",
@@ -751,145 +556,6 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-11-21"
-    },
-    {
-      "id": "frontier:atlas-work-router",
-      "kind": "pressure-frontier",
-      "domains": [
-        "atlas",
-        "work-router",
-        "memory",
-        "inquiry",
-        "authoring",
-        "fixtures"
-      ],
-      "summary": "Work Router joins a curated route to source, memory and fixture seeds. Its matches describe the declared routes and their evidence.",
-      "rationale": "The warm-diagnostic investigation reached its LSP guard and the changed input through the owner code and a stdio test despite a miss in the route catalogue. Use route maintenance for a recurring handoff with a known owner, cost and discriminator.",
-      "guidance": [
-        "For a focused maintenance question, start with the owning source and its consumer test. An exact curated route can supply a remembered decision or framework fixture.",
-        "A missing route, weak text match or absent source root leaves the question open. Check admission and follow the actual reader. Add coverage only when a repeated investigation would gain a specific answer.",
-        "Use exact route filters, domains, roles, lens ids, auLink ids, source paths, symbols, framework corpus concepts, expected effect kinds, recipe keys, and seed-use lanes before `query`.",
-        "Use Work Router for broad cross-subsystem questions such as `ProxyObservable ComputedObserver astEvaluate`; direct framework lens `query` filters are intentionally narrow/conjunctive unless a future projection explicitly exposes ranked partial coverage.",
-        "Domain filters join the declared route domains and the domains of memories anchored to that route.",
-        "Route scoring uses declared vocabulary, structural domains, roles and terms. A weak prose match has narrower evidentiary value.",
-        "Keep Atlas memory as the durable store for work state. The router should join memory and expose typed plans, not become a second task database.",
-        "Generic route lens anchors are navigation hints, not memory ownership evidence. Lens anchors only join memory structurally when they carry filters that match the memory lens anchor; otherwise use source, exact memory-domain, auLink, script, or doc anchors.",
-        "Use `--projection=memory-coverage --detail` to reverse the join from memory-next actions back to work routes. Without a route filter, unrouted high-rank rows are route ontology pressure; with `--routeId`, coverage is scoped to rows structurally matched to that route and sorted by route-match score before generic memory rank.",
-        "Use `--projection=coverage` when a semantic-runtime primitive appears asymmetric across route families. Coverage dimensions should turn cross-cutting incompleteness into route-local states such as missing, partial, covered, or not-applicable, so future sessions can discover the gap from adjacent loci instead of by grep. Current dimensions cover intent-aware continuations, query-claim lifetime, authored source-text boundaries, and checker value-access helper reuse.",
-        "When a new primitive is not threaded through all relevant query families, add a named coverage dimension only after identifying the substrate owner route and the route-local consumer obligations. Do not use coverage as a vague todo bucket.",
-        "Bare `--projection=route-plan --detail` is allowed as a fresh-checkpoint selector: with no filters it ranks route plans from live `memory:next` pressure and live product/source pressure using exact route memory/source/auLink/source-anchor overlap before catalog order. Product pressure is structural source ownership from product.architecture or atlas.self rows, not prose matching; symbol-qualified source anchors rank named declaration/class/function/variable rows instead of inheriting broad file/module pressure, and Atlas catalog/contract/barrel module shapes are damped so static catalog size stays visible without acting like implementation pressure. Source-anchor roles still weight live product/source pressure so supporting catalog/context anchors cannot dominate primary owners merely by being large. Shared generic lens anchors such as product.architecture are not enough to route memory pressure by themselves.",
-        "Route memory-domain anchors need either an exact domain-set match or at least two non-generic domain overlaps. Generic carriers such as `semantic-runtime`, `atlas`, `template`, `memory`, `inquiry`, and `analysis-substrate` are not enough by themselves; if a row only routes through those, add a sharper route/source/memory anchor instead of loosening scoring. Do not let memory-anchor domains double as query terms, because that makes joins look like fuzzy route vocabulary.",
-        "Use `--projection=workset` when a dirty worktree is the canary. It groups current changed files by route source/doc/path anchors, route-owned memory source/doc/fixture/live-check anchors, and memory shards so checkpoints can continue from route-shaped pressure instead of raw git status.",
-        "Workset detail is a dirty-file grouping view by default. Use `--fileRows=...` to widen per-route file samples and `--includePlans` only when route authority, memory, and corpus plans are worth the additional context.",
-        "In the workset projection, inspect matchedBy for a changed-file match and workset-structural strength before relying on a route.",
-        "The next and route-plan projections show authority lanes, memory summaries, cautions and suggested questions for a curated route.",
-        "Work Router projection ids are intentionally exact. If a human-oriented script receives an unsupported projection, it should print the reroute answer, supported projection ids from LensCatalog, and typed continuations instead of throwing a stack trace or adding a fuzzy alias.",
-        "Route-plan memory previews are query-aware after structural admission: route source, structurally filtered lens, doc, script, auLink, and memory-domain anchors decide which records/actions are eligible, then the active query reorders the admitted memory rows. Path anchors are for workset grouping, not durable memory ownership. If a pressure phrase routes correctly but previews the wrong frontier, first make the durable memory record carry exact source anchors or product vocabulary before changing route matching.",
-        "Route-owned framework-corpus anchors can carry exact classification and expected-effect filters. Use those for precise fixture pressure such as `surface:native-checked-binding` or `surface:option-model-binding`, and keep route-plan fixture seeds diversified by specific anchors so broad concept rows do not crowd out the concrete canaries.",
-        "Framework corpus fixture seeds deliberately exclude `describe(...)` suite wrappers; use `test-snippets` when a suite overview is useful, and use fixture seeds for concrete `it(...)`, `createFixture(...)`, object-test-case, or doc-fence pressure with tighter source spans.",
-        "Framework corpus classification matching is shared through `framework-corpus-classification.ts`; route anchors and corpus filters must spend that helper so exact `classificationKind` / `classificationKey` behavior cannot drift.",
-        "Framework corpus surface-reason generation is table-shaped in `framework-corpus-analysis.ts`; add new local surface rules to the named rule table rather than extending the fixture seed classifier with another long sequence of hand-coded predicate branches.",
-        "Use `--seedUse=authoring-taste` for docs/promoted-pattern fixture pressure and `--seedUse=behavior-grounding` for framework-test behavior pressure; keep both lanes visible instead of blending them into generic fixture examples."
-      ],
-      "nextActionPolicy": "when-touched",
-      "anchors": [
-        {
-          "kind": "source",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-work-router-route-catalog.ts",
-          "symbolName": "ATLAS_WORK_ROUTES",
-          "summary": "Typed static route catalog and route definitions."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-work-router-lenses.ts",
-          "symbolName": "answerAtlasWorkRouter",
-          "summary": "Lens implementation that joins routes to memory, product architecture, and framework corpus pressure."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/atlas/src/inquiry/runtime/framework-corpus-classification.ts",
-          "symbolName": "frameworkCorpusFixtureSeedMatchesClassification",
-          "summary": "Shared exact classification matching for corpus filters and work-router corpus anchors."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-work-router-matching.ts",
-          "symbolName": "scoredRoutesForFilters",
-          "summary": "Route query/filter scoring, exact anchor matching, weak-text suppression, and path matching policy."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-work-router-rows.ts",
-          "summary": "Public Work Router row/value contracts used by the lens and printable CLI surface."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-work-router-next-questions.ts",
-          "symbolName": "routeNextQuestions",
-          "summary": "Route-owned follow-up-question policy that turns matched pressure into sharper next inquiries."
-        },
-        {
-          "kind": "lens",
-          "lensId": "atlas.work-router",
-          "projection": "route-plan",
-          "summary": "Live route plan projection for selected structural routes."
-        },
-        {
-          "kind": "lens",
-          "lensId": "atlas.work-router",
-          "projection": "coverage",
-          "summary": "Cross-cutting coverage projection for primitives that need route-local completeness states."
-        },
-        {
-          "kind": "lens",
-          "lensId": "atlas.work-router",
-          "projection": "workset",
-          "summary": "Current worktree projection grouped by route anchors, memory anchors, and memory shards."
-        },
-        {
-          "kind": "script",
-          "command": "pnpm --filter @aurelia-ls/atlas work:router",
-          "summary": "Human-oriented route query script."
-        }
-      ],
-      "liveChecks": [
-        {
-          "kind": "atlas-self-variable",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-work-router-route-catalog.ts",
-          "variableName": "ATLAS_WORK_ROUTES",
-          "initializerKind": "array-literal"
-        },
-        {
-          "kind": "source-declaration-exists",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-work-router-lenses.ts",
-          "symbolName": "answerAtlasWorkRouter"
-        },
-        {
-          "kind": "source-declaration-exists",
-          "filePath": "packages/atlas/src/inquiry/runtime/framework-corpus-classification.ts",
-          "symbolName": "frameworkCorpusFixtureSeedMatchesClassification"
-        },
-        {
-          "kind": "source-declaration-exists",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-work-router-matching.ts",
-          "symbolName": "scoredRoutesForFilters"
-        },
-        {
-          "kind": "source-file-exists",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-work-router-rows.ts"
-        },
-        {
-          "kind": "source-declaration-exists",
-          "filePath": "packages/atlas/src/inquiry/runtime/atlas-work-router-next-questions.ts",
-          "symbolName": "routeNextQuestions"
-        },
-        {
-          "kind": "source-file-exists",
-          "filePath": "packages/atlas/src/scripts/atlas-work-router.ts"
-        }
-      ],
-      "createdAt": "2026-05-14",
       "updatedAt": "2026-11-21"
     }
   ]

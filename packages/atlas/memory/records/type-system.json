@@ -300,8 +300,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-11-21",
-      "nextActionPolicy": "when-touched"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "reuse:checker-expression-type-world",
@@ -486,8 +485,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-11-21",
-      "nextActionPolicy": "when-touched"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "reuse:checker-backed-union-projection",
@@ -582,8 +580,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-11-21",
-      "nextActionPolicy": "when-touched"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:checker-expression-scope-narrower",
@@ -636,8 +633,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-11-21",
-      "nextActionPolicy": "when-touched"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:checker-binding-pattern-local-type-projector",
@@ -686,8 +682,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-11-21",
-      "nextActionPolicy": "when-touched"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:checker-expression-branch-scope-projector",
@@ -907,7 +902,6 @@
         "Do not substitute TypeChecker.getFullyQualifiedName as universal identity. Local declarations can share bare names and anonymous symbols commonly collapse to __object.",
         "A future lexical/export-path identity is admissible only for provably module-addressable named declarations and must feed both declaration-source identity and type-shape identity. Keep positional fallback for local, anonymous, computed, and ambiguous declarations."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -973,7 +967,6 @@
         "When TypeScript's related-symbol engine is unavailable, references remain explicitly open and rename refuses. Unavailability must not masquerade as a complete declaration-only family.",
         "Bracket/string-literal template member selection is an upstream expression cursor-surface concern. Do not compensate for missing template dispatch inside related-member closure."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",

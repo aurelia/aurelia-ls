@@ -1,7 +1,6 @@
 import { BasisKind } from "../basis.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import {
@@ -25,7 +24,6 @@ import {
 } from "./lens-continuation-utils.js";
 import {
   maintenanceDiagnosticEvidence,
-  maintenanceDiagnosticEvidenceForOneBasedSource,
 } from "./evidence-helpers.js";
 import type {
   AtlasMemoryAnchor,
@@ -33,11 +31,8 @@ import type {
   AtlasMemoryComputedStatus,
   AtlasMemoryRecordRow,
   AtlasMemoryStorageIssue,
-  AtlasMemoryUntrackedProductClassFrontier,
 } from "./atlas-memory-contracts.js";
-import type { AtlasMemoryNextActionRow } from "./atlas-memory-next-actions.js";
 import type {
-  AtlasMemoryFrontierRow,
   AtlasMemoryProjection,
 } from "./atlas-memory-rows.js";
 import type { ProductArchitectureSourceReference } from "./product-architecture-source.js";
@@ -55,38 +50,6 @@ export function memoryRowEvidence(row: AtlasMemoryRecordRow): Evidence {
     source: storageSourceForMemoryRow(row) ?? sourceForMemoryRow(row),
     data: row,
   };
-}
-
-export function frontierEvidence(row: AtlasMemoryFrontierRow): Evidence {
-  return row.kind === "memory-record"
-    ? memoryRowEvidence(row.record)
-    : untrackedProductClassFrontierEvidence(row.frontier);
-}
-
-export function untrackedProductClassFrontierEvidence(
-  row: AtlasMemoryUntrackedProductClassFrontier,
-): Evidence {
-  return maintenanceDiagnosticEvidenceForOneBasedSource(row);
-}
-
-export function nextActionEvidence(row: AtlasMemoryNextActionRow): Evidence {
-  if (row.record !== undefined) {
-    return memoryRowEvidence(row.record);
-  }
-  if (row.frontier !== undefined) {
-    return untrackedProductClassFrontierEvidence(row.frontier);
-  }
-  if (row.sampleFrontier !== undefined) {
-    return untrackedProductClassFrontierEvidence(row.sampleFrontier);
-  }
-  if (row.issue !== undefined) {
-    return storageIssueEvidence(row.issue);
-  }
-  return maintenanceDiagnosticEvidence({
-    id: row.id,
-    summary: row.summary,
-    data: row,
-  });
 }
 
 export function storageIssueEvidence(issue: AtlasMemoryStorageIssue): Evidence {
@@ -130,57 +93,13 @@ export function memoryRowContinuations(row: AtlasMemoryRecordRow): readonly Cont
   ];
 }
 
-export function frontierContinuations(row: AtlasMemoryFrontierRow): readonly Continuation[] {
-  if (row.kind === "memory-record") {
-    return memoryRowContinuations(row.record);
-  }
-  return sourceInspectionContinuations(
-    sourceRangeFromOneBasedReference(row.frontier.source),
-    {
-      id: `${row.id}:source`,
-      rationale: `Inspect untracked frontier ${row.frontier.className}.`,
-      routeSummary: "Untracked product class frontier source.",
-      basis: [BasisKind.SourceText, BasisKind.TypeScriptProgram],
-    },
-  );
-}
-
-export function nextActionContinuations(row: AtlasMemoryNextActionRow): readonly Continuation[] {
-  if (row.record !== undefined) {
-    return memoryRowContinuations(row.record);
-  }
-  const frontier = row.frontier ?? row.sampleFrontier;
-  if (frontier === undefined) {
-    return [];
-  }
-  return sourceInspectionContinuations(
-    sourceRangeFromOneBasedReference(frontier.source),
-    {
-      id: `${row.id}:source`,
-      rationale: `Inspect source behind ${row.id}.`,
-      routeSummary: "Atlas memory next-action source.",
-      basis: [BasisKind.SourceText, BasisKind.TypeScriptProgram],
-    },
-  );
-}
-
 export function atlasMemorySummaryContinuations(
   inquiry: Inquiry,
   summaryRecords: readonly AtlasMemoryRecordRow[],
-  nextActions: readonly AtlasMemoryNextActionRow[],
-  untracked: readonly { readonly source: ProductArchitectureSourceReference; readonly id: string; readonly className: string }[],
 ): readonly Continuation[] {
   return [
     ...atlasMemoryProjectionContinuations(inquiry),
     ...summaryRecords.flatMap(memoryRowContinuations).slice(0, 8),
-    ...nextActions.flatMap(nextActionContinuations).slice(0, 8),
-    ...untracked.flatMap((row) =>
-      sourceInspectionContinuations(sourceRangeFromOneBasedReference(row.source), {
-        id: `${row.id}:source`,
-        rationale: `Inspect untracked product class frontier ${row.className}.`,
-        routeSummary: "Untracked product class source.",
-      }),
-    ).slice(0, 4),
   ];
 }
 
@@ -193,18 +112,6 @@ export function atlasMemoryProjectionContinuations(
       "atlas.memory:records",
       "records",
       "Inspect all durable memory records joined to live status.",
-    ),
-    atlasMemoryProjectionContinuation(
-      inquiry,
-      "atlas.memory:frontiers",
-      "frontiers",
-      "Inspect live active, intentional, stale, and untracked frontiers.",
-    ),
-    atlasMemoryProjectionContinuation(
-      inquiry,
-      "atlas.memory:next",
-      "next",
-      "Rank the next source-backed maintenance moves from live memory and pressure.",
     ),
     atlasMemoryProjectionContinuation(
       inquiry,
@@ -290,7 +197,6 @@ function continuationForAnchor(
         {
           id: `atlas.memory:${recordId}:anchor:${index}`,
           kind: ContinuationKind.InspectEvidence,
-          priority: ContinuationPriority.Secondary,
           rationale: anchor.summary ?? `Inspect ${anchor.filePath}.`,
           inquiry: {
             lens: LensId.TsSource,
@@ -312,7 +218,6 @@ function continuationForAnchor(
         {
           id: `atlas.memory:${recordId}:anchor:${index}`,
           kind: ContinuationKind.SwitchLens,
-          priority: ContinuationPriority.Secondary,
           rationale: anchor.summary ?? `Ask ${anchor.lensId}.`,
           inquiry: {
             lens: anchor.lensId as LensId,
@@ -338,7 +243,6 @@ function continuationForAnchor(
         {
           id: `atlas.memory:${recordId}:anchor:${index}`,
           kind: ContinuationKind.SwitchLens,
-          priority: ContinuationPriority.Secondary,
           rationale: anchor.summary ?? `Inspect auLink ${anchor.linkId}.`,
           inquiry: {
             lens: LensId.BridgeAuLink,
@@ -366,7 +270,6 @@ function atlasMemoryProjectionContinuation(
   return {
     id,
     kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Primary,
     rationale,
     inquiry: {
       ...inquiry,

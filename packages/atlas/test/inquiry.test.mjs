@@ -95,7 +95,8 @@ test('self-analysis counts the declared methods and functions used across a barr
       ...narrow, lenses: narrow.lenses.filter(spec => spec.id === 'repo.map'),
     } });
     assert.deepEqual(mapOnly.implementedLensIds, ['repo.map']);
-    assert.deepEqual((await mapOnly.map()).continuations, []);
+    const map = await mapOnly.map();
+    assert.deepEqual(map.value.lenses.map(lens => lens.id), ['repo.map']);
   } finally {
     project.dispose();
   }

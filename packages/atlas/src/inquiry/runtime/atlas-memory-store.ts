@@ -7,14 +7,12 @@ import { errorMessage } from "../../errors.js";
 import {
   readProductArchitectureAnalysis,
   type ProductArchitectureAnalysis,
-  type ProductArchitectureClassSurfaceRow,
 } from "./product-architecture-analysis.js";
 import { sourceRangeForSourceFileNode, type SourceProject } from "../../source/index.js";
 import type { AtlasSelfAnalysis } from "./self-analysis.js";
 import {
   ATLAS_MEMORY_REPO_PATH,
   ATLAS_MEMORY_SCHEMA_VERSION,
-  atlasMemoryEffectiveNextActionPolicy,
   type AtlasMemoryAnalysis,
   type AtlasMemoryComputedStatus,
   type AtlasMemoryDatabase,
@@ -26,15 +24,12 @@ import {
   type AtlasMemoryStorageIssue,
   type AtlasMemoryStoredRecord,
   type AtlasMemoryStoreRead,
-  type AtlasMemoryUntrackedProductClassFrontier,
 } from "./atlas-memory-contracts.js";
 import {
-  ATLAS_MEMORY_PRODUCT_LARGE_CLASS_LINE_THRESHOLD,
   evaluateAtlasMemoryLiveCheck,
   readAtlasMemorySelfAnalysisIfNeeded,
 } from "./atlas-memory-live-checks.js";
 import { atlasMemoryIntegrityIssues } from "./atlas-memory-integrity.js";
-import { atlasMemoryProductClassKey, trackedAtlasMemoryProductClassKeys } from "./atlas-memory-product-class-key.js";
 import { readAtlasMemorySources, type AtlasMemorySources } from "./atlas-memory-source-helpers.js";
 import {
   normalizeAtlasMemoryManifest,
@@ -68,7 +63,8 @@ export function readAtlasMemoryAnalysis(
     sourceProject,
     records,
   );
-  const productArchitecture = readProductArchitectureAnalysis(sourceProject, {
+  let product: ProductArchitectureAnalysis | undefined;
+  const readProduct = () => product ??= readProductArchitectureAnalysis(sourceProject, {
     includeCallSites: false,
     includeSymbols: false,
     includeKernelRecords: false,
@@ -76,14 +72,12 @@ export function readAtlasMemoryAnalysis(
   const rows = store.database.records.map((stored) =>
     memoryRecordRow(
       sources,
-      productArchitecture,
+      readProduct,
       atlasSelfAnalysis,
       stored,
     ),
   );
-  const tracked = trackedAtlasMemoryProductClassKeys(rows);
-  const untrackedProductClassFrontiers = untrackedProductLargeClassFrontiers(productArchitecture.classSurfaces, tracked);
-  const integrity = atlasMemoryIntegrityIssues(sources, productArchitecture, records, tracked);
+  const integrity = atlasMemoryIntegrityIssues(sources, readProduct, records);
   const issues = [...store.issues, ...integrity.issues];
   return {
     version: ATLAS_MEMORY_SCHEMA_VERSION,
@@ -91,8 +85,7 @@ export function readAtlasMemoryAnalysis(
     storageExists: store.storageExists,
     records: rows,
     scopeGaps: integrity.scopeGaps,
-    untrackedProductClassFrontiers,
-    rollup: memoryRollup(rows, untrackedProductClassFrontiers, issues),
+    rollup: memoryRollup(rows, issues),
     issues,
   };
 }
@@ -219,7 +212,7 @@ function jsonProperty(node: ts.Node | undefined, name: string): ts.PropertyAssig
 
 function memoryRecordRow(
   sources: AtlasMemorySources,
-  product: ProductArchitectureAnalysis,
+  readProduct: () => ProductArchitectureAnalysis,
   atlasSelfAnalysis: AtlasSelfAnalysis | undefined,
   stored: AtlasMemoryStoredRecord,
 ): AtlasMemoryRecordRow {
@@ -227,7 +220,7 @@ function memoryRecordRow(
   const liveChecks = (record.liveChecks ?? []).map((check) =>
     evaluateAtlasMemoryLiveCheck(
       sources,
-      product,
+      readProduct,
       atlasSelfAnalysis,
       check,
     ),
@@ -243,7 +236,6 @@ function memoryRecordRow(
     kind: record.kind,
     domains: record.domains,
     status,
-    nextActionPolicy: atlasMemoryEffectiveNextActionPolicy(record),
     liveChecks,
     summary: record.summary,
   };
@@ -295,55 +287,14 @@ function computedRecordStatus(
   return "resolved";
 }
 
-function untrackedProductLargeClassFrontiers(
-  productClasses: readonly ProductArchitectureClassSurfaceRow[],
-  tracked: ReadonlySet<string>,
-): readonly AtlasMemoryUntrackedProductClassFrontier[] {
-  return productClasses
-    .filter((row) =>
-      row.lineCount >= ATLAS_MEMORY_PRODUCT_LARGE_CLASS_LINE_THRESHOLD
-    )
-    .filter((row) => !tracked.has(atlasMemoryProductClassKey(row)))
-    .sort((left, right) =>
-      right.methodCount - left.methodCount ||
-      right.lineCount - left.lineCount ||
-      left.filePath.localeCompare(right.filePath) ||
-      left.name.localeCompare(right.name),
-    )
-    .map((row) => ({
-      id: `atlas.memory:untracked-product-class:${row.filePath}:${row.name}`,
-      className: row.name,
-      filePath: row.filePath,
-      area: row.area,
-      domains: ["semantic-runtime", "product-architecture", row.area],
-      methodCount: row.methodCount,
-      propertyCount: row.propertyCount,
-      lineCount: row.lineCount,
-      surfaceRole: row.surfaceRole,
-      surfaceRoleReason: row.surfaceRoleReason,
-      source: row.source,
-      summary: `${row.name} is an untracked ${row.surfaceRole} with ${row.methodCount} method(s), ${row.propertyCount} property/accessor(s), and ${row.lineCount} line(s).`,
-    }));
-}
-
 export function memoryRollup(
   records: readonly AtlasMemoryRecordRow[],
-  untrackedProductClassFrontiers: readonly AtlasMemoryUntrackedProductClassFrontier[],
   issues: readonly AtlasMemoryStorageIssue[],
 ): AtlasMemoryRollup {
   return {
     recordCount: records.length,
     byKind: countBy(records, (row) => row.kind),
     byStatus: countBy(records, (row) => row.status),
-    untrackedProductClassFrontierCount: untrackedProductClassFrontiers.length,
-    untrackedProductClassFrontiersByArea: countBy(
-      untrackedProductClassFrontiers,
-      (row) => row.area,
-    ),
-    untrackedProductClassFrontiersBySurfaceRole: countBy(
-      untrackedProductClassFrontiers,
-      (row) => row.surfaceRole,
-    ),
     storageIssueCount: issues.length,
   };
 }

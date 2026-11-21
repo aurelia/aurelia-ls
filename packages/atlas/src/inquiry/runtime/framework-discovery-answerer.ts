@@ -1,5 +1,4 @@
 import {
-  FRAMEWORK_DISCOVERY_SEEDS,
   groupFrameworkFlowCallTargets,
   readFrameworkDiscoveryIndex,
   readFrameworkDiscoverySeedIndex,
@@ -12,11 +11,6 @@ import {
 } from "../../framework/index.js";
 import type { SourceProject } from "../../source/index.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
-import {
-  ContinuationKind,
-  ContinuationPriority,
-  type Continuation,
-} from "../continuation.js";
 import type { Inquiry } from "../inquiry.js";
 import {
   evidenceLimit,
@@ -24,7 +18,6 @@ import {
   rowLimit,
 } from "../paging.js";
 import { readFrameworkBundles } from "./framework-bundles.js";
-import { nextPageContinuation } from "./framework-continuation-core.js";
 import {
   appTaskEntityContinuations,
   frameworkCatalogBundleContinuations,
@@ -47,7 +40,6 @@ import {
 } from "./framework-flow-continuations.js";
 import {
   frameworkSummaryContinuations,
-  openQuestionContinuations,
 } from "./framework-summary-continuations.js";
 import type {
   FrameworkAppTaskEntityRow,
@@ -81,10 +73,8 @@ import {
   evidenceForExpressionEntity,
   evidenceForFlow,
   evidenceForFlowSeed,
-  evidenceForFrameworkDiscoveryRecipe,
   evidenceForObserverEntity,
   evidenceForPackageExport,
-  evidenceForQuestion,
   evidenceForRenderingStructure,
   evidenceForResourceCarrier,
   evidenceForResourceExport,
@@ -109,10 +99,6 @@ import {
   readFrameworkResourceCarriers,
   readFrameworkResourceExports,
 } from "./framework-resources.js";
-import {
-  filterFrameworkDiscoveryRecipes,
-  type FrameworkDiscoveryRecipeRow,
-} from "./framework-recipes.js";
 import { PagedRowFamily } from "../paged-row-family.js";
 import {
   checkerBasis,
@@ -161,14 +147,6 @@ const FLOW_DEFINITION_ROW_FAMILY =
     evidenceForRow: evidenceForFlow,
     continuationsForPage: (inquiry, _rows, nextOffset, limit) =>
       flowContinuations(inquiry, nextOffset, limit),
-  });
-
-const DISCOVERY_RECIPE_ROW_FAMILY =
-  new PagedRowFamily<FrameworkDiscoveryRecipeRow>({
-    id: "framework.discovery:recipes",
-    rowLabel: "framework discovery recipe row(s)",
-    evidenceForRow: evidenceForFrameworkDiscoveryRecipe,
-    continuationsForPage: recipeContinuations,
   });
 
 const ANCHOR_ROW_FAMILY =
@@ -299,14 +277,6 @@ const RENDERING_STRUCTURE_ROW_FAMILY =
     continuationsForPage: renderingStructureContinuations,
   });
 
-const OPEN_QUESTION_ROW_FAMILY = new PagedRowFamily<string>({
-  id: "framework.discovery:open-questions",
-  rowLabel: "framework discovery question(s)",
-  evidenceForRow: evidenceForQuestion,
-  continuationsForPage: (inquiry, _rows, nextOffset, limit) =>
-    openQuestionContinuations(inquiry, nextOffset, limit),
-});
-
 /** Answer framework discovery-seed inquiries from package-local Atlas contracts and the hot source index. */
 export function answerFrameworkDiscovery(
   /** Inquiry being answered. */
@@ -378,18 +348,6 @@ class FrameworkDiscoveryAnswerer {
         offset,
         basis: seedBasis,
         value: (page) => ({ ...baseValue, flows: page.rows }),
-      });
-    }
-
-    if (projection === "recipes") {
-      const recipes = filterFrameworkDiscoveryRecipes(filters);
-      return DISCOVERY_RECIPE_ROW_FAMILY.answer({
-        inquiry,
-        rows: recipes,
-        limit,
-        offset,
-        basis: seedBasis,
-        value: (page) => ({ ...baseValue, recipes: page.rows }),
       });
     }
 
@@ -629,21 +587,10 @@ class FrameworkDiscoveryAnswerer {
       });
     }
 
-    if (projection === "open-questions") {
-      return OPEN_QUESTION_ROW_FAMILY.answer({
-        inquiry,
-        rows: FRAMEWORK_DISCOVERY_SEEDS.openQuestions,
-        limit,
-        offset,
-        basis: seedBasis,
-        value: (page) => ({ ...baseValue, openQuestions: page.rows }),
-      });
-    }
-
     return createAnswer(
       inquiry,
       OutcomeKind.Hit,
-      `Framework discovery seeds has ${seedIndex.rollup.flows} flow definition(s), ${seedIndex.rollup.anchors} seed anchor(s), ${seedIndex.rollup.resolvedAnchors} resolved anchor(s), and ${FRAMEWORK_DISCOVERY_SEEDS.openQuestions.length} open question(s).`,
+      `Framework discovery has ${seedIndex.rollup.flows} flow definition(s), ${seedIndex.rollup.anchors} seed anchor(s), and ${seedIndex.rollup.resolvedAnchors} resolved anchor(s).`,
       {
         value: {
           seedVersion: seedIndex.seedVersion,
@@ -664,42 +611,4 @@ class FrameworkDiscoveryAnswerer {
       },
     );
   }
-}
-
-function recipeContinuations(
-  inquiry: Inquiry,
-  rows: readonly FrameworkDiscoveryRecipeRow[],
-  nextOffset: number | undefined,
-  limit: number,
-): readonly Continuation[] {
-  const continuations: Continuation[] = [];
-  if (nextOffset !== undefined) {
-    continuations.push(
-      nextPageContinuation(
-        inquiry,
-        "framework.discovery:recipes:next-page",
-        "Continue framework discovery recipe rows.",
-        nextOffset,
-        limit,
-      ),
-    );
-  }
-  for (const [index, recipe] of rows.slice(0, 3).entries()) {
-    const firstHop = recipe.hops[0];
-    if (firstHop === undefined) {
-      continue;
-    }
-    continuations.push({
-      id: `framework.discovery:recipes:first-hop:${index}`,
-      kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Primary,
-      rationale: `Start recipe ${recipe.id}: ${firstHop.purpose}`,
-      inquiry: {
-        ...firstHop.ask,
-        locus: firstHop.ask.locus ?? inquiry.locus,
-      },
-      evidence: [evidenceForFrameworkDiscoveryRecipe(recipe)],
-    });
-  }
-  return continuations;
 }

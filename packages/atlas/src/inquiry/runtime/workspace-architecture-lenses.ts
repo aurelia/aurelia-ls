@@ -8,7 +8,6 @@ import {
 } from "../basis.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import {
@@ -172,7 +171,6 @@ function answerWorkspaceRows<TRow>(
     evidenceForRow,
     continuationsForPage: (inquiry, rows, nextOffset, limit) => [
       ...optionalNextPageContinuation(inquiry, nextOffset, limit, {
-        priority: ContinuationPriority.Secondary,
         rationale: "Continue the paged workspace architecture row family.",
         routeSummary: "Next workspace architecture row page.",
       }),
@@ -409,7 +407,6 @@ function workspaceArchitectureContinuations(inquiry: Inquiry): readonly Continua
     {
       id: "workspace.architecture:packages",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
       rationale: "Inspect admitted package topology rows.",
       inquiry: {
         ...inquiry,
@@ -419,7 +416,6 @@ function workspaceArchitectureContinuations(inquiry: Inquiry): readonly Continua
     {
       id: "workspace.architecture:surfaces",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
       rationale:
         "Inspect exact source and manifest surfaces that expose app/workspace integration pressure.",
       inquiry: {
@@ -430,7 +426,6 @@ function workspaceArchitectureContinuations(inquiry: Inquiry): readonly Continua
     {
       id: "workspace.architecture:plugin-architecture",
       kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
       rationale:
         "Move from broad workspace topology into the public Aurelia plugin pressure lane.",
       inquiry: {
@@ -442,7 +437,6 @@ function workspaceArchitectureContinuations(inquiry: Inquiry): readonly Continua
     {
       id: "workspace.architecture:map",
       kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
       rationale: "Return to the Atlas surface map.",
       inquiry: {
         lens: LensId.RepoMap,

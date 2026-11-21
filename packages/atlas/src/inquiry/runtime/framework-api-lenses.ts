@@ -28,7 +28,6 @@ import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
 import { BasisKind, type Basis } from "../basis.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import {
@@ -1232,7 +1231,6 @@ function apiSourceContinuation(
     source,
     rationale,
     "Source range behind an Aurelia API row.",
-    { priority: ContinuationPriority.Secondary },
   );
 }
 
@@ -1257,7 +1255,7 @@ function callSitesContinuation(
     source,
     rationale,
     "Call sites inside an Aurelia API usage owner.",
-    { priority: ContinuationPriority.Secondary, filters },
+    { filters },
   );
 }
 
@@ -1272,7 +1270,6 @@ function projectionForSubject(
   return {
     id: `framework.api:${projection}:subject:${index}`,
     kind: ContinuationKind.SwitchLens,
-    priority: ContinuationPriority.Secondary,
     rationale: `Inspect ${projection} for ${subjectName}.`,
     inquiry: {
       lens: LensId.FrameworkApi,
@@ -1299,7 +1296,6 @@ function projectionForImplementation(
   return {
     id: `framework.api:${projection}:implementation:${index}`,
     kind: ContinuationKind.SwitchLens,
-    priority: ContinuationPriority.Secondary,
     rationale: `Inspect ${projection} for the ${implementationName} implementation shape.`,
     inquiry: {
       lens: LensId.FrameworkApi,

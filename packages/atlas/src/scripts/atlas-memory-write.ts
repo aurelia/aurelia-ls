@@ -147,7 +147,6 @@ function printTemplate(): void {
     guidance: [
       "Replace with one concrete inspection or reuse move.",
     ],
-    nextActionPolicy: kind === "pressure-frontier" ? "proactive" : undefined,
     anchors,
     liveChecks: [],
     createdAt: today,
@@ -373,15 +372,7 @@ function recordWithDates(
   today: string,
 ): AtlasMemoryRecord {
   return {
-    id: record.id,
-    kind: record.kind,
-    domains: record.domains,
-    summary: record.summary,
-    rationale: record.rationale,
-    guidance: record.guidance,
-    nextActionPolicy: record.nextActionPolicy,
-    anchors: record.anchors,
-    liveChecks: record.liveChecks,
+    ...record,
     createdAt: previousCreatedAt ?? record.createdAt ?? today,
     updatedAt: today,
   };

@@ -29,7 +29,6 @@ import {
 } from "../basis.js";
 import { clampBudget } from "../budget.js";
 import {
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import {
@@ -334,7 +333,6 @@ function effectContinuations(
         "Inspect evaluator seams observed while tracing these effects.",
         {
           basis: [BasisKind.StaticEvaluator],
-          priority: ContinuationPriority.Secondary,
         },
       ),
     );

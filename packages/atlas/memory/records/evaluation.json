@@ -929,7 +929,6 @@
         "Use StaticEvaluationValueGraph.retainProduced for evaluator-created mutable values and reconcileEnvironmentAfterExternal after a runtime host may insert foreign values into an owned environment. These are opposite lifecycle crossings and must not collapse into environment-owner inference.",
         "Configuration method ownership joins on the evaluated receiver. A fluent result is downstream of invocation and therefore cannot identify a register/app operation whose argument preparation remained open."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -1019,7 +1018,6 @@
         "At kernel publication, preserve authored source/evidence and OpenSeamReasonKind.StaticEvaluationAbruptCompletion. Do not retain the evaluator-local thrown value graph in hot kernel records.",
         "A thrown configuration operation is a reached failure, not generic runtime openness. Ordered configuration execution must suppress impossible outputs and dependent fluent operations rather than minting a failed-facade sentinel."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",

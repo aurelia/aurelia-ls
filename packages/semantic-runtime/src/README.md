@@ -65,7 +65,7 @@ Template parser and compiler materializers should build on these layers.
 
 ## Atlas And auLink
 
-Atlas is the live orientation and inspection layer over this package. `auLink` is deliberately narrower: it is only the framework-symbol bridge between local model classes and Aurelia runtime/compiler concepts. A facetless link records unqualified correspondence without promising whole-target parity; a link with a named facet claims only that the product declaration models that semantic decision. Atlas must preserve authored facet text losslessly, exclude faceted links from whole-member comparison, and treat unqualified-link comparisons as review pressure rather than proof of parity.
+Atlas uses `auLink` to inspect correspondence between local model classes and Aurelia runtime/compiler symbols. A facetless link records unqualified correspondence. A named facet identifies the particular semantic decision modeled by the product declaration. Atlas must preserve authored facet text and exclude faceted links from whole-member comparison. Establishing behavioral parity requires evidence from the framework and the consumer.
 
 Do not put product taxonomy, pass roles, or model-surface classification into `auLink`; those belong in product models, vocabulary, claims, or Atlas source lenses when they are real obligations rather than bridge metadata.
 
@@ -110,15 +110,8 @@ watchpoints, and current shape:
 - [fetch-client/README.md](./fetch-client/README.md) owns fetch-client configuration diagnostics.
 - [dialog/README.md](./dialog/README.md) owns dialog configuration/service diagnostics.
 - [inquiry/README.md](./inquiry/README.md) owns semantic-runtime-local query helper boundaries.
-- [WORKBENCH.md](./WORKBENCH.md) owns recent context that is useful while this substrate is still settling, and
-  [WORKBENCH-controller-binding-lifecycle.md](./WORKBENCH-controller-binding-lifecycle.md) owns the current controller,
-  binding, target-operation, and recursive hydration pressure note.
 
-Queryable cross-package intent lives in [../../atlas/memory](../../atlas/memory/README.md). When a workbench note becomes durable enough that future Codex should find it by domain, path, symbol, or lens, add an Atlas memory record and keep the README/workbench as the explanatory backing.
-
-When text starts repeating across files, prefer linking to the owner and keeping only the local consequence.
-
-Inline comments own local invariants that would otherwise be lost beside the implementation. Git history is archaeological evidence rather than a current contract: when history recovers an intention that still survives scrutiny, promote it into the owning code, README, or queryable Atlas decision record.
+[Atlas memory](../../atlas/memory/README.md) preserves decisions that cross package boundaries and links them to the owning sources.
 
 ## Rebuild Discipline
 

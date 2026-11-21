@@ -26,7 +26,6 @@ import {
 } from "../basis.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import {
@@ -965,7 +964,6 @@ function diRelationshipContinuations(
       continuations.push({
         id: `framework.di:relationships:key:${index}`,
         kind: ContinuationKind.Narrow,
-        priority: ContinuationPriority.Secondary,
         rationale: "Stay in the DI lens and narrow to the same key expression.",
         inquiry: {
           ...inquiry,

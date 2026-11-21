@@ -1,7 +1,6 @@
 import { BasisKind } from "../basis.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import type { Inquiry } from "../inquiry.js";
@@ -14,7 +13,6 @@ import {
 
 export interface SourceInspectionContinuationOptions {
   readonly id?: string;
-  readonly priority?: ContinuationPriority;
   readonly rationale: string;
   readonly routeSummary: string;
   readonly basis?: readonly BasisKind[];
@@ -22,7 +20,6 @@ export interface SourceInspectionContinuationOptions {
 
 export interface NextPageContinuationOptions {
   readonly id?: string;
-  readonly priority?: ContinuationPriority;
   readonly rationale: string;
   readonly routeSummary: string;
   readonly basis?: readonly BasisKind[];
@@ -44,7 +41,6 @@ export function sourceInspectionContinuation(
   return {
     id: options.id,
     kind: ContinuationKind.InspectEvidence,
-    priority: options.priority ?? ContinuationPriority.Secondary,
     rationale: options.rationale,
     inquiry: {
       lens: LensId.TsSource,
@@ -82,7 +78,6 @@ export function optionalNextPageContinuation(
     {
       id: options.id,
       kind: ContinuationKind.NextPage,
-      priority: options.priority ?? ContinuationPriority.Primary,
       rationale: options.rationale,
       inquiry: {
         ...inquiry,

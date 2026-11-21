@@ -85,9 +85,12 @@ The harness spends the app-query catalog's `pagingKind` instead of blindly attac
 `SEMANTIC_RUNTIME_TELEMETRY_QUERY_PAGE_SIZE` applies to cursor/offset-paged row tables, while
 `SEMANTIC_RUNTIME_TELEMETRY_ROW_SAMPLE_SIZE` opts router-overview-style row samples into the profile. Keep row samples
 at 0 for MCP-orientation payload checks unless the run is specifically testing router-family row samples.
-The default output is aggregate-only so autonomous checkpoints can read the pressure without a per-run wall of text.
+The default output contains aggregate measurements.
 Set `SEMANTIC_RUNTIME_TELEMETRY_OUTPUT=runs` for detailed run rows, or `both` when a profiling pass needs the detailed
 rows and aggregate totals in one command.
+Set `SEMANTIC_RUNTIME_TELEMETRY_FINE_PHASES=true` to measure rendering and scope-construction subphases.
+For timing runs, set `SEMANTIC_RUNTIME_TELEMETRY_PHASE_MEMORY=false` and `SEMANTIC_RUNTIME_TELEMETRY_PHASE_KERNEL=false`
+to avoid taking memory and kernel snapshots inside each measured phase.
 Set `SEMANTIC_RUNTIME_TELEMETRY_QUERY_KINDS=summary,app-overview` or another comma-separated app-query list when a
 profile preset is too broad for the question. This is the projection-cost lane: it lets a run isolate one public answer
 without editing the harness or accidentally treating a profile bundle as the cost of a single query.

@@ -1,5 +1,5 @@
 import { BasisKind, BasisTransitionKind, type BasisTransition } from "./basis.js";
-import { ContinuationKind, ContinuationPriority } from "./continuation.js";
+import { ContinuationKind } from "./continuation.js";
 import { EvidenceKind } from "./evidence.js";
 import { HandleKind, HandleNamespace } from "./handle.js";
 import { LensId } from "./lens.js";
@@ -91,8 +91,6 @@ export interface NavigationRouteSpec {
   readonly to: NavigationEndpointSpec;
   /** Continuation kind normally used for this route. */
   readonly continuationKind: ContinuationKind;
-  /** Default priority when the answer has no stronger local reason. */
-  readonly defaultPriority: ContinuationPriority;
   /** Basis kinds that can honestly support this route. */
   readonly supportedBasis: readonly BasisKind[];
   /** Optional basis movement when this route intentionally changes authority. */
@@ -216,7 +214,6 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     from: {},
     to: {},
     continuationKind: ContinuationKind.NextPage,
-    defaultPriority: ContinuationPriority.Primary,
     supportedBasis: [
       BasisKind.SourceText,
       BasisKind.TypeScriptProgram,
@@ -258,7 +255,6 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     from: {},
     to: {},
     continuationKind: ContinuationKind.SwitchProjection,
-    defaultPriority: ContinuationPriority.Secondary,
     supportedBasis: [
       BasisKind.AtlasContract,
       BasisKind.SourceText,
@@ -300,7 +296,6 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     from: {},
     to: {},
     continuationKind: ContinuationKind.Narrow,
-    defaultPriority: ContinuationPriority.Secondary,
     supportedBasis: [
       BasisKind.AtlasContract,
       BasisKind.SourceText,
@@ -347,7 +342,6 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
       locus: LocusKind.SourceRange,
     },
     continuationKind: ContinuationKind.InspectEvidence,
-    defaultPriority: ContinuationPriority.Primary,
     supportedBasis: [
       BasisKind.SourceText,
       BasisKind.TypeScriptProgram,
@@ -378,7 +372,6 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     },
     to: { lens: LensId.TsType, projection: "facts" },
     continuationKind: ContinuationKind.SwitchLens,
-    defaultPriority: ContinuationPriority.Secondary,
     supportedBasis: [BasisKind.TypeScriptChecker],
     evidenceKinds: [EvidenceKind.Symbol, EvidenceKind.TypeFact],
     summary: "Inspect TypeChecker facts for a symbol-like target.",
@@ -390,7 +383,6 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     from: { handleKind: HandleKind.Symbol },
     to: { lens: LensId.TsType, projection: "references" },
     continuationKind: ContinuationKind.SwitchProjection,
-    defaultPriority: ContinuationPriority.Primary,
     supportedBasis: [BasisKind.TypeScriptChecker],
     evidenceKinds: [EvidenceKind.Symbol, EvidenceKind.SourceSpan],
     summary: "Follow exact TypeScript references for a symbol-like target.",
@@ -402,7 +394,6 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     from: { handleKind: HandleKind.Symbol },
     to: { lens: LensId.TsType, projection: "definitions" },
     continuationKind: ContinuationKind.SwitchProjection,
-    defaultPriority: ContinuationPriority.Secondary,
     supportedBasis: [BasisKind.TypeScriptChecker],
     evidenceKinds: [EvidenceKind.Symbol, EvidenceKind.SourceSpan],
     summary:
@@ -415,7 +406,6 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     from: { handleKind: HandleKind.Symbol },
     to: { lens: LensId.TsType, projection: "call-hierarchy" },
     continuationKind: ContinuationKind.SwitchProjection,
-    defaultPriority: ContinuationPriority.Secondary,
     supportedBasis: [BasisKind.TypeScriptChecker],
     evidenceKinds: [EvidenceKind.CallSite, EvidenceKind.Symbol],
     summary: "Follow incoming and outgoing TypeScript call hierarchy edges.",
@@ -431,7 +421,6 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
       evidenceKind: EvidenceKind.CallSite,
     },
     continuationKind: ContinuationKind.SwitchProjection,
-    defaultPriority: ContinuationPriority.Primary,
     supportedBasis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
     evidenceKinds: [
       EvidenceKind.CallSite,
@@ -454,7 +443,6 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     from: { evidenceKind: EvidenceKind.Symbol },
     to: { lens: LensId.FrameworkEvaluator, projection: "effects" },
     continuationKind: ContinuationKind.SwitchLens,
-    defaultPriority: ContinuationPriority.Primary,
     supportedBasis: [
       BasisKind.StaticEvaluator,
       BasisKind.TypeScriptChecker,
@@ -476,7 +464,6 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     from: {},
     to: { lens: LensId.TsType, projection: "diagnostics" },
     continuationKind: ContinuationKind.SwitchProjection,
-    defaultPriority: ContinuationPriority.Secondary,
     supportedBasis: [BasisKind.TypeScriptChecker],
     evidenceKinds: [EvidenceKind.TypeFact, EvidenceKind.SourceSpan],
     summary:
@@ -489,7 +476,6 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     from: {},
     to: { lens: LensId.TsType, projection: "rename" },
     continuationKind: ContinuationKind.SwitchProjection,
-    defaultPriority: ContinuationPriority.Secondary,
     supportedBasis: [BasisKind.TypeScriptChecker],
     evidenceKinds: [EvidenceKind.TypeFact, EvidenceKind.SourceSpan],
     summary: "Inspect rename affordances before producing edit plans.",
@@ -505,7 +491,6 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     },
     to: { lens: LensId.BridgeAuLink, projection: "targets" },
     continuationKind: ContinuationKind.SwitchProjection,
-    defaultPriority: ContinuationPriority.Primary,
     supportedBasis: [BasisKind.AuLink, BasisKind.TypeScriptChecker],
     evidenceKinds: [
       EvidenceKind.AuLinkAnchor,
@@ -522,7 +507,6 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     from: {},
     to: {},
     continuationKind: ContinuationKind.SwitchLens,
-    defaultPriority: ContinuationPriority.Secondary,
     supportedBasis: [
       BasisKind.StaticEvaluator,
       BasisKind.TypeScriptChecker,
@@ -546,7 +530,6 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     from: { evidenceKind: EvidenceKind.OpenSeam },
     to: { handleKind: HandleKind.OpenSeam },
     continuationKind: ContinuationKind.InspectOpenSeam,
-    defaultPriority: ContinuationPriority.Primary,
     supportedBasis: [
       BasisKind.StaticEvaluator,
       BasisKind.AuLink,
@@ -562,7 +545,6 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     from: { lens: LensId.FrameworkDiscovery },
     to: { handleNamespace: HandleNamespace.Framework },
     continuationKind: ContinuationKind.SwitchLens,
-    defaultPriority: ContinuationPriority.Primary,
     supportedBasis: [
       BasisKind.AtlasContract,
       BasisKind.TypeScriptChecker,
@@ -587,7 +569,6 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     from: { lens: LensId.FrameworkAdmission },
     to: { handleNamespace: HandleNamespace.Framework },
     continuationKind: ContinuationKind.SwitchLens,
-    defaultPriority: ContinuationPriority.Primary,
     supportedBasis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
     evidenceKinds: [
       EvidenceKind.DiRegistration,

@@ -9,7 +9,6 @@ import {
 } from "../basis.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import {
@@ -413,28 +412,24 @@ function productVocabularySummaryContinuations(inquiry: Inquiry): readonly Conti
       "product.vocabulary:summary:claim-graph",
       "claim-graph",
       "Inspect product-kind adjacency expanded from claim predicate signatures.",
-      ContinuationPriority.Primary,
     ),
     productVocabularyContinuation(
       inquiry,
       "product.vocabulary:summary:claim-schema",
       "claim-schema",
       "Inspect signed claim predicate signatures.",
-      ContinuationPriority.Primary,
     ),
     productVocabularyContinuation(
       inquiry,
       "product.vocabulary:summary:catalog",
       "catalog",
       "Inspect declared vocabulary definitions by slot and namespace.",
-      ContinuationPriority.Secondary,
     ),
     productVocabularyContinuation(
       inquiry,
       "product.vocabulary:summary:usage",
       "usage",
       "Inspect exact source usages outside the vocabulary package.",
-      ContinuationPriority.Secondary,
     ),
   ];
 }
@@ -449,7 +444,6 @@ function productVocabularyContinuations(inquiry: Inquiry): readonly Continuation
       "product.vocabulary:back-to-summary",
       "summary",
       "Return to the product vocabulary rollup.",
-      ContinuationPriority.Secondary,
     ),
   ];
 }
@@ -459,12 +453,10 @@ function productVocabularyContinuation(
   id: string,
   projection: ProductVocabularyProjection,
   rationale: string,
-  priority: ContinuationPriority,
 ): Continuation {
   return {
     id,
     kind: ContinuationKind.SwitchProjection,
-    priority,
     rationale,
     inquiry: {
       lens: LensId.ProductVocabulary,

@@ -228,8 +228,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-11-21",
-      "nextActionPolicy": "when-touched"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:built-in-syntax-catalog-materializer",
@@ -440,7 +439,7 @@
         "The project pass owns one CheckerExpressionTypeWorld for app and authoring resource runtime analysis, while each TemplateRuntimeAnalysisFrame records expression-cache deltas from a marker. Keep runtime/checker lifetime work here instead of recreating the world per resource.",
         "Captured `...$attrs` work should keep the parent usage scope through dynamic instruction context claims: syntax origin, captured hydration instruction, and captured runtime controller. The scope is the hydration-context controller scope's parent, matching framework SpreadBinding.bind. Do not rely on syntax-only provenance or fall back to definition-wide captured attribute buckets.",
         "Use opt-in fine-grained runtime-analysis phase telemetry when optimizing this frontier. Pair SEMANTIC_RUNTIME_TELEMETRY_FINE_PHASES=true with phase memory/kernel snapshots for density questions, or disable snapshots for cleaner CPU attribution.",
-        "This frontier is nextActionPolicy=when-touched after the aggregate child custom-element usage bridge closed; use it as front-door grounding, while runtime rendering/controller records own usage-local child view expansion.",
+        "Runtime rendering and controller records own usage-local child view expansion after the compilation pass assembles the aggregate child custom-element usage.",
         "Parent templates should hydrate child custom-element controllers, child view-model scopes, and aggregate child compiled-template views when renderer emulation created a child controller. This is required for wrapper/capture semantics such as field-shell `...$attrs`, because the child template's SpreadBinding must see the parent HydrateElementInstruction that captured the attributes.",
         "Keep recursive component hydration finite with controller definition ancestry guards, not with definition-wide capture buckets or fresh-controller product handles. Built-in template-controller synthetic views remain recursive through their compiler-owned child compiled-template definitions.",
         "Recursive custom-element re-entry is now an intentional controller boundary, not an open seam: the child controller records `recursive-hydration-boundary` and API rows expose `childViewRenderingState=recursive-boundary`. Treat that as a finite aggregate analysis state; per-runtime-instance expansion and runtime-state termination policy are still future controller semantics.",
@@ -452,7 +451,6 @@
         "Repeated option `model/value` bindings are a concrete recursive-rendering canary. The same-node `option repeat.for=\"...\" value/model.bind=\"...\"` case now closes through recursive rendering emission because the parent select owns the authored option node and the child synthetic view supplies the binding/scope; deeper cases where nested controllers produce descendant option nodes still need explicit rendered topology.",
         "If a future inquiry only needs part of this pass, model that as inquiry depth/scope pressure instead of cloning a partial compiler pipeline."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -571,8 +569,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-11-21",
-      "nextActionPolicy": "when-touched"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:html-parse-materializer",
@@ -646,8 +643,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-11-21",
-      "nextActionPolicy": "when-touched"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:binding-scope-materializer",
@@ -697,8 +693,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-11-21",
-      "nextActionPolicy": "when-touched"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:runtime-controller-bind-materializer",
@@ -760,8 +755,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-11-21",
-      "nextActionPolicy": "when-touched"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "reuse:template-pipeline-world-to-controller",
@@ -1009,8 +1003,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-11-21",
-      "nextActionPolicy": "when-touched"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:binding-command-lowering-publisher",
@@ -1068,8 +1061,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-11-21",
-      "nextActionPolicy": "when-touched"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "reuse:evaluator-and-speculative-context",
@@ -1527,8 +1519,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-11-21",
-      "nextActionPolicy": "when-touched"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:runtime-template-spread-compile-host",
@@ -1638,8 +1629,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-11-21",
-      "nextActionPolicy": "when-touched"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:runtime-renderer-catalog-materializer",
@@ -1700,8 +1690,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-11-21",
-      "nextActionPolicy": "when-touched"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:template-authoring-compiler-world-materializer",
@@ -1720,10 +1709,8 @@
         "Keep the standalone authoring compiler world separate from hydrated app compiler worlds.",
         "TemplateCompilationProjectPass profiles this lane as authoring-compiler-world, separate from app component-compiler-world materialization.",
         "Cursor-locus facade fallback should select the cursor source file by default, then widen only through explicit authoring source lists or authoringTemplateLimit.",
-        "This frontier is nextActionPolicy=when-touched: keep it as grounding for resource-library/cursor-locus authoring templates, not as default autonomous work when the next pressure is authoring verification or taste ontology.",
         "If this lane grows, check whether the missing concept belongs in app-world construction, resource recognition, or inquiry depth rather than cloning compiler-world construction."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -1809,8 +1796,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-11-21",
-      "nextActionPolicy": "when-touched"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:attribute-syntax-and-classification-materializers",
@@ -1885,8 +1871,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-11-21",
-      "nextActionPolicy": "when-touched"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:template-scope-type-projector",
@@ -1938,8 +1923,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-11-21",
-      "nextActionPolicy": "when-touched"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:interpolation-parser",
@@ -2000,8 +1984,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-11-21",
-      "nextActionPolicy": "when-touched"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:runtime-binding-behavior-materializer",
@@ -2148,7 +2131,6 @@
         "Re-enter lifecycle execution only when a bounded product question cannot be answered by compiler/resource/controller/type/candidate/settlement facts and explicit open pressure. Candidate resolution, activation model type comparison, and closed child-controller topology stay finite.",
         "Keep `RuntimeCompositions` and `pressure:app-api` buckets in sync so composition candidates, compiled-template coverage, candidate resource-analysis coverage, input fulfillment, composed child-controller counts, activation handoff kinds, and open composition rows stay visible in aggregate app pressure."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -2361,15 +2343,6 @@
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api",
           "summary": "Pressure harness that showed binding-source-slot-no-static-value disappeared after the pass."
-        },
-        {
-          "kind": "lens",
-          "lensId": "atlas.work-router",
-          "projection": "route-plan",
-          "filters": {
-            "query": "recursive hydration repeat value"
-          },
-          "summary": "Work Router query that should route repeat-value work into template recursive-rendering semantics."
         }
       ],
       "liveChecks": [
@@ -2390,7 +2363,7 @@
         }
       ],
       "createdAt": "2026-05-15",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "reuse:template-controller-built-in-overlay",
@@ -2566,7 +2539,6 @@
         "Use Atlas framework error and DI lenses against the ui-virtualization package before adding diagnostics for virtualization errors; the current template-controller contract does not prove renderer/scroller/strategy error authority.",
         "Unsupported virtual-repeat destructuring already has an authored diagnostic in template-diagnostic-policy.ts. A plugin runtime error claim needs separate evidence from the framework error site."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -2695,10 +2667,8 @@
         "Keep repeat unknown slot preservation shared below overlays: TypeChecker iterator projection should use the common checker-union helper and materialize unknown locals so semantic cursor diagnostics expose no-members rather than missing-slot-type.",
         "Generated overlay context-slot locals should spend materialized BindingScope target types when present and degrade to `unknown` when absent; `contract:type-system-overlays` checks generated overlay text for accidental `undefined as any` holes across current canaries.",
         "Keep synthetic Array.flat/flatMap repeat locals on the shared iterated-type hydration substrate. A compact checker related reference from an inner array must be hydrated before scope construction, otherwise cursor diagnostics regress to missing-slot-type even though the checker can prove the element type.",
-        "For rename, join authored segments to the TypeScript member family and the Aurelia resource relation. The rename-candidates test exercises refusal when unresolved sites would make an edit partial.",
-        "This frontier is nextActionPolicy=when-touched after common app-builder-facing overlay, binding-flow, observer, value-channel, component-object-boundary, computed/getter, and runtime-effect contracts stayed green. Keep it as integration grounding while app-builder discovers concrete generated-code patterns; do not let pixel-perfect rare expression narrowing or abstract overlay completeness block authoring/app-builder work."
+        "For rename, join authored segments to the TypeScript member family and the Aurelia resource relation. The rename-candidates test exercises refusal when unresolved sites would make an edit partial."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -2823,12 +2793,6 @@
           "filePath": "packages/semantic-runtime/src/api/source-reference.ts",
           "symbolName": "SemanticSourceReference",
           "summary": "Public source-reference envelope that future rename/edit plans must make exact enough."
-        },
-        {
-          "kind": "lens",
-          "lensId": "atlas.work-router",
-          "projection": "route-plan",
-          "summary": "The semantic-runtime.template-overlay-integration route should be the first routing surface for overlay integration pressure."
         },
         {
           "kind": "script",

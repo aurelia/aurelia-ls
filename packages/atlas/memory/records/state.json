@@ -182,7 +182,6 @@
         "The state-getter-bindings query currently exposes source definitions. Re-enter per-controller application only for a concrete product need: attach definitions to declaring custom-element/custom-attribute resources, apply beside RuntimeWatcher per RuntimeControllerFrame, preserve hydrating versus created ownership, and resolve through controller.container.",
         "Reducers, effects, middleware, subscriptions, dispatch execution, custom-registry execution, and asynchronous lifecycle scheduling remain outside this frontier."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",

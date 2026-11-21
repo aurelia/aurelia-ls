@@ -225,7 +225,7 @@ async function runSelfCheck(): Promise<InquirySessionSelfCheckResult> {
     locus: RepoRootLocus,
     projection: "summary",
   });
-  const firstContinuation = mapAnswer.continuations[0];
+  const firstContinuation = terrainAnswer.continuations[0];
   const followedAnswer =
     firstContinuation === undefined
       ? undefined

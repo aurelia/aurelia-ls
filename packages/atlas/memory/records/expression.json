@@ -70,11 +70,9 @@
         "Cursor-info should surface template compiler diagnostics even when the cursor site is not a completion site. Unknown completion sites inside recovery/error spans are acceptable only when the LSP envelope still carries exact framework-code diagnostics and syntax-rewrite suggestions.",
         "Cursor pressure completion classes may be diagnostic-backed while the answer still carries missing inputs. Inspect the separate missing-input counters before treating a diagnostic-backed partial as resolved substrate work or as an unexplained autocomplete gap.",
         "Use `framework:corpus -- --projection=fixture-seeds --concept=expression --seedUse=behavior-grounding --detail` when TypeChecker expression work needs grounded fixture pressure from docs/tests instead of generic binding examples.",
-        "This frontier is nextActionPolicy=when-touched after the expression/overlay integration pass proved the common app-builder-facing contracts. Re-enter it when app-builder, diagnostics, overlay, or cursor pressure exposes a concrete shared expression-context gap; do not use rare `in`/`instanceof` or stdlib edge cases as a default autonomous next task.",
         "Use this pressure as a prompt to check whether Atlas can reveal the flow clearly before splitting.",
         "Cursor-info currently proves contextual callback owner identity but may surface the template expression as the compact owner-type source; before changing answer formatting, inspect whether the product should carry both expression locus and TypeChecker declaration locus explicitly."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -331,7 +329,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-26"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:completed-input-companion-builder",

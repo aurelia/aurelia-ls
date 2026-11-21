@@ -4,7 +4,7 @@ import { NavigationRelation } from "../inquiry/navigation.js";
 import { SourceDeclarationKind } from "../source/index.js";
 
 /** Schema marker for the provisional Aurelia framework discovery seeds. */
-export const FRAMEWORK_DISCOVERY_SEEDS_VERSION = "framework-discovery-seeds-v1";
+export const FRAMEWORK_DISCOVERY_SEEDS_VERSION = "framework-discovery-seeds-v2";
 
 /** Discovery phase for one anchor or framework flow. */
 export const enum FrameworkDiscoveryPhase {
@@ -140,8 +140,6 @@ export interface FrameworkDiscoveryAnchor {
   readonly navigation: readonly NavigationRelation[];
   /** Grounded reason this anchor is useful as a starting handle. */
   readonly summary: string;
-  /** Open questions this anchor should help answer. */
-  readonly questions: readonly string[];
 }
 
 /** One framework flow with its source of authority and expected witnesses. */
@@ -162,16 +160,12 @@ export interface FrameworkFlowDefinition {
 
 /** Provisional framework discovery seeds consumed by future boot indexes and lenses. */
 export interface FrameworkDiscoverySeeds {
-  /** Schema marker for compaction-safe orientation. */
+  /** Version of the seed contract. */
   readonly schemaVersion: typeof FRAMEWORK_DISCOVERY_SEEDS_VERSION;
-  /** Operating rules for future framework indexing work. */
-  readonly principles: readonly string[];
   /** Framework flow definitions currently recognized by the workbench. */
   readonly flows: readonly FrameworkFlowDefinition[];
   /** Provisional framework anchors used to seed exact inquiry. */
   readonly anchors: readonly FrameworkDiscoveryAnchor[];
-  /** Questions that should remain visible until evidence closes or refines them. */
-  readonly openQuestions: readonly string[];
 }
 
 /** Framework flows recognized by the initial discovery workbench. */
@@ -317,11 +311,6 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.Startup, FrameworkFlowKind.WorldFormation, FrameworkFlowKind.PluginConfiguration, FrameworkFlowKind.Registration, FrameworkFlowKind.MirrorPressure],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.CallHierarchyOf, NavigationRelation.MirrorTargetOf],
     summary: "Primary runtime-html application facade and startup handle.",
-    questions: [
-      "What exact world is created before start resolves?",
-      "Which app tasks and registrations participate in startup?",
-      "Where do user component, host, container, and platform assumptions enter?",
-    ],
   },
   {
     id: "application.aggregator-aurelia",
@@ -332,10 +321,6 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.Startup, FrameworkFlowKind.WorldFormation, FrameworkFlowKind.PluginConfiguration],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.CallHierarchyOf],
     summary: "Umbrella package facade over runtime-html application startup.",
-    questions: [
-      "Which setup is introduced by the umbrella facade before reaching runtime-html?",
-      "Where should aggregator package semantics be collapsed or preserved?",
-    ],
   },
   {
     id: "di.container",
@@ -346,10 +331,6 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.Registration, FrameworkFlowKind.Lookup, FrameworkFlowKind.WorldFormation, FrameworkFlowKind.MirrorPressure],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.ReferencesOf, NavigationRelation.CallHierarchyOf, NavigationRelation.MirrorTargetOf],
     summary: "Core container implementation that publishes and resolves the framework world.",
-    questions: [
-      "Which resolver strategies and parent/root traversal rules must semantic-runtime emulate?",
-      "Which calls mutate container state versus only read provider state?",
-    ],
   },
   {
     id: "di.icontainer",
@@ -360,10 +341,6 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.Lookup, FrameworkFlowKind.MirrorPressure],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.ReferencesOf, NavigationRelation.MirrorTargetOf],
     summary: "Public DI contract that many packages consume rather than concrete Container.",
-    questions: [
-      "Which public contract members are semantic obligations and which are convenience surface?",
-      "Where do framework packages type against IContainer instead of Container?",
-    ],
   },
   {
     id: "compiler.template-compiler",
@@ -374,10 +351,6 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.Compilation, FrameworkFlowKind.InstructionEmission, FrameworkFlowKind.ResourceLookup, FrameworkFlowKind.MirrorPressure],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.CallHierarchyOf, NavigationRelation.MirrorTargetOf],
     summary: "Main template compiler anchor for instruction production and recursive compilation discovery.",
-    questions: [
-      "Which resource, syntax, and binding-command inputs shape compiler output?",
-      "Where does recursive compilation begin, and which outputs feed rendering?",
-    ],
   },
   {
     id: "rendering.controller",
@@ -388,10 +361,6 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.Hydration, FrameworkFlowKind.Rendering, FrameworkFlowKind.Activation, FrameworkFlowKind.LifecyclePropagation, FrameworkFlowKind.ScopePropagation],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.ReferencesOf, NavigationRelation.CallHierarchyOf],
     summary: "Controller/view lifecycle anchor for hydration, binding, activation, and child controller routes.",
-    questions: [
-      "Which controller states gate bind/attach/detach/unbind?",
-      "How does lifecycle recursion flow through children and views?",
-    ],
   },
   {
     id: "rendering.app-root",
@@ -402,10 +371,6 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.WorldFormation, FrameworkFlowKind.Hydration, FrameworkFlowKind.Rendering, FrameworkFlowKind.LifecyclePropagation, FrameworkFlowKind.MirrorPressure],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.CallHierarchyOf, NavigationRelation.MirrorTargetOf],
     summary: "Application root controller/host bridge for startup-to-rendering handoff.",
-    questions: [
-      "How does root config become a host/component/controller relationship?",
-      "Where does root lifecycle differ from nested component lifecycle?",
-    ],
   },
   {
     id: "resource.custom-element-definition",
@@ -416,10 +381,6 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.ResourceDefinition, FrameworkFlowKind.ResourceLookup, FrameworkFlowKind.Compilation, FrameworkFlowKind.Hydration, FrameworkFlowKind.MirrorPressure],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.ReferencesOf, NavigationRelation.MirrorTargetOf],
     summary: "Custom element resource definition anchor for compiler/rendering handoff.",
-    questions: [
-      "Which definition fields are required by compiler output and hydration?",
-      "Which static definition helpers need evaluator support?",
-    ],
   },
   {
     id: "compiler.hydrate-element-instruction",
@@ -430,10 +391,6 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.InstructionEmission, FrameworkFlowKind.InstructionConsumption, FrameworkFlowKind.Hydration],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.ReferencesOf],
     summary: "Instruction shape likely involved in compiler-to-renderer handoff.",
-    questions: [
-      "Which renderer consumes this instruction shape?",
-      "Which fields connect compiled resources to controller creation?",
-    ],
   },
   {
     id: "scope.scope",
@@ -444,10 +401,6 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.ScopePropagation, FrameworkFlowKind.Binding, FrameworkFlowKind.MirrorPressure],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.ReferencesOf, NavigationRelation.MirrorTargetOf],
     summary: "Runtime scope anchor for binding context and override-context movement.",
-    questions: [
-      "Where are scopes created, inherited, replaced, or captured?",
-      "Which binding and lifecycle routes depend on scope shape?",
-    ],
   },
   {
     id: "scope.binding-context",
@@ -458,10 +411,6 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.ScopePropagation, FrameworkFlowKind.Binding, FrameworkFlowKind.ReactivitySetup, FrameworkFlowKind.MirrorPressure],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.ReferencesOf, NavigationRelation.MirrorTargetOf],
     summary: "Binding context anchor for expression access and reactive binding setup.",
-    questions: [
-      "Which expression and binding paths read or synthesize binding contexts?",
-      "How do override contexts and parent scopes relate to binding context access?",
-    ],
   },
   {
     id: "reactivity.observer-locator-interface",
@@ -472,11 +421,6 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.ReactivitySetup, FrameworkFlowKind.Binding, FrameworkFlowKind.Lookup, FrameworkFlowKind.Registration],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.ReferencesOf, NavigationRelation.FrameworkFlowOf],
     summary: "DI key and contract for the html-agnostic observer lookup gateway used by bindings and connectables.",
-    questions: [
-      "Which binding and watcher paths ask IObserverLocator for observers or accessors?",
-      "Which default implementation is registered for this DI key?",
-      "Where does the locator delegate from object/property observation to node or collection observation?",
-    ],
   },
   {
     id: "reactivity.observer-locator-implementation",
@@ -487,11 +431,6 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.ReactivitySetup, FrameworkFlowKind.Binding, FrameworkFlowKind.Lookup],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.ReferencesOf, NavigationRelation.CallHierarchyOf],
     summary: "Html-agnostic observer locator implementation that creates property, computed, dirty-check, and collection observation paths.",
-    questions: [
-      "Which observer classes can this locator return for a property or collection?",
-      "Where does dirty-check fallback enter the observation path?",
-      "Which APIs are consumed by binding products during bind/update setup?",
-    ],
   },
   {
     id: "reactivity.node-observer-locator-interface",
@@ -502,10 +441,6 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.ReactivitySetup, FrameworkFlowKind.Binding, FrameworkFlowKind.Lookup, FrameworkFlowKind.Registration],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.ReferencesOf, NavigationRelation.FrameworkFlowOf],
     summary: "DI key and contract for platform/node-specific observer lookup delegated to by ObserverLocator.",
-    questions: [
-      "Which default fallback exists when no platform-specific node observer locator is registered?",
-      "Which runtime-html implementation replaces the fallback?",
-    ],
   },
   {
     id: "reactivity.node-observer-locator-html",
@@ -516,11 +451,6 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.ReactivitySetup, FrameworkFlowKind.Binding, FrameworkFlowKind.Registration],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.ReferencesOf, NavigationRelation.CallHierarchyOf],
     summary: "HTML-specific observer locator implementation that maps elements/properties to node observers and accessors.",
-    questions: [
-      "Which HTML node observer classes can this locator return?",
-      "Which configuration maps, events, and accessors shape node observation?",
-      "Where do binding behaviors override target observers or subscribers around this locator?",
-    ],
   },
   {
     id: "task.app-task",
@@ -531,11 +461,6 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.PluginConfiguration, FrameworkFlowKind.Registration, FrameworkFlowKind.WorldFormation, FrameworkFlowKind.LifecyclePropagation],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.ReferencesOf, NavigationRelation.FrameworkFlowOf],
     summary: "Lifecycle task registration factory that admits startup, hydration, activation, and deactivation work into the app world.",
-    questions: [
-      "Which AppTask phases participate before and after root rendering?",
-      "How are AppTask callbacks registered and later invoked through task slots?",
-      "Which configuration bundles publish AppTask rows?",
-    ],
   },
   {
     id: "lifecycle.lifecycle-hooks",
@@ -546,10 +471,6 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.LifecyclePropagation, FrameworkFlowKind.Activation, FrameworkFlowKind.Rendering],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.ReferencesOf, NavigationRelation.FrameworkFlowOf],
     summary: "Lifecycle hook registration/lookup surface that shapes bind, attach, detach, unbind, and dispose participation.",
-    questions: [
-      "Which hook kinds are admitted and where are they invoked?",
-      "How do lifecycle hooks relate to controller traversal and AppTask phases?",
-    ],
   },
   {
     id: "router.router",
@@ -560,10 +481,6 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.Routing, FrameworkFlowKind.Lookup, FrameworkFlowKind.LifecyclePropagation],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.ReferencesOf, NavigationRelation.CallHierarchyOf],
     summary: "Primary router orchestration surface for navigation, route tree state, and endpoint/viewport handoff.",
-    questions: [
-      "Where does navigation enter the router and become route tree/viewport work?",
-      "Which services and lifecycle hooks does Router depend on?",
-    ],
   },
   {
     id: "router.configuration",
@@ -574,10 +491,6 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.Routing, FrameworkFlowKind.PluginConfiguration, FrameworkFlowKind.Registration],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.ReferencesOf, NavigationRelation.FrameworkFlowOf],
     summary: "Router plugin/configuration export that admits router resources and services into Aurelia.register.",
-    questions: [
-      "Which router services and resources are registered by default?",
-      "How does router configuration alter routing semantics before app startup?",
-    ],
   },
   {
     id: "expression.expression-parser",
@@ -588,10 +501,6 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.Compilation, FrameworkFlowKind.Binding, FrameworkFlowKind.ReactivitySetup],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.ReferencesOf, NavigationRelation.CallHierarchyOf],
     summary: "Expression parsing entrypoint that turns binding syntax into AST shapes consumed by compiler/runtime binding work.",
-    questions: [
-      "Which parse modes produce the AST families that bindings and commands consume?",
-      "Where do expression ASTs cross from compiler output into runtime evaluation and observation?",
-    ],
   },
   {
     id: "expression.expression-kind",
@@ -602,10 +511,6 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.Compilation, FrameworkFlowKind.Binding],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.ReferencesOf],
     summary: "Expression AST discriminator surface used to classify parsed binding expressions.",
-    questions: [
-      "Which AST discriminator families need semantic-runtime emulation?",
-      "How do expression kind values map to evaluator and observer behavior?",
-    ],
   },
   {
     id: "rendering.view-factory",
@@ -616,10 +521,6 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.Rendering, FrameworkFlowKind.Hydration, FrameworkFlowKind.LifecyclePropagation],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.ReferencesOf, NavigationRelation.CallHierarchyOf],
     summary: "View construction surface that materializes renderable views from compiled definitions/instructions.",
-    questions: [
-      "Which compiled products and containers feed view creation?",
-      "Where do created views enter controller lifecycle traversal?",
-    ],
   },
   {
     id: "rendering.rendering-service",
@@ -630,31 +531,12 @@ export const FRAMEWORK_DISCOVERY_SEED_ANCHORS: readonly FrameworkDiscoveryAnchor
     flows: [FrameworkFlowKind.Rendering, FrameworkFlowKind.InstructionConsumption, FrameworkFlowKind.Hydration],
     navigation: [NavigationRelation.SourceFor, NavigationRelation.TypeFactsFor, NavigationRelation.ReferencesOf, NavigationRelation.CallHierarchyOf],
     summary: "Rendering service surface that bridges compiled instructions, renderers, controllers, and hydration context.",
-    questions: [
-      "Which renderer registry and hydration context paths does Rendering coordinate?",
-      "Where does recursive rendering re-enter instruction dispatch?",
-    ],
   },
 ];
 
-/** Provisional discovery seeds used as the workbench's compaction-safe orientation surface. */
+/** Source anchors and their framework flow definitions. */
 export const FRAMEWORK_DISCOVERY_SEEDS: FrameworkDiscoverySeeds = {
   schemaVersion: FRAMEWORK_DISCOVERY_SEEDS_VERSION,
-  principles: [
-    "Seed anchors are starting handles, not final taxonomy.",
-    "Semantic domains classify Aurelia meaning; framework flows classify behavior corridors; navigation relations classify inquiry hops.",
-    "Rows need source, TypeChecker, evaluator, auLink, or explicit human basis.",
-    "Dynamic runtime behavior should become an explicit unresolved boundary until a named evaluator model can close it.",
-    "Framework semantics should pressure product modeling through auLink instead of duplicate hand-maintained vocabulary.",
-    "Expensive recurrent discovery belongs in named substrate indexes; query-time reads should filter and traverse.",
-  ],
   flows: FRAMEWORK_FLOW_DEFINITIONS,
   anchors: FRAMEWORK_DISCOVERY_SEED_ANCHORS,
-  openQuestions: [
-    "Which app startup route is the first durable substrate target after auLink target resolution?",
-    "Which registration/configuration helper calls should become evaluator intrinsics?",
-    "Where does recursive compilation actually branch, and what exact instruction rows join compiler to renderer?",
-    "Which lifecycle routes are synchronous, promise-aware, or branch-dependent?",
-    "Which product-specific semantics can disappear once framework route facts are stable?",
-  ],
 };

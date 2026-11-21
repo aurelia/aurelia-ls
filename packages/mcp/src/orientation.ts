@@ -73,7 +73,6 @@ export function aureliaOrientWorkspacePromptText(input: {
     input.includeRouter === 'true'
       ? 'Because routing is in scope, call aurelia_router_overview after app overview with a small rowPageSize.'
       : 'Call aurelia_router_overview only if the overview or user task makes route/viewport facts relevant.',
-    'Do not ask for Atlas, Work Router, corpus, or development-only memory; this MCP surface is the public semantic-runtime shell.',
     'Use aurelia_docs_search and aurelia_docs_fetch for local bundled docs context instead of web requests.',
   ].join(' ');
 }

@@ -1,7 +1,6 @@
 import { BasisKind } from "../basis.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import {
@@ -19,12 +18,10 @@ export interface ProjectionContinuationOptions {
   readonly filters?: Inquiry["filters"];
   readonly evidence?: Evidence | readonly Evidence[];
   readonly basis?: readonly BasisKind[];
-  readonly priority?: ContinuationPriority;
   readonly summary?: string;
 }
 
 export interface NextPageContinuationOptions {
-  readonly priority?: ContinuationPriority;
   readonly summary?: string;
 }
 
@@ -40,7 +37,6 @@ export interface SourceRowContinuationPageOptions {
 }
 
 export interface RowContinuationRouteOptions {
-  readonly priority?: ContinuationPriority;
   readonly basis?: readonly BasisKind[];
   readonly budget?: Inquiry["budget"];
 }
@@ -125,8 +121,6 @@ export interface FrameworkSemanticRouteSpecInit {
   readonly basis: readonly BasisKind[];
   /** Route topology summary, independent from row-local rationale. */
   readonly summary: string;
-  /** Default priority for route instances. */
-  readonly priority?: ContinuationPriority;
   /** Continuation kind override for unusual semantic routes. */
   readonly kind?: ContinuationKind;
 }
@@ -140,8 +134,6 @@ export interface FrameworkSemanticRouteInstanceInit
   readonly rationale: string;
   /** Optional route-claim summary when it should differ from the declared route summary. */
   readonly routeSummary?: string;
-  /** Priority override for this row-local route. */
-  readonly priority?: ContinuationPriority;
   /** Continuation kind override for this row-local route. */
   readonly kind?: ContinuationKind;
 }
@@ -155,7 +147,6 @@ export class FrameworkSemanticRouteSpec {
   readonly relation: NavigationRelation;
   readonly basis: readonly BasisKind[];
   readonly summary: string;
-  readonly priority?: ContinuationPriority;
   readonly kind?: ContinuationKind;
 
   constructor(init: FrameworkSemanticRouteSpecInit) {
@@ -166,7 +157,6 @@ export class FrameworkSemanticRouteSpec {
     this.relation = init.relation;
     this.basis = init.basis;
     this.summary = init.summary;
-    this.priority = init.priority;
     this.kind = init.kind;
   }
 
@@ -179,7 +169,6 @@ export class FrameworkSemanticRouteSpec {
     return {
       id: instance.id,
       kind: instance.kind ?? this.kind ?? this.kindFor(inquiry),
-      priority: instance.priority ?? this.priority ?? ContinuationPriority.Primary,
       rationale: instance.rationale,
       inquiry: this.targetLocus === undefined
         ? this.target.toInquiry(inquiry, instance)
@@ -276,7 +265,6 @@ export class FrameworkRowContinuationBuilder {
     return this.#sourceRangeContinuation({
       idSuffix,
       kind: ContinuationKind.InspectEvidence,
-      priority: options.priority ?? ContinuationPriority.Primary,
       lens: LensId.TsSource,
       projection: "text",
       source,
@@ -300,7 +288,6 @@ export class FrameworkRowContinuationBuilder {
     return this.#sourceRangeContinuation({
       idSuffix,
       kind: ContinuationKind.SwitchLens,
-      priority: options.priority ?? ContinuationPriority.Secondary,
       lens: LensId.TsType,
       projection: "facts",
       source,
@@ -324,7 +311,6 @@ export class FrameworkRowContinuationBuilder {
     return this.#sourceRangeContinuation({
       idSuffix,
       kind: ContinuationKind.SwitchLens,
-      priority: options.priority ?? ContinuationPriority.Secondary,
       lens: LensId.TsType,
       projection: "call-sites",
       source,
@@ -349,7 +335,6 @@ export class FrameworkRowContinuationBuilder {
     return this.#sourceRangeContinuation({
       idSuffix,
       kind: ContinuationKind.SwitchLens,
-      priority: options.priority ?? ContinuationPriority.Primary,
       lens: LensId.FrameworkEvaluator,
       projection: "effects",
       source,
@@ -371,7 +356,6 @@ export class FrameworkRowContinuationBuilder {
   #sourceRangeContinuation(init: {
     readonly idSuffix: string;
     readonly kind: ContinuationKind;
-    readonly priority: ContinuationPriority;
     readonly lens: LensId;
     readonly projection: string;
     readonly source: SourceRange;
@@ -386,7 +370,6 @@ export class FrameworkRowContinuationBuilder {
     return {
       id: `${this.#idPrefix}:${init.idSuffix}:${this.#index}`,
       kind: init.kind,
-      priority: init.priority,
       rationale: init.rationale,
       inquiry: {
         lens: init.lens,
@@ -420,7 +403,6 @@ export function projectionContinuation(
       targetLens === inquiry.lens
         ? ContinuationKind.SwitchProjection
         : ContinuationKind.SwitchLens,
-    priority: options.priority ?? ContinuationPriority.Primary,
     rationale,
     inquiry: {
       ...inquiry,
@@ -450,7 +432,6 @@ export function nextPageContinuation(
   return {
     id,
     kind: ContinuationKind.NextPage,
-    priority: options.priority ?? ContinuationPriority.Primary,
     rationale,
     inquiry: {
       ...inquiry,
@@ -485,7 +466,6 @@ export function sourceRowContinuations<TRow extends { readonly source: SourceRan
         nextPageRationale,
         nextOffset,
         limit,
-        { priority: ContinuationPriority.Secondary },
       ),
     );
   }

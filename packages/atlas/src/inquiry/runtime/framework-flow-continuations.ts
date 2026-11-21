@@ -13,7 +13,6 @@ import { SourceSelectorScheme } from "../../source/index.js";
 import { BasisKind } from "../basis.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import type { Inquiry } from "../inquiry.js";
@@ -110,10 +109,6 @@ export function frameworkFlowAnchorContinuations(
     continuations.push({
       id: `framework.discovery:anchors:source:${index}`,
       kind: ContinuationKind.SwitchLens,
-      priority:
-        firstCandidate === undefined
-          ? ContinuationPriority.Secondary
-          : ContinuationPriority.Primary,
       rationale:
         firstCandidate === undefined
           ? "Resolve this framework seed anchor through the TypeScript source substrate."
@@ -136,7 +131,6 @@ export function frameworkFlowAnchorContinuations(
     continuations.push({
       id: `framework.discovery:anchors:type:${index}`,
       kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect TypeChecker facts for this framework seed anchor.",
       inquiry: {
         lens: LensId.TsType,
@@ -163,7 +157,6 @@ export function frameworkFlowAnchorContinuations(
       continuations.push({
         id: `framework.discovery:anchors:aulink:${index}`,
         kind: ContinuationKind.SwitchLens,
-        priority: ContinuationPriority.Secondary,
         rationale:
           "Inspect semantic-runtime auLink mirror pressure for this framework seed anchor.",
         inquiry: {
@@ -259,7 +252,6 @@ export function flowSeedContinuations(
       continuations.push({
         id: `framework.discovery:flow-seeds:call-hierarchy:${index}`,
         kind: ContinuationKind.SwitchLens,
-        priority: ContinuationPriority.Secondary,
         rationale:
           "Inspect call hierarchy around the source declaration that seeds this framework flow.",
         inquiry: {
@@ -284,7 +276,6 @@ export function flowSeedContinuations(
       continuations.push({
         id: `framework.discovery:flow-seeds:aulink:${index}`,
         kind: ContinuationKind.SwitchLens,
-        priority: ContinuationPriority.Secondary,
         rationale:
           "Inspect semantic-runtime auLink mirror pressure for this framework flow seed.",
         inquiry: {
@@ -364,7 +355,6 @@ export function callEdgeContinuations(
     continuations.push({
       id: `framework.discovery:call-edges:call-sites:${index}`,
       kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Primary,
       rationale:
         "Inspect exact call-site argument facts behind this framework flow call edge.",
       inquiry: {
@@ -430,7 +420,6 @@ export function callTargetContinuations(
     continuations.push({
       id: `framework.discovery:call-targets:edges:${index}`,
       kind: ContinuationKind.Narrow,
-      priority: ContinuationPriority.Primary,
       rationale:
         "Inspect call edges behind this grouped framework call target.",
       inquiry: {
@@ -456,7 +445,6 @@ export function callTargetContinuations(
     continuations.push({
       id: `framework.discovery:call-targets:call-sites:${index}`,
       kind: ContinuationKind.Narrow,
-      priority: ContinuationPriority.Primary,
       rationale:
         "Inspect exact call-site arguments behind this grouped framework call target.",
       inquiry: {

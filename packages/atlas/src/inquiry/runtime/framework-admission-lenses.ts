@@ -26,7 +26,6 @@ import {
 } from "../basis.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import {
@@ -967,7 +966,6 @@ function admissionSummaryContinuations(inquiry: Inquiry): readonly Continuation[
     {
       id: "framework.admission:raw-bundles",
       kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
       rationale:
         "Inspect raw evaluator-derived bundle associations behind the admission relationship rows.",
       inquiry: {
@@ -1004,7 +1002,6 @@ function broadSummaryContinuations(
     {
       id: "framework.admission:registry-exports",
       kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Primary,
       rationale:
         "Inspect registry/configuration exports before choosing an admission scope.",
       inquiry: {
@@ -1105,7 +1102,6 @@ function admissionBundleContinuations(
           "Inspect source behind this configuration or bundle admission row.",
           "Source behind a framework admission bundle row.",
           {
-            priority: ContinuationPriority.Secondary,
             basis: [BasisKind.SourceText, BasisKind.StaticEvaluator],
           },
         ),
@@ -1220,7 +1216,6 @@ function flowEdgeContinuations(
             filters: { instructionName: row.instructionName },
             rationale:
               "Inspect compiler instruction products represented by this flow edge.",
-            priority: ContinuationPriority.Secondary,
           },
         ),
       );
@@ -1341,7 +1336,6 @@ function materializationLinkContinuations(
         "Inspect the exact source expression that admitted this materialized target.",
         "Admission source for a materialization bridge row.",
         {
-          priority: ContinuationPriority.Secondary,
           basis: [BasisKind.SourceText, BasisKind.StaticEvaluator],
         },
       ),
@@ -1409,7 +1403,6 @@ function worldFormationContinuations(
         "Inspect the exact source expression that admitted this world-formation target.",
         "Admission source for a world-formation row.",
         {
-          priority: ContinuationPriority.Secondary,
           basis: [BasisKind.SourceText, BasisKind.StaticEvaluator],
         },
       ),

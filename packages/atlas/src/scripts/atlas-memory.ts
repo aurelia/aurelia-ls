@@ -13,6 +13,7 @@ import {
   scriptArgumentValue,
   scriptArgumentValues,
   scriptFilterSummary,
+  scriptOptionalBooleanFilter,
   scriptNumberArgumentValue,
   sourceLabel,
 } from "./script-output.js";
@@ -28,13 +29,12 @@ assertKnownScriptArguments("atlas.memory", [
   "--status=",
   "--recordId=",
   "--name=",
-  "--surfaceRole=",
   "--liveCheckKind=",
   "--anchorKind=",
   "--anchorLensId=",
   "--auLinkId=",
   "--symbolName=",
-  "--nextActionPolicy=",
+  "--archived=",
   "--rows=",
   "--limit=",
   "--all-guidance",
@@ -57,13 +57,11 @@ const domainMode = scriptArgumentValue("--domainMode=");
 const kind = scriptArgumentValue("--kind=");
 const status = scriptArgumentValue("--status=");
 const recordId = scriptArgumentValue("--recordId=") ?? scriptArgumentValue("--name=");
-const surfaceRole = scriptArgumentValue("--surfaceRole=");
 const liveCheckKind = scriptArgumentValue("--liveCheckKind=");
 const anchorKind = scriptArgumentValue("--anchorKind=");
 const anchorLensId = scriptArgumentValue("--anchorLensId=");
 const auLinkId = scriptArgumentValue("--auLinkId=");
 const symbolName = scriptArgumentValue("--symbolName=");
-const nextActionPolicy = scriptArgumentValue("--nextActionPolicy=");
 const rows = scriptNumberArgumentValue("--rows=");
 const guidanceRows = process.argv.includes("--all-guidance")
   ? Number.MAX_SAFE_INTEGER
@@ -86,13 +84,12 @@ const filters = {
   ...(kind === undefined ? {} : { kind }),
   ...(status === undefined ? {} : { status }),
   ...(recordId === undefined ? {} : { recordId }),
-  ...(surfaceRole === undefined ? {} : { surfaceRole }),
   ...(liveCheckKind === undefined ? {} : { liveCheckKind }),
   ...(anchorKind === undefined ? {} : { anchorKind }),
   ...(anchorLensId === undefined ? {} : { anchorLensId }),
   ...(auLinkId === undefined ? {} : { auLinkId }),
   ...(symbolName === undefined ? {} : { symbolName }),
-  ...(nextActionPolicy === undefined ? {} : { nextActionPolicy }),
+  ...scriptOptionalBooleanFilter("archived"),
 };
 
 const api = createApi({ idleTtlMs: 120_000, requestTimeoutMs: 120_000 });
@@ -132,102 +129,22 @@ if (value?.rollup !== undefined && (filterSummary === undefined || detail)) {
   printCounts("records by kind", value.rollup.byKind);
   printCounts("records by status", value.rollup.byStatus);
   console.log("");
-  console.log("live untracked product class frontiers");
-  console.log(`- ${value.rollup.untrackedProductClassFrontierCount}`);
-  printCounts(
-    "untracked frontiers by area",
-    value.rollup.untrackedProductClassFrontiersByArea ?? {},
-    detail ? 30 : 12,
-  );
-  printCounts(
-    "untracked frontiers by class role",
-    value.rollup.untrackedProductClassFrontiersBySurfaceRole ?? {},
-    detail ? 30 : 12,
-  );
   console.log("storage issues");
   console.log(`- ${value.rollup.storageIssueCount}`);
 }
 
-const frontiers = value?.frontiers ?? [];
-const nextActions = value?.nextActions ?? [];
-const frontierRecords = frontiers.flatMap((row) =>
-  row.kind === "memory-record" ? [row.record] : [],
-);
-const frontierUntracked = frontiers.flatMap((row) =>
-  row.kind === "untracked-product-class"
-    ? [row.frontier]
-    : [],
-);
-const records = projection === "frontiers"
-  ? frontierRecords
-  : value?.records ?? [];
-const nextActionRecordIds = new Set(
-  nextActions.flatMap((row) => row.record === undefined ? [] : [row.record.id]),
-);
-if (nextActions.length > 0) {
-  printRowSectionHeader("next actions", nextActions, displayRowLimit);
-  for (const row of nextActions.slice(0, displayRowLimit)) {
-    const domains = row.domains.length === 0 ? "" : `; domains ${row.domains.join(", ")}`;
-    const shard = row.record === undefined
-      ? ""
-      : `; shard ${row.record.shardPath}:${row.record.shardLine ?? "?"}`;
-    const policy = row.record?.nextActionPolicy === undefined
-      ? ""
-      : `; nextActionPolicy=${row.record.nextActionPolicy}`;
-    console.log(
-      `- ${row.id}: ${row.kind}/${row.status}; rank ${row.rank}${domains}${shard}${policy}; ${row.summary}`,
-    );
-    if (detail) {
-      console.log(`  rationale: ${row.rationale}`);
-      const frontier = row.frontier ?? row.sampleFrontier;
-      if (frontier !== undefined) {
-        console.log(
-          `  source: ${frontier.className} at ${sourceLabel(frontier)}`,
-        );
-      }
-      if (row.record !== undefined) {
-        printRecordAnchors(row.record, "  ");
-        printRecordLiveChecks(row.record, "  ");
-        printRecordGuidance(row.record, "  ");
-      }
-    }
-  }
-}
-
+const records = value?.records ?? [];
 printRowSectionHeader("memory records", records, displayRowLimit);
 printEmptyRows(records, "no memory records returned");
 for (const row of records.slice(0, displayRowLimit)) {
-  const policy = row.nextActionPolicy === undefined
-    ? ""
-    : `; nextActionPolicy=${row.nextActionPolicy}`;
+  const archive = row.record.archived ? "; archived" : "";
   console.log(
-    `- ${row.id}: ${row.kind}/${row.status}; domains ${row.domains.join(", ")}; shard ${row.shardPath}:${row.shardLine ?? "?"}${policy}; ${row.summary}`,
+    `- ${row.id}: ${row.kind}/${row.status}; domains ${row.domains.join(", ")}; shard ${row.shardPath}:${row.shardLine ?? "?"}${archive}; ${row.summary}`,
   );
   if (detail) {
-    if (projection === "next" && nextActionRecordIds.has(row.id)) {
-      console.log("  detail: expanded above as a next action.");
-    } else {
-      printRecordAnchors(row, "  ");
-      printRecordLiveChecks(row, "  ");
-      printRecordGuidance(row, "  ");
-    }
-  }
-}
-
-const untracked = projection === "frontiers"
-  ? frontierUntracked
-  : value?.untrackedProductClassFrontiers ?? [];
-if (untracked.length > 0) {
-  printRowSectionHeader("untracked product class frontiers", untracked, displayRowLimit);
-  for (const row of untracked.slice(0, displayRowLimit)) {
-    const area = ` [${row.area}]`;
-    const role = row.surfaceRole === undefined ? "" : ` {${row.surfaceRole}}`;
-    console.log(
-      `- ${row.className}${area}${role}: ${row.methodCount} method(s), ${row.propertyCount} property/accessor(s), ${row.lineCount} line(s) at ${sourceLabel(row)}`,
-    );
-    if (detail && row.surfaceRoleReason !== undefined) {
-      console.log(`  role: ${row.surfaceRoleReason}`);
-    }
+    printRecordAnchors(row, "  ");
+    printRecordLiveChecks(row, "  ");
+    printRecordGuidance(row, "  ");
   }
 }
 
@@ -256,9 +173,6 @@ function printDomainFilterHint(value: AtlasMemoryValue | undefined): void {
 function atlasMemoryScriptValueHasRows(value: AtlasMemoryValue | undefined): boolean {
   return (
     (value?.records?.length ?? 0) > 0 ||
-    (value?.frontiers?.length ?? 0) > 0 ||
-    (value?.nextActions?.length ?? 0) > 0 ||
-    (value?.untrackedProductClassFrontiers?.length ?? 0) > 0 ||
     (value?.issues?.length ?? 0) > 0
   );
 }

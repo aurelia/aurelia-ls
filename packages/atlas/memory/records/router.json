@@ -76,7 +76,6 @@
         "Keep route-config convergence separate from route-tree transition, route-context topology, and route-recognizer state graph semantics.",
         "Use framework.router route-config, routeable-component, route-context, and viewport-agent projections before changing product router behavior."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -827,7 +826,6 @@
         "AppTask phases are registration slots, not view-model hooks. Removed or legacy names such as define, load, unload, detached, and unbound must not enter completion classification without executable framework evidence.",
         "Exact hook signature compatibility is a future diagnostic and presentation question. It must not replace role ownership because the runtime discovers and invokes callable members by role and name."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -915,7 +913,6 @@
         "Use readRouterIssues(...) as the owning enumeration for RouterIssues rows, app summary counts, and cursor diagnostic projection; do not hand-assemble producer lists in each consumer.",
         "Configuration retains evaluator identity for implicit roots, explicit containers and authored child containers. Follow the AppRoot's actual container to its registration operations. The di-provider-model regression 'preserves authored container and facade identity across module and child boundaries' exercises separate and shared containers. Runtime rejection order across facades belongs to configuration lifecycle."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",

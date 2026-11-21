@@ -1,7 +1,6 @@
 import { BasisKind } from "../basis.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import type { Evidence } from "../evidence.js";
@@ -181,7 +180,6 @@ export function observerEntityContinuations(
         lens: LensId.FrameworkRendering,
         filters: { effectKind: FrameworkBindingEffectKind.ObserverLookup },
         basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
-        priority: ContinuationPriority.Secondary,
         summary:
           "Binding observer lookup rows connected to observer-system entities.",
       },
@@ -221,7 +219,6 @@ export function observerEntityContinuations(
       continuations.push({
         id: `framework.discovery:observers:implementation:${index}:${implementationIndex}`,
         kind: ContinuationKind.Narrow,
-        priority: ContinuationPriority.Primary,
         rationale:
           "Inspect the default implementation named by this observer DI interface.",
         inquiry: {
@@ -520,7 +517,6 @@ export function resourceCarrierContinuations(
           rationale:
             "Follow this resource carrier toward runtime/compiler/evaluator materialization sites.",
           routeSummary: "Resource carrier to materialization sites.",
-          priority: ContinuationPriority.Secondary,
         },
       ),
     );
@@ -594,7 +590,6 @@ export function resourceExportContinuations(
           rationale:
             "Follow this resource export toward runtime/compiler/evaluator materialization sites.",
           routeSummary: "Resource export to materialization sites.",
-          priority: ContinuationPriority.Secondary,
         },
       ),
     );
@@ -643,7 +638,6 @@ export function frameworkCatalogBundleContinuations(
     continuations.push({
       id: `framework.discovery:bundles:${index}:di-world`,
       kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Primary,
       rationale:
         "Spend this exact configuration, registry, or catalog export through the framework DI-world projection.",
       inquiry: {
@@ -696,7 +690,6 @@ export function frameworkCatalogBundleContinuations(
           "Inspect source behind the first evaluated registration association.",
           "Source behind an evaluated bundle association.",
           {
-            priority: ContinuationPriority.Secondary,
             basis: [BasisKind.SourceText, BasisKind.StaticEvaluator],
           },
         ),

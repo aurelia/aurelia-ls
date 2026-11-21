@@ -160,7 +160,6 @@
         "Router dynamic href target-open pressure is the first proof lane: `contract:router-dynamic-pattern` expects the `router-href-click-interception-target-open` reason source and repair action target to be source-bearing.",
         "Do not split one coherent runtime boundary into several open seams just to get per-reason source addresses; that loses the fact that the reasons describe one unresolved runtime decision."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -908,7 +907,6 @@
         "Use recordsForSourceOpenMaterialization only for source-backed failed product attempts; continue using recordsForSourceOpenSeam for raw evidence or when an enclosing product materialization will retain the returned handle.",
         "Run the focused open-seam materialization test and the broad ownership audit when adding a new domain seam family. An unowned domain attempt or an automatically owned evaluator seam is a causal-model regression."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -998,7 +996,6 @@
         "Resource definition comparison classifies semantic and witness reference subsets inside resources/product-details.ts. Do not duplicate that split in compiler-world, scheduler, or API code.",
         "Until reads declare semantic-versus-witness sensitivity, RefreshWitness activates every reader conservatively. Only Retain may cut propagation in the first queue."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",

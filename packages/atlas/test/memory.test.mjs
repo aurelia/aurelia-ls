@@ -61,7 +61,7 @@ test("the memory continuation reads the selected authored JSON object", async t 
   assert.equal(storageFile.value.records.length, 1);
 });
 
-test("a measured class stays tracked after its pressure resolves, and qualified names select direct members", async t => {
+test("an authored class check reports resolved pressure and verifies qualified member names", async t => {
   const root = fixture(t);
   const base = "packages/semantic-runtime";
   const file = base + "/src/example.ts";
@@ -71,6 +71,9 @@ test("a measured class stays tracked after its pressure resolves, and qualified 
   writeFileSync(path.join(root, file), `export class Outer {
     direct() { class Inner { nested() {} } return Inner; }
     ${"\n".repeat(100)}
+  }
+  export class Context {
+    ${"\n".repeat(100)}
   }`);
   execFileSync("git", ["add", file], { cwd: root });
   writeFileSync(path.join(root, shard("product")), document("records", [{
@@ -78,6 +81,7 @@ test("a measured class stays tracked after its pressure resolves, and qualified 
     anchors: [
       { kind: "source", filePath: file, symbolName: "Outer.direct" },
       { kind: "source", filePath: file, symbolName: "Outer.nested" },
+      { kind: "source", filePath: file, symbolName: "Context", summary: "Related class outside the measured check." },
     ],
     liveChecks: [{ kind: "product-large-class", filePath: file, className: "Outer", minLineCount: 500 }],
   }]));
@@ -87,15 +91,14 @@ test("a measured class stays tracked after its pressure resolves, and qualified 
   const answer = await api.ask({ lens: "atlas.memory", locus: { kind: "repo" }, projection: "summary" });
   assert.equal(answer.value.records[0].status, "resolved");
   assert.equal(answer.value.records[0].liveChecks[0].productClass.name, "Outer");
-  assert.equal(answer.value.rollup.untrackedProductClassFrontierCount, 0);
   assert.deepEqual(answer.value.issues.map(row => row.id), ["atlas.memory:record:frontier:outer:anchor:1:missing-symbol"]);
   const excluded = createSourceProject({ repoRoot: root, packages: [] });
   t.after(() => excluded.dispose());
   const partial = await createInMemoryApi({ sourceProject: excluded }).ask({
-    lens: "atlas.memory", locus: { kind: "repo" }, projection: "next",
+    lens: "atlas.memory", locus: { kind: "repo" }, projection: "summary",
   });
   assert.equal(partial.value.rollup.byStatus["out-of-scope"], 1);
-  assert.deepEqual(partial.value.nextActions, []);
+  assert.deepEqual(partial.value.records.map(row => row.status), ["out-of-scope"]);
   assert.deepEqual(partial.value.issues, []);
   assert.equal(partial.basis.find(basis => basis.kind === "typescript-program").closure, "partial");
 });
@@ -118,6 +121,24 @@ test("file-exists memory checks see working tree removal and newly staged paths 
   writeFileSync(path.join(root, "new.md"), "new");
   execFileSync("git", ["add", "new.md"], { cwd: root });
   assert.deepEqual(await statuses(), [["original.md", "stale-source"], ["new.md", "present"]]);
+});
+
+test("archived memory is addressable while guidance and body search use current records", async t => {
+  const root = fixture(t);
+  const archived = { ...decision("historical"), archived: true, guidance: ["obsolete mechanism"] };
+  writeFileSync(path.join(root, shard("first")), document("records", [
+    archived, { ...decision("current"), guidance: ["active mechanism"] },
+  ]));
+  const project = createSourceProject({ repoRoot: root, packages: [] });
+  t.after(() => project.dispose());
+  const api = createInMemoryApi({ sourceProject: project });
+  const ask = (projection, filters) => api.ask({ lens: "atlas.memory", locus: { kind: "repo" }, projection, filters });
+  const ids = async (projection, filters) => (await ask(projection, filters)).value.records.map(row => row.id);
+  assert.deepEqual(await ids("records", { archived: true }), ["historical"]);
+  assert.deepEqual(await ids("records", { recordId: "historical" }), ["historical"]);
+  assert.deepEqual(await ids("records", { query: "historical" }), ["historical"]);
+  assert.deepEqual(await ids("records", { query: "obsolete" }), []);
+  assert.deepEqual(await ids("guidance", {}), ["current"]);
 });
 
 test("memory distinguishes excluded files from resolved pressure and stale anchors", async t => {
@@ -169,7 +190,7 @@ test("memory distinguishes excluded files from resolved pressure and stale ancho
 test("the writer validates drafts and preserves neighboring data and creation date across a move", t => {
   const root = fixture(t);
   const neighbor = { ...decision("neighbor"), metadata: { retained: true } };
-  const original = { ...decision("moving"), createdAt: "2020-01-02" };
+  const original = { ...decision("moving"), nextActionPolicy: "hidden", createdAt: "2020-01-02" };
   const draft = path.join(root, "draft.json");
   const target = path.join(root, shard("product"));
   writeFileSync(path.join(root, shard("first")), document("records", [original, neighbor]));
@@ -182,7 +203,10 @@ test("the writer validates drafts and preserves neighboring data and creation da
   assert.deepEqual(JSON.parse(readFileSync(path.join(root, shard("first")), "utf8")).records, [neighbor]);
   const { database, issues } = readAtlasMemoryStore({ repoRoot: root });
   assert.deepEqual(issues, []);
-  assert.equal(database.records.find(row => row.record.id === "moving").record.createdAt, original.createdAt);
+  const movedRecord = database.records.find(row => row.record.id === "moving").record;
+  assert.equal(movedRecord.createdAt, original.createdAt);
+  assert.equal(movedRecord.archived, true);
+  assert.equal(Object.hasOwn(JSON.parse(readFileSync(target, "utf8")).records[0], "nextActionPolicy"), false);
   const saved = readFileSync(target, "utf8");
   writeFileSync(draft, JSON.stringify({ ...original, anchors: [{ kind: "source", wrong: "value" }] }));
   const invalid = run();
@@ -196,4 +220,23 @@ test("the writer validates drafts and preserves neighboring data and creation da
   assert.notEqual(wider.status, 0);
   assert.match(wider.stderr, /invalid lens selection \(surfaceKind\)/);
   assert.equal(readFileSync(target, "utf8"), saved);
+});
+
+test("memory normalizes archive visibility in v1 records and rejects invalid values", t => {
+  const root = fixture(t);
+  writeFileSync(path.join(root, shard("first")), document("records", [
+    { ...decision("old-hidden"), nextActionPolicy: "hidden" },
+    { ...decision("old-when-touched"), nextActionPolicy: "when-touched" },
+    { ...decision("old-proactive"), nextActionPolicy: "proactive" },
+    { ...decision("current"), archived: false },
+    { ...decision("archived"), archived: true },
+    { ...decision("invalid"), archived: "false" },
+    { ...decision("invalid-legacy"), nextActionPolicy: "invalid" },
+  ]));
+  const { database, issues } = readAtlasMemoryStore({ repoRoot: root });
+  assert.deepEqual(database.records.map(({ record }) => [record.id, record.archived]), [
+    ["old-hidden", true], ["old-when-touched", undefined], ["old-proactive", undefined],
+    ["current", false], ["archived", true],
+  ]);
+  assert.deepEqual(issues.map(issue => issue.summary), ["archived must be a boolean.", "Unknown nextActionPolicy."]);
 });

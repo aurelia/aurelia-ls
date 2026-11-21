@@ -8,7 +8,6 @@ import {
 } from "../basis.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import {
@@ -1786,112 +1785,96 @@ function productArchitectureSummaryContinuations(inquiry: Inquiry): readonly Con
       "product.architecture:summary:areas",
       "areas",
       "Inspect semantic-runtime top-level source areas and cross-area counts.",
-      ContinuationPriority.Primary,
     ),
     productArchitectureContinuation(
       inquiry,
       "product.architecture:summary:area-dependencies",
       "area-dependencies",
       "Inspect grouped area-to-area import pressure before drilling into individual imports.",
-      ContinuationPriority.Primary,
     ),
     productArchitectureContinuation(
       inquiry,
       "product.architecture:summary:dependencies",
       "dependencies",
       "Inspect import dependencies, especially cross-area and unresolved relatives.",
-      ContinuationPriority.Primary,
     ),
     productArchitectureContinuation(
       inquiry,
       "product.architecture:summary:cycles",
       "cycles",
       "Inspect strongly-connected local import groups before larger product refactors.",
-      ContinuationPriority.Primary,
     ),
     productArchitectureContinuation(
       inquiry,
       "product.architecture:summary:symbol-dependencies",
       "symbol-dependencies",
       "Inspect checker-backed symbol coupling between semantic-runtime source files.",
-      ContinuationPriority.Primary,
     ),
     productArchitectureContinuation(
       inquiry,
       "product.architecture:summary:call-dependencies",
       "call-dependencies",
       "Inspect checker-backed call coupling between semantic-runtime source files and framework/product targets.",
-      ContinuationPriority.Primary,
     ),
     productArchitectureContinuation(
       inquiry,
       "product.architecture:summary:kernel-records",
       "kernel-records",
       "Inspect source-level KernelStoreRecord construction sites and product vocabulary entry points.",
-      ContinuationPriority.Primary,
     ),
     productArchitectureContinuation(
       inquiry,
       "product.architecture:summary:kernel-batches",
       "kernel-batches",
       "Inspect KernelStoreBatch construction and commit labels across semantic-runtime passes.",
-      ContinuationPriority.Primary,
     ),
     productArchitectureContinuation(
       inquiry,
       "product.architecture:summary:field-provenance",
       "field-provenance",
       "Inspect FieldProvenance construction sites across semantic-runtime product models.",
-      ContinuationPriority.Secondary,
     ),
     productArchitectureContinuation(
       inquiry,
       "product.architecture:summary:profile",
       "profile",
       "Profile cold product.architecture build phases before cache, warmup, or split work.",
-      ContinuationPriority.Secondary,
     ),
     productArchitectureContinuation(
       inquiry,
       "product.architecture:summary:call-sites",
       "call-sites",
       "Inspect exact semantic-runtime call sites with owner function, callee, and resolved target.",
-      ContinuationPriority.Secondary,
     ),
     productArchitectureContinuation(
       inquiry,
       "product.architecture:summary:symbol-references",
       "symbol-references",
       "Inspect exact semantic-runtime identifier references resolved by the TypeScript checker.",
-      ContinuationPriority.Secondary,
     ),
     productArchitectureContinuation(
       inquiry,
       "product.architecture:summary:modules",
       "modules",
       "Inspect source modules with declaration, import, and size counts.",
-      ContinuationPriority.Secondary,
     ),
     productArchitectureContinuation(
       inquiry,
       "product.architecture:summary:functions",
       "functions",
       "Inspect function and method implementation bodies ranked by source span.",
-      ContinuationPriority.Secondary,
     ),
     productArchitectureContinuation(
       inquiry,
       "product.architecture:summary:classes",
       "classes",
       "Inspect class surfaces with method, property, heritage, and source-span counts.",
-      ContinuationPriority.Secondary,
     ),
     productArchitectureContinuation(
       inquiry,
       "product.architecture:summary:declarations",
       "declarations",
       "Inspect semantic-runtime declaration surfaces by area, file, and export.",
-      ContinuationPriority.Secondary,
     ),
   ];
 }
@@ -1906,7 +1889,6 @@ function productArchitectureContinuations(inquiry: Inquiry): readonly Continuati
       "product.architecture:back-to-summary",
       "summary",
       "Return to the semantic-runtime architecture rollup.",
-      ContinuationPriority.Secondary,
     ),
   ];
 }
@@ -1931,12 +1913,10 @@ function productArchitectureContinuation(
   id: string,
   projection: ProductArchitectureProjection,
   rationale: string,
-  priority: ContinuationPriority,
 ): Continuation {
   return {
     id,
     kind: ContinuationKind.SwitchProjection,
-    priority,
     rationale,
     inquiry: {
       lens: LensId.ProductArchitecture,

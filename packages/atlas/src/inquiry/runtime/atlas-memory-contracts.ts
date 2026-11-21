@@ -1,7 +1,6 @@
 import type { SourceRange } from "../locus.js";
 import type { OpenSeam } from "../evidence.js";
 import type {
-  ProductArchitectureClassSurfaceRoleId,
   ProductArchitectureClassSurfaceRow,
 } from "./product-architecture-analysis.js";
 import type { ProductArchitectureSourceReference } from "./product-architecture-source.js";
@@ -25,40 +24,6 @@ export type AtlasMemoryRecordKind =
   | "reuse-guide"
   | "decision"
   | "doc-shard";
-
-/** Whether an active pressure-frontier should appear as autonomous next work. */
-export type AtlasMemoryNextActionPolicy =
-  /** Surface this pressure-frontier as a normal next-action candidate. */
-  | "proactive"
-  /** Keep this frontier as guidance when the current task touches its domain, but do not let it drive unfiltered work. */
-  | "when-touched"
-  /** Keep the record queryable, but never turn it into a computed next action. */
-  | "hidden";
-
-/** Parse persisted next-action policy values without duplicating schema switches in readers and writers. */
-export function atlasMemoryNextActionPolicyValue(
-  value: unknown,
-): AtlasMemoryNextActionPolicy | undefined {
-  switch (value) {
-    case "proactive":
-    case "when-touched":
-    case "hidden":
-      return value;
-    default:
-      return undefined;
-  }
-}
-
-/** Effective next-action policy after applying record-kind defaults. */
-export function atlasMemoryEffectiveNextActionPolicy(
-  record: Pick<AtlasMemoryRecord, "kind" | "nextActionPolicy">,
-): AtlasMemoryNextActionPolicy | undefined {
-  const explicit = atlasMemoryNextActionPolicyValue(record.nextActionPolicy);
-  if (explicit !== undefined) {
-    return explicit;
-  }
-  return record.kind === "pressure-frontier" ? "proactive" : undefined;
-}
 
 /** Live status computed by Atlas from the current worktree. */
 export type AtlasMemoryComputedStatus =
@@ -337,8 +302,8 @@ export interface AtlasMemoryRecord {
   readonly rationale?: string;
   /** Actionable reuse or next-step guidance. */
   readonly guidance?: readonly string[];
-  /** Optional scheduling policy for active pressure-frontier records. Defaults to proactive. */
-  readonly nextActionPolicy?: AtlasMemoryNextActionPolicy;
+  /** Historical record retained for lookup by identity. */
+  readonly archived?: boolean;
   /** Anchors to source, lenses, scripts, or docs. */
   readonly anchors?: readonly AtlasMemoryAnchor[];
   /** Live checks that keep the record honest against the current worktree. */
@@ -457,43 +422,13 @@ export interface AtlasMemoryRecordRow {
   readonly domains: readonly string[];
   /** Computed worktree status. */
   readonly status: AtlasMemoryComputedStatus;
-  /** Effective scheduling policy for next-action computation after record-kind defaults. */
-  readonly nextActionPolicy?: AtlasMemoryNextActionPolicy;
   /** Live check results. */
   readonly liveChecks: readonly AtlasMemoryLiveCheckResult[];
   /** Compact row summary. */
   readonly summary: string;
 }
 
-/** Live semantic-runtime frontier with no durable memory record yet. */
-export interface AtlasMemoryUntrackedProductClassFrontier {
-  /** Stable row id. */
-  readonly id: string;
-  /** Class declaration name. */
-  readonly className: string;
-  /** Repository-relative source path. */
-  readonly filePath: string;
-  /** Product source area inferred by product.architecture. */
-  readonly area: string;
-  /** Domains inferred for filtering untracked live pressure. */
-  readonly domains: readonly string[];
-  /** Method count. */
-  readonly methodCount: number;
-  /** Property/accessor count. */
-  readonly propertyCount: number;
-  /** Source span line count. */
-  readonly lineCount: number;
-  /** Coarse class role from product.architecture for pressure triage. */
-  readonly surfaceRole: ProductArchitectureClassSurfaceRoleId;
-  /** Human-readable reason for the inferred class role. */
-  readonly surfaceRoleReason: string;
-  /** Exact class source. */
-  readonly source: ProductArchitectureSourceReference;
-  /** Compact row summary. */
-  readonly summary: string;
-}
-
-/** Rollup computed from memory rows and live pressure. */
+/** Rollup computed from durable records and their observed status. */
 export interface AtlasMemoryRollup {
   /** Durable record count. */
   readonly recordCount: number;
@@ -501,12 +436,6 @@ export interface AtlasMemoryRollup {
   readonly byKind: Readonly<Record<string, number>>;
   /** Record counts by computed status. */
   readonly byStatus: Readonly<Record<string, number>>;
-  /** Number of untracked live large product classes. */
-  readonly untrackedProductClassFrontierCount: number;
-  /** Untracked live product class frontier counts by semantic-runtime source area. */
-  readonly untrackedProductClassFrontiersByArea: Readonly<Record<string, number>>;
-  /** Untracked live product class frontier counts by product.architecture class role. */
-  readonly untrackedProductClassFrontiersBySurfaceRole: Readonly<Record<string, number>>;
   /** Storage issue count. */
   readonly storageIssueCount: number;
 }
@@ -523,8 +452,6 @@ export interface AtlasMemoryAnalysis {
   readonly records: readonly AtlasMemoryRecordRow[];
   /** Incomplete anchor checks, qualified by their backing record for paged answers. */
   readonly scopeGaps: readonly (OpenSeam & { readonly recordId: string })[];
-  /** Live product class frontiers not covered by durable records. */
-  readonly untrackedProductClassFrontiers: readonly AtlasMemoryUntrackedProductClassFrontier[];
   /** Rollup counts. */
   readonly rollup: AtlasMemoryRollup;
   /** Storage issues. */

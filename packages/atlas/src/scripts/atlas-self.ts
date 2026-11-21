@@ -23,7 +23,6 @@ const booleanFilters = new Set([
 ]);
 
 const rowProjectionKeys: Readonly<Record<string, keyof SelfValue>> = {
-  recipes: "recipes",
   contracts: "contracts",
   projections: "projectionBranches",
   continuations: "continuationRows",

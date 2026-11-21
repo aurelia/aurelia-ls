@@ -48,7 +48,6 @@ import {
 } from "../basis.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import {
@@ -1714,7 +1713,6 @@ function routeContinuations(
     continuations.push({
       id: `framework.materialization:routes:di-provider:${index}`,
       kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
       rationale:
         "Return to the DI provider atom that seeded this materialization route.",
       inquiry: {
@@ -1789,7 +1787,6 @@ function materializationRelationshipContinuations(
       continuations.push({
         id: `framework.materialization:relationships:dependency:${index}`,
         kind: ContinuationKind.SwitchProjection,
-        priority: ContinuationPriority.Primary,
         rationale:
           "Inspect the dependency row that produced this relationship.",
         inquiry: {
@@ -1857,14 +1854,12 @@ function instantiationContinuations(
           firstConstructionSite.source,
           "Inspect the low-level Aurelia framework construction site used by this route class.",
           "Low-level framework construction site for a key instantiation row.",
-          { priority: ContinuationPriority.Secondary },
         ),
       );
     }
     continuations.push({
       id: `framework.materialization:instantiations:route:${index}`,
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Secondary,
       rationale:
         "Return to the materialization route that produced this instantiation row.",
       inquiry: {
@@ -1930,7 +1925,6 @@ function resourceInstantiationContinuations(
           firstMaterializationSite.source,
           "Inspect the framework materialization site that can instantiate, resolve, build, or apply this resource class.",
           "Runtime/compiler/evaluator materialization site for a resource instantiation row.",
-          { priority: ContinuationPriority.Secondary },
         ),
       );
     }

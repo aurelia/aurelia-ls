@@ -4,7 +4,7 @@ import path from "node:path";
 import { countBy } from "../../collections.js";
 import { OpenSeamKind, type OpenSeam } from "../evidence.js";
 import { LensCatalog } from "../lens.js";
-import type { ProductArchitectureAnalysis, ProductArchitectureClassSurfaceRow } from "./product-architecture-analysis.js";
+import type { ProductArchitectureAnalysis } from "./product-architecture-analysis.js";
 import {
   type AtlasMemoryAuLinkAnchor,
   type AtlasMemoryAnalysis,
@@ -14,10 +14,6 @@ import {
   type AtlasMemoryStorageIssue,
 } from "./atlas-memory-contracts.js";
 import {
-  ATLAS_MEMORY_PRODUCT_LARGE_CLASS_LINE_THRESHOLD,
-} from "./atlas-memory-live-checks.js";
-import { atlasMemoryProductClassKey } from "./atlas-memory-product-class-key.js";
-import {
   type AtlasMemorySources,
   atlasMemoryRepoPathExists,
   atlasMemoryDeclarationStatus,
@@ -26,18 +22,16 @@ import {
 /** Validate durable memory records against live source, lens, and package-script contracts. */
 export function atlasMemoryIntegrityIssues(
   sources: AtlasMemorySources,
-  product: ProductArchitectureAnalysis,
+  readProduct: () => ProductArchitectureAnalysis,
   records: readonly AtlasMemoryRecord[],
-  trackedProductClassKeys: ReadonlySet<string>,
 ): Pick<AtlasMemoryAnalysis, "issues" | "scopeGaps"> {
   const issues = [...duplicateRecordIdIssues(records)];
   const scopeGaps: Array<OpenSeam & { recordId: string }> = [];
   for (const record of records) {
-    for (const finding of anchorIntegrityIssues(sources, product, record)) {
+    for (const finding of anchorIntegrityIssues(sources, readProduct, record)) {
       if ("kind" in finding) scopeGaps.push({ ...finding, recordId: record.id });
       else issues.push(finding);
     }
-    issues.push(...sourceClassAnchorLiveCheckIssues(product.classSurfaces, trackedProductClassKeys, record));
   }
   return { issues, scopeGaps };
 }
@@ -56,7 +50,7 @@ function duplicateRecordIdIssues(
 
 function anchorIntegrityIssues(
   sources: AtlasMemorySources,
-  product: ProductArchitectureAnalysis,
+  readProduct: () => ProductArchitectureAnalysis,
   record: AtlasMemoryRecord,
 ): readonly (AtlasMemoryStorageIssue | OpenSeam)[] {
   return (record.anchors ?? []).flatMap<AtlasMemoryStorageIssue | OpenSeam>((anchor, index) => {
@@ -68,7 +62,7 @@ function anchorIntegrityIssues(
         ? lensAnchorIntegrityIssues(record, anchor.lensId, anchor.projection, index)
         : anchor.kind === "script"
           ? scriptAnchorIntegrityIssues(sources, record, anchor, index)
-          : auLinkAnchorIntegrityIssues(sources, product, record, anchor, index);
+          : auLinkAnchorIntegrityIssues(sources, readProduct(), record, anchor, index);
     }
     const filePath = anchor.kind === "source" ? anchor.filePath : anchor.path;
     const issues: AtlasMemoryStorageIssue[] = [];
@@ -272,35 +266,4 @@ function packageScripts(
   } catch {
     return undefined;
   }
-}
-
-function sourceClassAnchorLiveCheckIssues(
-  productClasses: readonly ProductArchitectureClassSurfaceRow[],
-  trackedProductClassKeys: ReadonlySet<string>,
-  record: AtlasMemoryRecord,
-): readonly AtlasMemoryStorageIssue[] {
-  if (record.kind !== "pressure-frontier" && record.kind !== "intentional-shape") {
-    return [];
-  }
-  return (record.anchors ?? []).flatMap((anchor, index) => {
-    if (anchor.kind !== "source" || anchor.symbolName === undefined) {
-      return [];
-    }
-    const productClass = productClasses.find((row) =>
-      row.filePath === anchor.filePath && row.name === anchor.symbolName,
-    );
-    if (
-      productClass === undefined ||
-      productClass.lineCount < ATLAS_MEMORY_PRODUCT_LARGE_CLASS_LINE_THRESHOLD ||
-      trackedProductClassKeys.has(atlasMemoryProductClassKey(productClass))
-    ) {
-      return [];
-    }
-    return [
-      {
-        id: `atlas.memory:record:${record.id}:anchor:${index}:missing-product-class-check`,
-        summary: `${record.kind} record ${record.id} anchors large class ${anchor.symbolName} but no memory record live-checks that product class.`,
-      },
-    ];
-  });
 }

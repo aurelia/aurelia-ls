@@ -8,7 +8,6 @@ import {
 } from "../basis.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import {
@@ -211,7 +210,6 @@ function answerFrameworkRouterRows<TRow>(
     evidenceForRow,
     continuationsForPage: (inquiry, rows, nextOffset, limit) => [
       ...optionalNextPageContinuation(inquiry, nextOffset, limit, {
-        priority: ContinuationPriority.Secondary,
         rationale: "Continue the paged framework router row family.",
         routeSummary: "Next framework router row page.",
       }),
@@ -614,7 +612,6 @@ function routerSemanticContinuationsForRow(
         inquiry,
         {
           id: `framework.router:materialization-resource-instantiations:${index}`,
-          priority: ContinuationPriority.Secondary,
           rationale:
             "Follow routeable component resolution into resource materialization rows.",
         },
@@ -631,7 +628,6 @@ function routerSemanticContinuationsForRow(
         inquiry,
         {
           id: `framework.router:rendering-hydration-flow:${index}`,
-          priority: ContinuationPriority.Secondary,
           rationale:
             "Follow router route-tree or viewport pressure into the rendering hydration corridor.",
         },
@@ -644,7 +640,6 @@ function routerSemanticContinuationsForRow(
         inquiry,
         {
           id: `framework.router:rendering-controller-creations:${index}`,
-          priority: ContinuationPriority.Secondary,
           rationale:
             "Follow router component-agent creation into renderer child-controller creation rows.",
         },
@@ -657,7 +652,6 @@ function routerSemanticContinuationsForRow(
         inquiry,
         {
           id: `framework.router:lifecycle-controller-calls:${index}`,
-          priority: ContinuationPriority.Secondary,
           rationale:
             "Follow router component lifecycle pressure into controller lifecycle call rows.",
         },
@@ -680,7 +674,6 @@ function frameworkRouterContinuations(inquiry: Inquiry): readonly Continuation[]
     {
       id: "framework.router:packages",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
       rationale: "Inspect router package-level rollups.",
       inquiry: {
         ...inquiry,
@@ -690,7 +683,6 @@ function frameworkRouterContinuations(inquiry: Inquiry): readonly Continuation[]
     {
       id: "framework.router:surfaces",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
       rationale: "Inspect exact framework router surfaces.",
       inquiry: {
         ...inquiry,
@@ -700,7 +692,6 @@ function frameworkRouterContinuations(inquiry: Inquiry): readonly Continuation[]
     {
       id: "framework.router:flow",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
       rationale: "Inspect the ordered route-configuration and navigation flow spine.",
       inquiry: {
         ...inquiry,
@@ -710,7 +701,6 @@ function frameworkRouterContinuations(inquiry: Inquiry): readonly Continuation[]
     {
       id: "framework.router:flow-issues",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect the repository-wide audit of stale or ambiguous router flow descriptors.",
       inquiry: {
         lens: LensId.FrameworkRouter,
@@ -722,7 +712,6 @@ function frameworkRouterContinuations(inquiry: Inquiry): readonly Continuation[]
     {
       id: "framework.router:recognizer",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
       rationale: "Inspect route-recognizer parser/state/endpoint/candidate mechanics.",
       inquiry: {
         ...inquiry,
@@ -732,7 +721,6 @@ function frameworkRouterContinuations(inquiry: Inquiry): readonly Continuation[]
     {
       id: "framework.router:recognizer-issues",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect the repository-wide audit of stale or ambiguous route-recognizer mechanic descriptors.",
       inquiry: {
         lens: LensId.FrameworkRouter,
@@ -744,7 +732,6 @@ function frameworkRouterContinuations(inquiry: Inquiry): readonly Continuation[]
     {
       id: "framework.router:relationships",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect normalized router relationship rows derived from the route-flow spine.",
       inquiry: {
         ...inquiry,
@@ -755,7 +742,6 @@ function frameworkRouterContinuations(inquiry: Inquiry): readonly Continuation[]
       inquiry,
       {
         id: "framework.router:rendering-hydration-flow",
-        priority: ContinuationPriority.Secondary,
         rationale:
           "Compare router context/component-agent pressure with rendering hydration rows.",
       },
@@ -764,7 +750,6 @@ function frameworkRouterContinuations(inquiry: Inquiry): readonly Continuation[]
       inquiry,
       {
         id: "framework.router:lifecycle-controller-calls",
-        priority: ContinuationPriority.Secondary,
         rationale:
           "Compare routed component lifecycle pressure with lifecycle controller-call rows.",
       },

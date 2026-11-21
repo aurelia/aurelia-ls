@@ -38,7 +38,6 @@
         "State plugin capability rows should distinguish store admission from `& state`, `.state`, `.dispatch`, and `@fromState`. App-builder may use those rows, but the rows themselves should stay grounded in the framework plugin registrations, command lowering, binding scopes, and store lookup behavior.",
         "Do not use framework bundles such as StandardConfiguration as the ontology. Bundles are discovery and admission conveniences; the capabilities carried by bundles should remain visible independently."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -204,7 +203,6 @@
         "Collection observers and dirty checking should be treated as capability/mirror/accounting questions, not as permanent 80/20 exclusions unless a later reviewed policy says so.",
         "Use the existing framework:capabilities script with a projection before introducing a new command. Treat a cluster as a hypothesis; compare its selected members with a separately known framework construct or consumer."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -273,7 +271,6 @@
         "App diagnostics should consume framework capability demand/source-root products through api/framework-projections.ts and diagnostic-action classification before adding domain-local repair/action rows.",
         "SemanticAppQueryKind.FrameworkCapabilityDemands is the public fact surface. MCP should consume it through normal app-query pass-through rather than a bespoke tool."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -431,7 +428,6 @@
         "Relate a capability demand to the exact expression/resource application through a typed claim. Diagnostic presentation may group consequent unresolved-resource rows under the capability cause, but raw rows remain available.",
         "Use the plugin-capability-admission semantic-conformance domain as the executable contract: app-root isolation, i18n alias configuration, validation resource options, state static projection, and virtualization scope recovery are covered there."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",

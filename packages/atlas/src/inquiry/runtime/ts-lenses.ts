@@ -10,7 +10,6 @@ import {
 import { clampBudget, type PageInfo } from "../budget.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import {
@@ -1325,7 +1324,6 @@ function typeScriptGuideContinuations(
     {
       id: "ts.guide:kernel-exports",
       kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Primary,
       rationale: "Read checker-visible exports for the Aurelia kernel package.",
       inquiry: {
         ...inquiry,
@@ -1339,7 +1337,6 @@ function typeScriptGuideContinuations(
     {
       id: "ts.guide:product-api",
       kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
       rationale: "Read declaration rows for semantic-runtime.",
       inquiry: {
         ...inquiry,
@@ -1353,7 +1350,6 @@ function typeScriptGuideContinuations(
     {
       id: "ts.guide:container-facts",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect TypeChecker facts for the kernel Container export.",
       inquiry: {
         ...inquiry,
@@ -1372,7 +1368,6 @@ function typeScriptGuideContinuations(
     {
       id: "ts.guide:framework-semantics",
       kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
       rationale: "Enter Aurelia semantic catalogs after TypeScript package ore.",
       inquiry: {
         ...inquiry,
@@ -1401,7 +1396,6 @@ function typeScriptSourceContinuations(
     continuations.push({
       id: "ts.source:next-page",
       kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Primary,
       rationale: "Continue from the next source target or unread character.",
       inquiry: { ...inquiry, page: { size: rowLimit(inquiry), cursor: nextCursor } },
       route: nextPageRouteClaim("Next source page."),
@@ -1416,7 +1410,6 @@ function typeScriptSourceContinuations(
       continuations.push({
         id: `ts.source:text:${index}`,
         kind: ContinuationKind.SwitchProjection,
-        priority: ContinuationPriority.Primary,
         rationale: "Inspect exact source text for this resolved target.",
         inquiry: {
           lens: LensId.TsSource,
@@ -1441,7 +1434,6 @@ function apiSurfaceContinuations(
     continuations.push({
       id: "ts.structure:next-page",
       kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Primary,
       rationale: "Continue the TypeScript declaration surface page.",
       inquiry: {
         ...inquiry,
@@ -1453,7 +1445,6 @@ function apiSurfaceContinuations(
   continuations.push({
     id: "ts.structure:type",
     kind: ContinuationKind.SwitchLens,
-    priority: ContinuationPriority.Secondary,
     rationale: "Inspect TypeChecker facts for the same TypeScript selector.",
     inquiry: {
       lens: LensId.TsType,
@@ -1472,7 +1463,6 @@ function apiSurfaceContinuations(
     continuations.push({
       id: `ts.structure:source:${index}`,
       kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect the source declaration behind this row.",
       inquiry: {
         lens: LensId.TsSource,
@@ -1496,7 +1486,6 @@ function moduleGraphContinuations(
     continuations.push({
       id: "ts.structure:module-graph:next-page",
       kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Primary,
       rationale: "Continue the TypeScript module graph page.",
       inquiry: {
         ...inquiry,
@@ -1511,7 +1500,6 @@ function moduleGraphContinuations(
   continuations.push({
     id: "ts.structure:api",
     kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Secondary,
     rationale: "Inspect declarations for the same TypeScript selector.",
     inquiry: {
       lens: LensId.TsStructure,
@@ -1528,7 +1516,6 @@ function moduleGraphContinuations(
     continuations.push({
       id: `ts.structure:module-graph:source:${index}`,
       kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect the source edge behind this module graph row.",
       inquiry: {
         lens: LensId.TsSource,
@@ -1557,7 +1544,6 @@ function documentSymbolContinuations(
     continuations.push({
       id: "ts.structure:document-symbols:next-page",
       kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Primary,
       rationale: "Continue the TypeScript document-symbol page.",
       inquiry: {
         ...inquiry,
@@ -1572,7 +1558,6 @@ function documentSymbolContinuations(
   continuations.push({
     id: "ts.structure:document-symbols:api",
     kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Secondary,
     rationale: "Inspect declaration rows for the same TypeScript selector.",
     inquiry: {
       lens: LensId.TsStructure,
@@ -1589,7 +1574,6 @@ function documentSymbolContinuations(
     continuations.push({
       id: `ts.structure:document-symbols:source:${index}`,
       kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect the source behind this document symbol.",
       inquiry: {
         lens: LensId.TsSource,
@@ -1617,7 +1601,6 @@ function symbolContinuations(
     continuations.push({
       id: "ts.structure:symbols:next-page",
       kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Primary,
       rationale: "Continue the TypeScript symbol page.",
       inquiry: {
         ...inquiry,
@@ -1629,7 +1612,6 @@ function symbolContinuations(
   continuations.push({
     id: "ts.structure:module-graph",
     kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Secondary,
     rationale: "Inspect module edges for the same TypeScript selector.",
     inquiry: {
       lens: LensId.TsStructure,
@@ -1648,7 +1630,6 @@ function symbolContinuations(
     continuations.push({
       id: `ts.structure:symbols:type:${index}`,
       kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect TypeChecker facts for this symbol row.",
       inquiry: {
         lens: LensId.TsType,
@@ -1673,7 +1654,6 @@ function exportSurfaceContinuations(
     continuations.push({
       id: "ts.structure:exports:next-page",
       kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Primary,
       rationale: "Continue the TypeScript export surface page.",
       inquiry: {
         ...inquiry,
@@ -1685,7 +1665,6 @@ function exportSurfaceContinuations(
   continuations.push({
     id: "ts.structure:exports:api",
     kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Secondary,
     rationale: "Inspect declaration rows for the same TypeScript selector.",
     inquiry: {
       lens: LensId.TsStructure,
@@ -1709,7 +1688,6 @@ function exportSurfaceContinuations(
       continuations.push({
         id: `ts.structure:exports:source:${index}`,
         kind: ContinuationKind.InspectEvidence,
-        priority: ContinuationPriority.Secondary,
         rationale: "Inspect source behind this TypeScript export row.",
         inquiry: {
           lens: LensId.TsSource,
@@ -1725,7 +1703,6 @@ function exportSurfaceContinuations(
       continuations.push({
         id: `ts.structure:exports:type:${index}`,
         kind: ContinuationKind.SwitchLens,
-        priority: ContinuationPriority.Secondary,
         rationale: "Inspect TypeChecker facts for this TypeScript export row.",
         inquiry: {
           lens: LensId.TsType,
@@ -1749,7 +1726,6 @@ function typeContinuations(
     {
       id: "ts.type:references",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect TypeScript references for the same selector.",
       inquiry: {
         lens: LensId.TsType,
@@ -1769,7 +1745,6 @@ function typeContinuations(
     continuations.push({
       id: `ts.type:source:${index}`,
       kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect the source behind this TypeChecker fact.",
       inquiry: {
         lens: LensId.TsSource,
@@ -1794,7 +1769,6 @@ function referenceContinuations(
     continuations.push({
       id: "ts.type:references:next-page",
       kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Primary,
       rationale: "Continue the TypeScript reference page.",
       inquiry: {
         ...inquiry,
@@ -1806,7 +1780,6 @@ function referenceContinuations(
   continuations.push({
     id: "ts.type:facts",
     kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Secondary,
     rationale: "Inspect TypeChecker facts for the same selector.",
     inquiry: {
       lens: LensId.TsType,
@@ -1823,7 +1796,6 @@ function referenceContinuations(
     continuations.push({
       id: `ts.type:references:source:${index}`,
       kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect the source behind this reference.",
       inquiry: {
         lens: LensId.TsSource,
@@ -1858,7 +1830,6 @@ function navigationContinuations(
     continuations.push({
       id: `ts.type:definitions:source:${index}`,
       kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect the source behind this TypeScript navigation target.",
       inquiry: {
         lens: LensId.TsSource,
@@ -1897,7 +1868,6 @@ function callHierarchyContinuations(
     continuations.push({
       id: `ts.type:call-hierarchy:call-site:${index}`,
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
       rationale:
         "Inspect exact callee and argument facts for this call-hierarchy edge.",
       inquiry: {
@@ -1914,7 +1884,6 @@ function callHierarchyContinuations(
     continuations.push({
       id: `ts.type:call-hierarchy:source:${index}`,
       kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect the call site behind this call-hierarchy edge.",
       inquiry: {
         lens: LensId.TsSource,
@@ -1946,7 +1915,6 @@ function typeScriptCallSiteContinuations(
     continuations.push({
       id: `ts.type:call-sites:source:${index}`,
       kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect source behind this exact TypeScript call site.",
       inquiry: {
         lens: LensId.TsSource,
@@ -1987,7 +1955,6 @@ function diagnosticContinuations(
     continuations.push({
       id: `ts.type:diagnostics:source:${index}`,
       kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect the source behind this TypeScript diagnostic.",
       inquiry: {
         lens: LensId.TsSource,
@@ -2019,7 +1986,6 @@ function quickInfoContinuations(
     continuations.push({
       id: `ts.type:quick-info:source:${index}`,
       kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect the source behind this quick-info row.",
       inquiry: {
         lens: LensId.TsSource,
@@ -2071,7 +2037,6 @@ function highlightContinuations(
     continuations.push({
       id: `ts.type:highlights:source:${index}`,
       kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect the source behind this TypeScript highlight.",
       inquiry: {
         lens: LensId.TsSource,
@@ -2106,7 +2071,6 @@ function renameContinuations(
     continuations.push({
       id: `ts.type:rename:source:${index}`,
       kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect the source behind this rename location.",
       inquiry: {
         lens: LensId.TsSource,
@@ -2166,7 +2130,6 @@ function refactorEditContinuations(
     {
       id: "ts.type:refactor-edits:actions",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Secondary,
       rationale:
         "Inspect applicable TypeScript refactor actions for this selector.",
       inquiry: {
@@ -2210,7 +2173,6 @@ function fileRenameEditContinuations(
     {
       id: "ts.type:file-rename-edits:rename",
       kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Secondary,
       rationale: "Inspect rename information for the same selector.",
       inquiry: {
         lens: LensId.TsType,
@@ -2237,7 +2199,6 @@ function typeProjectionBaseContinuations(
     continuations.push({
       id: `${idPrefix}:next-page`,
       kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Primary,
       rationale: nextPageRationale,
       inquiry: {
         ...inquiry,
@@ -2249,7 +2210,6 @@ function typeProjectionBaseContinuations(
   continuations.push({
     id: `${idPrefix}:facts`,
     kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Secondary,
     rationale: "Inspect TypeChecker facts for the same selector.",
     inquiry: {
       lens: LensId.TsType,

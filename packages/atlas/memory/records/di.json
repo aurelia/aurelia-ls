@@ -142,7 +142,6 @@
         "Use DiKeyIdentityEmitter for all key publication and DiProviderActivationView for provider/default/activation reads rather than adding constructor-local identity or source graphs.",
         "Treat splits as framework-interface boundaries, not generic small-class cleanup."
       ],
-      "nextActionPolicy": "proactive",
       "anchors": [
         {
           "kind": "source",
@@ -774,7 +773,6 @@
         "Configured catalog construction is pre-spending evidence. It may classify an admission from its retained evaluator carrier, but app-world selection must join the catalog to an exact operation by both admission identity and effective framework kind.",
         "Keep provider activation downstream of spent slots and canonical registration values. Do not create a second registration-application graph inside DiProviderActivationView."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",

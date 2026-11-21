@@ -385,7 +385,6 @@
         "Use Atlas framework.errors diagnostic frontiers and likelySemanticRuntimeOwner hints to choose the owning substrate, then inspect exact framework usage rows before adding framework-code links.",
         "For broad fixture sweeps, use compact app-pressure fixture-owner rows (`templates.diagnostic-error-code-fixtures`, `app.diagnostic-error-code-fixtures`, `bindings.data-flow-error-code-fixtures`, `bindings.target-access-error-code-fixtures`, and `router.error-code-fixtures`) before doing isolated runs. These rows point exact framework codes at public fixture keys while custom/external roots collapse to `custom-root`."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -669,7 +668,6 @@
         "Profile app-world construction by phase before refactoring; likely owners include SemanticRuntime.openApp, AureliaAppWorldProjectConstructionFrame, TypeSystemProject, template runtime analysis, and query-depth policy.",
         "Keep the MCP workaround operational and visible, but do not treat a larger heap as the product fix."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -713,11 +711,6 @@
         },
         {
           "kind": "doc",
-          "path": "packages/semantic-runtime/src/WORKBENCH.md",
-          "summary": "Generalized large-app app-world heap pressure note."
-        },
-        {
-          "kind": "doc",
           "path": "packages/semantic-runtime/README.md",
           "summary": "Documented app pressure project filters."
         }
@@ -740,7 +733,7 @@
         }
       ],
       "createdAt": "2026-05-16",
-      "updatedAt": "2026-07-18"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "decision:mcp-preview-prioritizes-idiomatic-code-economy",
@@ -987,7 +980,6 @@
         "A source-backed verified row that cannot be mapped is adapter failure, not semantic uncertainty. Keep the verified subset, log the named failures, and use a warning notification rather than silently claiming completeness.",
         "Any new consumer (custom request, MCP, future editor surface) must surface candidate existence before claiming the operation covered the workspace."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",

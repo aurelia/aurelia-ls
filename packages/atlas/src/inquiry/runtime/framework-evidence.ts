@@ -41,7 +41,6 @@ import {
   type FrameworkRouterEntityRow,
   type FrameworkSyntaxProductRow,
 } from "./framework-entities.js";
-import type { FrameworkDiscoveryRecipeRow } from "./framework-recipes.js";
 import type { FrameworkHydrationFlowRow } from "./framework-rendering-hydration-flow.js";
 import type { FrameworkRenderConsequenceRow } from "./framework-rendering-consequences.js";
 import { sourceRangeForObserverEntity } from "./framework-observer-entities.js";
@@ -125,19 +124,6 @@ export function evidenceForFlow(flow: FrameworkFlowDefinition): Evidence {
     confidence: EvidenceConfidence.Exact,
     summary: `${flow.flow}: ${flow.summary}`,
     data: flow,
-  };
-}
-
-export function evidenceForFrameworkDiscoveryRecipe(
-  recipe: FrameworkDiscoveryRecipeRow,
-): Evidence {
-  return {
-    id: recipe.id,
-    kind: EvidenceKind.MaintenanceSignal,
-    role: EvidenceRole.Subject,
-    confidence: EvidenceConfidence.Exact,
-    summary: `${recipe.title}: ${recipe.question}`,
-    data: recipe,
   };
 }
 
@@ -612,16 +598,6 @@ export function evidenceForRenderingStructure(
     )}] capabilities [${row.renderingCapabilities.join(", ")}]`,
     source: source ?? undefined,
     data: row,
-  };
-}
-
-export function evidenceForQuestion(question: string, index: number): Evidence {
-  return {
-    id: `framework.question:${index}`,
-    kind: EvidenceKind.MaintenanceSignal,
-    role: EvidenceRole.Support,
-    confidence: EvidenceConfidence.Exact,
-    summary: question,
   };
 }
 

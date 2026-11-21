@@ -1,9 +1,6 @@
 import type { Continuation } from "../continuation.js";
 import type { Inquiry } from "../inquiry.js";
-import {
-  nextPageContinuation,
-  projectionContinuation,
-} from "./framework-continuation-core.js";
+import { projectionContinuation } from "./framework-continuation-core.js";
 
 export function frameworkSummaryContinuations(
   inquiry: Inquiry,
@@ -111,12 +108,6 @@ export function frameworkSummaryContinuations(
       "rendering-structures",
       "Inspect rendering, hydration, controller, view, and lifecycle structure exports.",
     ),
-    projectionContinuation(
-      inquiry,
-      "framework.discovery:open-questions",
-      "open-questions",
-      "Inspect open discovery questions that should steer indexing work.",
-    ),
   ];
 }
 
@@ -191,35 +182,4 @@ export function renderingSummaryContinuations(
       "Inspect normalized rendering relationships across compiler, renderer, binding, lifecycle, and observation axes.",
     ),
   ];
-}
-
-export function openQuestionContinuations(
-  inquiry: Inquiry,
-  nextOffset: number | undefined,
-  limit: number,
-): readonly Continuation[] {
-  return nextOffset === undefined
-    ? [
-        projectionContinuation(
-          inquiry,
-          "framework.discovery:anchors",
-          "anchors",
-          "Return to seed anchors that can answer these questions.",
-        ),
-      ]
-    : [
-        nextPageContinuation(
-          inquiry,
-          "framework.discovery:open-questions:next-page",
-          "Continue framework discovery questions.",
-          nextOffset,
-          limit,
-        ),
-        projectionContinuation(
-          inquiry,
-          "framework.discovery:anchors",
-          "anchors",
-          "Return to seed anchors that can answer these questions.",
-        ),
-      ];
 }

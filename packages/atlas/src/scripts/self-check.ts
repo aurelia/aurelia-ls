@@ -4,7 +4,6 @@ import path from "node:path";
 import ts from "typescript";
 import { assertFrameworkRenderingQueries } from "./self-check-rendering.js";
 import { assertFrameworkIdentityAndComposition } from "./self-check-bridge.js";
-import { assertWorkRouterScope } from "./self-check-work-router.js";
 import { assertFrameworkTerrain } from "./self-check-terrain.js";
 
 import { OutcomeKind } from "../inquiry/answer.js";
@@ -16,7 +15,6 @@ import { LensId, LensStage } from "../inquiry/lens.js";
 import { LocusKind } from "../inquiry/locus.js";
 import { isRouterExportName } from "../inquiry/runtime/aurelia-source-imports.js";
 import type { AtlasMemoryValue } from "../inquiry/runtime/atlas-memory-lenses.js";
-import type { AtlasWorkRouterValue } from "../inquiry/runtime/atlas-work-router-rows.js";
 import type { FrameworkRouterValue } from "../inquiry/runtime/framework-router-lenses.js";
 import {
   FrameworkBundleKind,
@@ -92,28 +90,6 @@ const atlasMemorySummary = await api.ask({
   locus: { kind: LocusKind.Repo },
   projection: "summary",
   budget: { rows: 1, evidencePerSubject: 0 },
-});
-const verifiedContinuationCoverage = await api.ask({
-  lens: LensId.AtlasWorkRouter,
-  locus: { kind: LocusKind.Repo },
-  projection: "coverage",
-  filters: {
-    coverageDimension: "intent-aware-continuations",
-    coverageState: "covered",
-    coverageDepth: "verified",
-  },
-  budget: { rows: 20, evidencePerSubject: 0 },
-});
-const impossibleContinuationCoverage = await api.ask({
-  lens: LensId.AtlasWorkRouter,
-  locus: { kind: LocusKind.Repo },
-  projection: "coverage",
-  filters: {
-    coverageDimension: "intent-aware-continuations",
-    coverageState: "missing",
-    coverageDepth: "verified",
-  },
-  budget: { rows: 20, evidencePerSubject: 0 },
 });
 const observerFacetAnchors = await api.ask({
   lens: LensId.BridgeAuLink,
@@ -229,14 +205,8 @@ for (const row of contractRows) {
     throw new Error(`Missing checker-resolved answer function for ${row.lensId}.`);
   }
 }
-const routeList = await api.ask({ lens: LensId.AtlasWorkRouter, projection: "routes" });
-const defaultRouteBudget = map.lenses.find(spec => spec.id === LensId.AtlasWorkRouter)?.defaultBudget?.rows;
-if (routeList.page?.size !== defaultRouteBudget) {
-  throw new Error("Work Router page size differs from its advertised default.");
-}
 await assertFrameworkRenderingQueries(api);
 await assertFrameworkIdentityAndComposition(api);
-await assertWorkRouterScope(api);
 await assertFrameworkTerrain(api);
 
 for (const lens of map.lenses) {
@@ -451,21 +421,6 @@ if (atlasMemoryValue.rollup.recordCount === 0) {
 if (atlasMemoryValue.rollup.storageIssueCount !== 0) {
   throw new Error(
     `Atlas memory store reported ${atlasMemoryValue.rollup.storageIssueCount} storage issue(s).`,
-  );
-}
-
-const verifiedContinuationCoverageValue = verifiedContinuationCoverage.value as AtlasWorkRouterValue | null | undefined;
-if (
-  verifiedContinuationCoverage.outcome !== OutcomeKind.Hit ||
-  (verifiedContinuationCoverageValue?.routeCoverage?.length ?? 0) === 0
-) {
-  throw new Error("Work Router coverage projection did not return verified intent-aware continuation rows.");
-}
-
-const impossibleContinuationCoverageValue = impossibleContinuationCoverage.value as AtlasWorkRouterValue | null | undefined;
-if ((impossibleContinuationCoverageValue?.routeCoverage?.length ?? 0) !== 0) {
-  throw new Error(
-    "Work Router coverage filters matched coverage state and depth from different rows.",
   );
 }
 

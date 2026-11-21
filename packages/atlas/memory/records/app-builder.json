@@ -4,7 +4,6 @@
     {
       "id": "intent:app-builder-pattern-ontology",
       "kind": "reuse-guide",
-      "nextActionPolicy": "hidden",
       "domains": [
         "semantic-runtime",
         "app-builder",
@@ -49,12 +48,12 @@
         }
       ],
       "createdAt": "2026-05-23",
-      "updatedAt": "2026-11-21"
+      "updatedAt": "2026-11-21",
+      "archived": true
     },
     {
       "id": "intent:app-builder-v1-scope-recalibration",
       "kind": "reuse-guide",
-      "nextActionPolicy": "hidden",
       "domains": [
         "semantic-runtime",
         "app-builder",
@@ -115,20 +114,9 @@
           "symbolName": "AppBuilderControlId"
         }
       ],
-      "authority": [
-        "The June 13 Aurelia Patterns transfer packet and later operator decisions supersede this June 7 packet for public app-building guidance.",
-        "The June 1-3 interview files remain texture/provenance, not co-equal current scope.",
-        "Semantic-runtime app-builder source and generated fixtures remain executable evidence but can be stale relative to the latest calibration."
-      ],
-      "relatedRouteIds": [
-        "semantic-runtime.app-builder-pattern-ontology",
-        "semantic-runtime.app-builder-generated-fixture-contracts",
-        "semantic-runtime.semantic-contract-verification",
-        "mcp.developer-preview-shell",
-        "atlas.work-router.self-improvement"
-      ],
       "createdAt": "2026-06-07",
-      "updatedAt": "2026-11-21"
+      "updatedAt": "2026-11-21",
+      "archived": true
     },
     {
       "id": "doc:app-builder-synthesis-pack",
@@ -165,7 +153,7 @@
       ],
       "createdAt": "2026-06-01",
       "updatedAt": "2026-11-21",
-      "nextActionPolicy": "hidden"
+      "archived": true
     },
     {
       "id": "decision:app-builder-read-only-ontology-before-generation",
@@ -208,7 +196,7 @@
       ],
       "createdAt": "2026-06-01",
       "updatedAt": "2026-11-21",
-      "nextActionPolicy": "hidden"
+      "archived": true
     },
     {
       "id": "decision:app-builder-style-input-boundary",
@@ -256,8 +244,7 @@
         }
       ],
       "createdAt": "2026-06-01",
-      "updatedAt": "2026-11-21",
-      "nextActionPolicy": "when-touched"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "decision:app-builder-component-control-manifest",
@@ -330,7 +317,6 @@
     {
       "id": "reuse:app-builder-native-first-control-patterns",
       "kind": "reuse-guide",
-      "nextActionPolicy": "hidden",
       "domains": [
         "semantic-runtime",
         "app-builder",
@@ -375,7 +361,8 @@
         }
       ],
       "createdAt": "2026-06-01",
-      "updatedAt": "2026-11-21"
+      "updatedAt": "2026-11-21",
+      "archived": true
     },
     {
       "id": "reuse:app-builder-interview-decision-effects",
@@ -413,7 +400,7 @@
       ],
       "createdAt": "2026-06-03",
       "updatedAt": "2026-11-21",
-      "nextActionPolicy": "hidden"
+      "archived": true
     },
     {
       "id": "frontier:app-builder-domain-identity-typing",
@@ -433,7 +420,6 @@
         "Target-specific source-lowering preflight requirements should run only after coarse input readiness is ready; broad/default source-lowering discovery should remain a menu instead of becoming partial because caller inputs are absent.",
         "When adding new identity-consuming source lowerers, thread the identity value kind through domain descriptors, materialization, input-contract detail, preflight, seed-record validation, generated source, generated fixtures, and contracts in one slice."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -551,7 +537,6 @@
         "Use sourceLoweringComponentPair.appShell for a runnable generated fixture and leave it absent for a component preview. SourceNaming.appName and explicit source/template placement belong to the caller.",
         "Inspect component-pair-task-draft-app-shell and its verification file before changing the section-to-shell handoff. Public MCP app-building guidance is provided by the Patterns tools."
       ],
-      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "doc",
@@ -604,7 +589,6 @@
     {
       "id": "reuse:app-builder-gradual-ascent-status-matrix",
       "kind": "reuse-guide",
-      "nextActionPolicy": "hidden",
       "domains": [
         "semantic-runtime",
         "app-builder",
@@ -636,7 +620,8 @@
         }
       ],
       "createdAt": "2026-06-01",
-      "updatedAt": "2026-11-21"
+      "updatedAt": "2026-11-21",
+      "archived": true
     }
   ]
 }

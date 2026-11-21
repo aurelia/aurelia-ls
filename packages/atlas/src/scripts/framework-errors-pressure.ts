@@ -193,7 +193,7 @@ console.log(`- usages with unresolved code definition: ${rollup.unresolvedUsageC
 console.log(`- duplicate AUR labels across framework definitions: ${rollup.duplicateCodeLabelCount}`);
 console.log(`- error families sampled: ${sampleFamilies.length}`);
 console.log(`- diagnostic frontiers sampled: ${sampleDiagnosticFrontiers.length}`);
-console.log(`- diagnostic code intake rows sampled: ${sampleDiagnosticCodes.length}`);
+console.log(`- diagnostic code rows sampled: ${sampleDiagnosticCodes.length}`);
 console.log(`- query 'binding' code rows sampled: ${sampleQueryBindingCodes.length}`);
 console.log(`- semantic-runtime AUR references: ${rollup.semanticRuntimeCodeReferenceCount}`);
 console.log(`- semantic-runtime used AUR references: ${rollup.semanticRuntimeUsedCodeReferenceCount}`);
@@ -256,7 +256,7 @@ if (sampleFamilies.length === 0) {
   console.log("- none");
 } else {
   for (const row of sampleFamilies) {
-    console.log(`- ${row.packageId} ${row.enumName}.${row.namePrefix}* codes=${row.codeCount} usages=${row.usageCount} unused=${row.unusedCodeCount} score=${row.pressureScore}`);
+    console.log(`- ${row.packageId} ${row.enumName}.${row.namePrefix}* codes=${row.codeCount} usages=${row.usageCount} unused=${row.unusedCodeCount}`);
   }
 }
 
@@ -267,7 +267,7 @@ if (sampleDiagnosticFrontiers.length === 0) {
 } else {
   for (const row of sampleDiagnosticFrontiers) {
     const owner = row.likelySemanticRuntimeOwner == null ? "" : ` owner=${row.likelySemanticRuntimeOwner}`;
-    console.log(`- ${row.packageId} ${row.enumName}.${row.namePrefix}* score=${row.frontierScore} coverage=${row.semanticRuntimeCoverage} usedExact=${row.semanticRuntimeLinkedCodeCount}/${row.codeCount} declaredExact=${row.semanticRuntimeExactReferenceCount} intentional=${row.intentionalUnclaimedCodeCount} futureSubstrate=${row.intentionalUnclaimedFutureSubstrateCodeCount} runtimeBoundary=${row.intentionalUnclaimedRuntimeBoundaryCodeCount} dormant=${row.dormantCodeCount} actionable=${row.actionableUncoveredCodeCount} rawGaps=${row.rawAuthorityGapCount}${owner} next=${row.recommendedNextStep}`);
+    console.log(`- ${row.packageId} ${row.enumName}.${row.namePrefix}* coverage=${row.semanticRuntimeCoverage} usedExact=${row.semanticRuntimeLinkedCodeCount}/${row.codeCount} declaredExact=${row.semanticRuntimeExactReferenceCount} intentional=${row.intentionalUnclaimedCodeCount} futureSubstrate=${row.intentionalUnclaimedFutureSubstrateCodeCount} runtimeBoundary=${row.intentionalUnclaimedRuntimeBoundaryCodeCount} dormant=${row.dormantCodeCount} actionable=${row.actionableUncoveredCodeCount} rawGaps=${row.rawAuthorityGapCount}${owner}`);
   }
 }
 
@@ -278,7 +278,7 @@ if (sampleDiagnosticCodes.length === 0) {
 } else {
   for (const row of sampleDiagnosticCodes) {
     const owner = row.likelySemanticRuntimeOwner == null ? "" : ` owner=${row.likelySemanticRuntimeOwner}`;
-    console.log(`- ${row.packageId} ${row.enumName}.${row.name} ${row.codeLabel}; disposition=${row.diagnosticDisposition}; score=${row.diagnosticScore}; usages=${row.usageCount}; usedExact=${row.semanticRuntimeUsedExactReferenceCount}; declaredExact=${row.semanticRuntimeExactReferenceCount}; rawGaps=${row.rawAuthorityGapCount}${owner} next=${row.recommendedNextStep}`);
+    console.log(`- ${row.packageId} ${row.enumName}.${row.name} ${row.codeLabel}; disposition=${row.diagnosticDisposition}; usages=${row.usageCount}; usedExact=${row.semanticRuntimeUsedExactReferenceCount}; declaredExact=${row.semanticRuntimeExactReferenceCount}; rawGaps=${row.rawAuthorityGapCount}${owner}`);
   }
 }
 

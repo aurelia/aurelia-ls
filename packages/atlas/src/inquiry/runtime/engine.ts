@@ -9,7 +9,6 @@ import {
 } from "../basis.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import { OpenSeamKind } from "../evidence.js";
@@ -53,7 +52,6 @@ import { answerPluginArchitecture } from "./plugin-architecture-lenses.js";
 import { answerFrameworkRouter } from "./framework-router-lenses.js";
 import { answerFrameworkCorpus } from "./framework-corpus-lenses.js";
 import { answerAtlasMemory } from "./atlas-memory-lenses.js";
-import { answerAtlasWorkRouter } from "./atlas-work-router-lenses.js";
 import type { InquiryWorld } from "./world.js";
 
 /** Hot substrate context shared by runtime lens implementations. */
@@ -95,7 +93,6 @@ export class InquiryEngine {
       [LensId.RepoTerrain]: inquiry => answerRepoTerrain(world, inquiry),
       [LensId.AtlasSelf]: (inquiry, project) => answerSelf(world, inquiry, new Set(this.implementedLensIds()), project),
       [LensId.AtlasMemory]: answerAtlasMemory,
-      [LensId.AtlasWorkRouter]: answerAtlasWorkRouter,
       [LensId.TsSource]: answerTsSource,
       [LensId.TsStructure]: answerTsStructure,
       [LensId.TsType]: answerTsType,
@@ -205,7 +202,6 @@ export class InquiryEngine {
         openSeams: [{ kind: OpenSeamKind.InsufficientBasis, summary }],
         continuations: [{
           kind: ContinuationKind.SwitchLens,
-          priority: ContinuationPriority.Primary,
           rationale: "Inspect the admitted package roots and IDs.",
           inquiry: { lens: LensId.WorkspaceArchitecture, locus: RepoRootLocus, projection: "packages" },
         }],
@@ -492,7 +488,6 @@ function numericBudgetLane<TKey extends keyof Budget>(
 function surfaceMapContinuation(rationale: string): Continuation {
   return {
     kind: ContinuationKind.SwitchLens,
-    priority: ContinuationPriority.Primary,
     rationale,
     inquiry: {
       lens: LensId.RepoMap,

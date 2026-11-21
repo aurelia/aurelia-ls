@@ -70,7 +70,7 @@ export const RepoTerrain: readonly RepoArea[] = [
     status: RepoAreaStatus.Active,
     ownership: RepoAreaOwnership.InRepo,
     root: "packages/atlas",
-    summary: "Atlas package and substrate for repository-aware Codex collaboration.",
+    summary: "Maintainer tools for source analysis, decision memory, and Aurelia framework inquiries.",
   },
   {
     id: RepoAreaId.SemanticRuntime,

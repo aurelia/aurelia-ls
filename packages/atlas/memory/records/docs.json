@@ -2,90 +2,6 @@
   "schemaVersion": "atlas-memory.v1",
   "records": [
     {
-      "id": "doc:product-pressures-provenance-evidence",
-      "kind": "doc-shard",
-      "domains": [
-        "semantic-runtime",
-        "atlas",
-        "provenance",
-        "evidence",
-        "product-architecture"
-      ],
-      "summary": "Product-specific pressures distinguish authored source provenance from framework-fixed catalog facts and warn against false field-level edit precision.",
-      "rationale": "The user explicitly noticed AI-generated provenance records that did not look thought through, especially framework property provenance. This shard makes that pressure queryable without rereading the entire product-specific pressure document.",
-      "guidance": [
-        "Use product.architecture field-provenance rows before deciding that a fact needs field-level provenance.",
-        "Authored TS/HTML/configuration facts may need exact field spans; framework-fixed catalog facts often need product/source provenance instead.",
-        "If a provenance fallback appears, trace the lower-level identity threading before accepting defensive source broadening."
-      ],
-      "anchors": [
-        {
-          "kind": "doc",
-          "path": "packages/atlas/workbench/product-specific-pressures.md",
-          "heading": "Provenance And Evidence",
-          "summary": "Product obligation notes for provenance and evidence."
-        },
-        {
-          "kind": "lens",
-          "lensId": "product.architecture",
-          "projection": "field-provenance",
-          "summary": "Live field-provenance construction pressure."
-        }
-      ],
-      "liveChecks": [
-        {
-          "kind": "source-file-exists",
-          "filePath": "packages/atlas/workbench/product-specific-pressures.md"
-        }
-      ],
-      "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
-    },
-    {
-      "id": "doc:product-pressures-context-economics",
-      "kind": "doc-shard",
-      "domains": [
-        "semantic-runtime",
-        "atlas",
-        "inquiry-algebra",
-        "performance",
-        "external-apps"
-      ],
-      "summary": "Context economics is an inquiry-algebra pressure: callers should pay for the minimum honest substrate needed for the product question.",
-      "rationale": "Multiple long runs found that slow phases can mean either ordinary product-feature cost or missing low-level indexes. This shard preserves the distinction so future performance work does not collapse back into generic caching or smoke tests.",
-      "guidance": [
-        "Profile deep enough to separate repeated primitive costs from product-feature costs.",
-        "When a product question does not need binding observation, TypeChecker projection, router activation, or full app-world construction, expose that as inquiry algebra.",
-        "For mixed monorepos and external roots, run workspace/app-shape lanes before expensive semantic-runtime opening."
-      ],
-      "anchors": [
-        {
-          "kind": "doc",
-          "path": "packages/atlas/workbench/product-specific-pressures.md",
-          "heading": "Context Economics",
-          "summary": "Product obligation notes for multi-resolution answers and cost boundaries."
-        },
-        {
-          "kind": "script",
-          "command": "pnpm --filter @aurelia-ls/atlas profile:product-architecture",
-          "summary": "Product architecture profile lane."
-        },
-        {
-          "kind": "script",
-          "command": "pnpm --filter @aurelia-ls/atlas profile:workspace-architecture",
-          "summary": "Workspace architecture profile lane."
-        }
-      ],
-      "liveChecks": [
-        {
-          "kind": "source-file-exists",
-          "filePath": "packages/atlas/workbench/product-specific-pressures.md"
-        }
-      ],
-      "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
-    },
-    {
       "id": "decision:mcp-comes-after-public-product-api",
       "kind": "decision",
       "domains": [
@@ -105,12 +21,6 @@
       "anchors": [
         {
           "kind": "doc",
-          "path": "packages/atlas/workbench/product-specific-pressures.md",
-          "heading": "MCP Packaging",
-          "summary": "MCP packaging pressure and public API framing."
-        },
-        {
-          "kind": "doc",
           "path": "packages/semantic-runtime/src/api/README.md",
           "summary": "Semantic-runtime public API boundary."
         },
@@ -122,10 +32,6 @@
         }
       ],
       "liveChecks": [
-        {
-          "kind": "source-file-exists",
-          "filePath": "packages/atlas/workbench/product-specific-pressures.md"
-        },
         {
           "kind": "source-file-exists",
           "filePath": "packages/semantic-runtime/src/api/README.md"

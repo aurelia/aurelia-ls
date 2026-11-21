@@ -108,7 +108,6 @@
       "rationale": "Semantic-runtime memory work is a CPU/memory/inquiry-algebra trade-off. The profiler must keep construction phases, public query cost, TypeScript Program composition, query-claim storage, and depth/profile groupings visible before a cache, compression pass, or materialization split is chosen.",
       "guidance": [
         "Run this lane before adding cache policy, changing app-opening defaults, trimming product details, or moving work between app construction and public query answers.",
-        "Use Work Router route `semantic-runtime.app-telemetry` for app-world construction, routed-query payload, continuation-envelope, and query-claim profiler work; avoid entering telemetry only through a neighboring query-claim or memory route when the profiler itself is the question.",
         "Prefer aggregate output for broad pressure, but read the grouped root/depth/profile rows before interpreting global totals. Global totals reveal total load; grouped rows reveal which analysis depth or inquiry profile introduced it.",
         "Use grouped timing leaders when one aggregate run spans multiple depths or profiles. They keep the leading phase costs attached to the root/depth/profile group so a profile comparison does not require immediate narrower reruns. TypeSystem inner phases are part of the aggregate timing lane so Program/checker cost stays visible beside the outer app-world phase.",
         "Use the compact compiler-options profile to explain the one options result captured for the current project-input generation. Static evaluation and TypeSystem construction share that ProjectBootFrame; do not interpret it as a process-global compiler-options cache or cross-generation reuse.",
@@ -176,7 +175,7 @@
         }
       ],
       "createdAt": "2026-05-17",
-      "updatedAt": "2026-07-18"
+      "updatedAt": "2026-11-21"
     }
   ]
 }

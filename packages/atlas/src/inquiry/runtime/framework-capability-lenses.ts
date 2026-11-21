@@ -9,7 +9,6 @@ import {
 } from "../basis.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import {
@@ -505,7 +504,6 @@ const CAPABILITY_ROW_FAMILY = new PagedRowFamily<FrameworkCapabilityRow>({
           "Continue the framework capability catalog.",
           nextOffset,
           limit,
-          { priority: ContinuationPriority.Secondary },
         ),
       );
     }
@@ -530,7 +528,6 @@ const MATRIX_ROW_FAMILY = new PagedRowFamily<FrameworkCapabilityMatrixRow>({
             "Continue the framework capability matrix.",
             nextOffset,
             limit,
-            { priority: ContinuationPriority.Secondary },
           ),
         ],
 });
@@ -549,7 +546,6 @@ const EVIDENCE_ROW_FAMILY = new PagedRowFamily<FrameworkCapabilityEvidenceRow>({
             "Continue the framework capability evidence rows.",
             nextOffset,
             limit,
-            { priority: ContinuationPriority.Secondary },
           ),
       ],
 });
@@ -568,7 +564,6 @@ const GROUNDING_ROW_FAMILY = new PagedRowFamily<FrameworkCapabilityGroundingRow>
             "Continue the framework capability grounding rows.",
             nextOffset,
             limit,
-            { priority: ContinuationPriority.Secondary },
           ),
         ],
 });
@@ -1940,7 +1935,6 @@ const INVENTORY_ROW_FAMILY = new PagedRowFamily<FrameworkTerritoryConstruct>({
             "Continue the source-derived framework inventory.",
             nextOffset,
             limit,
-            { priority: ContinuationPriority.Secondary },
           ),
         ],
 });
@@ -1959,7 +1953,6 @@ const REVERSE_COVERAGE_ROW_FAMILY = new PagedRowFamily<FrameworkReverseCoverageF
             "Continue framework reverse-coverage family rows.",
             nextOffset,
             limit,
-            { priority: ContinuationPriority.Primary },
           ),
         ],
 });
@@ -2100,35 +2093,30 @@ export function answerFrameworkCapabilities(
             "framework.capabilities:catalog",
             "catalog",
             "Inspect the paged capability catalog rows.",
-            { priority: ContinuationPriority.Primary },
           ),
           projectionContinuation(
             inquiry,
             "framework.capabilities:matrix",
             "matrix",
             "Inspect capability rows as a selection/constraint matrix.",
-            { priority: ContinuationPriority.Secondary },
           ),
           projectionContinuation(
             inquiry,
             "framework.capabilities:evidence",
             "evidence",
             "Inspect materialized evidence descriptors for the capability terrain.",
-            { priority: ContinuationPriority.Secondary },
           ),
           projectionContinuation(
             inquiry,
             "framework.capabilities:evidence-trace",
             "evidence-trace",
             "Materialize evidence descriptors by asking their backing Atlas lenses.",
-            { priority: ContinuationPriority.Secondary },
           ),
           projectionContinuation(
             inquiry,
             "framework.capabilities:grounding",
             "grounding",
             "Inspect neutral grounding rows derived from evidence and prerequisites.",
-            { priority: ContinuationPriority.Secondary },
           ),
         ],
       },
@@ -2195,7 +2183,6 @@ export function answerFrameworkCapabilities(
           "Continue materialized framework capability evidence traces.",
           page.nextOffset,
           limit,
-          { priority: ContinuationPriority.Secondary },
         )],
       },
     );
@@ -2341,7 +2328,6 @@ function qualifyTerritoryInputs<T>(answer: Answer<T>, inputPages: readonly Frame
       ...partial.flatMap((input): Continuation[] => input.next === undefined ? [] : [{
         id: `${id}:${input.family}:next`,
         kind: ContinuationKind.SwitchLens,
-        priority: ContinuationPriority.Primary,
         rationale: `Inspect the first unexamined ${input.family} source page before drawing absence or completeness conclusions.`,
         inquiry: input.next,
       }]),
@@ -3026,7 +3012,6 @@ function capabilityRowContinuations(
         {
           lens: firstLensEvidence.lensId,
           filters: targetFiltersForEvidence(row, firstLensEvidence, readFilters(inquiry)) ?? {},
-          priority: ContinuationPriority.Secondary,
           evidence: capabilityEvidence(row),
           basis: [BasisKind.AtlasContract],
           summary: firstLensEvidence.summary,

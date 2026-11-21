@@ -12,7 +12,6 @@ import {
 } from "../../source/index.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
 import {
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import {
@@ -2164,7 +2163,6 @@ function flowEntityLinkContinuations(
         row.entitySource,
         "Inspect the public observer entity declaration linked from this flow site.",
         "Source for linked observer entity declaration.",
-        { priority: ContinuationPriority.Secondary },
       ),
     );
   }
@@ -2194,7 +2192,6 @@ function observerCapabilityContinuation(
       rationale:
         "Inspect observer entities with the capability implied by this binding lookup.",
       routeSummary: "Binding observer lookup to observer capability catalog.",
-      priority: ContinuationPriority.Secondary,
     },
   );
 }
@@ -2278,7 +2275,6 @@ function observerLookupEntityLinkContinuation(
       rationale:
         "Jump from a binding observer lookup API to linked observer entity rows inside the observation subsystem.",
       routeSummary: "Binding observer lookup to observer entity links.",
-      priority: ContinuationPriority.Secondary,
     },
   );
 }
@@ -2301,7 +2297,6 @@ function observerEntitySourceContinuations(
         nextPageRationale,
         nextOffset,
         limit,
-        { priority: ContinuationPriority.Secondary },
       ),
     );
   }

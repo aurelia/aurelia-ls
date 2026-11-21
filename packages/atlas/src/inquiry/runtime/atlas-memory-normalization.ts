@@ -2,7 +2,6 @@ import { isRecord } from "../../collections.js";
 import { normalizeAtlasMemoryRepoPath } from "./atlas-memory-source-helpers.js";
 import {
   ATLAS_MEMORY_SCHEMA_VERSION,
-  atlasMemoryNextActionPolicyValue,
   type AtlasMemoryAnchor,
   type AtlasMemoryAtlasSelfSourceFileCheck,
   type AtlasMemoryAtlasSelfVariableCheck,
@@ -129,8 +128,13 @@ export function normalizeAtlasMemoryRecord(
     );
     return null;
   }
-  const nextActionPolicy = atlasMemoryNextActionPolicyValue(value.nextActionPolicy);
-  if (value.nextActionPolicy !== undefined && nextActionPolicy === undefined) {
+  if (value.archived !== undefined && typeof value.archived !== "boolean") {
+    issues.push(recordIssue(id, "archived must be a boolean."));
+    return null;
+  }
+  // Older v1 records used "hidden" to take a record out of current guidance.
+  const legacyPolicy = value.nextActionPolicy;
+  if (legacyPolicy !== undefined && legacyPolicy !== "hidden" && legacyPolicy !== "when-touched" && legacyPolicy !== "proactive") {
     issues.push(recordIssue(id, "Unknown nextActionPolicy."));
     return null;
   }
@@ -149,7 +153,7 @@ export function normalizeAtlasMemoryRecord(
     summary,
     rationale: stringFieldValue(value, "rationale"),
     guidance: optionalStringArrayValue(value.guidance),
-    nextActionPolicy,
+    archived: value.archived ?? (legacyPolicy === "hidden" ? true : undefined),
     anchors: normalizeAnchors(value.anchors, id, issues),
     liveChecks,
     createdAt: stringFieldValue(value, "createdAt"),

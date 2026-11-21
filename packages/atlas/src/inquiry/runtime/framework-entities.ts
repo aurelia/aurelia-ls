@@ -19,7 +19,6 @@ import type {
   TypeScriptExportSurfaceEntry,
 } from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
-import type { FrameworkDiscoveryRecipeRow } from "./framework-recipes.js";
 import type { FrameworkHydrationFlowRow } from "./framework-rendering-hydration-flow.js";
 import type { FrameworkRenderConsequenceRow } from "./framework-rendering-consequences.js";
 import type {
@@ -85,10 +84,6 @@ export interface FrameworkDiscoveryValue {
   readonly expressionEntities?: readonly FrameworkExpressionEntityRow[];
   /** Public rendering, hydration, controller, view, and lifecycle-structure entities. */
   readonly renderingStructures?: readonly FrameworkRenderingStructureEntityRow[];
-  /** Open discovery questions returned by the seed. */
-  readonly openQuestions?: readonly string[];
-  /** Calibrated cross-lens recipe examples for framework navigation. */
-  readonly recipes?: readonly FrameworkDiscoveryRecipeRow[];
 }
 
 /** Value returned by the framework.rendering runtime lens. */

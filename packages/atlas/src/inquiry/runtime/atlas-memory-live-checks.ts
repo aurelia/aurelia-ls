@@ -43,13 +43,13 @@ export function readAtlasMemorySelfAnalysisIfNeeded(
 /** Evaluate one durable memory live check against the current source project. */
 export function evaluateAtlasMemoryLiveCheck(
   sources: AtlasMemorySources,
-  product: ProductArchitectureAnalysis,
+  readProduct: () => ProductArchitectureAnalysis,
   atlasSelfAnalysis: AtlasSelfAnalysis | undefined,
   check: AtlasMemoryLiveCheck,
 ): AtlasMemoryLiveCheckResult {
   switch (check.kind) {
     case "product-large-class":
-      return evaluateProductLargeClassCheck(sources, product, check);
+      return evaluateProductLargeClassCheck(sources, readProduct(), check);
     case "source-file-exists":
       return evaluateSourceFileExistsCheck(sources, check);
     case "source-declaration-exists":
@@ -63,7 +63,7 @@ export function evaluateAtlasMemoryLiveCheck(
     case "atlas-self-variable":
       return evaluateAtlasSelfVariableCheck(sources, atlasSelfAnalysis, check);
     case "auLink-exists":
-      return evaluateAuLinkExistsCheck(sources, product, check);
+      return evaluateAuLinkExistsCheck(sources, readProduct(), check);
   }
 }
 

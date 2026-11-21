@@ -8,7 +8,6 @@ import {
 } from "../basis.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import {
@@ -938,7 +937,6 @@ function usageComparisonContinuations(
     continuations.push({
       id: "bridge.aulink:usage-comparison:next-page",
       kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Primary,
       rationale: "Continue the auLink usage comparison page.",
       inquiry: {
         ...inquiry,
@@ -1006,7 +1004,6 @@ function usageComparisonContinuations(
       continuations.push({
         id: `bridge.aulink:usage-comparison:framework-api:${index}`,
         kind: ContinuationKind.SwitchLens,
-        priority: ContinuationPriority.Primary,
         rationale:
           "Inspect the framework API usage rows backing the Aurelia side of this comparison.",
         inquiry: {
@@ -1074,7 +1071,6 @@ function memberSurfaceContinuations(
     continuations.push({
       id: "bridge.aulink:member-surface:next-page",
       kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Primary,
       rationale: "Continue the auLink member surface page.",
       inquiry: {
         ...inquiry,
@@ -1160,7 +1156,6 @@ function usageMemberContinuations(
     continuations.push({
       id: "bridge.aulink:usage-members:next-page",
       kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Primary,
       rationale: "Continue the auLink usage member page.",
       inquiry: {
         ...inquiry,
@@ -1246,7 +1241,6 @@ function auLinkUsageConsumerContinuations(
     continuations.push({
       id: "bridge.aulink:usage-consumers:next-page",
       kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Primary,
       rationale: "Continue the auLink usage consumer page.",
       inquiry: {
         ...inquiry,
@@ -1369,7 +1363,6 @@ function frameworkApiUsageConsumerContinuation(
   return {
     id: `bridge.aulink:usage-consumers:framework-api:${index}:${nativeIndex}`,
     kind: ContinuationKind.SwitchLens,
-    priority: ContinuationPriority.Secondary,
     rationale:
       "Inspect the native framework.api owner group behind this framework-side bridge usage consumer.",
     inquiry: {
@@ -1429,7 +1422,6 @@ function usageSiteContinuations(
     continuations.push({
       id: "bridge.aulink:usage-sites:next-page",
       kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Primary,
       rationale: "Continue the auLink usage site page.",
       inquiry: {
         ...inquiry,

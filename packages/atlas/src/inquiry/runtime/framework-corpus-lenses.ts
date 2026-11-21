@@ -8,7 +8,6 @@ import {
 } from "../basis.js";
 import {
   ContinuationKind,
-  ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
 import {
@@ -209,7 +208,6 @@ function answerFrameworkCorpusRows<TRow>(
     evidenceForRow,
     continuationsForPage: (inquiry, _rows, nextOffset, limit) => [
       ...optionalNextPageContinuation(inquiry, nextOffset, limit, {
-        priority: ContinuationPriority.Secondary,
         rationale: "Continue the paged framework corpus row family.",
         routeSummary: "Next framework corpus row page.",
       }),
@@ -896,7 +894,6 @@ function corpusSourceContinuation(
   return {
     id: `framework.corpus:source:${index}`,
     kind: ContinuationKind.InspectEvidence,
-    priority: ContinuationPriority.Secondary,
     rationale: "Inspect the exact source text behind this framework corpus row.",
     inquiry: {
       lens: LensId.TsSource,
@@ -936,9 +933,6 @@ function corpusProjectionContinuation(
   return {
     id: `framework.corpus:${projection}`,
     kind: ContinuationKind.SwitchLens,
-    priority: projection === inquiry.projection
-      ? ContinuationPriority.Secondary
-      : ContinuationPriority.Primary,
     rationale,
     inquiry: {
       ...inquiry,
