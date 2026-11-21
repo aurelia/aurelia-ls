@@ -719,6 +719,7 @@ export class StaticEvaluator {
     moduleKey: string,
     argumentValues: readonly EvaluationValue[],
     thisValue: EvaluationValue | null = null,
+    resultMode?: 'awaited',
   ): StaticExpressionEvaluationResult {
     const graph = this.runtimeHost.evaluationValueGraph;
     const evaluationCallee = graph?.adoptExternal(callee) ?? callee;
@@ -737,6 +738,7 @@ export class StaticEvaluator {
         moduleKey,
         0,
         evaluationThis == null ? null : new EvaluationValueEvidence(evaluationThis, []),
+        resultMode,
       ),
       checkpoint,
     );
@@ -2704,7 +2706,7 @@ export class StaticEvaluator {
         this.runtimeHost.evaluationValueGraph?.retainEnvironment(currentEnvironment);
         return this.evaluateExpressionEvidence(expression, currentEnvironment, currentModuleKey, currentDepth);
       },
-      evaluateFunctionWithArguments: (callee, currentCall, argumentValues, currentModuleKey, currentDepth, thisValue, resultMode) =>
+      evaluateFunctionWithArguments: (callee, currentCall, argumentValues, currentModuleKey, currentDepth, thisValue) =>
         this.ownProducedValue(this.evaluateFunctionWithArguments(
           this.adoptExternalValue(callee),
           currentCall,
@@ -2712,7 +2714,6 @@ export class StaticEvaluator {
           currentModuleKey,
           currentDepth,
           thisValue == null ? null : this.adoptExternalEvidence(thisValue),
-          resultMode,
         )),
       evaluateClassInstantiation: (callee, expression, argumentValues, currentModuleKey, currentDepth) =>
         this.ownProducedValue(this.evaluateClassInstantiation(

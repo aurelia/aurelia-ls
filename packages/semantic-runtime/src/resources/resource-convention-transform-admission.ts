@@ -8,6 +8,7 @@ import type {
   SourceFileAdmission,
 } from '../boot/frames.js';
 import {
+  StaticEvaluator,
   StaticEvaluationRuntimeValueResult,
   type StaticEvaluationRuntimeHost,
   type StaticEvaluationValueMetadataTransfer,
@@ -37,7 +38,8 @@ import {
 } from '../evaluation/property-access.js';
 import { EvaluationValueEvidence } from '../evaluation/value-pressure.js';
 import {
-  isEvaluatedProjectSource,
+  type EvaluatedProjectSource,
+  type StaticProjectEvaluationResult,
   type StaticProjectEvaluationAccess,
   StaticProjectEvaluationComputationPreparation,
   StaticProjectEvaluationComputationProfile,
@@ -53,6 +55,7 @@ import {
   EvaluationUndefined,
   EvaluationValueKind,
   closedEvaluationPromiseFulfillment,
+  readEvaluationCallability,
   type EvaluationValue,
 } from '../evaluation/values.js';
 import {
@@ -360,26 +363,8 @@ export class ResourceConventionToolingEvaluationContext {
     if (!this.defineConfigFactories.has(callee)) {
       return StaticInvocationNotApplicable;
     }
-    const config = firstArgument.value;
-    const result = config.kind === EvaluationValueKind.Function
-      ? host.evaluateFunctionWithArguments(
-          config,
-          call,
-          [new EvaluationValueEvidence(
-            new EvaluationBoundaryObjectValue(
-              EvaluationBoundaryKind.HostEnvironment,
-              'vite.config-env',
-              new Map(),
-              call,
-            ),
-            [],
-          )],
-          frame.moduleKey,
-          frame.depth + 1,
-          null,
-        )
-      : config;
-    return staticInvocationValue(result, firstArgument.openSeams);
+    // Vite's defineConfig retains its argument; the loader invokes the default export.
+    return staticInvocationValue(firstArgument.value, firstArgument.openSeams);
   }
 
   private conventionOptionsEvidence(
@@ -555,25 +540,28 @@ export class ResourceConventionTransformAdmissionMaterializer {
     if (!evaluationAccess.generation.belongsToProject(project)) {
       throw new Error(`Convention-tooling evaluation belongs to another project semantic frame.`);
     }
-    const evaluation = evaluationAccess.readBaseline();
+    const baseline = evaluationAccess.readBaseline();
+    const configs = viteConfigSources(baseline);
+    const evaluation = configs.some(source => exportedViteConfig(source)?.kind === EvaluationValueKind.Function)
+      ? evaluationAccess.forkSession() : baseline;
     const toolingHost = evaluationAccess.readBaselineContext();
     const emissions: ResourceConventionTransformEmission[] = [];
     const openRecords: KernelStoreRecord[] = [];
-    for (const source of evaluation.sources) {
-      if (
-        !isEvaluatedProjectSource(source)
-        || source.admission.role !== SourceFileRole.ToolingConfig
-        || !isViteConfigPath(source.admission.path)
-      ) {
-        continue;
-      }
-      const environment = source.evaluation.environment;
+    for (const source of evaluation === baseline ? configs : viteConfigSources(evaluation)) {
+      const exported = exportedViteConfig(source);
+      const factory = exported?.kind === EvaluationValueKind.Function
+        ? new StaticEvaluator(source.evaluation.policy, source.evaluation.runtimeHost).evaluateFunctionValue(
+            exported, exported.declaration, source.moduleKey,
+            [new EvaluationBoundaryObjectValue(EvaluationBoundaryKind.HostEnvironment, 'vite.config-env', new Map(), exported.declaration)],
+            null, 'awaited',
+          )
+        : null;
       const result = readConventionTransforms(
-        source.evaluation.invocations
+        [...source.evaluation.invocations, ...(factory?.invocations ?? [])]
           .map((invocation) => invocation.node)
           .filter(ts.isCallExpression)
           .filter((call) => toolingHost.isAureliaPluginCall(call)),
-        environment.readValue('default') ?? readStaticCommonJsExportValue(environment, 'default'),
+        factory == null ? exported : factory.abruptCompletion == null ? factory.value : null,
         toolingHost,
       );
       emissions.push(...result.admissions.map((read, index) =>
@@ -675,20 +663,36 @@ function conventionTransformEmission(
   );
 }
 
+function viteConfigSources(evaluation: StaticProjectEvaluationResult): readonly EvaluatedProjectSource[] {
+  return evaluation.readEvaluatedSources().filter(source =>
+    source.admission.role === SourceFileRole.ToolingConfig && isViteConfigPath(source.admission.path));
+}
+
+function exportedViteConfig(source: EvaluatedProjectSource): EvaluationValue | null {
+  const environment = source.evaluation.environment;
+  return environment.readValue('default') ?? readStaticCommonJsExportValue(environment, 'default');
+}
+
 function readConventionTransforms(
   calls: readonly ts.CallExpression[],
-  config: EvaluationValue | null,
+  exportedConfig: EvaluationValue | null,
   toolingHost: ResourceConventionToolingEvaluationContext,
 ): ResourceConventionTransformReadResult {
   if (calls.length === 0) {
     return new ResourceConventionTransformReadResult([], []);
   }
+  const config = exportedConfig?.kind === EvaluationValueKind.Promise
+    ? closedEvaluationPromiseFulfillment(exportedConfig) : exportedConfig;
   if (config?.kind !== EvaluationValueKind.Object) {
     return openConventionTransformCalls(
       calls,
       'The Aurelia Vite conventions plugin is called, but the exported Vite configuration could not be closed statically.',
-      config,
+      exportedConfig,
     );
+  }
+  const then = closedStaticValueMemberValue(readStaticValueProperty(config, 'then', config.node));
+  if (then == null || readEvaluationCallability(then) !== false) {
+    return openConventionTransformCalls(calls, 'The exported Vite configuration may settle through a custom thenable.', config);
   }
   const pluginsRead = readStaticValueProperty(config, 'plugins', config.node);
   const pluginsValue = closedStaticValueMemberValue(pluginsRead);

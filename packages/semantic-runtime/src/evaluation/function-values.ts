@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import { unwrapExpression } from './ts-syntax.js';
 
 import {
   initializeStaticFunctionParameters,
@@ -68,11 +69,13 @@ export function evaluateStaticFunctionWithArguments(
   depth: number,
   host: StaticFunctionEvaluationHost,
   thisValue: EvaluationValueEvidence | null,
+  resultMode?: 'awaited',
 ): EvaluationValue {
   if (callee.declaration.asteriskToken != null) {
     return host.unknown('Generator functions are not evaluated.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
-  if (isAsyncFunctionLike(callee.declaration)) {
+  const asyncFunction = isAsyncFunctionLike(callee.declaration);
+  if (asyncFunction) {
     if (host.requiresClosedSynchronousEffects?.()) {
       return host.unknown(
         'Async function effects are not closed by synchronous evaluation.',
@@ -81,14 +84,14 @@ export function evaluateStaticFunctionWithArguments(
         EvaluationOpenSeamKind.DynamicCall,
       );
     }
-    return EvaluationPromiseValue.open(
-      new EvaluationValueEvidence(new EvaluationBoundaryValue(
-        EvaluationBoundaryKind.AsyncExecution,
-        asyncFunctionBoundaryPath(callee.declaration),
+    if (resultMode !== 'awaited') {
+      return EvaluationPromiseValue.open(
+        new EvaluationValueEvidence(new EvaluationBoundaryValue(
+          EvaluationBoundaryKind.AsyncExecution, asyncFunctionBoundaryPath(callee.declaration), call,
+        ), []),
         call,
-      ), []),
-      call,
-    );
+      );
+    }
   }
 
   const callEnvironment = callee.environment.createChild(`${moduleKey}:call:${call.getStart()}`);
@@ -108,6 +111,16 @@ export function evaluateStaticFunctionWithArguments(
   const body = callee.declaration.body;
   if (body == null) {
     return host.unknown('Function body is not available to static evaluation.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  if (asyncFunction && resultMode === 'awaited') {
+    // A sole returned await only forwards settlement to the awaiting host. Keep real
+    // continuations, handlers and finally blocks under the evaluator's suspension policy.
+    const statement = ts.isBlock(body) && body.statements.length === 1 ? body.statements[0] : null;
+    const returned = ts.isExpression(body) ? body : statement != null && ts.isReturnStatement(statement) ? statement.expression : null;
+    const value = returned == null ? null : unwrapExpression(returned);
+    if (value != null && ts.isAwaitExpression(value)) {
+      return host.evaluateExpression(value.expression, callEnvironment, moduleKey, depth + 1);
+    }
   }
   if (ts.isExpression(body)) {
     return host.evaluateExpression(body, callEnvironment, moduleKey, depth + 1);
