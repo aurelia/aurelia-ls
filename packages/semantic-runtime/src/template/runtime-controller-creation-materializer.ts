@@ -127,7 +127,7 @@ import {
   runtimeWatcherMaterializationsForDefinition,
 } from './runtime-watcher-factory.js';
 import {
-  directDependencyDefinitions,
+  directDependencyRegistrations,
 } from './resource-scope-builder.js';
 import {
   AU_COMPOSE_RESOURCE_NAME,
@@ -733,8 +733,8 @@ export class RuntimeControllerCreationMaterializer {
       return;
     }
     let registered = 0;
-    directDependencyDefinitions(definition, resourceDefinitions).forEach((dependency, dependencyIndex) => {
-      resourceLookupNames(dependency).forEach((lookupName, nameIndex) => {
+    directDependencyRegistrations(definition, resourceDefinitions).forEach(({ definition: dependency, registrationName }, dependencyIndex) => {
+      resourceLookupNames(dependency, registrationName).forEach((lookupName, nameIndex) => {
         const resourceKey = runtimeResourceKeyForKind(dependency.type, lookupName);
         if (resourceKey == null || container.hasResource(resourceKey, false)) {
           return;
@@ -1642,11 +1642,12 @@ function auComposeComponentLookupIssue(
 
 function resourceLookupNames(
   definition: FullResourceDefinition,
+  registrationName: string | null,
 ): readonly string[] {
   if (definition.type === ResourceDefinitionKind.AttributePattern || !('name' in definition)) {
     return [];
   }
-  return [definition.name, ...definition.aliases.map((alias) => alias.name)];
+  return [registrationName ?? definition.name, ...definition.aliases.map((alias) => alias.name)];
 }
 
 function bindableSetterRequiresCoercer(bindable: BindableDefinition): boolean | null {

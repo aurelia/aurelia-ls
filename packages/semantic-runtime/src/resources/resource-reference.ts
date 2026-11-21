@@ -99,6 +99,17 @@ export class ResourceDependencyReference {
     readonly registryKind: ResourceRegistryDependencyKind | null = null,
     /** Ordered built-in registry input; present only for a recognized `cssModules(...)` dependency. */
     readonly cssModulesInput: ResourceCssModulesRegistryInput | null = null,
+    /** Source-resolved module namespace and per-import registration aliases from the HTML preprocessor. */
+    readonly htmlModule: HtmlModuleDependency | null = null,
+  ) {}
+}
+
+export class HtmlModuleDependency {
+  constructor(
+    readonly specifier: string,
+    /** Value exports in ECMAScript namespace iteration order. Local names refer to original declarations. */
+    readonly exportTargets: readonly { readonly moduleKey: string; readonly localName: string }[],
+    readonly aliases: ReadonlyMap<string, string>,
   ) {}
 }
 

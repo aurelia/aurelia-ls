@@ -32,6 +32,7 @@ export function visibleResourceForDefinition(
   definition: FullResourceDefinition,
   visibilityKind: TemplateResourceVisibilityKind,
   fallbackSourceAddressHandle: AddressHandle | null,
+  registrationName?: string | null,
 ): TemplateVisibleResource | null {
   if (definition.productHandle == null || definition.type === ResourceDefinitionKind.AttributePattern) {
     return null;
@@ -39,7 +40,7 @@ export function visibleResourceForDefinition(
   const resourceKind = taxonomyResourceKindForDefinition(definition);
   return new TemplateVisibleResource(
     resourceKind,
-    definition.name,
+    registrationName ?? definition.name,
     definition.aliases.map((alias) => alias.name),
     definition.productHandle,
     definition.identityHandle,
@@ -379,21 +380,32 @@ export function directDependencyDefinitions(
   definition: FullResourceDefinition,
   resourceDefinitions: ResourceDefinitionIndex | null,
 ): readonly FullResourceDefinition[] {
-  if (resourceDefinitions == null) {
-    return [];
-  }
-  const definitions: FullResourceDefinition[] = [];
-  const seen = new Set<ProductHandle>();
+  return [...new Set(directDependencyRegistrations(definition, resourceDefinitions).map(row => row.definition))];
+}
+
+/** A module alias changes the component-local registration key, without changing the declared resource. */
+export function directDependencyRegistrations(
+  definition: FullResourceDefinition,
+  resourceDefinitions: ResourceDefinitionIndex | null,
+): readonly { readonly definition: FullResourceDefinition; readonly registrationName: string | null }[] {
+  if (resourceDefinitions == null) return [];
+  const registrations: { definition: FullResourceDefinition; registrationName: string | null }[] = [];
+  const seen = new Map<ProductHandle, Set<string | null>>();
   for (const dependency of resourceDependencyReferences(definition)) {
-    for (const dependencyDefinition of resourceDefinitions.lookupAllByDependencyReference(dependency)) {
-      if (dependencyDefinition.productHandle == null || seen.has(dependencyDefinition.productHandle)) {
-        continue;
-      }
-      seen.add(dependencyDefinition.productHandle);
-      definitions.push(dependencyDefinition);
+    const aliases = dependency.htmlModule?.aliases;
+    const entries = resourceDefinitions.lookupAllByDependencyReference(dependency);
+    for (const [index, target] of entries.entries()) {
+      if (target.productHandle == null) continue;
+      const namedAlias = 'name' in target ? aliases?.get(target.name) : undefined;
+      const registrationName = (index === 0 ? aliases?.get('__MAIN__') : undefined) ?? namedAlias ?? null;
+      const prior = seen.get(target.productHandle) ?? new Set<string | null>();
+      if (prior.has(registrationName)) continue;
+      prior.add(registrationName);
+      seen.set(target.productHandle, prior);
+      registrations.push({ definition: target, registrationName });
     }
   }
-  return definitions;
+  return registrations;
 }
 
 export function visibleResourceLookupKeys(

@@ -30,7 +30,7 @@ import {
   TemplateVisibleResource,
 } from '../template/compiler-world-reference.js';
 import {
-  directDependencyDefinitions,
+  directDependencyRegistrations,
   visibleResourceForDefinition,
   visibleResourceLookupKeys,
 } from '../template/resource-scope-builder.js';
@@ -113,11 +113,12 @@ class AppWorldResourceVisibilityFrame {
   addRootAndDirectDependencyResources(): void {
     const rootDefinition = rootComponentDefinition(this.appRoot, this.resourceDefinitions);
     if (rootDefinition == null) return;
-    for (const dependency of directDependencyDefinitions(rootDefinition, this.resourceDefinitions)) {
+    for (const { definition: dependency, registrationName } of directDependencyRegistrations(rootDefinition, this.resourceDefinitions)) {
       this.addChildDefinitionResource(
         dependency,
         TemplateResourceVisibilityKind.Local,
         dependency.sourceAddressHandle,
+        registrationName,
       );
     }
     this.retainRootOwnerResource(rootDefinition);
@@ -267,8 +268,9 @@ class AppWorldResourceVisibilityFrame {
     definition: FullResourceDefinition,
     visibilityKind: TemplateResourceVisibilityKind,
     fallbackSourceAddressHandle: TemplateVisibleResource['sourceAddressHandle'],
+    registrationName: string | null,
   ): boolean {
-    const contender = visibleResourceForDefinition(definition, visibilityKind, fallbackSourceAddressHandle);
+    const contender = visibleResourceForDefinition(definition, visibilityKind, fallbackSourceAddressHandle, registrationName);
     if (contender == null) return false;
     const lane = TemplateResourceScopeLane.Local;
     const lookups = visibleResourceLookupKeys(contender).map((lookupKey) => new TemplateResourceScopeLookup(

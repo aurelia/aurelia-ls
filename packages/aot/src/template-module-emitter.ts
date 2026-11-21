@@ -454,6 +454,7 @@ function planDependencies(
 ): AotDefinitionDependencyPlan {
   const variableByModule = new Map<string, string>();
   const byDefinitionId = new Map<string, readonly string[]>();
+  let needsAliasRegistry = false;
   for (const definition of definitions) {
     const variables = definition.header.dependencies.map((dependency) => {
       validateDependency(dependency, definition.definitionId, request);
@@ -463,7 +464,10 @@ function planDependencies(
         variable = `$dependency${variableByModule.size}`;
         variableByModule.set(moduleKey, variable);
       }
-      return variable;
+      if (dependency.importAliases == null) return variable;
+      needsAliasRegistry = true;
+      const { __MAIN__: main, ...named } = dependency.importAliases;
+      return `$aliasedResourcesRegistry(${variable}, ${JSON.stringify(main ?? null)}, ${JSON.stringify(named)})`;
     });
     byDefinitionId.set(definition.definitionId, variables);
   }
@@ -472,6 +476,7 @@ function planDependencies(
     const specifier = relativeModuleSpecifier(request.sourcePath, target);
     return `import * as ${variable} from ${JSON.stringify(specifier)};`;
   });
+  if (needsAliasRegistry) imports.unshift("import { aliasedResourcesRegistry as $aliasedResourcesRegistry } from '@aurelia/kernel';");
   return { imports, byDefinitionId };
 }
 

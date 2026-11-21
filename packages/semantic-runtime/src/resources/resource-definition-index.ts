@@ -391,6 +391,9 @@ export class ResourceDefinitionIndex {
     if (reference.dependencyKind !== ResourceDependencyReferenceKind.Resource) {
       return [];
     }
+    if (reference.htmlModule != null) {
+      return reference.htmlModule.exportTargets.flatMap(target => this.lookupAllByModuleLocal(target.moduleKey, target.localName));
+    }
     const byIdentity = this.lookupByTargetIdentity(reference.identityHandle);
     if (byIdentity != null) {
       return [byIdentity];

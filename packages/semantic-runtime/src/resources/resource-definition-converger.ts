@@ -1,5 +1,6 @@
 import path from 'node:path';
 import ts from 'typescript';
+import { resolveValueAlias } from '../evaluation/import-bindings.js';
 import type { SourceFileAdmission } from '../boot/frames.js';
 import type { AuthoredSourceTextCache } from '../kernel/authored-source-text.js';
 import { sourceTextContentRevision } from '../kernel/source-text-revision.js';
@@ -167,6 +168,7 @@ import type { ResourceDefinitionHeaderEmission } from './resource-definition-hea
 import type { ResourceRecognitionKernelEmission } from './resource-recognition-kernel-emitter.js';
 import {
   ResourceAliasDefinition,
+  HtmlModuleDependency,
   ResourceCssModulesMappingArgument,
   ResourceCssModulesMappingEntry,
   ResourceCssModulesRegistryInput,
@@ -2562,14 +2564,31 @@ function readHtmlTemplateDependencies(
   imports: readonly HtmlTemplateMetadataImport[],
 ): ResourceDependenciesRead {
   return new ResourceDependenciesRead(
+  const mergedAliases = new Map<string, Map<string, string>>();
+  for (const item of imports) {
+    if (item.aliases.size === 0) continue;
+    const aliases = mergedAliases.get(item.specifier) ?? new Map<string, string>();
+    // Each aliased import sets the main alias (named-only aliases clear an earlier main alias).
+    aliases.delete('__MAIN__');
+    for (const [name, alias] of item.aliases) aliases.set(name, alias);
+    mergedAliases.set(item.specifier, aliases);
+  }
     imports.map((htmlImport) => {
       const moduleKey = resolveTemplateImportModuleKey(context, templatePath, htmlImport.specifier);
       return new ResourceDependencyReference(
         null,
-        templateImportDependencyKeyName(htmlImport.specifier, moduleKey),
+        moduleKey == null ? null : conventionalResourceNameForFilePath(moduleKey),
         moduleKey,
         null,
       );
+        ResourceDependencyReferenceKind.Resource,
+        null,
+        null,
+        new HtmlModuleDependency(
+          htmlImport.specifier,
+          moduleKey == null ? [] : htmlModuleExportTargets(context, moduleKey),
+          mergedAliases.get(htmlImport.specifier) ?? htmlImport.aliases,
+        ),
     }),
     [],
   );
@@ -2612,13 +2631,22 @@ function templateImportModuleKeyCandidates(
   ]);
 }
 
-function templateImportDependencyKeyName(
-  specifier: string,
-  moduleKey: string | null,
-): string | null {
-  return moduleKey == null
-    ? conventionalResourceNameForFilePath(specifier)
-    : conventionalResourceNameForFilePath(moduleKey);
+function htmlModuleExportTargets(context: ResourceRecognitionContext, moduleKey: string): HtmlModuleDependency['exportTargets'] {
+  const project = context.typeSystem;
+  const source = project?.readProgramSourceFileByModuleKey(moduleKey);
+  if (project == null || source == null) return [];
+  const moduleSymbol = project.checker.getSymbolAtLocation(source);
+  if (moduleSymbol == null) return [];
+  const exports = [...project.checker.getExportsOfModule(moduleSymbol)]
+    .sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+  return exports.flatMap(symbol => {
+    const target = resolveValueAlias(project.checker, symbol);
+    const declaration = target?.valueDeclaration;
+    if (declaration == null) return [];
+    const localName = readDeclarationLocalName(declaration);
+    const owner = project.readModuleKeyForSourceFile(declaration.getSourceFile());
+    return localName == null || owner == null ? [] : [{ moduleKey: owner, localName }];
+  });
 }
 
 function normalizeProjectModulePath(value: string): string {
@@ -2636,6 +2664,7 @@ function resourceDependencyReferenceKey(
     reference.localName ?? '',
     reference.registryKind ?? '',
   ].join('\0');
+    reference.htmlModule?.specifier ?? '',
 }
 
 function readStyleRegistryDependencyReference(

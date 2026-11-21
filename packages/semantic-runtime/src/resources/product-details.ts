@@ -804,6 +804,11 @@ function dependencySemanticValue(
     dependency.keyName,
     dependency.moduleKey,
     dependency.localName,
+    ...(dependency.htmlModule == null ? [] : [[
+      dependency.htmlModule.specifier,
+      dependency.htmlModule.exportTargets.map(target => [target.moduleKey, target.localName]),
+      [...dependency.htmlModule.aliases],
+    ]]),
     dependency.dependencyKind,
     dependency.registryKind,
     dependency.cssModulesInput == null
