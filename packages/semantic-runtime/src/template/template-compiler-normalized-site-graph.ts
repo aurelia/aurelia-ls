@@ -1118,12 +1118,6 @@ class TemplateCompilerNormalizedSiteGraphValidator {
     }
   }
 
-  private expressionParse(productHandle: ProductHandle): TemplateExpressionParse | null {
-    return this.primaryExpressionParsesByProduct.get(productHandle)
-      ?? this.secondaryExpressionParsesByProduct.get(productHandle)
-      ?? null;
-  }
-
   private syntax(productHandle: ProductHandle): AttributeSyntax | null {
     return this.topLevelSyntaxesByProduct.get(productHandle)
       ?? this.secondarySyntaxesByProduct.get(productHandle)
@@ -1182,18 +1176,6 @@ class TemplateCompilerNormalizedSiteGraphValidator {
     handles: readonly ProductHandle[],
   ): T | null {
     if (values.length === 1) return values[0]!;
-    this.mismatch(mismatchKind, relation, summary, handles);
-    return null;
-  }
-
-  private optionalSingle<T>(
-    values: readonly T[],
-    mismatchKind: TemplateCompilerNormalizedSiteMismatchKind,
-    relation: string,
-    summary: string,
-    handles: readonly ProductHandle[],
-  ): T | null {
-    if (values.length <= 1) return values[0] ?? null;
     this.mismatch(mismatchKind, relation, summary, handles);
     return null;
   }
