@@ -1405,7 +1405,7 @@ export class QueryClaimGraph {
     deferDisposal?: QueryClaimAnswerDisposalCollector,
   ): void {
     const limit = this.retentionPolicy.retainedRecordLimit;
-    if (limit == null || limit < 0) {
+    if (limit == null || limit < 0 || this.committedRetainedCount() <= limit) {
       return;
     }
     const traversal = this.createDisposalTraversal(undefined);

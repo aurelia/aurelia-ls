@@ -1,3 +1,4 @@
+import { hasNonZeroDetailDensity } from '../out/telemetry/kernel-density.js';
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1980,18 +1981,7 @@ function diffSemanticRuntimeDetailDensityRows(after, before) {
     mergeDetailDensityRow(rows, row, 1);
   }
   return sortedDetailDensityRows([...rows.values()]
-    .filter((row) =>
-      row.count !== 0
-      || row.ownPropertyCount !== 0
-      || row.directArrayItemCount !== 0
-      || row.directStringCharacterCount !== 0
-      || row.directNonHandleStringCharacterCount !== 0
-      || row.directUniqueStringCharacterCount !== 0
-      || row.directKernelHandleCharacterCount !== 0
-      || row.directNonEnvelopeKernelHandleCharacterCount !== 0
-      || row.directEnvelopeHandleEchoCharacterCount !== 0
-      || row.directLocalKeyCharacterCount !== 0
-    ));
+    .filter(hasNonZeroDetailDensity));
 }
 
 function addDetailDensityRows(target, rows) {

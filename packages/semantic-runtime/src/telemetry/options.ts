@@ -53,8 +53,8 @@ export function normalizeSemanticRuntimeTelemetryOptions(
     inquiryProfile: normalizeSemanticRuntimeInquiryProfile(options?.inquiryProfile ?? defaultProfile),
     capturePhaseMemory: options?.capturePhaseMemory === true,
     capturePhaseKernel: options?.capturePhaseKernel === true,
-    capturePhaseKernelBreakdowns: options?.capturePhaseKernelBreakdowns === true,
-    capturePhaseDetailDensity: options?.capturePhaseKernelBreakdowns === true
+    capturePhaseKernelBreakdowns: options?.capturePhaseKernel === true && options.capturePhaseKernelBreakdowns === true,
+    capturePhaseDetailDensity: options?.capturePhaseKernel === true && options.capturePhaseKernelBreakdowns === true
       && options?.capturePhaseDetailDensity === true,
     captureFineGrainedPhases: options?.captureFineGrainedPhases === true,
     captureKernelBreakdowns: options?.captureKernelBreakdowns === true,

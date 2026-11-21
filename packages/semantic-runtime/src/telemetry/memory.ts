@@ -8,7 +8,7 @@ export interface SemanticRuntimeMemorySample {
   readonly externalBytes: number;
   readonly arrayBuffersBytes: number;
   /**
-   * Process RSS not explained by V8 heapTotal, process external memory, or ArrayBuffers.
+   * Process RSS after subtracting V8 heapTotal and external memory (which includes ArrayBuffers).
    *
    * This is an attribution hint, not a leak verdict: it can include native stacks, code pages, allocator fragmentation,
    * mapped files, and memory that V8/TypeScript has reserved but not promptly returned to the OS.
@@ -43,7 +43,7 @@ export interface SemanticRuntimeMemoryDelta {
 export function readSemanticRuntimeMemorySample(): SemanticRuntimeMemorySample {
   const memory = process.memoryUsage();
   const heap = getHeapStatistics();
-  const rssOtherBytes = memory.rss - memory.heapTotal - memory.external - memory.arrayBuffers;
+  const rssOtherBytes = memory.rss - memory.heapTotal - memory.external;
   return {
     rssBytes: memory.rss,
     heapTotalBytes: memory.heapTotal,

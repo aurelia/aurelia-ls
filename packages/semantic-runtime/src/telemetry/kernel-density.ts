@@ -292,21 +292,12 @@ function addSignedSemanticRuntimeCountRows(
   }
 }
 
-function hasNonZeroDetailDensity(row: MutableSemanticRuntimeDetailDensityRow): boolean {
-  return row.count !== 0
-    || row.ownPropertyCount !== 0
-    || row.directArrayItemCount !== 0
-    || row.directStringCharacterCount !== 0
-    || row.directNonHandleStringCharacterCount !== 0
-    || row.directUniqueStringCount !== 0
-    || row.directUniqueStringCharacterCount !== 0
-    || row.directKernelHandleCount !== 0
-    || row.directKernelHandleCharacterCount !== 0
-    || row.directNonEnvelopeKernelHandleCount !== 0
-    || row.directNonEnvelopeKernelHandleCharacterCount !== 0
-    || row.directEnvelopeHandleEchoCount !== 0
-    || row.directEnvelopeHandleEchoCharacterCount !== 0
-    || row.directLocalKeyCharacterCount !== 0;
+/** Includes per-field redistribution even when aggregate counts and bytes are unchanged. */
+export function hasNonZeroDetailDensity(row: MutableSemanticRuntimeDetailDensityRow): boolean {
+  return Object.values(row).some(value =>
+    typeof value === 'number' ? value !== 0
+      : value instanceof Map && [...value.values()].some(count => count !== 0)
+  );
 }
 
 function sortSemanticRuntimeDetailDensityRows(
