@@ -137,10 +137,40 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         ],
         "phase": null,
         "presentation": {
-          "contextual": [],
+          "contextual": [
+            {
+              "diagnostic": {
+                "diagnosticAuthority": "framework-error-code",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "template-compiler-error",
+                "frameworkErrorCode": "AUR0713",
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "template-compiler:AUR0713",
+                "missingInputs": [
+                  "template-compiler:AUR0713"
+                ],
+                "phase": "attribute-classification",
+                "relatedInformation": [],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "rewrite-template-syntax",
+                  "actionability": "guided",
+                  "changeDomain": "app-source",
+                  "planKind": "template-syntax-rewrite",
+                  "readiness": "ready-to-plan",
+                  "targetSourceCoverage": "all"
+                },
+                "severity": "error",
+                "sourceRole": "template",
+                "subject": null,
+                "typeScriptDiagnosticCode": null
+              },
+              "relation": "derived-consequence"
+            }
+          ],
           "maxRawSeverity": "error",
           "primarySeverity": "error",
-          "rawRowCount": 1
+          "rawRowCount": 2
         },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
@@ -168,7 +198,25 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "rangeText": "click.dispatch:main=\"dispatch()\"",
-      "relatedInformation": [],
+      "relatedInformation": [
+        {
+          "anomaly": null,
+          "file": "src/unregistered-plugin-syntax-app.html",
+          "message": "Unknown binding command: \"dispatch:main\".",
+          "range": {
+            "end": {
+              "character": 27,
+              "line": 2
+            },
+            "start": {
+              "character": 14,
+              "line": 2
+            }
+          },
+          "rangeText": "dispatch:main",
+          "uri": "fixtures://pressure/unregistered-plugin-syntax/src/unregistered-plugin-syntax-app.html"
+        }
+      ],
       "severity": "error",
       "source": "aurelia"
     }
