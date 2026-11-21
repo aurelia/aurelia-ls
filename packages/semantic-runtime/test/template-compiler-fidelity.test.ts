@@ -18,7 +18,7 @@ import { OpenSeamReasonKind } from '../src/kernel/open-seam.js';
 import { KernelVocabulary } from '../src/kernel/vocabulary.js';
 import { runtimeBindingSourceExpression } from '../src/observation/runtime-binding-expression.js';
 import { RuntimeBindingDataFlowSourceKind } from '../src/observation/runtime-binding-observation.js';
-import { RuntimeExpressionOperationKind } from '../src/runtime-expression/runtime-expression-access-use.js';
+import { RuntimeExpressionAccessPhase, RuntimeExpressionOperationKind } from '../src/runtime-expression/runtime-expression-access-use.js';
 import { RuntimeOperationReachability } from '../src/runtime-expression/runtime-operation.js';
 import {
   CompiledTemplateContextRole,
@@ -273,8 +273,9 @@ describe('template compiler fidelity', () => {
       { sourceName: 'first', expressionChainIndex: 0 },
       { sourceName: 'second', expressionChainIndex: 1 },
     ]);
-    expect(resource.runtimeAnalysis.expressionAccesses.accessUses
-      .filter((accessUse) => multiHoleBindingHandles.has(accessUse.ownerProductHandle))
+    const multiHoleAccesses = resource.runtimeAnalysis.expressionAccesses.accessUses
+      .filter(accessUse => multiHoleBindingHandles.has(accessUse.ownerProductHandle));
+    expect(multiHoleAccesses.filter(accessUse => accessUse.operationKind !== RuntimeExpressionOperationKind.BindingResultObservation)
       .map((accessUse) => ({
         operationKind: accessUse.operationKind,
         operationIndex: accessUse.operationIndex,
@@ -287,6 +288,15 @@ describe('template compiler fidelity', () => {
       { operationKind: RuntimeExpressionOperationKind.InterpolationPart, operationIndex: 0, source: 'first' },
       { operationKind: RuntimeExpressionOperationKind.InterpolationPart, operationIndex: 1, source: 'second' },
     ]);
+    for (const binding of multiHoleBindings) {
+      const guards = multiHoleAccesses.filter(use => use.ownerProductHandle === binding.productHandle
+        && use.operationKind === RuntimeExpressionOperationKind.BindingResultObservation);
+      expect(guards.map(use => use.phase)).toEqual([
+        RuntimeExpressionAccessPhase.Bind, RuntimeExpressionAccessPhase.SourceEvaluation,
+        RuntimeExpressionAccessPhase.BindingCollectionRefresh,
+      ]);
+      expect(guards.every(use => use.operationIndex === binding.expressionChainIndex && use.nameSourceAddressHandle == null)).toBe(true);
+    }
     const publicFlows = app.ask({
       kind: SemanticAppQueryKind.BindingDataFlows,
       detail: 'handles',
@@ -783,8 +793,6 @@ describe('template compiler fidelity', () => {
     );
     expect(converterEntries).toHaveLength(2);
     expect(flows).toHaveLength(4);
-    expect(accesses).toHaveLength(6);
-    expect(dependencies).toHaveLength(6);
     for (const binding of bindings) {
       const chainIndex = binding.expressionChainIndex;
       const bindingConverters = converterEntries.filter((entry) =>
@@ -793,9 +801,9 @@ describe('template compiler fidelity', () => {
       const bindingFlows = flows.filter((dataFlow) =>
         dataFlow.binding.productHandle === binding.productHandle
       );
-      const bindingAccesses = accesses.filter((accessUse) =>
-        accessUse.ownerProductHandle === binding.productHandle
-      );
+      const ownedAccesses = accesses.filter(use => use.ownerProductHandle === binding.productHandle);
+      const bindingAccesses = ownedAccesses.filter(use => use.operationKind !== RuntimeExpressionOperationKind.BindingResultObservation);
+      const resultGuards = ownedAccesses.filter(use => use.operationKind === RuntimeExpressionOperationKind.BindingResultObservation);
       const bindingDependencies = dependencies.filter((dependency) =>
         dependency.binding.productHandle === binding.productHandle
       );
@@ -817,7 +825,13 @@ describe('template compiler fidelity', () => {
         accessUse.operationKind === RuntimeExpressionOperationKind.InterpolationPart
           && accessUse.operationIndex === chainIndex
       )).toBe(true);
-      expect(bindingDependencies).toHaveLength(chainIndex === 0 ? 1 : 2);
+      expect(resultGuards.map(use => use.phase)).toEqual([
+        RuntimeExpressionAccessPhase.Bind, RuntimeExpressionAccessPhase.SourceEvaluation,
+        RuntimeExpressionAccessPhase.BindingCollectionRefresh,
+      ]);
+      expect(resultGuards.every(use => use.operationIndex === chainIndex && use.nameSourceAddressHandle == null)).toBe(true);
+      expect(new Set(bindingDependencies.map(dependency => dependency.occurrence.accessUseProductHandle)))
+        .toEqual(new Set(ownedAccesses.map(use => use.productHandle)));
     }
   }, 30_000);
 

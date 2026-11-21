@@ -155,7 +155,9 @@ describe('template analysis breadth', () => {
     // The AOT branch publishes projection-provider definitions and their exact products explicitly; retain tight
     // pressure bounds without treating the richer topology as the older pre-provider counts.
     expect(local.pressure.controllers).toBeLessThanOrEqual(105);
-    expect(local.pressure.records).toBeLessThanOrEqual(13_500);
+    // The three guarded collection-observation phases of content/interpolation results add 1,152 kernel
+    // records on this workload. Omitting just those operations gives 13,371 and the same 101 controllers.
+    expect(local.pressure.records).toBeLessThanOrEqual(13_500 + 1_152);
   }, 60_000);
 
   test('preserves parent bindable targets and global public binding rows', async () => {
