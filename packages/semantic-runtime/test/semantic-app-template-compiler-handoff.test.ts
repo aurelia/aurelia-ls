@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, test } from 'vitest';
@@ -112,7 +113,14 @@ describe('semantic app template compiler handoff', () => {
     expect(definition.tree.nodes.some((node) => node.nodeKind === 'element' && node.tagName === 'main')).toBe(true);
     expect(definition.tree.nodes.some((node) => node.nodeId === definition.tree.compilerContentNodeId)).toBe(true);
     expect(definition.rows.flat()).not.toHaveLength(0);
-    expect(definition.rows.flat().every((instruction) => instruction.source != null)).toBe(true);
+    const textInstruction = definition.rows.flat().find(instruction =>
+      instruction.value.type === TemplateCompilerFrameworkInstructionType.TextBinding);
+    const messageOffset = readFileSync(templateFileName, 'utf8').indexOf('message');
+    expect(textInstruction?.source).toMatchObject({
+      kind: 'source-span-address', path: 'src/my-app.html',
+      start: messageOffset, end: messageOffset + 'message'.length,
+      sourceFileRole: 'template', anchor: { kind: 'source-file-address', path: 'src/my-app.html' },
+    });
     expect(resource.value.source.source?.path).toMatch(/src\/my-app\.html$/u);
 
     const serializedBeforeRetirement = JSON.stringify(resource.value);
@@ -122,6 +130,29 @@ describe('semantic app template compiler handoff', () => {
       schemaVersion: TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION,
       definitions: [{ definitionId: 'definition:0' }],
     });
+  });
+
+  test('keeps local let traversal and definitions in each root compiler context', async () => {
+    const workspaceRoot = path.join(packageRoot, 'fixtures/pressure/template-local-template-semantics');
+    const template = 'src/template-local-template-semantics-app.html';
+    const main = path.join(workspaceRoot, 'src/main.ts');
+    const source = readFileSync(main, 'utf8');
+    const overlay = new MutableProjectSourceOverlay();
+    const secondApp = source.slice(source.indexOf('new Aurelia()')).replace('document.body', 'document.documentElement');
+    overlay.write(main, source + '\n' + secondApp);
+    overlay.write(path.join(workspaceRoot, template), '<template><local-note></local-note><template as-custom-element="local-note"><let x.bind="1"><span>ignored</span></let></template></template>');
+    const runtime = await createSemanticRuntime({ workspaceRoot,
+      projectInputAuthority: new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost(overlay)),
+    });
+    try {
+      const app = await runtime.openApp({ includeCompilerOccurrencePrecedents: true, includeAuthoringTemplates: false, telemetry: { inquiryProfile: 'aot' } });
+      const handoffs = materializeSemanticAppTemplateCompilerHandoffs({ app, templateSourcePaths: [template] }).resources;
+      expect(handoffs).toHaveLength(2);
+      for (const handoff of handoffs) {
+        expect(handoff.state).toBe(TemplateCompilerCompiledHandoffState.Exact);
+        expect(handoff.value?.definitions.map(row => row.header.name)).toEqual(['template-local-template-semantics-app', 'local-note']);
+      }
+    } finally { runtime.retireWorkspaceIncarnation(); }
   });
 
   test('reports unmatched source selections without compiling unrelated app resources', async () => {

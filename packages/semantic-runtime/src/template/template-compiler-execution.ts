@@ -1690,6 +1690,7 @@ export class TemplateCompilerExecutionSession {
       throw new Error(`Additional context-family target plan '${targetPlan.localKey}' cannot attach.`);
     }
     targetPlan.assertCoherent();
+    structuralExecution.admitSubtreeExclusions(receipt.traversal.contexts.flatMap((context) => context.exclusions));
     structuralExecution.admitCompilerExtractedDetachedNodes(
       receipt.traversal.audit.transcript.binding.bootstrapClosure.localExtraction.operations.flatMap((operation) =>
         operation.mutationBatch.nodeDetachmentMutations.map((mutation) => mutation.node)
@@ -2606,6 +2607,7 @@ export class TemplateCompilerExecutionSession {
   detachTargetAttribute(
     attempt: TemplateCompilerPendingOperationAttempt,
     attribute: TemplateCompilerAttributeOccurrence,
+    previousOrdinal: number,
   ): void {
     const overlay = this.requirePendingMutationOverlay(attempt);
     if (
@@ -2619,8 +2621,7 @@ export class TemplateCompilerExecutionSession {
     }
     this.requireOccurrenceContext(attempt.context, attribute);
     const previousOwner = attribute.owner;
-    const previousOrdinal = attribute.readOwnerOrdinal();
-    if (previousOwner == null || previousOrdinal == null) {
+    if (previousOwner == null) {
       throw new Error(`Compiler attribute '${attribute.occurrenceKey}' has no live owner to detach.`);
     }
     const mutation = new TemplateCompilerAttributeDetachmentMutation(
@@ -2629,7 +2630,7 @@ export class TemplateCompilerExecutionSession {
       previousOwner,
       previousOrdinal,
     );
-    this.forest.detachAttribute(attribute);
+    this.forest.detachAttribute(attribute, previousOrdinal);
     overlay.recordAttributeDetachment(mutation);
   }
 
@@ -4625,12 +4626,11 @@ export class TemplateCompilerExecutionSession {
     operation: TemplateCompilerOperation,
   ): boolean {
     const batch = operation.mutationBatch;
-    const disposition = structural.readConsumedAttributeDispositions(context)
-      .find((candidate) => candidate.attribute === attribute) ?? null;
+    const disposition = structural.readConsumedAttributeDisposition(attribute);
     const mutation = batch.attributeDetachmentMutations.length === 1
       ? batch.attributeDetachmentMutations[0]!
       : null;
-    return disposition != null
+    return disposition?.context === context
       && sameOccurrences(disposition.causeHandles, operation.causeHandles)
       && batch.scalarMutationCount === 0
       && batch.topologyMutations.length === 1

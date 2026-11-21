@@ -293,11 +293,7 @@ export class TemplateCompilerStructuralExecutionSession {
       sourceOperations,
       sourceNodes,
     );
-    for (const exclusion of subtreeExclusions) {
-      session.requireForestNode(exclusion.owner);
-      session.requireForestNode(exclusion.root);
-      session.excludedContentRoots.add(exclusion.root);
-    }
+    session.admitSubtreeExclusions(subtreeExclusions);
     preparedBorrowingSessions.add(session);
     return session;
   }
@@ -723,6 +719,15 @@ export class TemplateCompilerStructuralExecutionSession {
 
   readTargetGeometry(row: TemplateCompilerTargetRowPlan): TemplateCompilerTargetGeometry | null {
     return this.geometriesByRow.get(row) ?? null;
+  }
+
+  /** Preserve each attached lane's deliberately unvisited children in the shared forest. */
+  admitSubtreeExclusions(exclusions: readonly TemplateCompilerSiteCursorSubtreeExclusionEvent[]): void {
+    for (const exclusion of exclusions) {
+      this.requireForestNode(exclusion.owner);
+      this.requireForestNode(exclusion.root);
+      this.excludedContentRoots.add(exclusion.root);
+    }
   }
 
   /** Admit exact compiler-local extraction detachments that precede structural target-plan availability. */
@@ -1556,7 +1561,8 @@ export class TemplateCompilerStructuralExecutionSession {
     attribute: TemplateCompilerAttributeOccurrence,
     context: TemplateCompilerTargetContextPlan,
     causeHandles: readonly ClaimEndpointHandle[],
-    detachAttribute: ((attribute: TemplateCompilerAttributeOccurrence) => void) | null = null,
+    detachAttribute: ((attribute: TemplateCompilerAttributeOccurrence, ordinal: number) => void) | null = null,
+    liveOrdinal?: number,
   ): TemplateCompilerConsumedAttributeDisposition {
     return this.consumeAttributeWithOwnerAuthority(
       attribute,
@@ -1564,6 +1570,7 @@ export class TemplateCompilerStructuralExecutionSession {
       causeHandles,
       detachAttribute,
       (owner, structure) => this.requireNodeInContext(owner, structure),
+      liveOrdinal,
     );
   }
 
@@ -1572,7 +1579,8 @@ export class TemplateCompilerStructuralExecutionSession {
     attribute: TemplateCompilerAttributeOccurrence,
     context: TemplateCompilerTargetContextPlan,
     causeHandles: readonly ClaimEndpointHandle[],
-    detachAttribute: ((attribute: TemplateCompilerAttributeOccurrence) => void) | null = null,
+    detachAttribute: ((attribute: TemplateCompilerAttributeOccurrence, ordinal: number) => void) | null = null,
+    liveOrdinal?: number,
   ): TemplateCompilerConsumedAttributeDisposition {
     return this.consumeAttributeWithOwnerAuthority(
       attribute,
@@ -1587,6 +1595,7 @@ export class TemplateCompilerStructuralExecutionSession {
           throw new Error(`Compiler surrogate attribute '${attribute.occurrenceKey}' is outside the root carrier.`);
         }
       },
+      liveOrdinal,
     );
   }
 
@@ -1620,11 +1629,12 @@ export class TemplateCompilerStructuralExecutionSession {
     attribute: TemplateCompilerAttributeOccurrence,
     context: TemplateCompilerTargetContextPlan,
     causeHandles: readonly ClaimEndpointHandle[],
-    detachAttribute: ((attribute: TemplateCompilerAttributeOccurrence) => void) | null,
+    detachAttribute: ((attribute: TemplateCompilerAttributeOccurrence, ordinal: number) => void) | null,
     assertOwner: (
       owner: TemplateCompilerElementOccurrence,
       structure: TemplateCompilerContextStructure,
     ) => void,
+    liveOrdinal?: number,
   ): TemplateCompilerConsumedAttributeDisposition {
     const structure = this.requireContextStructure(context);
     if (this.forest.attributeForOccurrenceKey(attribute.occurrenceKey) !== attribute) {
@@ -1645,17 +1655,17 @@ export class TemplateCompilerStructuralExecutionSession {
       throw new Error(`Compiler attribute '${attribute.occurrenceKey}' already has a final structural disposition.`);
     }
     const owner = attribute.owner;
-    const ownerOrdinal = attribute.readOwnerOrdinal();
-    if (owner == null || ownerOrdinal == null) {
+    const ownerOrdinal = liveOrdinal ?? attribute.readOwnerOrdinal();
+    if (owner == null || ownerOrdinal == null || owner.readAttributes()[ownerOrdinal] !== attribute) {
       throw new Error(`Consumed compiler attribute '${attribute.occurrenceKey}' has no live owner event.`);
     }
     if ((hookInsertion?.owner ?? this.forest.seededAttributePlacement(attribute)?.owner) !== owner) {
       throw new Error(`Consumed compiler attribute '${attribute.occurrenceKey}' changed its seeded input owner.`);
     }
-    if (hookInsertion == null) this.assertSeededAttributeOrder(attribute, owner);
+    if (hookInsertion == null) this.assertSeededAttributeOrder(attribute, owner, ownerOrdinal);
     assertOwner(owner, structure);
-    if (detachAttribute == null) this.forest.detachAttribute(attribute);
-    else detachAttribute(attribute);
+    if (detachAttribute == null) this.forest.detachAttribute(attribute, ownerOrdinal);
+    else detachAttribute(attribute, ownerOrdinal);
     if (!hasDetachedAttributeOwner(attribute)) {
       throw new Error(`Compiler attribute '${attribute.occurrenceKey}' detachment did not consume its owner edge.`);
     }
@@ -2472,10 +2482,10 @@ export class TemplateCompilerStructuralExecutionSession {
   private assertSeededAttributeOrder(
     attribute: TemplateCompilerAttributeOccurrence,
     owner: TemplateCompilerElementOccurrence,
+    currentOrdinal: number,
   ): void {
     const placement = this.forest.seededAttributePlacement(attribute);
-    const currentOrdinal = attribute.readOwnerOrdinal();
-    if (placement == null || currentOrdinal == null) return;
+    if (placement == null) return;
     const attributes = owner.readAttributes();
     const seededOrdinal = (candidate: TemplateCompilerAttributeOccurrence): number | null => {
       const candidatePlacement = this.forest.seededAttributePlacement(candidate);

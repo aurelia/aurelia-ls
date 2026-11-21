@@ -1,5 +1,8 @@
 import type { SemanticSourceReference } from '../api/source-reference.js';
-import { describeAddress } from '../api/source-reference.js';
+import { describeAddress, sourceReferenceForParserSpan } from '../api/source-reference.js';
+import { sourceFileAddressForAddress } from '../kernel/source-address.js';
+import { sourceAddressHandleForRuntimeExpressionSpan } from './runtime-expression-source-address.js';
+import type { TemplateCompilerContextFamilyValue } from './template-compiler-context-family-value.js';
 import type { EvidenceKind, EvidenceRole } from '../kernel/evidence.js';
 import type { AddressHandle, IdentityHandle, ProductHandle, ProvenanceHandle } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
@@ -503,6 +506,7 @@ function projectCompiledHandoff(
     request.store,
     request.spreadPlansByInstruction ?? new Map(),
     entry.local,
+    (entry.local?.definitions ?? request.definitions).family,
   ));
   return {
     schemaVersion: TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION,
@@ -541,6 +545,7 @@ function projectDefinition(
   store: KernelStore,
   spreadPlansByInstruction: ReadonlyMap<TemplateInstruction, TemplateCompilerCompiledHandoffSpreadPlan>,
   local: TemplateCompilerCompiledHandoffLocalFamilyProjection | null,
+  family: TemplateCompilerContextFamilyValue,
 ): TemplateCompilerCompiledHandoffDefinition {
   const definitionId = requireMap(definitionIds, location.context, 'definition context');
   const values = overlay.instructions;
@@ -557,6 +562,7 @@ function projectDefinition(
         definitionIds,
         store,
         spreadPlansByInstruction,
+        family,
       )
     )),
     surrogates: values.surrogates.map((value, instructionIndex) =>
@@ -566,6 +572,7 @@ function projectDefinition(
         definitionIds,
         store,
         spreadPlansByInstruction,
+        family,
       )
     ),
   };
@@ -860,7 +867,19 @@ function projectInstruction(
   definitionIds: ReadonlyMap<TemplateCompilerContextFamilyValueContext, string>,
   store: KernelStore,
   spreadPlansByInstruction: ReadonlyMap<TemplateInstruction, TemplateCompilerCompiledHandoffSpreadPlan>,
+  family: TemplateCompilerContextFamilyValue,
 ): TemplateCompilerCompiledHandoffInstruction {
+  const handle = instruction.sourceAddressHandle;
+  const hole = handle == null ? null : family.textHoleSources.get(handle);
+  let source: SemanticSourceReference | null;
+  if (hole == null) {
+    source = sourceReference(store, handle);
+  } else {
+    // This address was allocated in the sealed cursor, so its source lives in the family rather than the committed store.
+    const file = sourceFileAddressForAddress(store, sourceAddressHandleForRuntimeExpressionSpan(hole.expressionSpan) ?? hole.carrierSourceAddressHandle);
+    const anchor = file == null ? null : sourceReference(store, file.handle);
+    source = file == null ? null : { ...sourceReferenceForParserSpan(file.path, hole.expressionSpan, 'range', anchor), anchor };
+  }
   return {
     value: projectTemplateCompilerCompiledHandoffInstructionValue(
       value,
@@ -868,7 +887,7 @@ function projectInstruction(
       spreadPlansByInstruction,
       instruction,
     ),
-    source: sourceReference(store, instruction.sourceAddressHandle),
+    source,
     fieldProvenance: fieldProvenance(instruction.fieldProvenance, store),
   };
 }

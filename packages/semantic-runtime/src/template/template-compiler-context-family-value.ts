@@ -1,4 +1,5 @@
-import type { IdentityHandle, ProductHandle } from '../kernel/handles.js';
+import type { AddressHandle, IdentityHandle, ProductHandle } from '../kernel/handles.js';
+import type { TemplateCompilerTextHoleSourceRange } from './template-compiler-text-instruction-staging.js';
 import type { OpenSeam } from '../kernel/open-seam.js';
 import type { ProductDetailReadView } from '../kernel/product-details.js';
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
@@ -179,6 +180,7 @@ export class TemplateCompilerContextFamilyValue {
     readonly instructions: readonly TemplateInstruction[],
     readonly sourceOpenSeams: readonly OpenSeam[],
     readonly liveExpressions: readonly TemplateCompilerContextFamilyExpressionValue[],
+    readonly textHoleSources: ReadonlyMap<AddressHandle, TemplateCompilerTextHoleSourceRange>,
     /** Legacy compiler-created local resource identities; occurrence-first families detach constructables separately. */
     readonly compilerAddedDependencyIdentityHandles: readonly IdentityHandle[],
     productDetails: ProductDetailReadView,
@@ -334,6 +336,8 @@ export function projectTemplateCompilerContextFamilyValue(
     instructions,
     frozen.browserInput.openSeams,
     liveExpressions,
+    new Map(liveAllocation.sourceAllocations.flatMap(allocation =>
+      allocation.source == null ? [] : [[allocation.addressHandle, allocation.source] as const])),
     frozen.compilerAddedDependencyIdentityHandles,
     productDetails,
     () => frozen.isCurrent(),

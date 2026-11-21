@@ -442,6 +442,7 @@ function occurrencePrecedentForResource(
   const productHandle = resource.compilation.definition.productHandle;
   const matches = [...family.appOccurrencePrecedents, ...family.authoringOccurrencePrecedents].filter((precedent) =>
     precedent.compilation.definition.productHandle === productHandle
+    && precedent.compilation.analysisContextProductHandle === resource.compilation.analysisContextProductHandle
   );
   return matches.length === 1 ? matches[0]! : null;
 }

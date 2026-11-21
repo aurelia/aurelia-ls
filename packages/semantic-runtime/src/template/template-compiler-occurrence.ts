@@ -918,17 +918,21 @@ export class TemplateCompilerOccurrenceForest {
   }
 
   /** Remove one live attribute while retaining its occurrence for a later 1→0 derivation. */
-  detachAttribute(attribute: TemplateCompilerAttributeOccurrence): void {
+  detachAttribute(attribute: TemplateCompilerAttributeOccurrence, liveOrdinal?: number): void {
     this.requireAttribute(attribute);
     const owner = attribute.owner;
     if (owner === null) {
       throw new Error(`Compiler attribute occurrence '${attribute.occurrenceKey}' is already detached.`);
     }
-    const ordinal = this.mutationUndoJournal == null ? null : attribute.readOwnerOrdinal();
-    removeExact(mutableAttributes(owner), attribute, `compiler attribute '${attribute.occurrenceKey}'`);
+    const ordinal = liveOrdinal ?? attribute.readOwnerOrdinal();
+    const attributes = mutableAttributes(owner);
+    if (ordinal == null || attributes[ordinal] !== attribute) {
+      throw new Error(`Compiler attribute '${attribute.occurrenceKey}' is absent from its live owner slot.`);
+    }
+    attributes.splice(ordinal, 1);
     attributeOwners.set(attribute, null);
     this.mutationUndoJournal?.push(() => {
-      mutableAttributes(owner).splice(ordinal!, 0, attribute);
+      mutableAttributes(owner).splice(ordinal, 0, attribute);
       attributeOwners.set(attribute, owner);
     });
     this._mutationRevision += 1;

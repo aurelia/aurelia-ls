@@ -184,6 +184,7 @@ export function compileTemplateCompilerOccurrenceFamily(
     ...request.currentFamily.authoringCompilations,
   ].filter((compilation) =>
     compilation.definition.productHandle === rootDefinition.productHandle
+    && compilation.analysisContextProductHandle === precedent.compilation.analysisContextProductHandle
   );
   if (runtimeRootMatches.length !== 1) {
     return unavailable(

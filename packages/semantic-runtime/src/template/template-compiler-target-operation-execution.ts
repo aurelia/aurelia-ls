@@ -99,7 +99,7 @@ function executeAttributeOperation(
   rootSurrogate: boolean,
 ): TemplateCompilerTargetAttributeOperationResult {
   const { execution, structural, context, disposition } = request;
-  if (disposition.attribute.readOwnerOrdinal() !== disposition.simulatedLiveOrdinal) {
+  if (disposition.attribute.owner?.readAttributes()[disposition.simulatedLiveOrdinal] !== disposition.attribute) {
     throw new Error(`Attribute disposition '${request.operationKey}' lost its JIT-live owner ordinal.`);
   }
   const attempt = execution.beginOperation({
@@ -118,7 +118,8 @@ function executeAttributeOperation(
       disposition.attribute,
       context.targetContext,
       request.causeHandles,
-      (attribute) => execution.detachTargetAttribute(attempt, attribute),
+      (attribute, ordinal) => execution.detachTargetAttribute(attempt, attribute, ordinal),
+      disposition.simulatedLiveOrdinal,
     );
   return new TemplateCompilerTargetAttributeOperationResult(
     complete(execution, attempt),
