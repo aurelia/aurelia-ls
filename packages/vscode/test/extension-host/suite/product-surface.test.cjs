@@ -2592,7 +2592,7 @@ suite("extension-host product surface", () => {
       const checkerEvidence = primitiveMember.relatedInformation[0];
       assert.strictEqual(
         checkerEvidence.message,
-        "TS2339: Property 'label' does not exist on type 'string'.",
+        `TS2339: Property 'label' does not exist on type '"ticket-shell"'.`,
       );
       assert.strictEqual(checkerEvidence.location.uri.toString(), templateDocument.uri.toString());
       assert.strictEqual(templateDocument.getText(checkerEvidence.location.range), "label");
