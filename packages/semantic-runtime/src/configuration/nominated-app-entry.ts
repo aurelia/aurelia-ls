@@ -13,6 +13,7 @@ import {
   StaticInvocationOccurrence,
 } from '../evaluation/invocation.js';
 import { StaticModuleEvaluationResult } from '../evaluation/module-evaluation-result.js';
+import { EvaluationExportKind, readEvaluationStatementExports } from '../evaluation/module-graph.js';
 import {
   type EvaluatedProjectSource,
   StaticProjectEvaluationSourceResult,
@@ -296,35 +297,13 @@ function routeActivationInvocations(
 
 function localNameForExport(sourceFile: ts.SourceFile, exportName: string): string | null {
   for (const statement of sourceFile.statements) {
-    if (ts.isExportDeclaration(statement)) {
-      if (statement.moduleSpecifier != null || statement.exportClause == null || !ts.isNamedExports(statement.exportClause)) {
-        continue;
-      }
-      for (const element of statement.exportClause.elements) {
-        if (element.name.text === exportName) {
-          return (element.propertyName ?? element.name).text;
-        }
-      }
-      continue;
-    }
-    if (ts.isExportAssignment(statement) && exportName === 'default' && ts.isIdentifier(statement.expression)) {
-      return statement.expression.text;
-    }
-    if (!hasModifier(statement, ts.SyntaxKind.ExportKeyword)) {
-      continue;
-    }
-    const isDefault = hasModifier(statement, ts.SyntaxKind.DefaultKeyword);
-    if ((ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) && statement.name != null) {
-      if ((isDefault ? 'default' : statement.name.text) === exportName) {
-        return statement.name.text;
-      }
-      continue;
-    }
-    if (ts.isVariableStatement(statement) && !isDefault) {
-      for (const declaration of statement.declarationList.declarations) {
-        if (ts.isIdentifier(declaration.name) && declaration.name.text === exportName) {
-          return declaration.name.text;
-        }
+    if (ts.isExportDeclaration(statement) && statement.moduleSpecifier != null) continue;
+    for (const entry of readEvaluationStatementExports(statement, sourceFile)) {
+      if (entry.exportName !== exportName) continue;
+      if (entry.exportKind === EvaluationExportKind.Local) return entry.valueName;
+      if (entry.exportKind === EvaluationExportKind.Default) {
+        if (ts.isExportAssignment(statement)) return ts.isIdentifier(statement.expression) ? statement.expression.text : null;
+        return entry.valueName === 'default' ? null : entry.valueName;
       }
     }
   }

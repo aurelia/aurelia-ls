@@ -23,6 +23,7 @@ describe('framework capability diagnostic certainty', () => {
 
   test('keeps missing capability admission unknown in a standalone authoring compiler world', async () => {
     const workspaceRoot = await createWorkspace({
+      'index.html': '<!doctype html>',
       'src/authoring-card.ts': [
         "import { customElement } from '@aurelia/runtime-html';",
         "import template from './authoring-card.html';",
@@ -58,6 +59,10 @@ describe('framework capability diagnostic certainty', () => {
       row.requiredCapability === 'router.default-resources'
     );
     expect(routerDemands).not.toHaveLength(0);
+    const manifestEvidence = routerDemands.flatMap(row => row.packageEvidence)
+      .filter(row => row.evidenceKind === 'project-manifest-dependency');
+    expect(manifestEvidence.length).toBeGreaterThan(0);
+    expect(manifestEvidence.every(row => row.source?.path === 'package.json')).toBe(true);
     expect(routerDemands.every((row) =>
       row.admissionState === 'admission-unknown'
       && row.actionability === 'registration-status-unknown'

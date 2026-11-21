@@ -1,6 +1,8 @@
 import path from 'node:path';
+import { minimatch } from 'minimatch';
 import type { SemanticRuntimeProjectInputHost } from '../kernel/project-input.js';
-import { canonicalTypeSystemPath } from '../type-system/source-file-path.js';
+import type { ProjectBootFrame } from './frames.js';
+import { canonicalTypeSystemPath, isTypeSystemPathAtOrUnder } from '../type-system/source-file-path.js';
 
 export interface BootPackageManifest {
   readonly [key: string]: unknown;
@@ -57,44 +59,39 @@ export function manifestWorkspacesIncludeProject(
   projectRoot: string,
 ): boolean {
   const patterns = readPackageWorkspacePatterns(manifest);
-  if (patterns.length === 0) {
-    return false;
+  const relative = path.relative(manifestRoot, projectRoot);
+  if (patterns.length === 0 || relative === '' || !isHostPathWithin(projectRoot, manifestRoot)) return false;
+  const projectPath = normalizePosixPath(relative);
+  const include: string[] = [];
+  let exclude: string[] = [];
+  for (const pattern of patterns) {
+    const prefix = pattern.match(/^!+/u)?.[0].length ?? 0;
+    const glob = pattern.slice(prefix).replaceAll('\\', '/').replace(/^\.?\/+/u, '').replace(/\/+$/u, '');
+    if (prefix % 2 === 1) {
+      exclude.push(glob);
+    } else {
+      // npm allows a later positive workspace pattern to reopen a previously excluded subtree.
+      exclude = exclude.filter(negative => !minimatch(glob, negative));
+      include.push(glob);
+    }
   }
-  const relativeProjectRoot = normalizePosixPath(path.relative(manifestRoot, projectRoot));
-  return relativeProjectRoot.length > 0 && patterns.some((pattern) =>
-    workspacePatternMatchesProject(pattern, relativeProjectRoot)
-  );
+  return !exclude.some(glob => minimatch(projectPath, glob))
+    && include.some(glob => minimatch(projectPath, glob) && !exclude.some(negative => minimatch(glob, negative)));
 }
 
-function workspacePatternMatchesProject(
-  pattern: string,
-  relativeProjectRoot: string,
-): boolean {
-  const normalizedPattern = normalizeWorkspacePattern(pattern);
-  return globPatternToRegExp(normalizedPattern).test(relativeProjectRoot);
-}
-
-function normalizeWorkspacePattern(pattern: string): string {
-  let normalized = normalizePosixPath(pattern).replace(/^\.\//, '');
-  while (normalized.endsWith('/')) {
-    normalized = normalized.slice(0, -1);
+/** Closest ancestor package that actually includes the project in its declared workspace. */
+export function nearestWorkspaceManifestForProject(project: ProjectBootFrame): { directory: string; manifest: BootPackageManifest } | null {
+  const projectRoot = path.resolve(project.rootDir);
+  const workspaceRoot = path.resolve(project.workspaceRootDir);
+  if (sameHostPath(projectRoot, workspaceRoot)) return null;
+  let directory = path.dirname(projectRoot);
+  while (isHostPathWithin(directory, workspaceRoot)) {
+    const manifest = readPackageManifest(project.inputGeneration.host, directory);
+    if (manifest != null && manifestWorkspacesIncludeProject(manifest, directory, projectRoot)) return { directory, manifest };
+    if (sameHostPath(directory, workspaceRoot)) break;
+    directory = path.dirname(directory);
   }
-  return normalized;
-}
-
-function globPatternToRegExp(pattern: string): RegExp {
-  const body = pattern
-    .split('/')
-    .map((segment) => {
-      if (segment === '**') {
-        return '(?:[^/]+/)*[^/]+';
-      }
-      return segment
-        .replace(/[\\^$+?.()|[\]{}]/g, '\\$&')
-        .replace(/\*/g, '[^/]*');
-    })
-    .join('/');
-  return new RegExp(`^${body}$`);
+  return null;
 }
 
 export function hasPackageManifest(host: SemanticRuntimeProjectInputHost, directory: string): boolean {
@@ -118,9 +115,5 @@ export function sameHostPath(left: string, right: string): boolean {
 }
 
 export function isHostPathWithin(fileName: string, rootDir: string): boolean {
-  const relativePath = path.relative(path.resolve(rootDir), path.resolve(fileName));
-  return (
-    relativePath === ''
-    || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath))
-  );
+  return isTypeSystemPathAtOrUnder(canonicalTypeSystemPath(fileName), canonicalTypeSystemPath(rootDir));
 }

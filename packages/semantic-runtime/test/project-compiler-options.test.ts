@@ -5,6 +5,7 @@ import path from 'node:path';
 import { afterAll, describe, expect, test } from 'vitest';
 
 import { createSemanticRuntime } from '../src/index.js';
+import { manifestWorkspacesIncludeProject } from '../src/boot/host-files.js';
 
 const temporaryRoots: string[] = [];
 
@@ -13,6 +14,16 @@ afterAll(async () => {
 });
 
 describe('project compiler options', () => {
+  test('inherits workspace dependencies only for npm workspace members', () => {
+    const manifestRoot = path.resolve('workspace');
+    const members = (workspaces: string[]) => ['packages/lib', 'packages/nested/lib', 'packages/extras'].filter(key =>
+      manifestWorkspacesIncludeProject({ workspaces }, manifestRoot, path.join(manifestRoot, key)));
+    expect(members(['packages/**/lib', 'packages/extras'])).toHaveLength(3);
+    expect(members(['packages/{lib,extras}'])).toEqual(['packages/lib', 'packages/extras']);
+    expect(members(['packages/*', '!packages/extras', 'packages/*/lib'])).toEqual(['packages/lib', 'packages/nested/lib']);
+    expect(members(['packages/*', '!packages/extras', './packages/extras/'])).toEqual(['packages/lib', 'packages/extras']);
+  });
+
   test('does not turn ambient ancestor workspaces or Aurelia checkouts into implicit path mappings', async () => {
     const workspaceRoot = await temporaryRoot();
     const projectRoot = path.join(workspaceRoot, 'packages/app');

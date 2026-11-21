@@ -9,10 +9,8 @@ import {
 } from '../kernel/address.js';
 import {
   type BootPackageManifest,
-  isHostPathWithin,
-  manifestWorkspacesIncludeProject,
+  nearestWorkspaceManifestForProject,
   readPackageManifest,
-  sameHostPath,
 } from '../boot/host-files.js';
 import {
   EvidenceKind,
@@ -1361,7 +1359,9 @@ function siteForExpressionResource(
     requiredCapability: demand.requiredCapability,
     authoredName,
     admissionState: admission.admissionState,
+    blockingOpenSeamHandles: admission.blockingOpenSeamHandles,
     admissionSourceAddressHandles: admission.admissionSourceAddressHandles,
+    configurationSourceAddressHandles: admission.configurationSourceAddressHandles,
     sourceAddressHandle: expressionSource.handle,
     ownerIdentityHandle: parse.identityHandle,
     expressionResourceApplicationProductHandles: planFacts.applicationProductHandles,
@@ -1375,7 +1375,7 @@ interface CapabilityDemandDescriptor {
   readonly requiredCapability: FrameworkRegistrationCapability;
 }
 
-function capabilityForBuiltInSyntaxGroup(
+export function capabilityForBuiltInSyntaxGroup(
   group: BuiltInSyntaxGroup,
 ): CapabilityDemandDescriptor | null {
   switch (group) {
@@ -1659,9 +1659,10 @@ function readCapabilityAvailabilityEvidence(
   project: ProjectBootFrame,
   typeSystem: TypeSystemProject,
 ): CapabilityAvailabilityEvidenceContext {
+  const ancestor = nearestWorkspaceManifestForProject(project);
   const rows = [
-    ...manifestDependencyEvidence(project, readPackageManifest(project.inputGeneration.host, project.rootDir), FrameworkCapabilityPackageEvidenceKind.ProjectManifestDependency),
-    ...manifestDependencyEvidence(project, nearestWorkspaceManifestForProject(project), FrameworkCapabilityPackageEvidenceKind.WorkspaceManifestDependency),
+    ...manifestDependencyEvidence(project, project.rootDir, readPackageManifest(project.inputGeneration.host, project.rootDir), FrameworkCapabilityPackageEvidenceKind.ProjectManifestDependency),
+    ...(ancestor == null ? [] : manifestDependencyEvidence(project, ancestor.directory, ancestor.manifest, FrameworkCapabilityPackageEvidenceKind.WorkspaceManifestDependency)),
     ...sourceImportEvidence(project, typeSystem),
   ];
   return {
@@ -1671,12 +1672,14 @@ function readCapabilityAvailabilityEvidence(
 
 function manifestDependencyEvidence(
   project: ProjectBootFrame,
+  directory: string,
   manifest: BootPackageManifest | null,
   kind: FrameworkCapabilityPackageEvidenceKind.ProjectManifestDependency | FrameworkCapabilityPackageEvidenceKind.WorkspaceManifestDependency,
 ): readonly FrameworkCapabilityPackageEvidence[] {
   if (manifest == null) {
     return [];
   }
+  const source = project.sourceOwnership.resolveProjectPath(path.join(directory, 'package.json'));
   return [
     ...manifestDependencyScopeEvidence(manifest.dependencies, 'dependencies', kind),
     ...manifestDependencyScopeEvidence(manifest.peerDependencies, 'peerDependencies', kind),
@@ -1687,7 +1690,7 @@ function manifestDependencyEvidence(
     row.packageName,
     row.moduleName,
     row.scope,
-    project.sourceFiles[0]?.addressHandle ?? null,
+    source.kind === 'resolved' ? source.source.admission.addressHandle : null,
   ));
 }
 
@@ -1806,25 +1809,4 @@ function packageNameForSpecifier(specifier: string): string {
 
 function isAureliaPackageSpecifier(specifier: string): boolean {
   return specifier === 'aurelia' || specifier.startsWith('@aurelia/');
-}
-
-function nearestWorkspaceManifestForProject(
-  project: ProjectBootFrame,
-): BootPackageManifest | null {
-  const workspaceRoot = path.resolve(project.workspaceRootDir);
-  const projectRoot = path.resolve(project.rootDir);
-  let current = path.dirname(projectRoot);
-
-  while (isHostPathWithin(current, workspaceRoot)) {
-    const manifest = readPackageManifest(project.inputGeneration.host, current);
-    if (manifest != null && manifestWorkspacesIncludeProject(manifest, current, projectRoot)) {
-      return manifest;
-    }
-    if (sameHostPath(current, workspaceRoot)) {
-      break;
-    }
-    current = path.dirname(current);
-  }
-
-  return null;
 }

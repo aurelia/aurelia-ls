@@ -1,6 +1,7 @@
 import path from 'node:path';
 import ts from 'typescript';
 import { hasModifier } from './ts-syntax.js';
+import { staticBindingNames } from './binding-patterns.js';
 
 export const enum EvaluationImportKind {
   /** Import declaration that only executes the target module. */
@@ -146,21 +147,7 @@ export function readEvaluationModuleRecord(
       imports.push(...readImportEqualsEntries(statement, sourceFile, compilerOptions));
       continue;
     }
-    if (ts.isExportDeclaration(statement)) {
-      exports.push(...readExportDeclarationEntries(statement, sourceFile, compilerOptions));
-      continue;
-    }
-    if (ts.isExportAssignment(statement)) {
-      exports.push(new EvaluationExportEntry(
-        statement.isExportEquals === true ? EvaluationExportKind.ExportEquals : EvaluationExportKind.Default,
-        statement.isExportEquals === true ? 'export=' : 'default',
-        statement.isExportEquals === true ? null : 'default',
-        null,
-        statement,
-      ));
-      continue;
-    }
-    exports.push(...readLocalExportEntries(statement));
+    exports.push(...readEvaluationStatementExports(statement, sourceFile, compilerOptions));
   }
 
   return new EvaluationModuleRecord(moduleKey, sourceFile, [
@@ -392,27 +379,28 @@ function readExportDeclarationEntries(
     );
 }
 
-function readLocalExportEntries(statement: ts.Statement): readonly EvaluationExportEntry[] {
+/** Runtime exports introduced by a statement, with TypeScript-only selectors erased. */
+export function readEvaluationStatementExports(
+  statement: ts.Statement, sourceFile: ts.SourceFile, compilerOptions: ts.CompilerOptions = {},
+): readonly EvaluationExportEntry[] {
+  if (ts.isExportDeclaration(statement)) return readExportDeclarationEntries(statement, sourceFile, compilerOptions);
+  if (ts.isExportAssignment(statement)) {
+    return [new EvaluationExportEntry(
+      statement.isExportEquals === true ? EvaluationExportKind.ExportEquals : EvaluationExportKind.Default,
+      statement.isExportEquals === true ? 'export=' : 'default',
+      statement.isExportEquals === true ? null : 'default', null, statement,
+    )];
+  }
   if (!hasModifier(statement, ts.SyntaxKind.ExportKeyword)) {
     return [];
   }
 
   const defaultExport = hasModifier(statement, ts.SyntaxKind.DefaultKeyword);
   if (ts.isVariableStatement(statement)) {
-    return statement.declarationList.declarations.flatMap((declaration) => {
-      const localName = ts.isIdentifier(declaration.name) ? declaration.name.text : null;
-      return localName == null
-        ? []
-        : [
-          new EvaluationExportEntry(
-            EvaluationExportKind.Local,
-            localName,
-            localName,
-            null,
-            declaration,
-          ),
-        ];
-    });
+    return statement.declarationList.declarations.flatMap(declaration =>
+      staticBindingNames(declaration.name).map(name => new EvaluationExportEntry(
+        EvaluationExportKind.Local, name, name, null, declaration,
+      )));
   }
 
   if (ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement)) {
