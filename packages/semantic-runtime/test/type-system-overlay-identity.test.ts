@@ -1,19 +1,39 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
 import { describe, expect, test } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
 import { TemplateTypeSystemOverlayBuilder } from '../src/template/template-type-system-overlay.js';
+import { appendTemplateTypeSystemOverlayPrelude } from '../src/template/template-type-system-overlay-prelude.js';
 import { resolveCheckerDomEventType } from '../src/type-system/dom-node-type.js';
 import {
   CheckerTypeWitnessName,
+  createTypeSystemOverlaySourceFile,
+  TypeSystemOverlaySourceBuilder,
   TYPE_SYSTEM_CHECKER_TYPE_WITNESS_ORIGIN_KEY,
   type TypeSystemOverlaySource,
 } from '../src/type-system/overlay.js';
 import { TypeSystemProjectBuilder } from '../src/type-system/project.js';
 
 describe('type-system overlay identity', () => {
+  test('retains the component module specifier through the TypeScript parser', () => {
+    const moduleSpecifier = "./owner's-panel";
+    const builder = new TypeSystemOverlaySourceBuilder({
+      kind: 'semantic-checker-surface',
+      fileName: 'overlay.ts',
+      originKey: 'quoted-owner',
+    });
+    appendTemplateTypeSystemOverlayPrelude(builder, { moduleSpecifier, typeName: 'Panel' });
+    const file = createTypeSystemOverlaySourceFile(builder.appendLine('}').build());
+    const statement = file.statements[0];
+    if (!statement || !ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+      throw new Error('Expected a generated view-model import.');
+    }
+    expect(statement.moduleSpecifier.text).toBe(moduleSpecifier);
+  });
+
   test('preserves full semantic identity through lossy generated filenames', async () => {
     const { app, runtime, resource } = await openFixture('filename');
     const builder = new TemplateTypeSystemOverlayBuilder(
