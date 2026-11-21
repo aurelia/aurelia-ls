@@ -10,6 +10,7 @@ import {
 } from '../evaluation/nullish-expression.js';
 import {
   ContainerLookupKeyKind,
+  intrinsicTypeNames,
 } from './container-key.js';
 import {
   isAureliaInterfaceKeyDeclaration,
@@ -90,17 +91,26 @@ export function containerLookupKeyKindForExpression(
     return ContainerLookupKeyKind.Object;
   }
   if (ts.isClassExpression(current)) {
-    return ContainerLookupKeyKind.Constructable;
+    return containerLookupKeyKindForDeclaration(typeSystem, current);
   }
   if (readAureliaResolverWrapperCall(typeSystem, current) != null) {
     return ContainerLookupKeyKind.Resolver;
   }
-  if (ts.isIdentifier(current) && intrinsicTypeNames.has(current.text)) {
-    return ContainerLookupKeyKind.IntrinsicConstructable;
-  }
 
-  const symbol = typeSystem.readProgramAliasedSymbolAtLocation(current);
-  const declaration = symbol == null ? null : firstSymbolDeclaration(symbol);
+  // Follow immutable value aliases to the constructor declaration, including globalThis.Date.
+  let target: ts.Expression = current;
+  const seen = new Set<ts.Declaration>();
+  let declaration: ts.Declaration | null;
+  for (;;) {
+    const symbol = typeSystem.readProgramAliasedSymbolAtLocation(ts.isPropertyAccessExpression(target) ? target.name : target);
+    declaration = symbol == null ? null : firstSymbolDeclaration(symbol);
+    if (declaration == null || !ts.isVariableDeclaration(declaration) || !declaration.initializer
+      || !(declaration.parent.flags & ts.NodeFlags.Const) || seen.has(declaration)) break;
+    const initializer = unwrapExpression(declaration.initializer);
+    if (!ts.isIdentifier(initializer) && !ts.isPropertyAccessExpression(initializer)) break;
+    seen.add(declaration);
+    target = initializer;
+  }
   if (declaration == null) {
     return ContainerLookupKeyKind.Unknown;
   }
@@ -112,6 +122,15 @@ export function containerLookupKeyKindForDeclaration(
   typeSystem: TypeSystemProject,
   declaration: ts.Declaration,
 ): ContainerLookupKeyKind {
+  const name = ts.getNameOfDeclaration(declaration);
+  if (name != null && ts.isIdentifier(name) && intrinsicTypeNames.has(name.text)) {
+    if (typeSystem.program.isSourceFileDefaultLibrary(declaration.getSourceFile()) && ts.isVariableDeclaration(declaration)) {
+      return ContainerLookupKeyKind.IntrinsicConstructable;
+    }
+    if (ts.isClassLike(declaration) || ts.isFunctionDeclaration(declaration) || ts.isFunctionExpression(declaration)) {
+      return ContainerLookupKeyKind.IntrinsicNamedConstructable;
+    }
+  }
   if (isAureliaInterfaceKeyDeclaration(typeSystem, declaration)) {
     return ContainerLookupKeyKind.Interface;
   }
@@ -185,38 +204,3 @@ export function containerKeyExpressionIdentityKind(
   }
   return DiContainerKeyExpressionIdentityKind.Stable;
 }
-
-const intrinsicTypeNames = new Set<string>([
-  'Array',
-  'ArrayBuffer',
-  'Boolean',
-  'DataView',
-  'Date',
-  'Error',
-  'EvalError',
-  'Float32Array',
-  'Float64Array',
-  'Function',
-  'Int8Array',
-  'Int16Array',
-  'Int32Array',
-  'Map',
-  'Number',
-  'Object',
-  'Promise',
-  'RangeError',
-  'ReferenceError',
-  'RegExp',
-  'Set',
-  'SharedArrayBuffer',
-  'String',
-  'SyntaxError',
-  'TypeError',
-  'Uint8Array',
-  'Uint8ClampedArray',
-  'Uint16Array',
-  'Uint32Array',
-  'URIError',
-  'WeakMap',
-  'WeakSet',
-]);

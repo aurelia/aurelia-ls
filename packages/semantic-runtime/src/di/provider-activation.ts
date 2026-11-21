@@ -105,6 +105,7 @@ import {
   ContainerLookupKeyKind,
   containerLookupKeyForRegistrationKey,
   containerLookupKeyForRegistrationValue,
+  intrinsicTypeNames,
 } from './container-key.js';
 import {
   type ContainerFactorySlot,
@@ -358,8 +359,7 @@ export class DiProviderActivationView {
   private readonly containersByProductHandle = new Map<string, Container>();
   private readonly invocationsByExpression = new Map<ts.CallExpression, StaticInvocationOccurrence<ts.CallExpression>[]>();
   private readonly executionEventsBySourceKey = new Map<string, DiProviderActivationExecutionEvent[]>();
-  private readonly resolverSlotExecutionOrdinals = new WeakMap<ContainerResolverLikeSlot, number | null>();
-  private readonly factorySlotExecutionOrdinals = new WeakMap<ContainerFactorySlot, number | null>();
+  private readonly slotExecutionOrdinals = new WeakMap<ContainerResolverLikeSlot | ContainerFactorySlot, number | null>();
   private readonly evaluationValuesByContainer = new WeakMap<Container, EvaluationValue>();
   private readonly keyIdentities: DiKeyIdentityEmitter;
 
@@ -393,17 +393,13 @@ export class DiProviderActivationView {
       }
     }
     this.indexExecutionOrder();
-    for (const slot of [...topology.resolverSlots, ...topology.selfResolverSlots]) {
-      this.resolverSlotExecutionOrdinals.set(
-        slot,
-        this.executionOrdinalForSourceAddress(slot.sourceAddressHandle),
-      );
-    }
-    for (const slot of topology.factorySlots) {
-      this.factorySlotExecutionOrdinals.set(
-        slot,
-        this.executionOrdinalForSourceAddress(slot.sourceAddressHandle),
-      );
+    this.captureSlotExecutionOrder(topology);
+  }
+
+  /** Capture newly published slots while their source addresses are readable through the candidate's publication. */
+  captureSlotExecutionOrder(topology: DiProviderActivationTopology): void {
+    for (const slot of [...topology.resolverSlots, ...topology.selfResolverSlots, ...topology.factorySlots]) {
+      this.slotExecutionOrdinals.set(slot, this.executionOrdinalForSourceAddress(slot.sourceAddressHandle));
     }
   }
 
@@ -430,11 +426,11 @@ export class DiProviderActivationView {
   }
 
   executionOrdinalForResolverSlot(slot: ContainerResolverLikeSlot): number | null | undefined {
-    return this.resolverSlotExecutionOrdinals.get(slot);
+    return this.slotExecutionOrdinals.get(slot);
   }
 
   executionOrdinalForFactorySlot(slot: ContainerFactorySlot): number | null | undefined {
-    return this.factorySlotExecutionOrdinals.get(slot);
+    return this.slotExecutionOrdinals.get(slot);
   }
 
   dependencyCycleForContainerGet(
@@ -849,7 +845,7 @@ export class DiProviderActivationSession {
   private readonly overlaySlots = new Map<Container, Map<IdentityHandle, DiProviderActivationSlot[]>>();
   private readonly singletonValues = new Map<object, DiProviderActivationResult>();
   private readonly activeSingletons = new Set<object>();
-  private readonly activeAliases = new Set<Resolver>();
+  private readonly activeAliases = new Set<Resolver | AureliaInterfaceDefaultRegistrationEffect>();
   private readonly registryExecutions = new EvaluationRuntimeIdentityIndex<DiRegistryExecutionState>();
   private readonly classDependencies: DiClassDependencyPlanner<Container>;
   private activeRequestor: Container | null = null;
@@ -1103,8 +1099,12 @@ export class DiProviderActivationSession {
       switch (site.methodKind) {
         case DiContainerApiMethodKind.Get:
           return this.activatePreparedExpression(requestor, expression, evidence, sourceNode, null, 0).failureKind;
-        case DiContainerApiMethodKind.GetResolver:
-          if (site.autoRegister !== true || resolver != null) {
+        case DiContainerApiMethodKind.GetResolver: {
+          const flag = sourceNode.arguments[1];
+          const evaluated = flag == null ? null : staticInvocationEvidenceForExpression(invocation, flag)?.value;
+          const autoRegister = flag == null || evaluated?.kind === EvaluationValueKind.Undefined
+            || evaluated?.kind === EvaluationValueKind.Boolean && evaluated.value;
+          if (!autoRegister || resolver != null) {
             return null;
           }
           return this.activateExpressionWithValue(
@@ -1115,6 +1115,7 @@ export class DiProviderActivationSession {
             null,
             0,
           ).failureKind;
+        }
         case DiContainerApiMethodKind.GetAll:
         case DiContainerApiMethodKind.Has:
           return null;
@@ -1495,15 +1496,8 @@ export class DiProviderActivationSession {
         if (aliasKey == null) {
           return activationOpen('Aurelia alias resolver did not retain a canonical target key.');
         }
-        if (this.activeAliases.has(resolver)) {
-          return activationOpen(`Aurelia alias resolver for '${key.key.localName ?? key.key.identityHandle}' recursively re-entered alias lookup.`);
-        }
-        this.activeAliases.add(resolver);
-        try {
-          return this.activateKey(requestor, { key: aliasKey, classValue: null, sourceValue: null }, dependencyNode, host, depth + 1);
-        } finally {
-          this.activeAliases.delete(resolver);
-        }
+        return this.withAliasResolution(resolver, () =>
+          this.activateKey(requestor, this.aliasTarget(resolver, aliasKey), dependencyNode, host, depth + 1));
       }
       case ResolverResolutionKind.Callback:
       case ResolverResolutionKind.CachedCallback:
@@ -1539,16 +1533,18 @@ export class DiProviderActivationSession {
           ? this.activateSingleton(requestor, provider, value, provider.key.key, dependencyNode)
           : this.activateClass(requestor, value, provider.key.key, dependencyNode, null);
       }
-      case RegistrationStrategy.AliasTo:
-        return effect.valueExpression == null
+      case RegistrationStrategy.AliasTo: {
+        const target = effect.valueExpression;
+        return target == null
           ? activationOpen('Aurelia interface default alias did not retain its target key expression.')
-          : this.activateKey(
+          : this.withAliasResolution(effect, () => this.activateKey(
               requestor,
-              this.view.keyForExpression(effect.valueExpression, effect.value),
+              this.view.keyForExpression(target, effect.value),
               dependencyNode,
               host,
               depth + 1,
-            );
+            ));
+      }
       case RegistrationStrategy.Callback:
       case RegistrationStrategy.CachedCallback:
         return activationOpen(`Aurelia interface default ${effect.strategy} execution remains a runtime callback boundary.`);
@@ -1572,14 +1568,19 @@ export class DiProviderActivationSession {
     dependencyNode: ts.Node,
     host: StaticIntrinsicEvaluationHost | null,
     depth: number,
+    factoryOnly = false,
   ): DiProviderActivationResult {
     if (key.key.keyKind === ContainerLookupKeyKind.Interface) {
-      return this.activateInterfaceJit(requestor, key, dependencyNode, host, depth);
+      return this.activateInterfaceJit(requestor, key, dependencyNode, host, depth, factoryOnly);
     }
     if (key.key.keyKind === ContainerLookupKeyKind.Registry) {
       return this.activateRegistryJit(requestor, key, dependencyNode, host, depth);
     }
-    const keyFailure = containerJitRegistrationFailureKind(key.key);
+    // A registered alias can retain the exact constructor even when its carrier spelling differs.
+    const constructor = key.sourceValue?.kind === EvaluationValueKind.Class || key.sourceValue?.kind === EvaluationValueKind.Function
+      ? key.sourceValue.declaration.name : null;
+    const keyFailure = constructor && ts.isIdentifier(constructor) && intrinsicTypeNames.has(constructor.text)
+      ? ContainerResolutionFailureKind.NoJitIntrinsicType : containerJitRegistrationFailureKind(key.key);
     if (keyFailure != null) {
       return activationFailed(
         keyFailure,
@@ -1598,16 +1599,15 @@ export class DiProviderActivationSession {
       return activationOpen('Aurelia JIT handler selection depends on an open registerInRequestor class property.');
     }
     const handler = registerInRequestor ? requestor : requestor.root;
-    switch (requestor.readConfiguration().defaultResolverPolicy) {
-      case ContainerDefaultResolverPolicy.Singleton: {
-        const provider = new DiJitProvider(key, value, ContainerDefaultResolverPolicy.Singleton);
-        this.appendOverlaySlot(handler, key.key.identityHandle, provider);
-        return this.activateSlot(requestor, provider, handler, key, dependencyNode, host, depth);
-      }
+    const policy = requestor.readConfiguration().defaultResolverPolicy;
+    switch (policy) {
+      case ContainerDefaultResolverPolicy.Singleton:
       case ContainerDefaultResolverPolicy.Transient: {
-        const provider = new DiJitProvider(key, value, ContainerDefaultResolverPolicy.Transient);
+        const provider = new DiJitProvider(key, value, policy);
         this.appendOverlaySlot(handler, key.key.identityHandle, provider);
-        return this.activateSlot(requestor, provider, handler, key, dependencyNode, host, depth);
+        return factoryOnly
+          ? this.activateFreshSlot(requestor, provider, handler, key, dependencyNode, host, depth)
+          : this.activateSlot(requestor, provider, handler, key, dependencyNode, host, depth);
       }
       case ContainerDefaultResolverPolicy.None:
         return activationFailed(
@@ -1627,6 +1627,7 @@ export class DiProviderActivationSession {
     dependencyNode: ts.Node,
     host: StaticIntrinsicEvaluationHost | null,
     depth: number,
+    factoryOnly: boolean,
   ): DiProviderActivationResult {
     const evaluation = aureliaInterfaceEvaluationForValue(key.sourceValue);
     if (evaluation == null) {
@@ -1644,7 +1645,9 @@ export class DiProviderActivationSession {
         const provider = new DiInterfaceDefaultProvider(key, evaluation.defaultRegistration!);
         const handler = requestor.root;
         this.appendOverlaySlot(handler, key.key.identityHandle, provider);
-        return this.activateSlot(requestor, provider, handler, key, dependencyNode, host, depth);
+        return factoryOnly
+          ? this.activateFreshSlot(requestor, provider, handler, key, dependencyNode, host, depth)
+          : this.activateSlot(requestor, provider, handler, key, dependencyNode, host, depth);
       }
     }
   }
@@ -2091,16 +2094,18 @@ export class DiProviderActivationSession {
         return effect.value.kind === EvaluationValueKind.Class
           ? this.activateClass(requestor, effect.value, key.key, dependencyNode, null)
           : activationOpen(`Aurelia interface default ${effect.strategy} factory target did not reduce to a class value.`);
-      case RegistrationStrategy.AliasTo:
-        return effect.valueExpression == null
+      case RegistrationStrategy.AliasTo: {
+        const target = effect.valueExpression;
+        return target == null
           ? activationOpen('Aurelia interface default alias did not retain its target key expression for fresh activation.')
-          : this.activateFresh(
+          : this.withAliasResolution(effect, () => this.activateAliasFactory(
               requestor,
-              this.view.keyForExpression(effect.valueExpression, effect.value),
+              this.view.keyForExpression(target, effect.value),
               dependencyNode,
               host,
               depth + 1,
-            );
+            ));
+      }
       case RegistrationStrategy.Instance:
       case RegistrationStrategy.Callback:
       case RegistrationStrategy.CachedCallback:
@@ -2156,15 +2161,9 @@ export class DiProviderActivationSession {
         return this.activateConstructableReference(requestor, resolver, resolution.value, key.key, dependencyNode, null);
       case ResolverResolutionKind.Alias: {
         const aliasKey = containerLookupKeyForRegistrationValue(resolution.value);
-        if (aliasKey == null || this.activeAliases.has(resolver)) {
-          return activationOpen('Aurelia fresh-instance alias lookup remained open or recursive.');
-        }
-        this.activeAliases.add(resolver);
-        try {
-          return this.activateFresh(requestor, { key: aliasKey, classValue: null, sourceValue: null }, dependencyNode, host, depth + 1);
-        } finally {
-          this.activeAliases.delete(resolver);
-        }
+        if (aliasKey == null) return activationOpen('Aurelia alias resolver did not retain a canonical target key.');
+        return this.withAliasResolution(resolver, () =>
+          this.activateAliasFactory(requestor, this.aliasTarget(resolver, aliasKey), dependencyNode, host, depth + 1));
       }
       case ResolverResolutionKind.Instance:
       case ResolverResolutionKind.Callback:
@@ -2180,6 +2179,41 @@ export class DiProviderActivationSession {
       case ResolverResolutionKind.InvalidStrategy:
         return activationOpen(`Aurelia fresh-instance resolution reached a ${resolution.resolutionKind} provider without a modeled constructable factory.`);
     }
+  }
+
+  private withAliasResolution(
+    alias: Resolver | AureliaInterfaceDefaultRegistrationEffect,
+    resolve: () => DiProviderActivationResult,
+  ): DiProviderActivationResult {
+    if (this.activeAliases.has(alias)) return activationOpen('Aurelia alias resolver recursively re-entered alias lookup.');
+    this.activeAliases.add(alias);
+    try {
+      return resolve();
+    } finally {
+      this.activeAliases.delete(alias);
+    }
+  }
+
+  private aliasTarget(resolver: Resolver, key: ContainerLookupKey): DiProviderActivationKey {
+    const sourceValue = this.view.evaluatedResolverState(resolver);
+    return { key, sourceValue, classValue: sourceValue?.kind === EvaluationValueKind.Class ? sourceValue : null };
+  }
+
+  /** Resolver.getFactory follows an alias through getResolver(target, true) before asking for its factory. */
+  private activateAliasFactory(
+    requestor: Container,
+    key: DiProviderActivationKey,
+    dependencyNode: ts.Node,
+    host: StaticIntrinsicEvaluationHost | null,
+    depth: number,
+  ): DiProviderActivationResult {
+    const answer = this.lookup(requestor, key.key);
+    if (answer.closure === DiProviderActivationLookupClosure.Open) return activationLookupOrderOpen();
+    if (answer.lookup === null) return this.activateJit(requestor, key, dependencyNode, host, depth, true);
+    const slot = answer.lookup.slots[0];
+    return slot == null
+      ? activationOpen('Aurelia alias factory lookup found no resolver slot.')
+      : this.activateFreshSlot(requestor, slot, answer.lookup.handler, key, dependencyNode, host, depth);
   }
 
   private lookup(

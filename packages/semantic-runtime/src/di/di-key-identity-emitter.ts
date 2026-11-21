@@ -199,7 +199,9 @@ export class DiKeyIdentityEmitter {
         evaluatedDeclaration.symbolName ?? request.localName,
         evaluatedDeclaration.addressHandle,
       ));
-      return new DiKeyIdentityEmission(handle, DiKeyIdentityKind.Constructable, ContainerLookupKeyKind.Constructable);
+      const lookupKind = request.typeSystem == null ? ContainerLookupKeyKind.Constructable
+        : containerLookupKeyKindForDeclaration(request.typeSystem, evaluatedDeclaration.declaration);
+      return new DiKeyIdentityEmission(handle, DiKeyIdentityKind.Constructable, lookupKind);
     }
 
     const object = this.emitObjectKeyIdentity(records, publication, request);

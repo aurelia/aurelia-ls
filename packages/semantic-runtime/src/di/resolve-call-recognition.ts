@@ -17,7 +17,8 @@ import {
   isClassMemberWithExpressionChildren,
   type ClassMemberWithExpressionChildren,
 } from '../type-system/ts-class-member.js';
-import { AURELIA_RESOLVER_WRAPPER_KINDS } from './resolver-wrapper-recognition.js';
+import { readAureliaResolverWrapperCall } from './resolver-wrapper-recognition.js';
+import { isImportedValue } from '../evaluation/import-bindings.js';
 import {
   readNullishKeyArguments,
   type DiNullishKeyArgument,
@@ -29,7 +30,6 @@ const AURELIA_RESOLVE_MODULES = new Set([
   '@aurelia/kernel',
 ]);
 
-const AURELIA_RESOLVE_KEY_WRAPPER_EXPORTS = new Set<string>(AURELIA_RESOLVER_WRAPPER_KINDS);
 
 /** Import-aware source site for Aurelia's ambient `resolve(...)` DI API. */
 export class DiResolveCallSite {
@@ -162,9 +162,8 @@ function readSourceFileDiResolveCallSites(
     sourcePath,
     sourceFileAddressHandle,
     sourceFile,
-    checker: typeSystem.checker,
+    typeSystem,
     sourcePathByFileName,
-    bindings: readAureliaResolveBindings(sourceFile),
     imports: readSourceFileImportBindings(sourceFile),
     sites: [],
   };
@@ -176,9 +175,8 @@ interface DiResolveReadContext {
   readonly sourcePath: string;
   readonly sourceFileAddressHandle: AddressHandle;
   readonly sourceFile: ts.SourceFile;
-  readonly checker: ts.TypeChecker;
+  readonly typeSystem: TypeSystemProject;
   readonly sourcePathByFileName: ReadonlyMap<string, string>;
-  readonly bindings: AureliaResolveBindings;
   readonly imports: SourceFileImportBindings;
   readonly sites: DiResolveCallSite[];
 }
@@ -225,12 +223,13 @@ function recordDiResolveCallSite(
   node: ts.Node,
   lexical: DiResolveLexicalContext,
 ): void {
-  if (!ts.isCallExpression(node) || !isAureliaResolveExpression(node.expression, context.bindings)) {
+  if (!ts.isCallExpression(node) || !isImportedValue(node.expression, context.typeSystem.checker, AURELIA_RESOLVE_MODULES, 'resolve')) {
     return;
   }
-  const keyExpression = resolveKeyExpressionForArgument(node.arguments[0] ?? null, context.bindings);
+  const argument = node.arguments[0] == null ? null : unwrapExpression(node.arguments[0]);
+  const keyExpression = argument == null ? null : readAureliaResolverWrapperCall(context.typeSystem, argument)?.innerExpression ?? argument;
   const target = resolveKeyTarget(
-    context.checker,
+    context.typeSystem.checker,
     keyExpression,
     context.sourcePathByFileName,
     context.imports,
@@ -285,7 +284,7 @@ function classMemberResolveContext(
     enclosingMemberKind: memberKind,
     enclosingMemberStatic,
     executionContextKind: classMemberExecutionContextKind(memberKind, enclosingMemberStatic),
-    activeContainerExpectation: classMemberActiveContainerExpectation(memberKind, enclosingMemberStatic),
+    activeContainerExpectation: classMemberActiveContainerExpectation(memberKind, enclosingMemberStatic, lexical.activeContainerExpectation),
   };
 }
 
@@ -344,9 +343,10 @@ function classMemberExecutionContextKind(
 function classMemberActiveContainerExpectation(
   memberKind: DiResolveEnclosingMemberKind,
   isStatic: boolean,
+  enclosing: DiResolveActiveContainerExpectation,
 ): DiResolveActiveContainerExpectation {
   if (memberKind === 'static-block' || (memberKind === 'property' && isStatic)) {
-    return 'definitely-absent';
+    return enclosing;
   }
   if (memberKind === 'constructor' || memberKind === 'property') {
     return 'provided-by-container-activation';
@@ -360,44 +360,9 @@ function isFunctionResolveBoundary(node: ts.Node): boolean {
     || ts.isArrowFunction(node);
 }
 
-class AureliaResolveBindings {
-  readonly identifiers = new Set<string>();
-  readonly keyWrapperIdentifiers = new Set<string>();
-  readonly namespaces = new Set<string>();
-}
-
 class SourceFileImportBindings {
   readonly locals = new Map<string, ImportedSymbolReference>();
   readonly namespaces = new Map<string, string>();
-}
-
-function readAureliaResolveBindings(sourceFile: ts.SourceFile): AureliaResolveBindings {
-  const bindings = new AureliaResolveBindings();
-  for (const statement of sourceFile.statements) {
-    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier)) {
-      continue;
-    }
-    if (!AURELIA_RESOLVE_MODULES.has(statement.moduleSpecifier.text)) {
-      continue;
-    }
-    const namedBindings = statement.importClause?.namedBindings ?? null;
-    if (namedBindings == null) {
-      continue;
-    }
-    if (ts.isNamespaceImport(namedBindings)) {
-      bindings.namespaces.add(namedBindings.name.text);
-      continue;
-    }
-    for (const element of namedBindings.elements) {
-      const exportedName = element.propertyName?.text ?? element.name.text;
-      if (exportedName === 'resolve') {
-        bindings.identifiers.add(element.name.text);
-      } else if (AURELIA_RESOLVE_KEY_WRAPPER_EXPORTS.has(exportedName)) {
-        bindings.keyWrapperIdentifiers.add(element.name.text);
-      }
-    }
-  }
-  return bindings;
 }
 
 function readSourceFileImportBindings(sourceFile: ts.SourceFile): SourceFileImportBindings {
@@ -435,54 +400,6 @@ function readSourceFileImportBindings(sourceFile: ts.SourceFile): SourceFileImpo
     }
   }
   return bindings;
-}
-
-function isAureliaResolveExpression(
-  expression: ts.Expression,
-  bindings: AureliaResolveBindings,
-): boolean {
-  const current = unwrapExpression(expression);
-  if (ts.isIdentifier(current)) {
-    return bindings.identifiers.has(current.text);
-  }
-  return ts.isPropertyAccessExpression(current)
-    && current.name.text === 'resolve'
-    && ts.isIdentifier(unwrapExpression(current.expression))
-    && bindings.namespaces.has((unwrapExpression(current.expression) as ts.Identifier).text);
-}
-
-function resolveKeyExpressionForArgument(
-  expression: ts.Expression | null,
-  bindings: AureliaResolveBindings,
-): ts.Expression | null {
-  if (expression == null) {
-    return null;
-  }
-  const current = unwrapExpression(expression);
-  if (!ts.isCallExpression(current) || current.arguments.length === 0) {
-    return current;
-  }
-  const firstArgument = current.arguments[0];
-  if (firstArgument == null) {
-    return current;
-  }
-  return isAureliaResolveKeyWrapperExpression(current.expression, bindings)
-    ? unwrapExpression(firstArgument)
-    : current;
-}
-
-function isAureliaResolveKeyWrapperExpression(
-  expression: ts.Expression,
-  bindings: AureliaResolveBindings,
-): boolean {
-  const current = unwrapExpression(expression);
-  if (ts.isIdentifier(current)) {
-    return bindings.keyWrapperIdentifiers.has(current.text);
-  }
-  return ts.isPropertyAccessExpression(current)
-    && AURELIA_RESOLVE_KEY_WRAPPER_EXPORTS.has(current.name.text)
-    && ts.isIdentifier(unwrapExpression(current.expression))
-    && bindings.namespaces.has((unwrapExpression(current.expression) as ts.Identifier).text);
 }
 
 function resolveKeyTarget(

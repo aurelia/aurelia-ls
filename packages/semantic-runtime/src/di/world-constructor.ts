@@ -1466,7 +1466,9 @@ export class DiWorldConstructor {
       ],
     ));
 
-    return frame.toEmission(configuration.containers, providerActivation);
+    const emission = frame.toEmission(configuration.containers, providerActivation);
+    providerActivation.captureSlotExecutionOrder(emission);
+    return emission;
   }
 
   private registrationSpendingCascade(

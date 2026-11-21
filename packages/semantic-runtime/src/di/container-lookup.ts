@@ -178,6 +178,7 @@ export function containerJitRegistrationFailureKind(
 ): ContainerResolutionFailureKind | null {
   switch (key.keyKind) {
     case ContainerLookupKeyKind.IntrinsicConstructable:
+    case ContainerLookupKeyKind.IntrinsicNamedConstructable:
       return ContainerResolutionFailureKind.NoJitIntrinsicType;
     case ContainerLookupKeyKind.String:
     case ContainerLookupKeyKind.Symbol:
@@ -217,6 +218,7 @@ export function containerFactoryFailureKind(
       return ContainerResolutionFailureKind.UnableJitNonConstructor;
     case ContainerLookupKeyKind.Unknown:
     case ContainerLookupKeyKind.Constructable:
+    case ContainerLookupKeyKind.IntrinsicNamedConstructable:
       return null;
   }
 }
@@ -237,6 +239,7 @@ export function containerInvocationFailureKind(
     case ContainerLookupKeyKind.Nullish:
     case ContainerLookupKeyKind.Unknown:
     case ContainerLookupKeyKind.Constructable:
+    case ContainerLookupKeyKind.IntrinsicNamedConstructable:
     case ContainerLookupKeyKind.Registry:
     case ContainerLookupKeyKind.Resolver:
     case ContainerLookupKeyKind.Interface:

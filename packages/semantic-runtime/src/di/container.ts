@@ -600,6 +600,7 @@ function containerFactoryLookupMayConsultResolver(
     case ContainerLookupKeyKind.Unknown:
       return true;
     case ContainerLookupKeyKind.Constructable:
+    case ContainerLookupKeyKind.IntrinsicNamedConstructable:
     case ContainerLookupKeyKind.NativeFunction:
     case ContainerLookupKeyKind.IntrinsicConstructable:
       return false;

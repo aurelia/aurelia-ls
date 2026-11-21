@@ -214,6 +214,7 @@ function resourceRegistrationCanHideDirectKey(
   // install an arbitrary interface, symbol, or ordinary string key.
   switch (requestedKey.keyKind) {
     case ContainerLookupKeyKind.Constructable:
+    case ContainerLookupKeyKind.IntrinsicNamedConstructable:
       return registeredValueIdentityHandle == null
         || registeredValueIdentityHandle === requestedKey.identityHandle;
     case ContainerLookupKeyKind.Resource:

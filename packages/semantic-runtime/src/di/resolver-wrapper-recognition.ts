@@ -93,19 +93,11 @@ function aureliaResolverWrapperKindForCallee(
     : ts.isIdentifier(expression)
       ? expression
       : null;
-  if (name == null || !isAureliaResolverWrapperKind(name.text)) {
-    const exportedName = symbolForExpression(checker, name ?? expression)?.getName() ?? null;
-    if (exportedName == null || !isAureliaResolverWrapperKind(exportedName)) {
-      return null;
-    }
-    return (symbolForExpression(checker, name ?? expression)?.declarations ?? [])
-      .some(isAureliaResolverWrapperDeclaration)
-      ? exportedName
-      : null;
-  }
-  return (symbolForExpression(checker, name)?.declarations ?? []).some(isAureliaResolverWrapperDeclaration)
-    ? name.text
-    : null;
+  const symbol = symbolForExpression(checker, name ?? expression);
+  const exportedName = symbol?.getName();
+  return exportedName != null && isAureliaResolverWrapperKind(exportedName)
+    && symbol?.declarations?.some(isAureliaResolverWrapperDeclaration)
+    ? exportedName : null;
 }
 
 /** Whether an expression is Aurelia's built-in resolver that intentionally injects `undefined`. */

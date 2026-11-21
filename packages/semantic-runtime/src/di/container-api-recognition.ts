@@ -137,7 +137,7 @@ function recordContainerApiCallSite(
     keyNameForContainerKeyExpression(keyWrapper?.innerExpression ?? null),
     containerLookupKeyKindForExpression(typeSystem, keyExpression),
     containerKeyExpressionIdentityKind(keyExpression),
-    containerApiAutoRegister(methodKind, node),
+    containerApiAutoRegister(methodKind, node, checker),
     isFreshCreateContainerReceiver(checker, access.expression),
     readNullishKeyArguments(node, sourceFile),
     access.expression.getText(sourceFile),
@@ -196,12 +196,13 @@ function containerApiMethodKind(
 function containerApiAutoRegister(
   methodKind: DiContainerApiMethodKind,
   call: ts.CallExpression,
+  checker: ts.TypeChecker,
 ): boolean | null {
   switch (methodKind) {
     case DiContainerApiMethodKind.Get:
       return true;
     case DiContainerApiMethodKind.GetResolver:
-      return booleanArgument(call.arguments[1] ?? null) ?? true;
+      return call.arguments[1] === undefined ? true : booleanArgument(call.arguments[1], checker);
     case DiContainerApiMethodKind.GetAll:
     case DiContainerApiMethodKind.Has:
     case DiContainerApiMethodKind.GetFactory:
@@ -211,18 +212,13 @@ function containerApiAutoRegister(
 }
 
 function booleanArgument(
-  expression: ts.Expression | null,
+  expression: ts.Expression,
+  checker: ts.TypeChecker,
 ): boolean | null {
-  if (expression == null) {
-    return null;
-  }
-  const current = unwrapExpression(expression);
-  if (current.kind === ts.SyntaxKind.TrueKeyword) {
-    return true;
-  }
-  if (current.kind === ts.SyntaxKind.FalseKeyword) {
-    return false;
-  }
+  const type = checker.getTypeAtLocation(expression);
+  if (type === checker.getTrueType()) return true;
+  if (type === checker.getFalseType()) return false;
+  if (type.flags & ts.TypeFlags.Undefined) return true;
   return null;
 }
 

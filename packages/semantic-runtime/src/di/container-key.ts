@@ -18,6 +18,8 @@ export const enum ContainerLookupKeyKind {
   NativeFunction = 'native-function',
   /** A native intrinsic type name rejected by the container JIT registration path. */
   IntrinsicConstructable = 'intrinsic-constructable',
+  /** An authored constructor with a built-in name that trips the container JIT name guard. */
+  IntrinsicNamedConstructable = 'intrinsic-named-constructable',
   /** An IRegistry-shaped object or function. */
   Registry = 'registry',
   /** A resolver object supplied directly as a key. */
@@ -72,7 +74,7 @@ export function containerLookupKeyForRegistrationKey(
   }
   return new ContainerLookupKey(
     key.identityHandle,
-    keyKindForRegistrationKey(key),
+    containerLookupKeyKindForIdentityKind(key.keyKind),
     key.localName,
     key.addressHandle,
   );
@@ -90,15 +92,6 @@ export function containerLookupKeyForRegistrationValue(
     value.localName,
     value.addressHandle,
   );
-}
-
-function keyKindForRegistrationKey(
-  key: RegistrationKeyReference,
-): ContainerLookupKeyKind {
-  if (key.localName != null && intrinsicTypeNames.has(key.localName)) {
-    return ContainerLookupKeyKind.IntrinsicConstructable;
-  }
-  return containerLookupKeyKindForIdentityKind(key.keyKind);
 }
 
 /** Map canonical DI identity vocabulary to the runtime container branch it selects. */
@@ -131,9 +124,6 @@ export function containerLookupKeyKindForIdentityKind(
 function keyKindForRegistrationValue(
   value: RegistrationValueReference,
 ): ContainerLookupKeyKind {
-  if (value.localName != null && intrinsicTypeNames.has(value.localName)) {
-    return ContainerLookupKeyKind.IntrinsicConstructable;
-  }
   switch (value.valueKind) {
     case RegistrationValueKind.Constructable:
     case RegistrationValueKind.PlainClass:
@@ -159,7 +149,7 @@ function keyKindForRegistrationValue(
   }
 }
 
-const intrinsicTypeNames = new Set<string>([
+export const intrinsicTypeNames: ReadonlySet<string> = new Set<string>([
   'Array',
   'ArrayBuffer',
   'Boolean',
