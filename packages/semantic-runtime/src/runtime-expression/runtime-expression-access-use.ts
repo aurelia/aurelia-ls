@@ -160,6 +160,8 @@ export const enum RuntimeExpressionExecutionQualifierKind {
   ShortCircuitRightHandSide = 'short-circuit-right-hand-side',
   /** Access occurs only when optional access/call continues past a nullish guard. */
   OptionalContinuation = 'optional-continuation',
+  /** astEvaluate evaluates the arguments only after confirming the target is callable. */
+  CallableTarget = 'callable-target',
   /** Access occurs inside a framework-proven synchronous callback invocation. */
   SynchronousCallback = 'synchronous-callback',
   /** Loop condition evaluated at least once when its containing loop statement is reached. */

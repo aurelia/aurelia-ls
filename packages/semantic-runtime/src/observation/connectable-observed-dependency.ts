@@ -64,11 +64,8 @@ export function runtimeConnectableObservedAccessUseDrafts(
     const expression = accessUse.expression;
     switch (accessUse.accessForm) {
       case RuntimeExpressionAccessForm.Scope:
-      case RuntimeExpressionAccessForm.ScopeCall:
         if (!accessUse.lexicalLocal) {
-          const scopeName = expression.$kind === 'CallScope'
-            ? expression.name.name
-            : expressionSourceName(expression);
+          const scopeName = expressionSourceName(expression);
           rows.push({
             accessUse,
             dependency: observedDependencyDraft(
@@ -78,7 +75,7 @@ export function runtimeConnectableObservedAccessUseDrafts(
               expressionSourceRootName(expression),
               null,
               null,
-              expression.$kind === 'CallScope' ? expression.name.name : null,
+              null,
               expression,
             ),
           });
@@ -129,6 +126,8 @@ export function runtimeConnectableObservedAccessUseDrafts(
           }
         }
         break;
+      // astEvaluate calls a scope method without observing the property that holds the function.
+      case RuntimeExpressionAccessForm.ScopeCall:
       case RuntimeExpressionAccessForm.FunctionCall:
       case RuntimeExpressionAccessForm.Declarative:
         break;
@@ -200,10 +199,9 @@ function observedMemberNameSpan(
   expression: ExpressionAstNode,
 ): { readonly start: number; readonly end: number } | null {
   switch (expression.$kind) {
+    // Scope reads also keep a name-token span separate from the whole access (e.g. $parent.title).
     case 'AccessMember':
     case 'CallMember':
-    // Scope reads carry the name token too so `$parent.title`-style lowerings keep a token-granular
-    // address distinct from the whole scope-access span.
     case 'AccessScope':
     case 'CallScope':
       return { start: expression.name.span.start, end: expression.name.span.end };

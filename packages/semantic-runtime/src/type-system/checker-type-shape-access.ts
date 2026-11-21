@@ -885,8 +885,8 @@ function checkerTypeMemberWriteAccessFromSurface(
   declarations: readonly ts.Declaration[],
   sourceAddressHandle: AddressHandle | null,
 ): CheckerTypeShapeMemberWriteAccess {
-  if (memberKind === CheckerTypeMemberKind.Method
-    || memberKind === CheckerTypeMemberKind.Constructor
+  // Writing an ordinary method assigns the instance property, shadowing its prototype method.
+  if (memberKind === CheckerTypeMemberKind.Constructor
     || memberKind === CheckerTypeMemberKind.CallSignature) {
     return checkerTypeMemberWriteAccessResult(
       CheckerTypeShapeMemberWriteAccessKind.MethodLike,

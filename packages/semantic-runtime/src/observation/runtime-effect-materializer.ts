@@ -10,12 +10,7 @@ import {
   DiClassDependencySlotState,
 } from '../di/class-dependency-plan.js';
 import type { DiClassDependencyProjectView } from '../di/class-dependency-plan.js';
-import {
-  readImportedExportName,
-  readSourceImportBindings,
-  typeNodeReferencesImportedExport,
-  type SourceImportBindings,
-} from '../evaluation/import-bindings.js';
+import { isImportedValue } from '../evaluation/import-bindings.js';
 import {
   isNestedExecutionBoundary,
   readObjectPropertyExpression,
@@ -125,21 +120,6 @@ const OBSERVATION_MODULES = new Set([
   '@aurelia/kernel',
 ]);
 
-const OBSERVATION_EXPORTS = new Set([
-  'IObservation',
-  'inject',
-  'observable',
-  'resolve',
-]);
-
-const OBSERVATION_SERVICE_EXPORTS = new Set([
-  'IObservation',
-]);
-
-const OBSERVATION_RESOLVE_EXPORTS = new Set([
-  'resolve',
-]);
-
 interface RuntimeEffectSourceSite extends SourceSpanSite {
   readonly sourcePath: string;
   readonly sourceFile: ts.SourceFile;
@@ -158,16 +138,12 @@ interface RuntimeEffectSourceContext {
   readonly sourcePath: string;
   readonly sourceFileAddressHandle: AddressHandle;
   readonly sourceFile: ts.SourceFile;
-  readonly bindings: SourceImportBindings;
   readonly sourcePathByFileName: ReadonlyMap<string, string>;
   readonly roots: ObservationRootSet;
   readonly sites: RuntimeEffectSourceSite[];
 }
 
-interface ObservationRootSet {
-  readonly locals: ReadonlySet<string>;
-  readonly instanceMembers: ReadonlySet<string>;
-}
+type ObservationRootSet = ReadonlySet<ts.Declaration>;
 
 interface RuntimeEffectPublication {
   readonly effect: RuntimeEffect;
@@ -311,19 +287,16 @@ function readRuntimeEffectSourceSites(
     if (sourceFile == null) {
       return [];
     }
-    const bindings = readSourceImportBindings(sourceFile, OBSERVATION_MODULES, OBSERVATION_EXPORTS);
     const context: RuntimeEffectSourceContext = {
       project,
       typeSystem,
       sourcePath: source.path,
       sourceFileAddressHandle: source.addressHandle,
       sourceFile,
-      bindings,
       sourcePathByFileName,
       roots: readObservationRoots(
         sourceFile,
-        bindings,
-        typeSystem,
+          typeSystem,
         sourcePathByFileName,
         classDependencies,
       ),
@@ -347,47 +320,39 @@ function visitRuntimeEffectSourceNode(
 
 function readObservationRoots(
   sourceFile: ts.SourceFile,
-  bindings: SourceImportBindings,
   typeSystem: TypeSystemProject,
   sourcePathByFileName: ReadonlyMap<string, string>,
   classDependencies: DiClassDependencyProjectView,
 ): ObservationRootSet {
-  const locals = new Set<string>();
-  const instanceMembers = new Set<string>();
+  const roots = new Set<ts.Declaration>();
   const visit = (node: ts.Node): void => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-      if (nodeIsObservationTyped(node, bindings) || expressionCreatesObservationRoot(node.initializer ?? null, bindings, typeSystem, sourcePathByFileName)) {
-        locals.add(node.name.text);
+      if (nodeIsObservationTyped(node, typeSystem.checker) || expressionCreatesObservationRoot(node.initializer ?? null, typeSystem, sourcePathByFileName)) {
+        roots.add(node);
       }
     } else if (ts.isPropertyDeclaration(node)) {
       const name = propertyNameForInstanceMember(node.name);
       if (
         name != null
         && (
-          nodeIsObservationTyped(node, bindings)
-          || expressionCreatesObservationRoot(node.initializer ?? null, bindings, typeSystem, sourcePathByFileName)
+          nodeIsObservationTyped(node, typeSystem.checker)
+          || expressionCreatesObservationRoot(node.initializer ?? null, typeSystem, sourcePathByFileName)
         )
       ) {
-        instanceMembers.add(name);
+        roots.add(node);
       }
     } else if (ts.isParameter(node) && ts.isIdentifier(node.name)) {
       if (
-        nodeIsObservationTyped(node, bindings)
-        || parameterIsInjectedObservation(node, bindings, classDependencies)
+        nodeIsObservationTyped(node, typeSystem.checker)
+        || parameterIsInjectedObservation(node, typeSystem, classDependencies)
       ) {
-        locals.add(node.name.text);
-        if (parameterIsParameterProperty(node)) {
-          instanceMembers.add(node.name.text);
-        }
+        roots.add(node);
       }
     }
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
-  return {
-    locals,
-    instanceMembers,
-  };
+  return roots;
 }
 
 function readObservationWatchSite(
@@ -401,7 +366,6 @@ function readObservationWatchSite(
     || !expressionIsObservationRoot(
       expression.expression,
       context.roots,
-      context.bindings,
       context.typeSystem,
       context.sourcePathByFileName,
     )
@@ -444,7 +408,6 @@ function readObservationRunSite(
     || !expressionIsObservationRoot(
       expression.expression,
       context.roots,
-      context.bindings,
       context.typeSystem,
       context.sourcePathByFileName,
     )
@@ -470,14 +433,29 @@ function readObservationRunSite(
 
 function nodeIsObservationTyped(
   node: ts.VariableDeclaration | ts.PropertyDeclaration | ts.ParameterDeclaration,
-  bindings: SourceImportBindings,
+  checker: ts.TypeChecker,
 ): boolean {
-  return typeNodeReferencesImportedExport(node.type ?? null, bindings, OBSERVATION_SERVICE_EXPORTS);
+  if (node.type == null || !ts.isTypeReferenceNode(node.type)) return false;
+  const name = node.type.typeName;
+  const local = ts.isQualifiedName(name) ? name.left : name;
+  if (!ts.isIdentifier(local)) return false;
+  const declarations = checker.getSymbolAtLocation(local)?.declarations ?? [];
+  return declarations.some(declaration => {
+    if (ts.isImportSpecifier(declaration) && ts.isIdentifier(name)) {
+      const module = declaration.parent.parent.parent.moduleSpecifier;
+      return (declaration.propertyName ?? declaration.name).text === 'IObservation'
+        && ts.isStringLiteralLike(module) && OBSERVATION_MODULES.has(module.text);
+    }
+    if (ts.isNamespaceImport(declaration) && ts.isQualifiedName(name)) {
+      const module = declaration.parent.parent.moduleSpecifier;
+      return name.right.text === 'IObservation' && ts.isStringLiteralLike(module) && OBSERVATION_MODULES.has(module.text);
+    }
+    return false;
+  });
 }
 
 function expressionCreatesObservationRoot(
   expression: ts.Expression | null,
-  bindings: SourceImportBindings,
   typeSystem: TypeSystemProject,
   sourcePathByFileName: ReadonlyMap<string, string>,
 ): boolean {
@@ -489,11 +467,11 @@ function expressionCreatesObservationRoot(
     return false;
   }
   const firstArgument = current.arguments[0] ?? null;
-  if (firstArgument == null || expressionReferencesObservationKey(firstArgument, bindings) !== true) {
+  if (firstArgument == null || expressionReferencesObservationKey(firstArgument, typeSystem) !== true) {
     return false;
   }
   const callee = unwrapExpression(current.expression);
-  if (readImportedExportName(callee, bindings, OBSERVATION_RESOLVE_EXPORTS) === 'resolve') {
+  if (isImportedValue(callee, typeSystem.checker, OBSERVATION_MODULES, 'resolve')) {
     return true;
   }
   return ts.isPropertyAccessExpression(callee)
@@ -509,34 +487,24 @@ function expressionCreatesObservationRoot(
 function expressionIsObservationRoot(
   expression: ts.Expression,
   roots: ObservationRootSet,
-  bindings: SourceImportBindings,
   typeSystem: TypeSystemProject,
   sourcePathByFileName: ReadonlyMap<string, string>,
 ): boolean {
   const current = unwrapExpression(expression);
-  if (ts.isIdentifier(current)) {
-    return roots.locals.has(current.text) || expressionCreatesObservationRoot(current, bindings, typeSystem, sourcePathByFileName);
-  }
-  if (
-    ts.isPropertyAccessExpression(current)
-    && current.expression.kind === ts.SyntaxKind.ThisKeyword
-    && roots.instanceMembers.has(current.name.text)
-  ) {
-    return true;
-  }
-  return expressionCreatesObservationRoot(current, bindings, typeSystem, sourcePathByFileName);
+  const name = ts.isIdentifier(current) ? current
+    : ts.isPropertyAccessExpression(current) && current.expression.kind === ts.SyntaxKind.ThisKeyword ? current.name : null;
+  if (name && typeSystem.checker.getSymbolAtLocation(name)?.declarations?.some(declaration => roots.has(declaration))) return true;
+  return expressionCreatesObservationRoot(current, typeSystem, sourcePathByFileName);
 }
 
-function expressionReferencesObservationKey(
-  expression: ts.Expression,
-  bindings: SourceImportBindings,
-): boolean {
-  return readImportedExportName(expression, bindings, OBSERVATION_SERVICE_EXPORTS) === 'IObservation';
+function expressionReferencesObservationKey(expression: ts.Expression, typeSystem: TypeSystemProject): boolean {
+  const programExpression = typeSystem.readProgramExpression(expression);
+  return programExpression != null && isImportedValue(programExpression, typeSystem.checker, OBSERVATION_MODULES, 'IObservation');
 }
 
 function parameterIsInjectedObservation(
   parameter: ts.ParameterDeclaration,
-  bindings: SourceImportBindings,
+  typeSystem: TypeSystemProject,
   classDependencies: DiClassDependencyProjectView,
 ): boolean {
   if (!ts.isConstructorDeclaration(parameter.parent)) {
@@ -557,7 +525,7 @@ function parameterIsInjectedObservation(
   }
   return dependency.lookupKeyExpression == null
     ? false
-    : expressionReferencesObservationKey(dependency.lookupKeyExpression, bindings);
+    : expressionReferencesObservationKey(dependency.lookupKeyExpression, typeSystem);
 }
 
 function propertyNameForInstanceMember(
@@ -571,16 +539,6 @@ function propertyNameForInstanceMember(
     : null;
 }
 
-function parameterIsParameterProperty(
-  parameter: ts.ParameterDeclaration,
-): boolean {
-  return (ts.canHaveModifiers(parameter) ? ts.getModifiers(parameter) : undefined)?.some((modifier) =>
-    modifier.kind === ts.SyntaxKind.PublicKeyword
-    || modifier.kind === ts.SyntaxKind.ProtectedKeyword
-    || modifier.kind === ts.SyntaxKind.PrivateKeyword
-    || modifier.kind === ts.SyntaxKind.ReadonlyKeyword
-  ) === true;
-}
 
 function watchImmediateOption(
   options: ts.Expression | null,
@@ -836,7 +794,7 @@ function collectRunEffectObservedAccessEffects(
     typeSystem: TypeSystemProject,
   ): RuntimeObservedDependencyDraft | null {
     const symbol = typeSystem.readProgramSymbolAtLocation(expression.name);
-    if (!symbolHasObservableDecorator(symbol)) {
+    if (!symbolHasObservableDecorator(symbol, typeSystem.checker)) {
       return null;
     }
     return {

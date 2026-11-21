@@ -9,7 +9,7 @@ import type {
   CallScopeExpression,
   ExpressionAstNode,
 } from '../expression/ast.js';
-import { aureliaArrayMethodSemanticsFor } from '../expression/array-method-semantics.js';
+import { AureliaArrayCallbackParameterShape, aureliaArrayMethodSemanticsFor } from '../expression/array-method-semantics.js';
 import {
   AuthoredScopePathKind,
   expressionHasOptionalChain,
@@ -111,12 +111,8 @@ function collectAccessUses(
     }
     case 'AccessKeyed': {
       collectAccessUses(expression.object, rows, context);
-      const keyedContext = optionalContext(
-        context,
-        expression.optional || expressionHasOptionalChain(expression.object),
-        expression,
-      );
-      collectAccessUses(expression.key, rows, keyedContext);
+      // Aurelia evaluates the key before its null-receiver check, including for optional access.
+      collectAccessUses(expression.key, rows, context);
       addKeyedAccess(rows, expression, context, role);
       return;
     }
@@ -222,7 +218,7 @@ function collectAccessUses(
       expression.args.forEach((arg) => collectCallArgument(
         arg,
         rows,
-        optionalContext(context, expression.optional || expression.optionalAccess, expression),
+        callArgumentContext(context, expression.optional || expression.optionalAccess, expression),
         null,
       ));
       return;
@@ -234,7 +230,7 @@ function collectAccessUses(
       expression.args.forEach((arg) => collectCallArgument(
         arg,
         rows,
-        optionalContext(context, expression.optional, expression),
+        callArgumentContext(context, expression.optional, expression),
         null,
       ));
       return;
@@ -302,14 +298,19 @@ function collectCallMemberAccessUses(
   const canUseRuntimeArrayMethod = semantics?.callbackParameterShape != null
     && (context.canUseRuntimeArrayMethod?.(expression, context.rootExpression) ?? true);
 
-  expression.args.forEach((arg) => collectCallArgument(
-    arg,
-    rows,
-    optionalContext(context, expression.optionalMember || expression.optionalCall, expression),
-    canUseRuntimeArrayMethod && semantics?.callbackParameterShape != null
-      ? expression.name.name
-      : null,
-  ));
+  const optional = expression.optionalMember || expression.optionalCall;
+  const argumentContext = canUseRuntimeArrayMethod ? optionalContext(context, optional, expression)
+    : callArgumentContext(context, optional, expression);
+  expression.args.forEach((arg, index) => {
+    if (canUseRuntimeArrayMethod && index > 0 && arg.$kind === 'ArrowFunction') {
+      // Iteration methods pass the second argument as 'this'. An inline arrow callback ignores it.
+      // A reducer's initial accumulator, in contrast, is passed to the callback as a value.
+      if (index > 1 || semantics?.callbackParameterShape === AureliaArrayCallbackParameterShape.Comparator
+        || (semantics?.callbackParameterShape === AureliaArrayCallbackParameterShape.Iteration
+          && expression.args[0]?.$kind === 'ArrowFunction')) return;
+    }
+    collectCallArgument(arg, rows, argumentContext, canUseRuntimeArrayMethod && index === 0 ? expression.name.name : null);
+  });
 }
 
 function collectCallArgument(
@@ -484,6 +485,11 @@ function addAccess(
     nameSourceSpan: memberSpan,
     lexicalDeclarationSpan: shape.lexicalDeclarationSpan,
   });
+}
+
+function callArgumentContext(context: AccessCollectionContext, optional: boolean, call: ExpressionAstNode): AccessCollectionContext {
+  return qualifiedContext(context, optional ? RuntimeExpressionExecutionQualifierKind.OptionalContinuation
+    : RuntimeExpressionExecutionQualifierKind.CallableTarget, call, null, false);
 }
 
 function optionalContext(

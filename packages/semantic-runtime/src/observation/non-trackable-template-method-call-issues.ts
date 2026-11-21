@@ -19,18 +19,17 @@ import {
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import type { TemplateCompilationProjectEmission } from '../template/template-compilation-project-pass.js';
-import { resourceLocalBindingObservedDependencies } from '../template/runtime-resource-ownership.js';
-import { sourceAddressForRuntimeExpressionBounds } from '../template/runtime-expression-source-address.js';
+import { resourceLocalRuntimeExpressionAccessUses } from '../template/runtime-resource-ownership.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { sourceSpanForCheckerNode } from '../type-system/declaration-source.js';
-import { CheckerTypeMemberKind } from '../type-system/type-shape.js';
+import {
+  RuntimeExpressionAccessForm, RuntimeExpressionAccessTracking, RuntimeExpressionAccessTargetResolution,
+  type RuntimeExpressionAccessUse,
+} from '../runtime-expression/runtime-expression-access-use.js';
+import { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
 import {
   RuntimeBindingKind,
 } from '../template/runtime-binding.js';
-import {
-  type RuntimeBindingObservedDependency,
-} from './runtime-binding-observation.js';
-import { RuntimeObservedDependencyKind } from './runtime-observed-dependency.js';
 import { readTrackableMethodDependency } from './trackable-method-dependency-recognition.js';
 import {
   ObservationIssueKind,
@@ -92,8 +91,13 @@ export class NonTrackableTemplateMethodCallIssueMaterializer {
     const calls: NonTrackableTemplateMethodCall[] = [];
     const seen = new Set<string>();
     for (const resource of templates.resources) {
-      for (const dependency of resourceLocalBindingObservedDependencies(this.publication, resource)) {
-        const call = this.nonTrackableMethodCallForDependency(project, typeSystem, dependency);
+      for (const use of resourceLocalRuntimeExpressionAccessUses(this.publication, resource)) {
+        if ((use.accessForm !== RuntimeExpressionAccessForm.ScopeCall && use.accessForm !== RuntimeExpressionAccessForm.MemberCall)
+          || use.tracking !== RuntimeExpressionAccessTracking.Connectable || use.reachability !== RuntimeOperationReachability.Reached
+          || use.targetResolution !== RuntimeExpressionAccessTargetResolution.Exact) continue;
+        const binding = resource.runtimeAnalysis.runtimeRendering.readBinding(use.ownerProductHandle);
+        if (binding == null || binding.bindingKind === RuntimeBindingKind.Listener || binding.bindingKind === RuntimeBindingKind.StateDispatch) continue;
+        const call = this.nonTrackableMethodCall(project, typeSystem, use);
         if (call == null) {
           continue;
         }
@@ -108,15 +112,14 @@ export class NonTrackableTemplateMethodCallIssueMaterializer {
     return calls;
   }
 
-  private nonTrackableMethodCallForDependency(
+  private nonTrackableMethodCall(
     project: ProjectBootFrame,
     typeSystem: TypeSystemProject,
-    dependency: RuntimeBindingObservedDependency,
+    use: RuntimeExpressionAccessUse,
   ): NonTrackableTemplateMethodCall | null {
-    if (!isTemplateMethodCallDependency(dependency)) {
-      return null;
-    }
-    const method = this.methodDeclarationForDependency(typeSystem, dependency);
+    const declarationSource = use.targetLinks[0]?.declarationSourceAddressHandle;
+    if (declarationSource == null || use.nameSourceAddressHandle == null) return null;
+    const method = this.methodDeclarationAt(typeSystem, declarationSource);
     if (method == null || readTrackableMethodDependency(method, typeSystem.checker) != null) {
       return null;
     }
@@ -131,27 +134,24 @@ export class NonTrackableTemplateMethodCallIssueMaterializer {
       return null;
     }
     return {
-      dependency,
-      method,
-      methodName: dependency.occurrence.methodName
-        ?? dependency.occurrence.sourceName
-        ?? method.name?.getText(method.getSourceFile())
-        ?? '<method>',
+      source: use.nameSourceAddressHandle,
+      declarationSource,
+      methodName: method.name.getText(method.getSourceFile()),
       bodyReads,
     };
   }
 
-  private methodDeclarationForDependency(
+  private methodDeclarationAt(
     typeSystem: TypeSystemProject,
-    dependency: RuntimeBindingObservedDependency,
+    declarationSource: AddressHandle,
   ): ts.MethodDeclaration | null {
     const sourceSpan = sourceSpanAddressForAddress(
       this.publication,
-      dependency.occurrence.observedMemberSourceAddressHandle,
+      declarationSource,
     );
     const sourceFileAddress = sourceFileAddressForAddress(
       this.publication,
-      dependency.occurrence.observedMemberSourceAddressHandle,
+      declarationSource,
     );
     if (sourceSpan == null || sourceFileAddress == null) {
       return null;
@@ -169,21 +169,8 @@ export class NonTrackableTemplateMethodCallIssueMaterializer {
     index: number,
   ): ObservationIssuePublication {
     const local = nonTrackableTemplateMethodCallLocalKey(project, call, index);
-    const source = sourceAddressForRuntimeExpressionBounds(
-      this.publication,
-      `${local}:source`,
-      call.dependency.occurrence.sourceAddressHandle,
-      call.dependency.occurrence.memberNameSpanStart,
-      call.dependency.occurrence.memberNameSpanEnd,
-    );
     const relatedSources = [
-      ...(call.dependency.occurrence.observedMemberSourceAddressHandle == null
-        ? []
-        : [new ObservationIssueRelatedSource(
-          ObservationIssueRelatedSourceKind.SubjectDeclaration,
-          call.dependency.occurrence.observedMemberSourceAddressHandle,
-          call.methodName,
-        )]),
+      new ObservationIssueRelatedSource(ObservationIssueRelatedSourceKind.SubjectDeclaration, call.declarationSource, call.methodName),
       ...call.bodyReads.map((read) => new ObservationIssueRelatedSource(
         ObservationIssueRelatedSourceKind.HiddenStateRead,
         read.sourceAddressHandle,
@@ -197,12 +184,11 @@ export class NonTrackableTemplateMethodCallIssueMaterializer {
       ObservationIssueKind.NonTrackableTemplateMethodCall,
       nonTrackableTemplateMethodCallMessage(call),
       null,
-      source.handle,
+      call.source,
       relatedSources,
       call.methodName,
     );
     return new ObservationIssuePublication(publication.issue, [
-      ...source.records,
       ...call.bodyReads.flatMap((read) => read.records),
       ...publication.records,
     ]);
@@ -210,24 +196,10 @@ export class NonTrackableTemplateMethodCallIssueMaterializer {
 }
 
 interface NonTrackableTemplateMethodCall {
-  readonly dependency: RuntimeBindingObservedDependency;
-  readonly method: ts.MethodDeclaration;
+  readonly source: AddressHandle;
+  readonly declarationSource: AddressHandle;
   readonly methodName: string;
   readonly bodyReads: readonly HiddenTemplateMethodRead[];
-}
-
-function isTemplateMethodCallDependency(
-  dependency: RuntimeBindingObservedDependency,
-): boolean {
-  return dependency.occurrence.dependencyKind === RuntimeObservedDependencyKind.TemplateExpressionRead
-    && dependency.binding.bindingKind !== RuntimeBindingKind.Listener
-    && dependency.binding.bindingKind !== RuntimeBindingKind.StateDispatch
-    && dependency.occurrence.observedMemberKind === CheckerTypeMemberKind.Method
-    && dependency.occurrence.observedMemberSourceAddressHandle != null
-    && (
-      dependency.occurrence.expressionKind === 'CallScope'
-      || dependency.occurrence.expressionKind === 'CallMember'
-    );
 }
 
 function findMethodDeclarationAtSourceSpan(
@@ -270,7 +242,21 @@ function collectHiddenTemplateMethodReads(
   }
   const reads = new Map<string, HiddenTemplateMethodRead>();
   const sourceFile = method.getSourceFile();
+  const visitedArrows = new Set<ts.ArrowFunction>();
   const visit = (node: ts.Node): void => {
+    if (ts.isFunctionLike(node) || ts.isClassLike(node)) return;
+    if (ts.isCallExpression(node)) {
+      const callee = unwrapThisPathExpression(node.expression);
+      const declaration = ts.isIdentifier(callee) ? checker.getSymbolAtLocation(callee)?.valueDeclaration : undefined;
+      const body = declaration && ts.isVariableDeclaration(declaration) && declaration.initializer
+        && (declaration.parent.flags & ts.NodeFlags.Const)
+        ? unwrapThisPathExpression(declaration.initializer) : callee;
+      if (ts.isArrowFunction(body) && body.getSourceFile() === sourceFile
+        && body.pos >= method.pos && body.end <= method.end && !visitedArrows.has(body)) {
+        visitedArrows.add(body);
+        visit(body.body);
+      }
+    }
     if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
       addThisReadExpression(store, publication, checker, project, method, sourceFile, reads, node.expression.expression);
       for (const argument of node.arguments) {
@@ -404,7 +390,7 @@ function nonTrackableTemplateMethodCallMessage(
   const remaining = call.bodyReads.length > 4
     ? `, and ${call.bodyReads.length - 4} more`
     : '';
-  return `Template method call "${call.methodName}(...)" reads ${readList}${remaining} inside an undecorated method. Aurelia observes the template call and its arguments, but not arbitrary method bodies; add @computed(...), convert the read to a getter, or bind the dependency directly when the result must update with those reads.`;
+  return `Template method call "${call.methodName}(...)" reads ${readList}${remaining} inside an undecorated method. Aurelia does not subscribe to these reads when the method runs; add @computed(...), convert the read to a getter, or bind the dependency directly when the result must update with those reads.`;
 }
 
 function nonTrackableTemplateMethodCallLocalKey(
@@ -417,7 +403,7 @@ function nonTrackableTemplateMethodCallLocalKey(
     ObservationIssueKind.NonTrackableTemplateMethodCall,
     localKeyPart(project.projectKey),
     localKeyPart(call.methodName),
-    localKeyPart(call.dependency.occurrence.sourceAddressHandle ?? 'unknown-source'),
+    localKeyPart(call.source),
     index,
   ].join(':');
 }
@@ -426,8 +412,8 @@ function nonTrackableTemplateMethodCallKey(
   call: NonTrackableTemplateMethodCall,
 ): string {
   return [
-    call.dependency.occurrence.sourceAddressHandle ?? 'unknown-source',
-    call.dependency.occurrence.observedMemberSourceAddressHandle ?? 'unknown-method',
+    call.source,
+    call.declarationSource,
     call.methodName,
   ].join(':');
 }

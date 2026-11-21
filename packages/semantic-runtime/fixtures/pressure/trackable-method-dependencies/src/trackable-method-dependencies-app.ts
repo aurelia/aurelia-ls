@@ -155,7 +155,14 @@ export class TrackableMethodDependenciesApp {
   }
 
   ordinaryCounterLabel(): string {
-    return this.ordinaryCounter.value.toString();
+    const read = () => { return this.ordinaryCounter.value.toString(); };
+    return read();
+  }
+
+  unusedCounterClosure(): string {
+    const read = () => this.ordinaryCounter.value;
+    void read;
+    return 'constant';
   }
 
   someCheck(value: string): boolean {
