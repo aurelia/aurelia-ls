@@ -170,12 +170,16 @@ export class CompletedInputPrimaryCorridor {
       );
     }
 
+    let code: string = ExpressionFrameworkErrorCode.ParseInvalidStart;
+    if (token.type === TokenType.EOF || (this.state.consumedEnd > 0 && token.end === this.state.source.length)) {
+      code = ExpressionFrameworkErrorCode.ParseUnexpectedEnd;
+    } else if (this.state.consumedEnd > 0) {
+      code = ExpressionFrameworkErrorCode.ParseUnconsumedToken;
+    }
     return this.state.failures.error(
       `Unexpected token ${tokenTypeName(token.type)} in primary expression`,
       token,
-      token.type === TokenType.EOF
-        ? ExpressionFrameworkErrorCode.ParseUnexpectedEnd
-        : ExpressionFrameworkErrorCode.ParseInvalidStart,
+      code,
     );
   }
 
@@ -586,6 +590,7 @@ export class CompletedInputPrimaryCorridor {
         ExpressionFrameworkErrorCode.ParseInvalidIdentifierObjectLiteralKey,
       );
     }
+    const checkpoint = this.state.createCheckpoint(keyTok.start);
     this.state.nextToken();
 
     const key = keyTok.type === TokenType.NumericLiteral
@@ -594,8 +599,9 @@ export class CompletedInputPrimaryCorridor {
     const keySpan = this.state.spanFromToken(keyTok);
     const colon = this.state.peekToken();
     if (colon.type !== TokenType.Colon) {
-      if (keyTok.type === TokenType.Identifier) {
-        const shorthand = this.objectLiteralShorthandValue(keyTok);
+      if (this.deps.isIdentifierNameToken(keyTok)) {
+        this.state.restoreCheckpoint(checkpoint);
+        const shorthand = this.parse();
         if (isParseFailure(shorthand)) {
           return shorthand;
         }
@@ -622,30 +628,6 @@ export class CompletedInputPrimaryCorridor {
     keySpans.push(keySpan);
     values.push(value);
     return this.parseObjectLiteralSeparator(start, keys, keySpans, values);
-  }
-
-  private objectLiteralShorthandValue(token: Token): ParseOutcome<AccessScopeExpression | AccessGlobalExpression> {
-    const name = this.deps.tokenToIdentifierName(token);
-    if (name === 'import') {
-      return this.state.failures.error(
-        "Bare 'import' is not allowed in binding expressions",
-        token,
-        ExpressionFrameworkErrorCode.ParseUnexpectedKeywordImport,
-      );
-    }
-
-    const identifier = this.deps.identifierFromToken(token);
-    if (this.deps.isGlobalName(name)) {
-      return new AccessGlobalExpression(
-        this.state.spanFromToken(token),
-        identifier,
-      );
-    }
-
-    return new AccessScopeExpression(
-      this.state.spanFromToken(token),
-      identifier,
-    );
   }
 
   private parseObjectLiteralValue(
@@ -720,7 +702,7 @@ export class CompletedInputPrimaryCorridor {
   }
 
   private isObjectLiteralKeyToken(token: Token): boolean {
-    return token.type === TokenType.Identifier
+    return this.deps.isIdentifierNameToken(token)
       || token.type === TokenType.StringLiteral
       || token.type === TokenType.NumericLiteral;
   }

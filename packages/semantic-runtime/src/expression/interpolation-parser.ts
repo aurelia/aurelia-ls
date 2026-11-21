@@ -204,7 +204,6 @@ export class InterpolationParser {
 }
 
 class InterpolationPublicationFrame {
-  private readonly expressions: CompletedInputPropertyLikeExpression[] = [];
   private readonly closedHoles: InterpolationClosedHole[] = [];
   private readonly suppressedHoles: InterpolationSuppressedHole[] = [];
   private activePublicationKind: InterpolationCompanionPublicationKind | null = null;
@@ -294,8 +293,7 @@ class InterpolationPublicationFrame {
       return null;
     }
 
-    this.expressions.push(expr.ast);
-    this.closedHoles.push(new InterpolationClosedHole(index, expr.ast.span, expr.ast));
+    this.closedHoles.push(new InterpolationClosedHole(index, expr.ast.span, expr.ast, this.createHoleBoundaryState(hole)));
     return null;
   }
 
@@ -385,7 +383,8 @@ class InterpolationPublicationFrame {
 
     return new InterpolationSuccess(
       span,
-      new Interpolation(span, [...this.segments.parts], this.expressions),
+      new Interpolation(span, [...this.segments.parts], this.closedHoles.map(hole => hole.ast)),
+      this.closedHoles.map(hole => hole.boundaryState),
     );
   }
 

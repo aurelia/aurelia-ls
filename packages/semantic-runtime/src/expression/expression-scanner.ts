@@ -180,7 +180,7 @@ export class Token {
  * Scanner for the Aurelia expression language.
  *
  * - Construct with the full expression string.
- * - Call `next()` to consume tokens (skips whitespace & comments).
+ * - Call `next()` to consume tokens (skips whitespace).
  * - Call `peek()` to look ahead without consuming.
  *
  * Offsets are 0-based UTF-16 code units into the original string.
@@ -235,7 +235,9 @@ export class Scanner {
   // --------------------------------------------------------------------------------------
 
   private scanToken(): Token {
-    this.skipWhitespaceAndComments();
+    while (this.index < this.length && isEcmascriptWhitespaceCode(charCodeAt(this.source, this.index))) {
+      this.index++;
+    }
 
     const start = this.index;
 
@@ -250,7 +252,7 @@ export class Scanner {
       return this.scanIdentifierOrKeyword();
     }
 
-    // Numbers: decimal integer/float/exponent, with optional leading dot
+    // Numbers: decimal integer/float, with optional leading dot
     if (isDigit(ch) || (ch === CharCode.Dot && isDigit(charCodeAt(this.source, this.index + 1)))) {
       return this.scanNumber(ch === CharCode.Dot);
     }
@@ -266,47 +268,8 @@ export class Scanner {
   }
 
   // --------------------------------------------------------------------------------------
-  // Helpers: whitespace, comments, identifiers, numbers, strings
+  // Helpers: identifiers, numbers, strings
   // --------------------------------------------------------------------------------------
-
-  private skipWhitespaceAndComments(): void {
-    while (this.index < this.length) {
-      const ch = charCodeAt(this.source, this.index);
-
-      // Whitespace
-      if (isEcmascriptWhitespaceCode(ch)) {
-        this.index++;
-        continue;
-      }
-
-      // Line comment: // ...
-      if (ch === CharCode.Slash && charCodeAt(this.source, this.index + 1) === CharCode.Slash) {
-        this.index += 2;
-        while (this.index < this.length) {
-          const c = charCodeAt(this.source, this.index);
-          if (c === CharCode.LineFeed || c === CharCode.CarriageReturn) break;
-          this.index++;
-        }
-        continue;
-      }
-
-      // Block comment: /* ... */
-      if (ch === CharCode.Slash && charCodeAt(this.source, this.index + 1) === CharCode.Asterisk) {
-        this.index += 2;
-        while (this.index < this.length) {
-          const c = charCodeAt(this.source, this.index);
-          if (c === CharCode.Asterisk && charCodeAt(this.source, this.index + 1) === CharCode.Slash) {
-            this.index += 2;
-            break;
-          }
-          this.index++;
-        }
-        continue;
-      }
-
-      break;
-    }
-  }
 
   private scanIdentifierOrKeyword(): Token {
     const start = this.index;
@@ -367,26 +330,10 @@ export class Scanner {
     }
 
     // Fractional part ('.' digits)
-    if (!startsWithDot && charCodeAt(this.source, this.index) === CharCode.Dot && isDigit(charCodeAt(this.source, this.index + 1))) {
+    if (!startsWithDot && charCodeAt(this.source, this.index) === CharCode.Dot && (this.index + 1 === this.length || isDigit(charCodeAt(this.source, this.index + 1)))) {
       this.index++; // consume '.'
       while (this.index < this.length && isDigit(charCodeAt(this.source, this.index))) {
         this.index++;
-      }
-    }
-
-    // Exponent part (e/E [+-]? digits)
-    const e = charCodeAt(this.source, this.index);
-    if (e === CharCode.LowercaseE || e === CharCode.UppercaseE) {
-      const sign = charCodeAt(this.source, this.index + 1);
-      const afterSign = sign === CharCode.Plus || sign === CharCode.Minus ? charCodeAt(this.source, this.index + 2) : charCodeAt(this.source, this.index + 1);
-      if (isDigit(afterSign)) {
-        this.index++; // consume 'e' / 'E'
-        if (sign === CharCode.Plus || sign === CharCode.Minus) {
-          this.index++; // consume sign
-        }
-        while (this.index < this.length && isDigit(charCodeAt(this.source, this.index))) {
-          this.index++;
-        }
       }
     }
 
@@ -533,7 +480,7 @@ function scanExpressionQuestionOperator(source: string, start: number): Token {
   if (next === CharCode.Question) {
     return new Token(TokenType.QuestionQuestion, undefined, start, start + 2);
   }
-  if (next === CharCode.Dot) {
+  if (next === CharCode.Dot && !isDigit(charCodeAt(source, start + 2))) {
     return new Token(TokenType.QuestionDot, undefined, start, start + 2);
   }
   return expressionSingleCharacterToken(TokenType.Question, start);
@@ -781,8 +728,6 @@ export const enum CharCode {
   LowercaseB = 0x0062,       // b
   LowercaseF = 0x0066,       // f
   LowercaseV = 0x0076,       // v
-  LowercaseE = 0x0065,       // e
-  UppercaseE = 0x0045,       // E
 }
 
 // IdentifierStart_BMP ranges.

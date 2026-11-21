@@ -77,13 +77,18 @@ describe('template compiler instruction staging laws', () => {
       companion,
       null,
     ));
+    const invalid = stageTemplateCompilerValueInstruction(valueRequest(
+      authority, 'invalid', TemplateCompilerValueInstructionLane.Plain, parser.parse('${#}', 'Interpolation'), null,
+    ));
 
     expect(literal).toBeInstanceOf(SetPropertyInstruction);
     expect(dynamic).toBeInstanceOf(InterpolationInstruction);
     expect(empty).toBeNull();
-    expect(open).toBeNull();
+    expect(open).toBeInstanceOf(InterpolationInstruction);
+    expect(invalid).toBeNull();
     expect(authority.requests.map((request) => request.kind)).toEqual([
       'set-property',
+      'interpolation',
       'interpolation',
     ]);
   });

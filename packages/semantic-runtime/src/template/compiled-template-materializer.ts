@@ -234,6 +234,8 @@ export class CompiledTemplateEmission {
     readonly issues: readonly TemplateCompilerIssue[],
     readonly openSeams: readonly OpenSeam[],
     readonly records: readonly KernelStoreRecord[],
+    /** Parses actually attempted in the compiler walk whose attribute could not produce an instruction. */
+    readonly rejectedAttributeParses: ReadonlySet<ProductHandle>,
   ) {
     this.compiledTemplatesByProduct = new Map(compiledTemplates.map((template) => [template.productHandle, template]));
   }
@@ -331,6 +333,7 @@ class CompiledTemplateAssembly {
     readonly records: readonly KernelStoreRecord[],
     readonly issues: readonly TemplateCompilerIssue[],
     readonly openSeams: readonly OpenSeam[],
+    readonly rejectedAttributeParses: ReadonlySet<ProductHandle>,
   ) {
     if (
       !targetPlan.root.hasBoundSurrogateInstructions
@@ -430,6 +433,7 @@ class CompiledTemplateAssemblyIndexes {
 }
 
 class CompiledTemplateAssemblyState {
+  readonly rejectedAttributeParses = new Set<ProductHandle>();
   readonly records: KernelStoreRecord[] = [];
   readonly openSeams: OpenSeam[] = [];
   readonly instructions: TemplateInstruction[] = [];
@@ -547,6 +551,7 @@ class CompiledTemplateAssemblyState {
       this.records,
       this.issues,
       this.openSeams,
+      this.rejectedAttributeParses,
     );
   }
 }
@@ -629,7 +634,7 @@ class CompiledTemplateInstructionFactory {
     const parse = site == null ? null : this.indexes.parseBySite.get(site.productHandle) ?? null;
     const target = this.valueInstructionTarget(classification, syntax, node, lane);
     const addressHandle = attribute.valueAddressHandle ?? attribute.sourceAddressHandle;
-    return stageTemplateCompilerValueInstruction(new TemplateCompilerValueInstructionStagingRequest(
+    const instruction = stageTemplateCompilerValueInstruction(new TemplateCompilerValueInstructionStagingRequest(
       new CompiledTemplateInstructionStagingAuthority(this.assemblyState, classification.identityHandle),
       classification.productHandle,
       attribute.productHandle,
@@ -647,6 +652,10 @@ class CompiledTemplateInstructionFactory {
       attribute.rawName,
       addressHandle,
     ));
+    if (instruction == null && parse != null && parse.resultKind !== ExpressionParseResultKind.InterpolationAbsent) {
+      this.assemblyState.rejectedAttributeParses.add(parse.productHandle);
+    }
+    return instruction;
   };
 
   private valueInstructionTarget(
@@ -2193,6 +2202,7 @@ export class CompiledTemplateMaterializer {
       assembly.issues,
       openSeams,
       records,
+      assembly.rejectedAttributeParses,
     );
   }
 

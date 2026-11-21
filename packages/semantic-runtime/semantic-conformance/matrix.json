@@ -688,7 +688,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "variable" }, "source": { "marker": "${title}", "token": "title" }, "note": true }
               ]
@@ -700,7 +700,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "<input value.bind=\"draft.title\">", "token": "bind" } }
               ]
@@ -712,7 +712,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "variable" }, "source": { "marker": "<input value.bind=\"draft.title\">", "token": "draft" } }
               ]
@@ -724,7 +724,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "property" }, "source": { "marker": "<input value.bind=\"draft.title\">", "token": "title" } }
               ]
@@ -736,7 +736,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "variable" }, "source": { "marker": "<input type=\"number\" value-as-number.bind=\"draft.quantity\">", "token": "draft" } }
               ]
@@ -748,7 +748,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "property" }, "source": { "marker": "<input type=\"number\" value-as-number.bind=\"draft.quantity\">", "token": "quantity" } }
               ]
@@ -760,7 +760,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "<input type=\"checkbox\" checked.bind=\"draft.enabled\">", "token": "bind" } }
               ]
@@ -772,7 +772,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "property" }, "source": { "marker": "<input type=\"checkbox\" checked.bind=\"draft.enabled\">", "token": "enabled" } }
               ]
@@ -785,7 +785,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "aureliaController" }, "source": { "marker": "<label repeat.for=\"option of options\">", "markerOccurrence": 1, "token": "repeat" } }
               ]
@@ -798,7 +798,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "<label repeat.for=\"option of options\">", "markerOccurrence": 1, "token": "for" } }
               ]
@@ -811,7 +811,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "variable" }, "source": { "marker": "<label repeat.for=\"option of options\">", "markerOccurrence": 1, "token": "option" } }
               ]
@@ -824,7 +824,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "variable" }, "source": { "marker": "<label repeat.for=\"option of options\">", "markerOccurrence": 1, "token": "options" } }
               ]
@@ -837,7 +837,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "variable" }, "source": { "marker": "model.bind=\"option\"", "markerOccurrence": 1, "token": "option" } }
               ]
@@ -850,7 +850,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "property" }, "source": { "marker": "${option.label}", "markerOccurrence": 1, "token": "label" } }
               ]
@@ -862,7 +862,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "<button click.trigger=\"handle($event)\">", "token": "trigger" } }
               ]
@@ -874,7 +874,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "function" }, "source": { "marker": "<button click.trigger=\"handle($event)\">", "token": "handle" } }
               ]
@@ -886,7 +886,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "variable" }, "source": { "marker": "<button click.trigger=\"handle($event)\">", "token": "$event" } }
               ]
@@ -898,7 +898,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "<button click.capture=\"handle($event)\">", "token": "capture" } }
               ]
@@ -910,7 +910,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "<div ref=\"element\" class.bind=\"classes\"", "token": "ref" } }
               ]
@@ -923,7 +923,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "variable" }, "source": { "marker": "<div ref=\"element\" class.bind=\"classes\"", "token": "element" } }
               ]
@@ -935,7 +935,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "class.bind=\"classes\"", "token": "bind" } }
               ]
@@ -947,7 +947,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "is-active.class=\"isActive\"", "token": "class" } }
               ]
@@ -959,7 +959,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "style.bind=\"styleRules\"", "token": "bind" } }
               ]
@@ -971,7 +971,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "display.style=\"isVisible ? 'block' : 'none'\"", "token": "style" } }
               ]
@@ -983,7 +983,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "disabled.to-view=\"isDisabled\"", "token": "to-view" } }
               ]

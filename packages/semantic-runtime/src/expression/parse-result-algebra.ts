@@ -407,6 +407,7 @@ export class InterpolationSuccess {
   constructor(
     readonly primarySpan: SourceSpan | null,
     readonly ast: Interpolation,
+    readonly holeBoundaries: readonly InterpolationHoleBoundaryState[],
   ) {}
 }
 
@@ -514,6 +515,7 @@ export class InterpolationClosedHole {
     readonly index: number,
     readonly span: SourceSpan,
     readonly ast: CompletedInputPropertyLikeExpression,
+    readonly boundaryState: InterpolationHoleBoundaryState,
   ) {}
 }
 

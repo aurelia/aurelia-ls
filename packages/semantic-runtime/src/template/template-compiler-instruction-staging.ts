@@ -1,5 +1,6 @@
 import type { ExpressionParseResult } from '../expression/parse-result-algebra.js';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
+import { runtimeAcceptedBindingExpressionAstForResult } from './expression-parse-projection.js';
 import type {
   AddressHandle,
   IdentityHandle,
@@ -218,7 +219,7 @@ export function stageTemplateCompilerValueInstruction(
         request.sourceAddressHandle,
       ));
   }
-  if (request.expressionResult?.kind !== ExpressionParseResultKind.InterpolationSuccess) {
+  if (request.expressionResult == null || runtimeAcceptedBindingExpressionAstForResult(request.expressionResult)?.$kind !== 'Interpolation') {
     return null;
   }
   return createInstruction(request, TemplateInstructionKind.Interpolation, 'interpolation', (allocation) =>

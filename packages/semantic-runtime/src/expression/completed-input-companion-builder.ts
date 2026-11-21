@@ -317,6 +317,7 @@ export class CompletedInputCompanionBuilder {
           [ExpressionExpectedContinuationClass.MemberName],
         ),
       ],
+      ExpressionFrameworkErrorCode.ParseExpectedIdentifier,
     );
   }
 

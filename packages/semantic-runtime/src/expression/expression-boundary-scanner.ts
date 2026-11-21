@@ -21,7 +21,7 @@ export function isInterpolationStart(source: string, index: number): boolean {
  * Find the `}` that closes a `${...}` expression hole.
  *
  * This is a boundary lookahead, not expression parsing. It owns only delimiter
- * balance across strings, comments, object literals, and nested template
+ * balance across strings, object literals, and nested template
  * literals so callers can hand the completed-input parser an exact expression
  * slice instead of asking EOF to stand in for "maybe closed".
  */
@@ -44,18 +44,6 @@ export function findTemplateExpressionClose(
 
     if (ch === CharCode.Backtick) {
       const after = findTemplateLiteralEnd(source, i);
-      if (after == null) return null;
-      i = after;
-      continue;
-    }
-
-    if (ch === CharCode.Slash && source.charCodeAt(i + 1) === CharCode.Slash) {
-      i = skipLineComment(source, i + 2);
-      continue;
-    }
-
-    if (ch === CharCode.Slash && source.charCodeAt(i + 1) === CharCode.Asterisk) {
-      const after = skipBlockComment(source, i + 2);
       if (after == null) return null;
       i = after;
       continue;
@@ -134,33 +122,6 @@ function skipStringLiteral(
       return i + 1;
     }
 
-    i++;
-  }
-
-  return null;
-}
-
-function skipLineComment(source: string, start: number): number {
-  let i = start;
-
-  while (i < source.length) {
-    const ch = source.charCodeAt(i);
-    if (ch === CharCode.LineFeed || ch === CharCode.CarriageReturn) {
-      return i;
-    }
-    i++;
-  }
-
-  return i;
-}
-
-function skipBlockComment(source: string, start: number): number | null {
-  let i = start;
-
-  while (i < source.length - 1) {
-    if (source.charCodeAt(i) === CharCode.Asterisk && source.charCodeAt(i + 1) === CharCode.Slash) {
-      return i + 2;
-    }
     i++;
   }
 

@@ -23,8 +23,9 @@ import type {
 import type {
   ExpressionAstNode,
 } from '../expression/ast.js';
-import type {
-  ExpressionParseResult,
+import {
+  ExpressionParseResultKind,
+  type ExpressionParseResult,
 } from '../expression/parse-result-algebra.js';
 import { ExpressionParseResultInspector } from '../expression/parse-result-inspection.js';
 import {
@@ -448,6 +449,11 @@ function expressionSemanticTokenRows(
   const parses = resourceLocalAuthoredTemplateExpressionParses(store, resource);
   for (const parse of parses) {
     const parseSource = semanticExactSourceReference(describeAddress(store, parse.sourceAddressHandle));
+    for (const boundary of interpolationBoundaries(parse.result)) {
+      for (const span of [boundary.openSpan, boundary.closeSpan]) {
+        pushExpressionToken(rows, 'aureliaExpression', [], span, parseSource, resource.compilation.definition.name, parse.productHandle, parse.sourceAddressHandle, handles);
+      }
+    }
     const root = expressionRoot(parse.result);
     if (root == null) {
       continue;
@@ -518,12 +524,6 @@ function collectExpressionTokens(
         break;
       case 'BindingIdentifier':
         pushExpressionToken(rows, 'variable', ['declaration'], node.name.span, parseSource, definitionName, semanticProductHandle, sourceAddressHandle, handles);
-        break;
-      case 'Interpolation':
-        for (const child of node.expressions) {
-          pushExpressionToken(rows, 'aureliaExpression', [], sliceExpressionSpan(child.span, child.span.start - 2, child.span.start), parseSource, definitionName, semanticProductHandle, sourceAddressHandle, handles);
-          pushExpressionToken(rows, 'aureliaExpression', [], sliceExpressionSpan(child.span, child.span.end, child.span.end + 1), parseSource, definitionName, semanticProductHandle, sourceAddressHandle, handles);
-        }
         break;
       default:
         break;
@@ -799,6 +799,18 @@ function expressionRoot(
   result: ExpressionParseResult,
 ): ExpressionAstNode | null {
   return ExpressionParseResultInspector.hasCanonicalAst(result) ? result.ast : null;
+}
+
+function interpolationBoundaries(result: ExpressionParseResult) {
+  switch (result.kind) {
+    case ExpressionParseResultKind.InterpolationSuccess:
+      return result.holeBoundaries;
+    case ExpressionParseResultKind.InterpolationFrontierPublication:
+    case ExpressionParseResultKind.InterpolationDegradedPublication:
+      return [...result.closedHoles, result.activeHole, ...result.suppressedHoles].map(hole => hole.boundaryState);
+    default:
+      return [];
+  }
 }
 
 function modifiersForScopeName(
