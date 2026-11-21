@@ -1517,7 +1517,6 @@ export class SemanticRuntime {
       request.pagePolicy,
     ) as SemanticRuntimeAppQueryRequest;
     const routedPreflightCompletedAt = routedAnswerStartedAt == null ? null : performance.now();
-    let appOpened = false;
     let openedApp: SemanticApp | null = null;
     const result = this.answerRuntimeQuery(
       {
@@ -1544,11 +1543,9 @@ export class SemanticRuntime {
         shouldReuseRetainedAnswer: () =>
           shouldDisposeAppAfterRoutedQuery(request, inquiryProfile) || cachedBefore != null,
         disposeAnswerSideEffects: (transaction) => {
-          const forceCachedAppDisposal = cachedBefore != null && request.appRetention === 'dispose-app';
           return this.disposeRoutedAppAnswerSideEffects(
             shouldDisposeAppAfterRoutedQuery(request, inquiryProfile)
-              && (appOpened || forceCachedAppDisposal)
-              && (cachedBefore == null || request.appRetention === 'dispose-app'),
+              && (cachedBefore == null || request.appRetention === 'dispose-app') ? openedApp ?? cachedBefore : null,
             typeSystemDependencyCacheClearPolicy,
             transaction.token,
           );
@@ -1557,7 +1554,6 @@ export class SemanticRuntime {
       (transaction) => {
         const app = this.openPlannedApp(plan, transaction, cachePreflight);
         openedApp = app;
-        appOpened = true;
         return app.answerRoutedQuery({
           ...canonicalRequest,
           inquiryProfile,
@@ -1770,7 +1766,7 @@ export class SemanticRuntime {
       {
         inquiryProfile,
         queryKind: 'app-query-batch',
-        queryKey: semanticRuntimeAppWorldFreeQueryBatchKey(plan.project.projectKey, canonicalQueries),
+        queryKey: semanticRuntimeAppWorldFreeQueryBatchKey(plan.project.projectKey, plan.analysisDepth, canonicalQueries),
         responsePolicyKey: semanticRuntimePagePolicyReuseKey(pagePolicy),
         locusKey: semanticRuntimeRoutedAppQueryBatchLocusKey(plan.project.projectKey, canonicalQueries),
         epochKeys: semanticRuntimeRoutedAppQueryBatchEpochKeys(
@@ -1914,7 +1910,6 @@ export class SemanticRuntime {
   ): SemanticRuntimeAnswer<SemanticRuntimeAppQueryBatchResult> {
     assertCompatibleRoutedAppRetention({ ...request, queries: canonicalQueries });
     const cachedBefore = cachePreflight.cachedApp;
-    let appOpened = false;
     let openedApp: SemanticApp | null = null;
     return this.answerRuntimeQuery(
       {
@@ -1941,11 +1936,9 @@ export class SemanticRuntime {
           && request.includeAppQueryClaimProfiles !== true
           && (shouldDisposeAppAfterRoutedQuery(request, inquiryProfile) || cachedBefore != null),
         disposeAnswerSideEffects: (transaction) => {
-          const forceCachedAppDisposal = cachedBefore != null && request.appRetention === 'dispose-app';
           return this.disposeRoutedAppAnswerSideEffects(
             shouldDisposeAppAfterRoutedQuery(request, inquiryProfile)
-              && (appOpened || forceCachedAppDisposal)
-              && (cachedBefore == null || request.appRetention === 'dispose-app'),
+              && (cachedBefore == null || request.appRetention === 'dispose-app') ? openedApp ?? cachedBefore : null,
             typeSystemDependencyCacheClearPolicy,
             transaction.token,
           );
@@ -1954,7 +1947,6 @@ export class SemanticRuntime {
       (transaction) => {
         const app = this.openPlannedApp(plan, transaction, cachePreflight);
         openedApp = app;
-        appOpened = true;
         const rows = canonicalQueries.map((query, index) =>
           this.appWorldBatchRow(app, query, index, inquiryProfile, request.pagePolicy ?? null, transaction)
         );
@@ -2268,13 +2260,13 @@ export class SemanticRuntime {
   }
 
   private disposeRoutedAppAnswerSideEffects(
-    shouldDisposeAppEpoch: boolean,
+    appToDispose: SemanticApp | null,
     typeSystemDependencyCacheClearPolicy: SemanticTypeSystemDependencyCacheClearPolicy,
     transactionToken?: object,
   ): QueryClaimAnswerDisposalSummary | null {
     let disposal: QueryClaimAnswerDisposalSummary | null = null;
-    if (shouldDisposeAppEpoch) {
-      const disposed = this.disposeCachedAppEpochs(QueryClaimDisposalReason.AppEpochDisposed, transactionToken);
+    if (appToDispose != null) {
+      const disposed = this.disposeCachedAppEpochs(QueryClaimDisposalReason.AppEpochDisposed, transactionToken, appToDispose);
       disposal = {
         queryClaims: disposed.queryClaimRecords,
         kernel: disposed.kernel,
@@ -2869,13 +2861,15 @@ export class SemanticRuntime {
   private disposeCachedAppEpochs(
     reason: QueryClaimDisposalReason,
     transactionToken?: object,
+    selectedApp?: SemanticApp,
   ): {
     readonly apps: number;
     readonly typeSystemProjects: number;
     readonly queryClaimRecords: number;
     readonly kernel: KernelStoreDisposalSummary;
   } {
-    const apps = [...new Set(this.appsByCacheKey.values())];
+    const entries = [...this.appsByCacheKey].filter(([, app]) => selectedApp == null || selectedApp === app);
+    const apps = [...new Set(entries.map(([, app]) => app))];
     if (apps.length === 0) {
       return {
         apps: 0,
@@ -2895,20 +2889,23 @@ export class SemanticRuntime {
     for (const app of apps) {
       queryClaimRecords += app.disposeAnswerState(reason, transactionToken).queryClaimRecords;
     }
-    this.workspace.store.disposeUnownedSince(earliestMarker);
+    // A chronological sweep can include direct publications from another retained app.
+    // Each selected app already released its exactly owned answer state above.
+    if (entries.length === this.appsByCacheKey.size) this.workspace.store.disposeUnownedSince(earliestMarker);
     for (const app of apps) {
       app.retireGeneration();
     }
     for (const app of apps) {
       app.disposeAnswerState(reason, transactionToken);
     }
+    for (const [key] of entries) this.appsByCacheKey.delete(key);
     const typeSystemProjects = [...new Set(apps.map((app) => app.project.projectKey))]
+      .filter((projectKey) => !this.hasCachedAppForProject(projectKey))
       .reduce((count, projectKey) => count + Number(this.typeSystemProjects.retire(projectKey)), 0);
     const kernel = kernelDisposalBetween(
       kernelBefore,
       this.workspace.store.readTelemetrySnapshot({ includeBreakdowns: false }),
     );
-    this.appsByCacheKey.clear();
     return {
       apps: apps.length,
       typeSystemProjects,
@@ -5751,6 +5748,12 @@ export class SemanticApp {
     if (claimed != null) {
       return claimed;
     }
+    const unsupported = this.requireAnalysisDepth(
+      SemanticAppAnalysisDepth.BindingObservation,
+      'i18n translation binding parameter dependencies',
+      { rows: [] } satisfies SemanticI18nTranslationBindingsResult,
+    );
+    if (unsupported != null) return unsupported;
     const rows = readI18nTranslationBindingRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(

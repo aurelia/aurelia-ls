@@ -17,6 +17,10 @@ const runtime = await createSemanticRuntime({
   workspaceRoot: fixtureRoot,
   storeKey: 'contract:i18n-binding-lifecycle',
 });
+const defaultBindingQuery = { kind: SemanticAppQueryKind.I18nTranslationBindings, page: { size: 100 } };
+const shallow = await runtime.answerAppQuery({ ...defaultBindingQuery, analysisDepth: 'binding-targets' });
+const defaultSingle = await runtime.answerAppQuery(defaultBindingQuery);
+const defaultBatch = await runtime.answerAppQueries({ queries: [defaultBindingQuery] });
 const app = await runtime.openApp({
   analysisDepth: 'binding-observation',
 });
@@ -45,6 +49,12 @@ const translationKeyCompletion = completionAtMemberDot('objectKey.');
 const translationParamsCompletion = completionAtMemberDot('parameterObject.');
 
 const failures = [];
+if (shallow.result !== 'unsupported') failures.push('Shallow analysis cannot claim complete i18n parameter dependencies.');
+for (const result of [defaultSingle, defaultBatch.value.rows[0].answer]) {
+  if (result.result !== 'answered' || !result.value.rows.some(row => row.parameterSourceRootNames.includes('parameterName'))) {
+    failures.push('Default i18n translation binding queries must observe the authored parameter reads.');
+  }
+}
 const invalidKeyDiagnostics = diagnostics.filter((row) => row.frameworkErrorCode === 'AUR4002');
 if (invalidKeyDiagnostics.length !== 2) {
   failures.push(`Expected exactly two i18n invalid-key diagnostics, got ${invalidKeyDiagnostics.length}.`);

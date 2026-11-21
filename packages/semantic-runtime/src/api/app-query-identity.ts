@@ -42,7 +42,7 @@ export function semanticRuntimeSummaryKey(
   return [
     'runtime-summary',
     `project-page-size:${request.projectPage?.size ?? 0}`,
-    `project-page-cursor:${request.projectPage?.cursor ?? 'start'}`,
+    `project-page-cursor:${pageCursorKey(request.projectPage?.cursor)}`,
   ].map((part) => queryKeyPart(part)).join('|');
 }
 
@@ -63,7 +63,7 @@ export function semanticNativeProjectConfigurationsKey(
     sourceFilePaths,
     page: {
       size: page?.size ?? null,
-      cursor: page?.cursor ?? null,
+      cursor: pageCursorKey(page?.cursor),
     },
   }))}`;
 }
@@ -78,7 +78,7 @@ export function semanticProjectConfigurationDiagnosticsKey(
     sourceFilePaths,
     page: {
       size: page?.size ?? null,
-      cursor: page?.cursor ?? null,
+      cursor: pageCursorKey(page?.cursor),
     },
   }))}`;
 }
@@ -146,11 +146,13 @@ export function semanticRuntimeAppWorldFreeQueryKey(
 
 export function semanticRuntimeAppWorldFreeQueryBatchKey(
   projectKey: string,
+  analysisDepth: SemanticAppAnalysisDepth,
   queries: readonly SemanticAppQuery[],
 ): string {
   return [
     'app-world-free-batch',
     projectKey,
+    analysisDepth,
     `queries:${queries.map((query, index) => `${index}:${semanticAppQueryRequestKey(query)}`).join(',')}`,
   ].map((part) => queryKeyPart(part)).join('|');
 }
@@ -221,7 +223,7 @@ export function semanticAppQueryKey(query: SemanticAppQuery): string {
     shapedQuery.openSeamSiteKey ?? 'all-open-seam-sites',
     shapedQuery.rowPageSize ?? 'default-row-page',
     shapedQuery.page?.size ?? 'all',
-    shapedQuery.page?.cursor ?? 'start',
+    pageCursorKey(shapedQuery.page?.cursor),
     shapedQuery.sourceFile?.filePath ?? 'no-source-file',
     semanticObservedDependencyLocusKey(shapedQuery.observedDependencyLocus),
     shapedQuery.includeDeclaration ?? 'default-include-declaration',
@@ -234,6 +236,11 @@ export function semanticAppQueryKey(query: SemanticAppQuery): string {
       : `${shapedQuery.cursor.filePath}:${shapedQuery.cursor.line}:${shapedQuery.cursor.character}:${shapedQuery.cursor.offset ?? 'no-offset'}`,
   ];
   return parts.map((part) => queryKeyPart(String(part))).join('|');
+}
+
+/** Cursors are opaque input. Preserve their spelling even inside normalized compound keys. */
+function pageCursorKey(cursor: string | null | undefined): string {
+  return cursor == null ? 'start' : `cursor:${encodeURIComponent(JSON.stringify(cursor))}`;
 }
 
 /** Page-stable identity excludes page size/cursor while retaining every semantic selector and projection choice. */

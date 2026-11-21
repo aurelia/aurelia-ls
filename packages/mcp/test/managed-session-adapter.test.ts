@@ -53,6 +53,29 @@ afterEach(async () => {
 });
 
 describe('managed MCP workspace operations', () => {
+  it('keeps a first page and a malformed opaque cursor distinct in either request order', async () => {
+    for (const order of [[null, 'start'], ['start', null]]) {
+      const adapter = managedAdapter();
+      for (const cursor of order) {
+        const { value } = await adapter.appQuery({
+          workspaceRoot, queryKind: 'source-files', page: { size: 1, cursor },
+        }, projectDetachedAureliaMcpResponse);
+        expect(value.result).toBe(cursor == null ? 'answered' : 'invalid');
+        expect(value.page?.returnedRows).toBe(cursor == null ? 1 : 0);
+      }
+    }
+  });
+
+  it('reports the requested batch depth when the same app-world-free rows are reused', async () => {
+    const adapter = managedAdapter();
+    for (const analysisDepth of ['runtime-topology', 'binding-observation', 'runtime-topology'] as const) {
+      const { value } = await adapter.appQueryBatch({
+        workspaceRoot, analysisDepth, queries: [{ kind: 'source-files', page: { size: 1 } }],
+      }, projectDetachedAureliaMcpResponse);
+      expect(value.value).toMatchObject({ analysisDepth, appWorldOpened: false });
+    }
+  });
+
   it('forwards explicit application entrypoint policy through single and batch answers', async () => {
     const adapter = managedAdapter();
     const applicationEntrypointPolicy = 'aggregate-independent-graphs' as const;
