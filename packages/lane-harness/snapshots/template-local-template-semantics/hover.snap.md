@@ -84,7 +84,7 @@ Aurelia custom element.
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCodePoints": 143,
+    "markdownCodePoints": 114,
     "range": {
       "end": {
         "character": 18,
@@ -104,13 +104,11 @@ Aurelia custom element.
 
 ````markdown
 ```ts
-(bindable) one-time-value
+(bindable) one-time-value: string
 ```
 
 Effective mode: one time (bindable default).
 Maps to: `oneTimeValue`.
-
-Type unavailable for this bindable.
 ````
 
 ## local-bindable-two-way-usage
@@ -139,7 +137,7 @@ Type unavailable for this bindable.
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCodePoints": 140,
+    "markdownCodePoints": 111,
     "range": {
       "end": {
         "character": 17,
@@ -159,13 +157,11 @@ Type unavailable for this bindable.
 
 ````markdown
 ```ts
-(bindable) two-way-value
+(bindable) two-way-value: string
 ```
 
 Effective mode: two way (bindable default).
 Maps to: `twoWayValue`.
-
-Type unavailable for this bindable.
 ````
 
 ## local-bindable-default-sentinel-usage
@@ -194,7 +190,7 @@ Type unavailable for this bindable.
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCodePoints": 143,
+    "markdownCodePoints": 114,
     "range": {
       "end": {
         "character": 17,
@@ -214,13 +210,11 @@ Type unavailable for this bindable.
 
 ````markdown
 ```ts
-(bindable) default-value
+(bindable) default-value: string
 ```
 
 Effective mode: to view (framework fallback).
 Maps to: `defaultValue`.
-
-Type unavailable for this bindable.
 ````
 
 ## local-bindable-property-declaration
