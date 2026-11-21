@@ -46,6 +46,15 @@ export function endpointForAdmissionBundle(
 export function endpointForAdmissionAssociation(
   association: FrameworkBundleAssociationRow,
 ): FrameworkRelationshipEndpoint {
+  if (association.associationKind === FrameworkBundleAssociationKind.AppTaskRegistration) {
+    return {
+      ...admissionExpressionEndpoint(FrameworkRelationshipEndpointKind.AppTask, association),
+      name: association.helperName ?? association.expression.text,
+    };
+  }
+  if (association.associationKind === FrameworkBundleAssociationKind.FactoryRegistration) {
+    return admissionExpressionEndpoint(FrameworkRelationshipEndpointKind.Factory, association);
+  }
   if (association.diInterface !== undefined) {
     return {
       kind: FrameworkRelationshipEndpointKind.DiKey,

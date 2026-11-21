@@ -51,7 +51,7 @@ export class EvaluationExportEntry {
     readonly exportKind: EvaluationExportKind,
     /** Exported name visible to importers. */
     readonly exportName: string,
-    /** Local binding name when the export comes from this module. */
+    /** Binding name in this module or the target module for a named re-export. */
     readonly localName: string | null,
     /** Target module specifier for re-exports. */
     readonly moduleSpecifier: string | null,
@@ -187,6 +187,9 @@ function readImportEntries(
   }
 
   const entries: EvaluationImportEntry[] = [];
+  if (clause.isTypeOnly) {
+    return entries;
+  }
   if (clause.name !== undefined) {
     entries.push(
       new EvaluationImportEntry(
@@ -217,6 +220,9 @@ function readImportEntries(
   }
 
   for (const element of named.elements) {
+    if (element.isTypeOnly) {
+      continue;
+    }
     entries.push(
       new EvaluationImportEntry(
         EvaluationImportKind.Named,
@@ -233,6 +239,9 @@ function readImportEntries(
 function readExportDeclarationEntries(
   statement: ts.ExportDeclaration,
 ): readonly EvaluationExportEntry[] {
+  if (statement.isTypeOnly) {
+    return [];
+  }
   if (
     statement.moduleSpecifier !== undefined &&
     !ts.isStringLiteral(statement.moduleSpecifier)
@@ -257,16 +266,14 @@ function readExportDeclarationEntries(
     return [];
   }
 
-  return statement.exportClause.elements.map(
+  return statement.exportClause.elements.filter((element) => !element.isTypeOnly).map(
     (element) =>
       new EvaluationExportEntry(
         moduleSpecifier === null
           ? EvaluationExportKind.Local
           : EvaluationExportKind.ReExport,
         element.name.text,
-        moduleSpecifier === null
-          ? element.propertyName?.text ?? element.name.text
-          : null,
+        element.propertyName?.text ?? element.name.text,
         moduleSpecifier,
         element,
       ),
@@ -315,8 +322,6 @@ function readDeclarationName(statement: ts.Statement): string | null {
   if (
     (ts.isClassDeclaration(statement) ||
       ts.isFunctionDeclaration(statement) ||
-      ts.isInterfaceDeclaration(statement) ||
-      ts.isTypeAliasDeclaration(statement) ||
       ts.isEnumDeclaration(statement)) &&
     statement.name !== undefined
   ) {

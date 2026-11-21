@@ -11,15 +11,15 @@
         "performance",
         "context-economics"
       ],
-      "summary": "The TypeScript enum usage index is the dominant measured cold phase in atlas.self and should stay visible as a source-analysis performance frontier.",
-      "rationale": "profile:self showed that cold atlas.self cost was dominated by readTypeScriptEnumUsageIndex for the Atlas package. The cleanup added nested phase/checker-call profiling, contextual lookup outcome counts, exact raw enum-like literal occurrence rows, skipped contextual type lookup where a literal role cannot contribute contextual raw enum counts, cached root enum-name extraction, and moved contextual raw-value analysis toward role-specific expected-type reads. Exact unambiguous Enum.Member text now resolves before checker lookup because that syntactic match was already the fallback; member-reference symbol lookup is no longer the main measured cost. Raw numeric values such as CharKind.None/Upper/Lower remain broad candidate overlaps but skip checker-backed contextual narrowing by default. Atlas self-analysis now uses an explicit enum raw-value context policy: the standard path skips call-argument contextual refinement because it is currently high cost with zero narrowed rows, while targeted `enumContext=all` or call-argument occurrence inquiries still compute the full lane. The profile hotspot printer now pages the whole enum-value-occurrence family before aggregating, so future optimization should read the full candidate distribution: remaining measured checker pressure is mostly comparison contextual narrowing, plus opt-in string-like call-argument contextual checks.",
+      "summary": "Cold enum-usage indexing dominated the May atlas.self profile. Preserve exact member identity and measure current costs when changing the index.",
+      "rationale": "Profiling separated member-reference resolution from contextual narrowing of raw values. The standard path skips call-argument contextual refinement; targeted requests can measure that lane separately. A spelling match can also select a shadowing parameter, so exact Enum.Member references need checker-backed declaration identity.",
       "guidance": [
         "Run profile:self before touching this substrate; use enum-usage.* phase rows to choose the next cache or split point. Use atlas.self:phase-profile when the same measured rows need exact phase, query, or threshold filtering through the inquiry API.",
         "Use `pnpm --filter @aurelia-ls/atlas self -- --projection=enum-value-occurrences --role=... --contextualOnly=true --detail` when a specific enum raw-value occurrence lane needs row-level inspection without writing a throwaway inquiry script.",
         "Treat enum raw-value context as an inquiry policy: standard atlas.self skips call-argument refinement, `--enumContext=all` or role-targeted call-argument occurrence reads keep the exact full lane available, and `--enumContext=none` keeps declaration/reference/raw-overlap inventory without checker-backed raw-value narrowing.",
         "Numeric raw overlaps are intentionally high-collision candidate rows only; direct Enum.Member references still count numeric enum usage, while checker-backed contextual raw-value narrowing is reserved for string-like literals unless a future product need explicitly opts into numerics.",
         "profile:self enum raw value hotspots are full-family aggregates, not a single clamped page; role summaries split string and number rows so candidate numeric overlap does not hide the checker-backed string signal. If the numbers look surprising, inspect enum-value-occurrences with role/valueKind/value/contextualOnly filters before changing the substrate.",
-        "Expect enum-usage.member-reference.syntax-exact to absorb unambiguous Enum.Member rows; if checker.getSymbolAtLocation rises again, inspect alias/ambiguous-member pressure before adding broad symbol lookups.",
+        "Screen candidates by member name, then use the TypeChecker to resolve the declared enum member. When profiling member-reference cost, include a shadowing local and a genuine reference as controls.",
         "Comparison raw-value narrowing skips TypeChecker counterpart reads for syntax that cannot carry an enum value type, such as typeof expressions and literal counterparts. If comparison pressure rises again, inspect `enum-usage.checker.getTypeAtLocation.comparison-counterpart` beside `.syntax-skipped` and an `--enumContext=none` baseline before adding more checker calls.",
         "Use atlas.self projection enum-value-occurrences with valueKind, contextualOnly, and enumContext filters when auditing whether raw enum-like literal counts are real signal or broad overlap noise.",
         "Use `pnpm --filter @aurelia-ls/atlas enum:usage -- --packageId=semantic-runtime --projection=summary --enumName=... --memberName=... --detail` when auditing whether semantic-runtime inquiry/kernel enum primitives are actually spent. The package-facing wrapper exposes the same source index outside atlas.self; for example `InquiryContinuationIntent.Author` currently resolves to a single vocabulary-list reference, which is different from being emitted by public continuation rows.",
@@ -82,7 +82,7 @@
         {
           "kind": "lens",
           "lensId": "atlas.self",
-          "projectionId": "phase-profile",
+          "projection": "phase-profile",
           "summary": "Queryable Atlas self-analysis phase rows with exact phase and threshold filters."
         }
       ],
@@ -106,7 +106,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-24"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:atlas-core-analysis-pressure",

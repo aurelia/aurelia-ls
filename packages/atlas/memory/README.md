@@ -129,6 +129,11 @@ pnpm --filter @aurelia-ls/atlas memory:write -- --mode=remove --id=decision:some
 
 `--record` accepts one memory record object. `--shard` accepts either a shard name such as `atlas` or a repository-relative shard path. When `--shard` is omitted, the writer uses the first record domain that matches a shard file and falls back to `product`. Upsert preserves an existing `createdAt`, refreshes `updatedAt`, and removes duplicate copies of the same id from other shards.
 
+The reader and writer share record validation. The writer replaces each changed shard atomically.
+For moves it writes the destination first, so retrying an interrupted move can reconcile both copies.
+Concurrent writers use `.temp/atlas/memory-write.lock`. If a terminated writer left the lock behind,
+check its recorded PID before removing the lock and retrying the command.
+
 Memory scripts accept both `--name=value` and `--name value`, and `--limit` is a human-facing alias for `--rows`.
 Repeated `--domain` filters narrow by all listed domains by default; add `--domainMode=any` when you deliberately want
 an OR-style sweep.
@@ -137,6 +142,12 @@ Use `--path=` with a repository-relative file or directory prefix when you are a
 adjacent memory records plus any remaining untracked class pressure. The path filter also matches durable shard paths,
 so `--path=packages/atlas/memory/records/router.json` is a quick way to inspect one memory shard through Atlas rather
 than opening the raw JSON first.
+
+A package or terrain locus selects records through their backing source, documentation, fixture, or checked
+declaration paths. A source-file locus selects an exact backing file or the JSON shard itself. These selections
+compose with the explicit filters. Use the `symbolName` filter to search authored symbol spellings across records.
+Storage continuations point to the authored record's JSON object, including records in single-line shards.
+The tracked-path check reads the Git index for each memory analysis and also requires the working path to exist.
 
 Use `--query=` for a compact fuzzy text pass before choosing structural filters. Query matching keeps old substring
 behavior and also matches all tokens split across punctuation and camel-case, so `--query="expression type"` can find
@@ -199,8 +210,8 @@ JSON. Active live-frontier ranking spends live check pressure
 facts such as class lines/methods and Atlas source-file size/coupling instead
 of counting checks as the only proxy. When `--query=` is present, next-action ranks include the same relevance bonus as
 record rows so workstream-specific handles are not buried under global pressure that only mentions the term in prose.
-When a filtered `next` read has no computed queue rows, Atlas falls back to matching durable memory records and returns
-them as `consult-memory-record` rows. This is intentionally checkpoint-shaped: exact domain, path, query, symbol, lens,
+On a filtered `next` read, Atlas adds eligible matching records with no computed queue row as
+`consult-memory-record` rows. Exact domain, path, query, symbol, lens,
 auLink, or record-id filters can still recover reference decisions and when-touched guidance without making those
 records part of the unfiltered work queue.
 In `memory:next --detail`, backing memory records remain present in the answer payload, but records already expanded as

@@ -1,6 +1,7 @@
 import {
   type FrameworkAdmissionRelationshipRow,
 } from "../../framework/admission.js";
+import { frameworkDeclaredDiKeyAtSource } from "../../framework/di-index.js";
 import {
   FrameworkRelationshipEndpointKind,
   type FrameworkRelationshipEndpoint,
@@ -305,7 +306,7 @@ class FrameworkAdmissionFlowBuilder {
     );
     this.#routesByKey = groupRoutes(
       this.#materialization.routes,
-      (route) => route.key,
+      (route) => frameworkDeclaredDiKeyAtSource(sourceProject, route.keyEndpoint.source)?.id ?? route.key,
     );
     for (const row of readFrameworkResourceConvergenceRows(sourceProject, {
       bundleExportName: filters.exportName,
@@ -521,10 +522,11 @@ class FrameworkAdmissionFlowBuilder {
     endpoint: FrameworkRelationshipEndpoint,
     admissionRelationshipId: string | undefined,
   ): void {
-    const routes = uniqueRoutes([
-      ...(this.#routesByProviderName.get(endpoint.name) ?? []),
+    const declaration = frameworkDeclaredDiKeyAtSource(this.sourceProject, endpoint.source);
+    const routes = declaration === null ? uniqueRoutes([
+      ...(this.#routesByProviderName.get(endpoint.name) ?? []).filter(route => route.packageId === endpoint.packageId),
       ...(this.#routesByKey.get(endpoint.name) ?? []),
-    ]);
+    ]) : this.#routesByKey.get(declaration.id) ?? [];
     for (const route of routes) {
       this.addMaterializationEdge(
         route,
@@ -546,7 +548,7 @@ class FrameworkAdmissionFlowBuilder {
   ): void {
     const to = this.nodeForEndpoint(route.keyEndpoint, "di-key");
     this.#graph.addEdge({
-      id: `framework-admission-flow:materializes:${route.providerIdentity.id}:${route.key}:${route.routeKind}`,
+      id: `framework-admission-flow:materializes:${route.id}`,
       edgeKind: "materializes-key",
       layer: "di-materialization",
       role: route.routeKind,
@@ -576,15 +578,15 @@ class FrameworkAdmissionFlowBuilder {
     if (depth > MAX_DI_DEPENDENCY_DEPTH) {
       return;
     }
-    const visitKey = routeTraversalKey(route);
+    const visitKey = route.id;
     if (this.#visitedDependencyRoutes.has(visitKey)) {
       return;
     }
     this.#visitedDependencyRoutes.add(visitKey);
     for (const dependency of route.dependencies) {
       this.addDependencyEdge(route, dependency, admissionRelationshipId);
-      const dependencyRoutes =
-        this.#routesByKey.get(dependency.dependencyKey) ?? [];
+      const key = frameworkDeclaredDiKeyAtSource(this.sourceProject, dependency.argumentSource)?.id ?? dependency.dependencyKey;
+      const dependencyRoutes = this.#routesByKey.get(key) ?? [];
       for (const dependencyRoute of dependencyRoutes) {
         this.addMaterializationEdge(
           dependencyRoute,
@@ -617,7 +619,7 @@ class FrameworkAdmissionFlowBuilder {
       "di-key",
     );
     this.#graph.addEdge({
-      id: `framework-admission-flow:provider-depends:${route.providerIdentity.id}:${dependency.dependencyKey}:${dependency.access}:${dependency.policy}`,
+      id: `framework-admission-flow:provider-depends:${dependency.id}`,
       edgeKind: "provider-depends-on-key",
       layer: "di-dependency",
       role: dependency.access,
@@ -721,23 +723,18 @@ class FrameworkAdmissionFlowBuilder {
     endpoint: FrameworkRelationshipEndpoint,
     fallbackKind: FrameworkAdmissionFlowNodeKind,
   ): FrameworkAdmissionFlowNodeRow {
-    const nodePackageId =
-      fallbackKind === "di-key" ? undefined : endpoint.packageId;
+    const origin = fallbackKind === "di-key" ? frameworkDeclaredDiKeyAtSource(this.sourceProject, endpoint.source) : null;
     return this.#graph.addNode({
-      id: admissionFlowNodeId(fallbackKind, nodePackageId, endpoint.name),
+      id: origin?.id ?? admissionFlowNodeId(fallbackKind, endpoint.packageId, endpoint.name),
       kind: fallbackKind,
       name: endpoint.name,
-      packageId: endpoint.packageId,
-      packageName: endpoint.packageName,
-      source: endpoint.source,
+      packageId: origin?.packageId ?? endpoint.packageId,
+      packageName: origin?.packageName ?? endpoint.packageName,
+      source: origin?.source ?? endpoint.source,
       summary: `${endpoint.name} ${fallbackKind}.`,
     });
   }
 
-}
-
-function routeTraversalKey(route: FrameworkMaterializationRouteRow): string {
-  return `${route.key}:${route.providerIdentity.id}:${route.routeKind}`;
 }
 
 function groupRoutes(

@@ -51,7 +51,6 @@ import {
   readFrameworkBindingSetups,
   readFrameworkControllerCreations,
   readFrameworkHydrationFlow,
-  readFrameworkHydrationFlowRows,
   readFrameworkInstructionDispatches,
   readFrameworkInstructionSlots,
   readFrameworkRenderingSyntaxProducts,
@@ -84,6 +83,7 @@ import {
 import {
   checkerBasis,
   countBy,
+  frameworkLandmarkPageStatus,
   sourceIndexBasis,
 } from "./framework-support.js";
 import { PagedRowFamily } from "../paged-row-family.js";
@@ -356,6 +356,7 @@ class FrameworkRenderingAnswerer {
         hydrationFilters,
       );
       return HYDRATION_FLOW_ROW_FAMILY.answer({
+        ...frameworkLandmarkPageStatus(hydrationFlow.openSeams),
         inquiry,
         rows: hydrationFlow.rows,
         limit,
@@ -536,10 +537,11 @@ class FrameworkRenderingAnswerer {
       sourceProject,
       filters,
     );
-    const hydrationFlow = readFrameworkHydrationFlowRows(
+    const hydration = readFrameworkHydrationFlow(
       sourceProject,
       hydrationFilters,
     );
+    const hydrationFlow = hydration.rows;
     const bindingAdmissions = readFrameworkBindingAdmissions(
       sourceProject,
       filters,
@@ -556,7 +558,7 @@ class FrameworkRenderingAnswerer {
     );
     return createAnswer(
       inquiry,
-      OutcomeKind.Hit,
+      hydration.openSeams.length > 0 ? OutcomeKind.Partial : OutcomeKind.Hit,
       `Framework rendering index has ${hydrationFlow.length} hydration-flow corridor row(s), ${renderConsequences.length} compact renderer consequence row(s), ${syntaxProducts.length} syntax product(s), ${instructionSlots.length} instruction slot(s), ${instructionDispatches.length} instruction dispatch edge(s), ${controllerCreations.length} controller creation flow(s), ${bindingProducts.length} binding product(s), ${bindingAdmissions.length} admission edge(s), ${bindingEffects.length} binding effect(s), ${bindingSetups.length} binding setup override(s), and ${renderingRelationships.length} rendering relationship row(s).`,
       {
         value: {
@@ -605,6 +607,7 @@ class FrameworkRenderingAnswerer {
           ),
         },
         basis,
+        openSeams: hydration.openSeams,
         evidence: [
           ...syntaxProducts.slice(0, 2).map(evidenceForSyntaxProduct),
           ...renderConsequences

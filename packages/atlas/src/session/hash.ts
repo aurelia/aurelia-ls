@@ -1,11 +1,10 @@
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, extname, join, relative, resolve } from "node:path";
+import { extname, join, relative, resolve } from "node:path";
 
 import ts from "typescript";
 
-import { isPathWithin } from "../source/path.js";
-import { defaultSourcePackageDefinitions } from "../source/project.js";
+import { defaultSourcePackageDefinitions, parseSourcePackageConfig } from "../source/project.js";
 
 /** Options for computing the daemon-compatible build hash. */
 export interface BuildHashOptions {
@@ -63,13 +62,15 @@ export function computeBuildOutputHash(
   return `sha256:${hash.digest("hex")}`;
 }
 
-/** Compute a cheap epoch hash for TypeScript files admitted into the Atlas source project. */
+/** Identify the admitted source bytes, effective tsconfig settings, and TypeScript version for a new session. */
 export function computeSourceEpochHash(
   /** Source epoch hash options. */
   options: SourceEpochHashOptions,
 ): string {
   const repoRoot = resolve(options.repoRoot);
   const files = new Set<string>();
+  const hash = createHash("sha256");
+  hash.update(`atlas-source-epoch-v2\0${ts.version}\0`);
   for (const definition of defaultSourcePackageDefinitions(repoRoot)) {
     const rootPath = resolve(repoRoot, definition.rootPath);
     const tsconfigPath = resolve(repoRoot, definition.tsconfigPath);
@@ -78,63 +79,26 @@ export function computeSourceEpochHash(
     if (existsSync(packageJsonPath)) {
       files.add(packageJsonPath);
     }
-    for (const fileName of rootFileNamesForTsconfig(rootPath, tsconfigPath)) {
+    const read = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
+    if (read.error !== undefined) {
+      throw new Error(`Cannot compute atlas source epoch hash for ${tsconfigPath}: ${formatDiagnostic(read.error)}`);
+    }
+    const config = parseSourcePackageConfig(rootPath, tsconfigPath, read.config);
+    hash.update(JSON.stringify([definition.id, definition.packageName, config.options,
+      config.diagnostics.map((diagnostic) => [diagnostic.code, formatDiagnostic(diagnostic)])]));
+    hash.update("\0");
+    for (const fileName of config.rootFileNames) {
       files.add(fileName);
     }
   }
 
-  const hash = createHash("sha256");
-  hash.update("atlas-source-epoch-v1");
-  hash.update("\0");
   for (const file of [...files].sort((left, right) => left.localeCompare(right))) {
     hash.update(relative(repoRoot, file).replaceAll("\\", "/"));
     hash.update("\0");
-    const stat = safeStat(file);
-    if (stat == null) {
-      hash.update("missing");
-      hash.update("\0");
-      continue;
-    }
-    hash.update(String(stat.size));
-    hash.update("\0");
-    hash.update(String(stat.mtimeMs));
+    hash.update(readFileSync(file));
     hash.update("\0");
   }
   return `sha256:${hash.digest("hex")}`;
-}
-
-function rootFileNamesForTsconfig(
-  /** Absolute package root. */
-  rootPath: string,
-  /** Absolute tsconfig path. */
-  tsconfigPath: string,
-): readonly string[] {
-  const read = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
-  if (read.error !== undefined) {
-    throw new Error(
-      `Cannot compute atlas source epoch hash for ${tsconfigPath}: ${formatDiagnostic(read.error)}`,
-    );
-  }
-  const parsed = ts.parseJsonConfigFileContent(
-    read.config,
-    ts.sys,
-    dirname(tsconfigPath),
-  );
-  return parsed.fileNames
-    .map((fileName) => resolve(fileName))
-    .filter((fileName) => isPathWithin(fileName, rootPath))
-    .sort((left, right) => left.localeCompare(right));
-}
-
-function safeStat(
-  /** File path to stat. */
-  file: string,
-): ReturnType<typeof statSync> | null {
-  try {
-    return statSync(file);
-  } catch {
-    return null;
-  }
 }
 
 /** Recursively list files under a directory in deterministic order. */

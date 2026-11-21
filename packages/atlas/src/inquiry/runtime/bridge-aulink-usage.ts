@@ -1,6 +1,7 @@
 import ts from "typescript";
 
 import {
+  aureliaApiUsageConsumerId,
   readAureliaApiUsageIndex,
   type AureliaApiUsageIndex,
   type AureliaApiUsageRow,
@@ -41,6 +42,7 @@ import {
   usageCallFiltersHaveArgumentFilter,
   usageCallMatchesFilters,
   usageOwnerForNode,
+  usageOwnerSourceKey,
   usageRoleForIdentifier,
   usageText,
   visitNode,
@@ -145,6 +147,8 @@ export interface AuLinkUsageSiteRow {
   readonly packageId: string;
   readonly symbolName: string;
   readonly side: AuLinkUsageSide;
+  /** Native framework.api group when this site comes from its checker index. */
+  readonly frameworkApiConsumerId?: string;
   readonly targetName?: string;
   readonly memberName?: string;
   readonly role: string;
@@ -196,6 +200,8 @@ export interface AuLinkUsageConsumerRow
   readonly ownerMemberName?: string;
   readonly consumerPackageId?: string | null;
   readonly consumerArea?: string;
+  /** Native framework API groups that supplied sites in this bridge group. */
+  readonly frameworkApiConsumerIds: readonly string[];
   readonly usageCount: number;
   readonly usageRoles: Readonly<Record<string, number>>;
   readonly callCalleeNames: Readonly<Record<string, number>>;
@@ -243,9 +249,7 @@ interface AuLinkComparableUsageRow {
   readonly call?: TypeScriptUsageCallSite;
 }
 
-interface AuLinkFrameworkComparableUsageRow extends AuLinkComparableUsageRow {
-  readonly consumerPackageId: string | null;
-}
+type AuLinkFrameworkComparableUsageRow = AureliaApiUsageRow | AuLinkFrameworkTargetUsageRow;
 
 interface AuLinkProductComparableUsageRow extends AuLinkComparableUsageRow {
   readonly consumerArea: string;
@@ -265,7 +269,7 @@ interface AuLinkProductUsageRow extends AuLinkProductComparableUsageRow {
   readonly text: string;
 }
 
-interface AuLinkFrameworkTargetUsageRow extends AuLinkFrameworkComparableUsageRow {
+interface AuLinkFrameworkTargetUsageRow extends AuLinkComparableUsageRow {
   readonly id: string;
   readonly linkId: string;
   readonly packageId: string;
@@ -1039,6 +1043,7 @@ function frameworkUsageSiteRow(
     packageId: target.packageId,
     symbolName: target.symbolName,
     side: "framework",
+    frameworkApiConsumerId: "subjectId" in usage ? aureliaApiUsageConsumerId(usage) : undefined,
     targetName: target.symbolName,
     memberName: usage.memberName,
     role: usage.role,
@@ -1155,6 +1160,7 @@ function shouldRegroupConsumerRows(filters: AuLinkMirrorFilters): boolean {
     filters.side !== undefined ||
     filters.productArea !== undefined ||
     filters.usageRole !== undefined ||
+    filters.ownerSourceKey !== undefined ||
     filters.ownerName !== undefined ||
     filters.ownerKind !== undefined ||
     filters.ownerMemberName !== undefined ||
@@ -1181,6 +1187,7 @@ function auLinkUsageConsumerRow(
       owner.ownerKind,
       owner.ownerName,
       owner.ownerMemberName ?? "<owner>",
+      usageOwnerSourceKey(owner),
     ].join(":"),
     linkId: row.linkId,
     packageId: row.packageId,
@@ -1194,6 +1201,7 @@ function auLinkUsageConsumerRow(
     consumerPackageId: first.consumerPackageId,
     consumerArea: first.consumerArea,
     usageCount: sites.length,
+    frameworkApiConsumerIds: uniqueSortedStrings(sites.flatMap(site => site.frameworkApiConsumerId ?? [])),
     usageRoles: countBy(sites, (site) => site.role),
     ...usageCallAggregate(sites),
     firstSource: first.source,
@@ -1211,6 +1219,7 @@ function auLinkUsageConsumerGroupKey(site: AuLinkUsageSiteRow): string {
     site.owner.ownerKind,
     site.owner.ownerName,
     site.owner.ownerMemberName ?? "<owner>",
+    usageOwnerSourceKey(site.owner),
     site.consumerPackageId ?? "",
     site.consumerArea ?? "",
   ].join("\0");
@@ -1471,6 +1480,7 @@ function usageSiteRowMatches(
     (filters.side === undefined || row.side === filters.side) &&
     (filters.productArea === undefined || row.consumerArea === filters.productArea) &&
     (filters.usageRole === undefined || row.role === filters.usageRole) &&
+    (filters.ownerSourceKey === undefined || usageOwnerSourceKey(row.owner) === filters.ownerSourceKey) &&
     (filters.ownerName === undefined || row.owner.ownerName === filters.ownerName) &&
     (filters.ownerKind === undefined || row.owner.ownerKind === filters.ownerKind) &&
     (filters.ownerMemberName === undefined ||
@@ -1522,6 +1532,7 @@ function usageConsumerRowMatches(
     (filters.side === undefined || row.side === filters.side) &&
     (filters.productArea === undefined || row.consumerArea === filters.productArea) &&
     (filters.usageRole === undefined || row.usageRoles[filters.usageRole] !== undefined) &&
+    (filters.ownerSourceKey === undefined || usageOwnerSourceKey(row) === filters.ownerSourceKey) &&
     (filters.ownerName === undefined || row.ownerName === filters.ownerName) &&
     (filters.ownerKind === undefined || row.ownerKind === filters.ownerKind) &&
     (filters.ownerMemberName === undefined ||

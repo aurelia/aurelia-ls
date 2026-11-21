@@ -300,6 +300,7 @@ export const FrameworkSemanticRoutes = {
     id: "framework.route.admission-flow.compiler-instruction-products",
     navigationSpecId: "framework.flow",
     target: FrameworkRouteEndpoints.CompilerInstructionProducts,
+    targetLocus: RepoRootLocus,
     relation: NavigationRelation.FrameworkFlowOf,
     basis: ADMISSION_BASIS,
     summary:
@@ -309,6 +310,7 @@ export const FrameworkSemanticRoutes = {
     id: "framework.route.compiler.admission-jit-flow",
     navigationSpecId: "framework.flow",
     target: FrameworkRouteEndpoints.AdmissionFlow,
+    targetLocus: RepoRootLocus,
     relation: NavigationRelation.FrameworkFlowOf,
     basis: ADMISSION_BASIS,
     summary:
@@ -318,6 +320,7 @@ export const FrameworkSemanticRoutes = {
     id: "framework.route.compiler.rendering-controller-creations",
     navigationSpecId: "framework.flow",
     target: FrameworkRouteEndpoints.RenderingControllerCreations,
+    targetLocus: RepoRootLocus,
     relation: NavigationRelation.FrameworkFlowOf,
     basis: SOURCE_CHECKER_BASIS,
     summary:
@@ -327,6 +330,7 @@ export const FrameworkSemanticRoutes = {
     id: "framework.route.compiler.rendering-hydration-flow",
     navigationSpecId: "framework.flow",
     target: FrameworkRouteEndpoints.RenderingHydrationFlow,
+    targetLocus: RepoRootLocus,
     relation: NavigationRelation.FrameworkFlowOf,
     basis: SOURCE_CHECKER_BASIS,
     summary:
@@ -336,6 +340,7 @@ export const FrameworkSemanticRoutes = {
     id: "framework.route.compiler.rendering-instruction-dispatches",
     navigationSpecId: "framework.flow",
     target: FrameworkRouteEndpoints.RenderingInstructionDispatches,
+    targetLocus: RepoRootLocus,
     relation: NavigationRelation.FrameworkFlowOf,
     basis: SOURCE_CHECKER_BASIS,
     summary:
@@ -464,6 +469,7 @@ export const FrameworkSemanticRoutes = {
     id: "framework.route.rendering.compiler-instruction-products",
     navigationSpecId: "semantic.provenance",
     target: FrameworkRouteEndpoints.CompilerInstructionProducts,
+    targetLocus: RepoRootLocus,
     relation: NavigationRelation.ProvenanceOf,
     basis: SOURCE_CHECKER_BASIS,
     summary:
@@ -473,6 +479,7 @@ export const FrameworkSemanticRoutes = {
     id: "framework.route.rendering.compiler-compile-flow",
     navigationSpecId: "semantic.provenance",
     target: FrameworkRouteEndpoints.CompilerCompileFlow,
+    targetLocus: RepoRootLocus,
     relation: NavigationRelation.ProvenanceOf,
     basis: SOURCE_CHECKER_BASIS,
     summary:
@@ -569,6 +576,7 @@ export const FrameworkSemanticRoutes = {
     id: "framework.route.router.rendering-controller-creations",
     navigationSpecId: "framework.flow",
     target: FrameworkRouteEndpoints.RenderingControllerCreations,
+    targetLocus: RepoRootLocus,
     relation: NavigationRelation.FrameworkFlowOf,
     basis: SOURCE_CHECKER_BASIS,
     summary:
@@ -578,6 +586,7 @@ export const FrameworkSemanticRoutes = {
     id: "framework.route.router.rendering-hydration-flow",
     navigationSpecId: "framework.flow",
     target: FrameworkRouteEndpoints.RenderingHydrationFlow,
+    targetLocus: RepoRootLocus,
     relation: NavigationRelation.FrameworkFlowOf,
     basis: SOURCE_CHECKER_BASIS,
     summary:
@@ -587,6 +596,7 @@ export const FrameworkSemanticRoutes = {
     id: "framework.route.router.lifecycle-controller-calls",
     navigationSpecId: "framework.flow",
     target: FrameworkRouteEndpoints.LifecycleControllerCalls,
+    targetLocus: RepoRootLocus,
     relation: NavigationRelation.FrameworkFlowOf,
     basis: SOURCE_CHECKER_BASIS,
     summary:
@@ -596,6 +606,7 @@ export const FrameworkSemanticRoutes = {
     id: "framework.route.router.materialization-resource-instantiations",
     navigationSpecId: "framework.flow",
     target: FrameworkRouteEndpoints.MaterializationResourceInstantiations,
+    targetLocus: RepoRootLocus,
     relation: NavigationRelation.FrameworkFlowOf,
     basis: SOURCE_CHECKER_BASIS,
     summary:
@@ -605,6 +616,7 @@ export const FrameworkSemanticRoutes = {
     id: "framework.route.rendering.router-relationships",
     navigationSpecId: "semantic.provenance",
     target: FrameworkRouteEndpoints.RouterRelationships,
+    targetLocus: RepoRootLocus,
     relation: NavigationRelation.ProvenanceOf,
     basis: SOURCE_CHECKER_BASIS,
     summary:
@@ -623,6 +635,7 @@ export const FrameworkSemanticRoutes = {
     id: "framework.route.resource.compiler-instruction-products",
     navigationSpecId: "framework.flow",
     target: FrameworkRouteEndpoints.CompilerInstructionProducts,
+    targetLocus: RepoRootLocus,
     relation: NavigationRelation.FrameworkFlowOf,
     basis: CHECKER_BASIS,
     summary:

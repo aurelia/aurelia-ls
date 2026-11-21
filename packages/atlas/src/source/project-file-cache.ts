@@ -111,10 +111,10 @@ export class SourceProjectFileCache {
   ): string[] {
     const key = JSON.stringify([
       normalizeFileKey(rootDir),
-      extensions ?? [],
-      excludes ?? [],
-      includes ?? [],
-      depth ?? null,
+      extensions,
+      excludes,
+      includes,
+      depth,
     ]);
     const cached = this.#readDirectories.get(key);
     if (cached !== undefined) {
@@ -161,6 +161,37 @@ export class SourceProjectFileCache {
     return real;
   }
 
+  /** Recheck the successful and failed filesystem observations consumed by this TypeScript host. */
+  inputsAreCurrent(): boolean {
+    for (const [file, snapshot] of this.#scriptSnapshots) {
+      const text = snapshot?.getText(0, snapshot.getLength());
+      if (text !== this.#readScriptText(file)) return false;
+    }
+    for (const [file, text] of this.#hostReadFiles) {
+      if (ts.sys.readFile(file) !== text) return false;
+    }
+    for (const [file, exists] of this.#fileExists) {
+      if (ts.sys.fileExists(file) !== exists) return false;
+    }
+    for (const [dir, exists] of this.#directoryExists) {
+      if ((ts.sys.directoryExists?.(dir) ?? false) !== exists) return false;
+    }
+    for (const [file, real] of this.#realpaths) {
+      if (normalizeFileKey(ts.sys.realpath?.(file) ?? file) !== normalizeFileKey(real)) return false;
+    }
+    for (const [dir, entries] of this.#directories) {
+      if (!samePaths(ts.sys.getDirectories(dir), entries)) return false;
+    }
+    for (const [key, entries] of this.#readDirectories) {
+      // JSON preserves omitted optional arguments as null in the cache key.
+      const [dir, extensions, excludes, includes, depth] = JSON.parse(key) as
+        [string, string[] | null, string[] | null, string[] | null, number | null];
+      const current = ts.sys.readDirectory(dir, extensions ?? undefined, excludes ?? undefined, includes ?? undefined, depth ?? undefined);
+      if (!samePaths(current, entries)) return false;
+    }
+    return true;
+  }
+
   /** Compact profiling counters for one SourceProject epoch. */
   profile(): SourceProjectFileCacheProfile {
     return {
@@ -185,12 +216,21 @@ export class SourceProjectFileCache {
   }
 
   #readScriptSnapshot(fileName: string): ts.IScriptSnapshot | undefined {
+    const text = this.#readScriptText(fileName);
+    return text === undefined ? undefined : ts.ScriptSnapshot.fromString(text);
+  }
+
+  #readScriptText(fileName: string): string | undefined {
     try {
-      return ts.ScriptSnapshot.fromString(readFileSync(fileName, "utf8"));
+      return readFileSync(fileName, "utf8");
     } catch {
       return undefined;
     }
   }
+}
+
+function samePaths(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((entry, index) => normalizeFileKey(entry) === normalizeFileKey(right[index]!));
 }
 
 interface SourceProjectFileCacheStats {

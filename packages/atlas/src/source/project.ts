@@ -8,6 +8,7 @@ import {
   isPathWithin,
   repoPathIdentity,
   repoRelativePath,
+  readTextFileOrNull,
   normalizeFileKey,
   resolveRepoPath,
   toPosixPath,
@@ -278,6 +279,11 @@ export class SourceProject {
     return this.#program;
   }
 
+  /** Whether the files and module-resolution observations behind this immutable Program still match disk. */
+  inputsAreCurrent(): boolean {
+    return this.#fileCache.inputsAreCurrent();
+  }
+
   /** Current TypeChecker owned by the current Program epoch. */
   get checker(): ts.TypeChecker {
     return this.#checker;
@@ -304,11 +310,7 @@ export class SourceProject {
     const programFiles = index.programSourceFiles;
     const ownedFiles = index.ownedSourceFiles;
     const packageSummaries = this.#packageDefinitions.map((definition) => {
-      const sourceFileCount = ownedFiles.filter(
-        (sourceFile) =>
-          index.packageByFileKey.get(normalizeFileKey(sourceFile.fileName))
-            ?.id === definition.id,
-      ).length;
+      const sourceFileCount = index.ownedSourceFilesByPackage.get(definition.id)?.length ?? 0;
       const implementationSourceFileCount =
         index.ownedImplementationSourceFilesByPackage.get(definition.id)
           ?.length ?? 0;
@@ -374,6 +376,28 @@ export class SourceProject {
     return this.currentIndex().sourceFileByKey.get(normalized) ?? null;
   }
 
+  /** Resolve a module occurrence in this Program, preserving its import mode and declaration-file target. */
+  resolvedModuleFile(
+    /** Literal from an import, re-export, or dynamic import in this source epoch. */
+    specifier: ts.StringLiteralLike,
+  ): SourceFileIdentity | null {
+    const sourceFile = specifier.getSourceFile();
+    const { resolvedModule } = ts.resolveModuleName(
+      specifier.text,
+      sourceFile.fileName,
+      this.#compilerOptions,
+      this.#fileCache,
+      undefined,
+      undefined,
+      this.#program.getModeForUsageLocation(sourceFile, specifier),
+    );
+    if (resolvedModule === undefined) {
+      return null;
+    }
+    const target = this.readSourceFile(resolvedModule.resolvedFileName);
+    return target === null ? null : this.requiredSourceFileIdentity(target);
+  }
+
   /** Return stable file identity for a path in this source epoch, without requiring TypeScript admission. */
   sourceFileIdentityForPath(
     /** Repository-relative or absolute file path. */
@@ -397,7 +421,7 @@ export class SourceProject {
     );
   }
 
-  /** Read source text for a path in this source epoch, including non-Program docs/tests. */
+  /** Return Program text from the pinned epoch or read the current contents of a filesystem-only target. */
   readTextFile(
     /** Repository-relative or absolute file path. */
     filePath: string,
@@ -413,8 +437,8 @@ export class SourceProject {
     const absolutePath = path.isAbsolute(filePath)
       ? path.resolve(filePath)
       : resolveRepoPath(this.repoRoot, filePath);
-    const text = this.#fileCache.readFile(absolutePath);
-    if (text === undefined) {
+    const text = readTextFileOrNull(absolutePath);
+    if (text === null) {
       return null;
     }
     return {
@@ -535,6 +559,7 @@ export class SourceProject {
     const localPackageCount = this.#packageDefinitions.filter((definition) =>
       definition.id === SourcePackageId.Atlas ||
       definition.id === SourcePackageId.SemanticRuntime ||
+      definition.id === SourcePackageId.Patterns ||
       definition.id === SourcePackageId.Mcp
     ).length;
     const frameworkPackageCount = this.#packageDefinitions.filter((definition) =>
@@ -858,14 +883,23 @@ function readPackageConfig(
       diagnostics: [read.error],
     };
   }
+  return parseSourcePackageConfig(definition.rootAbsolutePath, definition.tsconfigAbsolutePath, read.config);
+}
+
+/** Resolve inherited options and admitted source roots identically for the Program and its session epoch. */
+export function parseSourcePackageConfig(
+  rootAbsolutePath: string,
+  tsconfigAbsolutePath: string,
+  config: object,
+): ReadPackageConfigResult {
   const parsed = ts.parseJsonConfigFileContent(
-    read.config,
+    config,
     ts.sys,
-    path.dirname(definition.tsconfigAbsolutePath),
+    path.dirname(tsconfigAbsolutePath),
   );
   const rootFileNames = parsed.fileNames
     .map((fileName) => path.resolve(fileName))
-    .filter((fileName) => isPathWithin(fileName, definition.rootAbsolutePath))
+    .filter((fileName) => isPathWithin(fileName, rootAbsolutePath))
     .sort((left, right) => left.localeCompare(right));
   return {
     rootFileNames,

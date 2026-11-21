@@ -587,18 +587,12 @@ export function answerFrameworkObservation(
         sourceProject,
         filters,
       );
-      const dependencyCircuits = dependencyCircuitsForFlowSites(
-        flowSites,
-        filters,
-      );
+      const dependencyCircuits = readFrameworkObservationDependencyCircuits(sourceProject, filters);
       const collectionMethods = readFrameworkObservationCollectionMethods(
         sourceProject,
         filters,
       );
-      const observerLocatorDecisions = observerLocatorDecisionsForFlowSites(
-        flowSites,
-        filters,
-      );
+      const observerLocatorDecisions = readFrameworkObserverLocatorDecisions(sourceProject, filters);
       const flowEntityLinks = readFrameworkObservationFlowEntityLinks(
         sourceProject,
         filters,
@@ -720,9 +714,6 @@ function observationBaseValue(
     relationshipPhases: relationships === undefined
       ? undefined
       : countBy(relationships, (row) => row.phase),
-    dependencyCircuits,
-    collectionMethods,
-    observerLocatorDecisions,
   };
 }
 
@@ -766,6 +757,7 @@ export function readFrameworkObserverLocatorDecisions(
     readFrameworkObservationFlowSites(sourceProject, {
       ...filters,
       query: undefined,
+      targetName: undefined,
     }),
     filters,
   );
@@ -829,7 +821,7 @@ function readAstEvaluatorCollectionMethods(
     wrapsResult: false,
     source,
     summary:
-      `astEvaluate auto-observes array method '${methodName}' through IConnectable.observeCollection before evaluating the call.`,
+      `After an ordinary array '${methodName}' call returns, astEvaluate asks the active connectable to observe the collection.`,
   }));
 }
 

@@ -78,7 +78,7 @@ export function createSurfaceMap(
     },
     vocabulary: contracts.vocabulary ?? InternalVocabularyDefinitions,
     terrain: contracts.terrain ?? RepoTerrain,
-    activeTerrain: contracts.activeTerrain ?? activeTerrain(),
+    activeTerrain: contracts.activeTerrain ?? activeTerrain(contracts.terrain),
     substrates: contracts.substrates ?? SubstrateCatalog,
     lenses: contracts.lenses ?? LensCatalog,
     navigation: contracts.navigation ?? NAVIGATION_GRAMMAR,

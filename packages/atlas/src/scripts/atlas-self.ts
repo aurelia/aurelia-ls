@@ -1,4 +1,5 @@
-import { LensId } from "../inquiry/lens.js";
+import { LensCatalog, LensId } from "../inquiry/lens.js";
+import { OutcomeKind } from "../inquiry/answer.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
 import type { SelfValue } from "../inquiry/runtime/index.js";
 import { createApi } from "../session/index.js";
@@ -15,83 +16,11 @@ import {
 
 type AtlasSelfRow = Readonly<Record<string, unknown>>;
 
-const stringFilterNames = [
-  "packageId",
-  "query",
-  "domain",
-  "lensId",
-  "projectionId",
-  "parameterId",
-  "functionName",
-  "variableName",
-  "initializerKind",
-  "bodyFingerprint",
-  "bodyShapeFingerprint",
-  "switchTopologyFingerprint",
-  "targetLens",
-  "targetProjection",
-  "routeRelationMember",
-  "semanticRouteId",
-  "navigationSpecId",
-  "targetEndpointId",
-  "axis",
-  "axisId",
-  "axisField",
-  "valueSpace",
-  "pressure",
-  "phase",
-  "fromArea",
-  "area",
-  "toArea",
-  "class",
-  "kind",
-  "enumName",
-  "memberName",
-  "value",
-  "valueKind",
-  "fromEnum",
-  "toEnum",
-  "carrier",
-  "enumRelation",
-  "enumContext",
-  "role",
-  "stringRole",
-  "declarationKind",
-  "surfaceKind",
-  "surfaceRole",
-  "className",
-  "methodName",
-  "functionKind",
-  "moduleShape",
-  "orderBy",
-] as const;
-
-const booleanFilterNames = [
-  "crossesArea",
-  "contextualOnly",
-  "magicOnly",
-  "includeSourceProject",
-  "includeFunctionBodyAnalysis",
-  "includeSemanticTaxonomyAnalysis",
-] as const;
-
-const numberFilterNames = [
-  "minInitializerEntryCount",
-  "minSwitchTopologyCount",
-  "minMilliseconds",
-  "minExclusiveMilliseconds",
-  "minLineCount",
-  "minOutgoingLocalImportCount",
-  "minIncomingLocalImportCount",
-  "minCrossAreaOutgoingImportCount",
-  "minCallCount",
-  "minFunctionCount",
-  "minNameCount",
-  "minFileCount",
-  "minUniqueCallTargetCount",
-  "minMethodCount",
-  "minPropertyCount",
-] as const;
+const filterNames = LensCatalog.find(spec => spec.id === LensId.AtlasSelf)!.parameters!.map(param => param.id);
+const booleanFilters = new Set([
+  "crossesArea", "contextualOnly", "magicOnly", "exported",
+  "includeSourceProject", "includeFunctionBodyAnalysis", "includeSemanticTaxonomyAnalysis",
+]);
 
 const rowProjectionKeys: Readonly<Record<string, keyof SelfValue>> = {
   recipes: "recipes",
@@ -135,32 +64,34 @@ assertKnownScriptArguments("atlas.self", [
   "--projection=",
   "--rows=",
   "--limit=",
-  ...stringFilterNames.map((name) => `--${name}=`),
-  ...booleanFilterNames.map((name) => `--${name}=`),
-  ...numberFilterNames.map((name) => `--${name}=`),
+  "--cursor=",
+  ...filterNames.map(name => `--${name}=`),
 ]);
 
 const filters: Record<string, unknown> = {};
-for (const name of stringFilterNames) {
-  copyStringFilter(name);
-}
-for (const name of booleanFilterNames) {
-  copyBooleanFilter(name);
-}
-for (const name of numberFilterNames) {
-  copyNumberFilter(name);
+for (const name of filterNames) {
+  const value = scriptArgumentValue(`--${name}=`);
+  if (booleanFilters.has(name)) {
+    if (value !== undefined && value !== "true" && value !== "false") {
+      throw new Error(`--${name} expects true or false.`);
+    }
+    if (value !== undefined || process.argv.includes(`--${name}`)) filters[name] = value !== "false";
+  } else if (value !== undefined) {
+    filters[name] = value;
+  }
 }
 
+const cursor = scriptArgumentValue("--cursor=");
 const api = createApi({ idleTtlMs: 120_000, requestTimeoutMs: 180_000 });
 const answer = await api.ask({
   lens: LensId.AtlasSelf,
   locus: RepoRootLocus,
   projection,
   filters,
+  page: cursor === undefined ? undefined : { cursor, size: answerRowBudget },
   budget: { rows: answerRowBudget, evidencePerSubject: detail ? 2 : 0 },
 });
 
-assertHitOrMissAnswer(`atlas.self:${projection}`, answer);
 const value = answerValue<SelfValue>(answer);
 
 if (json) {
@@ -171,9 +102,12 @@ if (json) {
     summary: answer.summary,
     value,
     page: answer.page,
+    ...(answer.openSeams.length === 0 ? {} : { openSeams: answer.openSeams, continuations: answer.continuations }),
   }, null, 2));
-  process.exit(0);
+  process.exit(answer.outcome === OutcomeKind.Error ? 1 : 0);
 }
+
+if (answer.outcome !== OutcomeKind.Partial) assertHitOrMissAnswer(`atlas.self:${projection}`, answer);
 
 console.log("atlas.self");
 console.log(`projection: ${projection}; outcome=${answer.outcome}; mode=${detail ? "detail" : "compact"}`);
@@ -182,6 +116,7 @@ if (filterSummary !== undefined) {
   console.log(`filters: ${filterSummary}`);
 }
 console.log(answer.summary);
+for (const seam of answer.openSeams) console.log(`- ${seam.summary}`);
 
 if (projection === "summary" || projection === "taxonomy") {
   printTaxonomy(value);
@@ -194,32 +129,7 @@ if (rows.length > 0) {
 
 if (answer.page?.nextCursor !== undefined) {
   console.log("");
-  console.log(`next page: cursor=${answer.page.nextCursor}`);
-}
-
-function copyStringFilter(name: string): void {
-  const value = scriptArgumentValue(`--${name}=`);
-  if (value !== undefined) {
-    filters[name] = value;
-  }
-}
-
-function copyBooleanFilter(name: string): void {
-  const value = scriptArgumentValue(`--${name}=`);
-  if (value === "true" || process.argv.includes(`--${name}`)) {
-    filters[name] = true;
-    return;
-  }
-  if (value === "false") {
-    filters[name] = false;
-  }
-}
-
-function copyNumberFilter(name: string): void {
-  const value = scriptNumberArgumentValue(`--${name}=`);
-  if (value !== undefined) {
-    filters[name] = value;
-  }
+  console.log(`next page: --cursor=${answer.page.nextCursor}`);
 }
 
 function rowsForProjection(

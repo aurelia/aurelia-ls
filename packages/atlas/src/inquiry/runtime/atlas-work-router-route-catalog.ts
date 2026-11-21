@@ -1,4 +1,5 @@
 import { LensId } from "../lens.js";
+import { LocusKind } from "../locus.js";
 import {
   AtlasWorkRouteCoverageDepth,
   AtlasWorkRouteCoverageDimension,
@@ -2503,7 +2504,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "path",
-        pathPrefix: "packages/semantic-runtime/fixtures/pressure/app-builder-",
+        pathPrefix: "packages/semantic-runtime/fixtures/pressure/app-builder-*",
         role: "pressure",
         summary:
           "Focused pressure fixture lane for current app-builder part/source-lowering behavior.",
@@ -3934,7 +3935,6 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "semantic-runtime.app-builder-pattern-ontology",
       "mcp.aurelia-patterns-public-surface",
       "semantic-runtime.lsp-edit-affordance-substrate",
-      "semantic-runtime.app-builder-pattern-ontology",
       "semantic-runtime.semantic-contract-verification",
       "semantic-runtime.type-system-project-epoch",
       "semantic-runtime.template-overlay-integration",
@@ -4133,7 +4133,6 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Does the inquiry profile need cost, retention, paging, or materialization-budget assertions?",
     ],
     relatedRouteIds: [
-      "semantic-runtime.app-builder-pattern-ontology",
       "semantic-runtime.app-builder-pattern-ontology",
       "semantic-runtime.inquiry-query-claim-graph",
       "diagnostics.framework-error-grounding",
@@ -4586,11 +4585,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/api/open-seam-interpretation.ts",
-        symbolName: "semanticOpenSeamAttemptForKind",
+        filePath: "packages/semantic-runtime/src/api/open-seam-projections.ts",
+        symbolName: "openSeamProjectionFacts",
         role: "grounding",
         summary:
-          "Open-seam vocabulary interpretation maps seam kinds to factual attempted semantic operation and boundary kind for MCP/IDE trust surfaces.",
+          "Projects the seam's reason sources, materialization impacts, and boundary kinds for public open-seam queries.",
       },
       {
         kind: "source",
@@ -4745,10 +4744,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "script",
-        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:open-seam-interpretation",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:open-seam-causality",
         role: "supporting",
         summary:
-          "Contract proving every controlled open-seam vocabulary key has a public attempt and boundary interpretation.",
+          "Contract checking that public open-seam rows preserve causal reasons and boundary classifications.",
       },
       {
         kind: "script",
@@ -5058,10 +5057,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath: "packages/semantic-runtime/src/api/source-reference.ts",
-        symbolName: "semanticSourcePrecisionForReferences",
+        symbolName: "semanticContinuationSourceFacts",
         role: "supporting",
         summary:
-          "Shared authored/generated/external source-precision classifier for continuation, diagnostic, hover, and future edit evidence.",
+          "Groups source references by identity and preserves their source facets in continuation evidence.",
       },
       {
         kind: "source",
@@ -5255,7 +5254,6 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "semantic-runtime.inquiry-query-claim-graph",
       "semantic-runtime.lsp-edit-affordance-substrate",
       "semantic-runtime.app-builder-pattern-ontology",
-      "semantic-runtime.app-builder-pattern-ontology",
       "atlas.work-router.self-improvement",
     ],
   },
@@ -5420,10 +5418,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath: "packages/semantic-runtime/src/kernel/store.ts",
-        symbolName: "KernelStore.mark",
+        symbolName: "KernelStore.disposeAnswerLocalOwner",
         role: "supporting",
         summary:
-          "Kernel marks provide answer-local disposal boundaries for query-produced products and sidecars.",
+          "Reclaims orphaned direct kernel publications by their exact answer-local owner when the query-backed runtime releases them.",
       },
       {
         kind: "script",
@@ -6802,7 +6800,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "runtimeObservedDependencyPublicationFrame",
       "runtimeObservedDependencyKernelRecords",
       "runtime observed dependency draft",
-      "distinctRuntimeObservedDependencyDrafts",
+      "observedDependencyAccessUseDrafts",
       "runtime-observed-dependency-draft",
       "observer couplings",
       "observer coupling expected effects",
@@ -7134,10 +7132,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath: "packages/semantic-runtime/src/template/runtime-watcher-factory.ts",
-        symbolName: "runtimeWatchersForDefinition",
+        symbolName: "runtimeWatcherMaterializationsForDefinition",
         role: "primary",
         summary:
-          "Runtime watcher creation from resource definition.watches during controller hydration.",
+          "Materializes watchers from resource watch definitions with their observed dependencies during controller hydration.",
       },
       {
         kind: "source",
@@ -7205,11 +7203,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/observation/runtime-observed-dependency-draft.ts",
-        symbolName: "distinctRuntimeObservedDependencyDrafts",
+        filePath: "packages/semantic-runtime/src/observation/runtime-observed-dependency-access-use.ts",
+        symbolName: "observedDependencyAccessUseDrafts",
         role: "primary",
         summary:
-          "Shared semantic-identity dedupe for binding, watcher, computed-observer, proxy, and trackable observed-dependency drafts.",
+          "Joins observed-dependency drafts with their published source access uses and member-source evidence.",
       },
       {
         kind: "source",
@@ -8301,10 +8299,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath: "packages/semantic-runtime/src/evaluation/evaluator.ts",
-        symbolName: "evaluateCallExpression",
+        symbolName: "StaticEvaluator.prepareInvocationTarget",
         role: "supporting",
         summary:
-          "Static evaluator call semantics include receiver-bound property method calls needed by child component predicates.",
+          "Prepares the call target with its evaluated receiver for member calls in child component predicates.",
       },
       {
         kind: "source",
@@ -9017,7 +9015,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "path",
-        pathPrefix: "packages/semantic-runtime/src/expression/completed-input",
+        pathPrefix: "packages/semantic-runtime/src/expression/completed-input-*",
         role: "pressure",
         summary:
           "Completed-input parser/corridor workset lane.",
@@ -9489,10 +9487,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath: "packages/semantic-runtime/src/type-system/project-options.ts",
-        symbolName: "buildTypeSystemProjectOptions",
+        symbolName: "typeSystemProjectOptions",
         role: "grounding",
         summary:
-          "App-local tsconfig/default option builder that determines module resolution and ambient declarations.",
+          "Constructs the checker options and initial overlays from the boot frame's selected project inputs.",
       },
       {
         kind: "source",
@@ -10396,7 +10394,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "optional call target",
       "non-strict call target",
       "nullish union value property",
-      "checkerTypeShapeNullishUnionHasValueProperty",
+      "cursorDiagnosticRows",
       "nullable union missing member diagnostic",
       "evaluateCallableCallReturn",
       "checker signature parameters",
@@ -10620,7 +10618,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query:
           "nullish union value property checker type shape access missing member diagnostic",
         summary:
-          "Missing-member diagnostic policy for nullable unions should spend checkerTypeShapeNullishUnionHasValueProperty instead of duplicating TypeChecker union/member walks in API code.",
+          "Trace a nullable owner's member projection into cursorDiagnosticRows to determine which evidence produces a missing-member diagnostic.",
       },
       {
         query:
@@ -10805,11 +10803,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath:
-          "packages/semantic-runtime/src/type-system/checker-type-shape-access.ts",
-        symbolName: "checkerTypeShapeNullishUnionHasValueProperty",
+          "packages/semantic-runtime/src/api/template-diagnostic-policy.ts",
+        symbolName: "cursorDiagnosticRows",
         role: "supporting",
         summary:
-          "Shared nullable-union value-member check for diagnostic and cursor policy.",
+          "Builds cursor diagnostics from the resolved member, owner type and scope-slot evidence.",
       },
       {
         kind: "source",
@@ -10898,10 +10896,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "lens",
         lensId: LensId.TsType,
-        projection: "type",
+        projection: "guide",
         role: "grounding",
         summary:
-          "TypeScript checker facts are the authority for static owner/member/call/keyed expression surfaces.",
+          "Use the TypeScript selector guide to inspect owner, member, call, and keyed expression types.",
       },
       {
         kind: "script",
@@ -11587,17 +11585,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "representativeEvaluationValues conditional arrays",
       "import.meta conditional dependency spread",
       "evaluateAureliaResolveCall",
-      "aureliaResolveDirectKey",
-      "evaluateAureliaResolveDirectClassKey",
-      "Aurelia resolve direct class key",
-      "ambient resolve ClassKey static evaluator host",
-      "evaluator-local resolve ClassKey",
-      "resolve(ClassKey) activation-like frame",
-      "RuntimeBindingSourceActivationContext evaluateResolveCall",
-      "RuntimeBindingSourceActivationContext resolveCallFrame",
-      "resolveCallFrame",
-      "resolveCallWithoutActiveContainer",
-      "evaluationValueForResolvedKey",
+      "DiProviderActivationView",
+      "DiProviderActivationSession.runtimeHost",
+      "active DI requestor",
+      "ambient resolve evaluated argument keys",
       "binding-source DI activation resolve frame",
       "binding-source DI activation context",
     ],
@@ -11745,15 +11736,15 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         query:
-          "evaluateAureliaResolveCall ambient resolve ClassKey activation-like frame RuntimeBindingSourceActivationContext",
+          "ambient resolve ClassKey without an active DI requestor",
         summary:
-          "Ambient resolve(...) value-closure questions should route through evaluator host direct class-key support first, then binding-source DI activation context for registered/interface keys.",
+          "The generic evaluator needs a modeled active container to close ambient resolve(...), including class keys.",
       },
       {
         query:
-          "RuntimeBindingSourceActivationContext resolveCallFrame active container resolver lookup",
+          "DiProviderActivationSession active container resolver lookup",
         summary:
-          "Binding-source DI resolve(...) questions should route to the activation resolve frame before adding evaluator-, router-, or template-local active-container policy.",
+          "The activation session handles resolve(...) under the active requestor during binding and router source evaluation.",
       },
     ],
     anchors: [
@@ -11821,7 +11812,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         symbolName: "aureliaStaticEvaluationRuntimeHost",
         role: "primary",
         summary:
-          "Aurelia runtime host intrinsics for app admission, including browser ambient boundaries and narrow ambient resolve(ClassKey) closure.",
+          "Aurelia runtime host intrinsics for app admission and browser ambient boundaries.",
       },
       {
         kind: "source",
@@ -11845,23 +11836,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         symbolName: "evaluateAureliaResolveCall",
         role: "supporting",
         summary:
-          "Host-bound direct ambient resolve(...) evaluator path; only activation-like direct class keys close here.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
-        symbolName: "aureliaResolveDirectKey",
-        role: "supporting",
-        summary:
-          "Direct-key admission for evaluator-local ambient resolve(...); wrappers and non-direct key shapes remain open.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
-        symbolName: "evaluateAureliaResolveDirectClassKey",
-        role: "supporting",
-        summary:
-          "Evaluator-local class-key instantiation path for direct ambient resolve(ClassKey) when an activation-like `this` frame exists.",
+          "Reports an open call when resolve(...) is evaluated outside a modeled DI activation.",
       },
       {
         kind: "source",
@@ -11873,19 +11848,19 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/observation/binding-source-activation-context.ts",
-        symbolName: "RuntimeBindingSourceActivationContext",
+        filePath: "packages/semantic-runtime/src/di/provider-activation.ts",
+        symbolName: "DiProviderActivationView",
         role: "supporting",
         summary:
-          "Binding-source DI activation join for registered/interface keys when a modeled active container is available; do not duplicate this in the generic evaluator host.",
+          "Indexes the DI world and creates a provider activation session with those container and identity facts.",
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/observation/binding-source-activation-context.ts",
-        symbolName: "RuntimeBindingSourceActivationContext.resolveCallFrame",
+        filePath: "packages/semantic-runtime/src/di/provider-activation.ts",
+        symbolName: "DiProviderActivationSession.runtimeHost",
         role: "supporting",
         summary:
-          "Activation-scoped resolve(...) frame that separates call/key admission from active-container resolver lookup and open-row wording.",
+          "Intercepts identity-proven resolve(...) calls, reads the active container and evaluates each exact argument against that requestor.",
       },
       {
         kind: "source",
@@ -11897,11 +11872,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/di/container-api-recognition.ts",
-        symbolName: "containerDefaultResolverPolicyForExpression",
+        filePath: "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
+        symbolName: "aureliaContainerDefaultResolverPolicyForValue",
         role: "supporting",
         summary:
-          "TypeChecker-backed source recognition maps createContainer defaultResolver expressions to semantic-runtime policy.",
+          "Reads the modeled DefaultResolver policy attached to an evaluated framework function value.",
       },
       {
         kind: "source",
@@ -12000,10 +11975,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "script",
-        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:source-service-api-demand",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:framework-capability-demand-query",
         role: "supporting",
         summary:
-          "Contract for unadmitted source service API capability demand, diagnostic actionability, and no false provided-key admission.",
+          "Contract checking framework service demand rows, capability identities, paging, and source selection.",
       },
       {
         kind: "script",
@@ -12114,9 +12089,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         kind: "lens",
         lensId: LensId.FrameworkEvaluator,
         projection: "effects",
+        locus: { kind: LocusKind.SourceFile, filePath: "aurelia/packages/runtime-html/src/aurelia.ts" },
+        filters: { memberName: "register" },
         role: "grounding",
         summary:
-          "Framework evaluator lens must be checked before expanding evaluator emulation.",
+          "Trace framework registration effects on Aurelia.register before extending evaluator emulation.",
       },
       {
         kind: "script",
@@ -13487,7 +13464,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "scope-open observed dependency",
       "RuntimeBindingObservedDependency scope-open",
       "observedMemberSourceState",
-      "observedMemberSourceStateForBindingDependency",
+      "runtimeObservedDependencyOccurrence",
       "binding observed dependency root",
       "guidance truth canary",
       "guidance-truth canary",
@@ -13575,10 +13552,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath: "packages/semantic-runtime/src/observation/observed-dependency-member-source.ts",
-        symbolName: "observedMemberSourceStateForBindingDependency",
+        symbolName: "runtimeObservedDependencyOccurrence",
         role: "primary",
         summary:
-          "Binding observation classifier that marks source-backed members, temporary collection owners, runtime scope names, and scope-open root reads before API diagnostics project them.",
+          "Classifies each observed dependency occurrence and preserves its member-source evidence for diagnostics.",
       },
       {
         kind: "source",
@@ -13599,10 +13576,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath: "packages/semantic-runtime/src/diagnostic-action/action.ts",
-        symbolName: "diagnosticActionKindForDiagnosticSuggestion",
+        symbolName: "diagnosticActionKindForSuggestion",
         role: "supporting",
         summary:
-          "Maps diagnostic suggestions and open seams into neutral action categories before authoring or IDE/edit planning consumes them.",
+          "Maps a diagnostic suggestion's action kind to the repair affordance used by authoring and edit planning.",
       },
       {
         kind: "script",
@@ -13761,10 +13738,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath: "packages/semantic-runtime/src/di/world-constructor.ts",
-        symbolName: "frameworkRegistrationEffectsCloseRegistryBody",
+        symbolName: "frameworkDiEffectsCloseRegistryBody",
         role: "supporting",
         summary:
-          "DI registry-body closure predicate that admits framework registration effects such as DialogConfiguration.",
+          "Closes a registry body for an interpreted registry value or a framework registration with closed DI effect coverage.",
       },
       {
         kind: "path",

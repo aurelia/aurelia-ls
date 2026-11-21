@@ -17,6 +17,8 @@ export const enum FrameworkAdmissionMaterializationLinkKind {
 
 /** Exact matching basis used to join admission rows to materialization rows. */
 export const enum FrameworkAdmissionMaterializationMatchBasis {
+  /** Admission and resolver route point to the same interface creation site. */
+  DiKeyDeclaration = "di-key-declaration",
   /** The admitted DI key name exactly matched a key-instantiation row. */
   DiKeyName = "di-key-name",
   /** The admitted DI target name exactly matched the provider endpoint. */
@@ -47,8 +49,8 @@ export const enum FrameworkAdmissionWorldFormationKind {
 export const enum FrameworkAdmissionWorldFormationStatus {
   /** A DI key or resource has visible materialization evidence. */
   Materialized = "materialized",
-  /** An AppTask has visible lifecycle execution evidence. */
-  Executed = "executed",
+  /** AppRoot source contains a matching execution site for the admitted task's slot. */
+  ExecutionSite = "execution-site",
   /** A catalog was statically expanded by the evaluator. */
   Expanded = "expanded",
   /** The row is intentionally only an admission fact at this layer. */

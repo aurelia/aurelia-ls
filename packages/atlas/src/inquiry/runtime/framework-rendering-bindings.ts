@@ -695,7 +695,7 @@ export function bindingNameFromSetupReceiver(
     return directName;
   }
   if (ts.isIdentifier(receiver)) {
-    const initializer = localVariableInitializerForIdentifier(receiver);
+    const initializer = localVariableInitializerForIdentifier(sourceProject, receiver);
     return initializer === null
       ? null
       : bindingNameFromBindingExpression(sourceProject, initializer);
@@ -963,7 +963,7 @@ export function bindingAdmissionExpressionForArgument(
   if (!ts.isIdentifier(current)) {
     return null;
   }
-  const localInitializer = localVariableInitializerForIdentifier(current);
+  const localInitializer = localVariableInitializerForIdentifier(sourceProject, current);
   if (localInitializer !== null) {
     const bindingName = bindingNameFromBindingExpression(
       sourceProject,

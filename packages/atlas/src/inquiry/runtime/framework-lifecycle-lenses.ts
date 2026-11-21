@@ -25,7 +25,6 @@ import {
   requiredSourceFileIdentity,
   sourceRangeForSourceFileNode,
   SourceProjectMemo,
-  toPosixPath,
 } from "../../source/index.js";
 import { lowerFirst } from "../../text-case.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
@@ -59,6 +58,7 @@ import {
   type FrameworkResourceMaterializationSiteRow,
 } from "./framework-resource-materialization.js";
 import {
+  admittedFrameworkSourceFile,
   checkerBasis,
   countBy,
   frameworkPagedAnswer,
@@ -228,18 +228,7 @@ export interface FrameworkLifecycleAppTaskExecutionFilters {
   readonly query?: string;
 }
 
-type FrameworkLifecycleHookParticipantKind =
-  | FrameworkLifecycleParticipantKind.ViewModelHook
-  | FrameworkLifecycleParticipantKind.LifecycleHook;
-
-const hookDispatchTargetEndpointKindByParticipantKind: Readonly<
-  Record<FrameworkLifecycleHookParticipantKind, FrameworkRelationshipEndpointKind>
-> = {
-  [FrameworkLifecycleParticipantKind.ViewModelHook]:
-    FrameworkRelationshipEndpointKind.Method,
-  [FrameworkLifecycleParticipantKind.LifecycleHook]:
-    FrameworkRelationshipEndpointKind.AppTask,
-};
+const CONTROLLER_FILE = "aurelia/packages/runtime-html/src/templating/controller.ts";
 
 const controllerLifecycleMemo = new SourceProjectMemo<
   {
@@ -327,36 +316,10 @@ export function answerFrameworkLifecycle(
 ): Answer<FrameworkLifecycleValue> {
   const projection = inquiry.projection ?? "summary";
   const filters = lifecycleFiltersFromInquiry(inquiry);
-  const controller = readControllerLifecycle(sourceProject);
-  const controllerMethods = controller.methods.filter((row) =>
-    controllerMethodMatches(row, filters),
-  );
-  const controllerCalls = controller.calls.filter((row) =>
-    controllerCallMatches(row, filters),
-  );
-  const bindingEffects = readFrameworkBindingEffects(
-    sourceProject,
-    filters,
-  ).filter(
-    (row) =>
-      row.effectKind === FrameworkBindingEffectKind.LifecycleMethod &&
-      bindingEffectMatches(row, filters),
-  );
-  const resourceSites = readLifecycleResourceSites(sourceProject, filters);
-  const appTaskExecutions = readLifecycleAppTaskExecutions(
-    sourceProject,
-    filters,
-  );
-  const hookDispatches = readLifecycleHookDispatches(sourceProject, filters);
-  const relationships = [
-    ...controllerMethods.map(controllerMethodRelationship),
-    ...controllerCalls.map(controllerCallRelationship),
-    ...bindingEffects.map(lifecycleBindingEffectRelationship),
-    ...resourceSites.map(resourceSiteRelationship),
-    ...appTaskExecutions.map(appTaskExecutionRelationship),
-    ...hookDispatches.map(hookDispatchRelationship),
-  ].filter((row) => lifecycleRelationshipMatches(row, filters));
-
+  const {
+    controllerMethods, controllerCalls, bindingEffects, resourceSites,
+    appTaskExecutions, hookDispatches, relationships,
+  } = readLifecycleRows(sourceProject, filters);
   const limit = rowLimit(inquiry);
   const offset = pageOffset(inquiry);
   const baseValue = lifecycleBaseValue(
@@ -480,6 +443,10 @@ export function readFrameworkLifecycleRelationships(
   sourceProject: SourceProject,
   filters: FrameworkLifecycleFilters = {},
 ): readonly FrameworkLifecycleRelationshipRow[] {
+  return readLifecycleRows(sourceProject, filters).relationships;
+}
+
+function readLifecycleRows(sourceProject: SourceProject, filters: FrameworkLifecycleFilters) {
   const controller = readControllerLifecycle(sourceProject);
   const controllerMethods = controller.methods.filter((row) =>
     controllerMethodMatches(row, filters),
@@ -501,7 +468,7 @@ export function readFrameworkLifecycleRelationships(
     filters,
   );
   const hookDispatches = readLifecycleHookDispatches(sourceProject, filters);
-  return [
+  const relationships = [
     ...controllerMethods.map(controllerMethodRelationship),
     ...controllerCalls.map(controllerCallRelationship),
     ...bindingEffects.map(lifecycleBindingEffectRelationship),
@@ -509,6 +476,10 @@ export function readFrameworkLifecycleRelationships(
     ...appTaskExecutions.map(appTaskExecutionRelationship),
     ...hookDispatches.map(hookDispatchRelationship),
   ].filter((row) => lifecycleRelationshipMatches(row, filters));
+  return {
+    controllerMethods, controllerCalls, bindingEffects, resourceSites,
+    appTaskExecutions, hookDispatches, relationships,
+  };
 }
 
 function readControllerLifecycle(sourceProject: SourceProject): {
@@ -516,16 +487,8 @@ function readControllerLifecycle(sourceProject: SourceProject): {
   readonly calls: readonly FrameworkLifecycleControllerCallRow[];
 } {
   return controllerLifecycleMemo.read(sourceProject, () => {
-    const rows = sourceProject
-      .ownedSourceFiles()
-      .filter((sourceFile) =>
-        toPosixPath(
-          requiredSourceFileIdentity(sourceProject, sourceFile).repoPath,
-        ).endsWith("runtime-html/src/templating/controller.ts"),
-      )
-      .flatMap((sourceFile) =>
-        controllerLifecycleForSourceFile(sourceProject, sourceFile),
-      );
+    const file = admittedFrameworkSourceFile(sourceProject, "runtime-html", CONTROLLER_FILE);
+    const rows = file === null ? [] : controllerLifecycleForSourceFile(sourceProject, file);
     return {
       methods: rows.flatMap((row) => row.methods),
       calls: rows.flatMap((row) => row.calls),
@@ -739,7 +702,9 @@ function readLifecycleResourceSites(
   sourceProject: SourceProject,
   filters: FrameworkLifecycleFilters,
 ): readonly FrameworkLifecycleResourceSiteRow[] {
-  return readFrameworkResourceInstantiationRows(sourceProject, filters)
+  // The instantiation row belongs to the resource. Its lifecycle site belongs to the framework code
+  // doing the lookup or registration, which can live in a different package.
+  return readFrameworkResourceInstantiationRows(sourceProject, { ...filters, packageId: undefined, query: undefined })
     .flatMap((row) => resourceLifecycleSitesForRow(row))
     .filter((row) => resourceSiteMatches(row, filters));
 }
@@ -770,18 +735,10 @@ export function readLifecycleAppTaskExecutions(
   sourceProject: SourceProject,
   filters: FrameworkLifecycleAppTaskExecutionFilters,
 ): readonly FrameworkLifecycleAppTaskExecutionRow[] {
-  const rows = appTaskExecutionsMemo.read(sourceProject, () =>
-    sourceProject
-      .ownedSourceFiles()
-      .filter((sourceFile) =>
-        toPosixPath(
-          requiredSourceFileIdentity(sourceProject, sourceFile).repoPath,
-        ).endsWith("runtime-html/src/app-root.ts"),
-      )
-      .flatMap((sourceFile) =>
-        appTaskExecutionsForSourceFile(sourceProject, sourceFile),
-      ),
-  );
+  const rows = appTaskExecutionsMemo.read(sourceProject, () => {
+    const file = admittedFrameworkSourceFile(sourceProject, "runtime-html", "aurelia/packages/runtime-html/src/app-root.ts");
+    return file === null ? [] : appTaskExecutionsForSourceFile(sourceProject, file);
+  });
   return rows.filter((row) => appTaskExecutionMatches(row, filters));
 }
 
@@ -1056,18 +1013,10 @@ function readLifecycleHookDispatches(
   sourceProject: SourceProject,
   filters: FrameworkLifecycleFilters,
 ): readonly FrameworkLifecycleHookDispatchRow[] {
-  const rows = hookDispatchesMemo.read(sourceProject, () =>
-    sourceProject
-      .ownedSourceFiles()
-      .filter((sourceFile) =>
-        toPosixPath(
-          requiredSourceFileIdentity(sourceProject, sourceFile).repoPath,
-        ).endsWith("runtime-html/src/templating/controller.ts"),
-      )
-      .flatMap((sourceFile) =>
-        hookDispatchesForSourceFile(sourceProject, sourceFile),
-      ),
-  );
+  const rows = hookDispatchesMemo.read(sourceProject, () => {
+    const file = admittedFrameworkSourceFile(sourceProject, "runtime-html", CONTROLLER_FILE);
+    return file === null ? [] : hookDispatchesForSourceFile(sourceProject, file);
+  });
   return rows.filter((row) => hookDispatchMatches(row, filters));
 }
 
@@ -1558,7 +1507,7 @@ function hookDispatchRelationship(
       source: row.source,
     },
     to: {
-      kind: hookDispatchTargetEndpointKind(row.participantKind),
+      kind: FrameworkRelationshipEndpointKind.Method,
       name: row.hookName,
       packageId: row.packageId,
       packageName: row.packageName,
@@ -1569,12 +1518,6 @@ function hookDispatchRelationship(
     sourceRowId: row.id,
     summary: row.summary,
   };
-}
-
-function hookDispatchTargetEndpointKind(
-  participantKind: FrameworkLifecycleHookParticipantKind,
-): FrameworkRelationshipEndpointKind {
-  return hookDispatchTargetEndpointKindByParticipantKind[participantKind];
 }
 
 function phaseForLifecycleStage(stage: string): FrameworkRelationshipPhase {

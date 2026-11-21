@@ -1,3 +1,16 @@
+import type {
+  ProductArchitectureClassSurfaceRow,
+  ProductArchitectureFunctionSurfaceRow,
+  ProductArchitectureCallSiteRow,
+  ProductArchitectureSourceTemplateRow,
+  ProductArchitectureModuleRow,
+} from "../inquiry/runtime/product-architecture-analysis.js";
+import type {
+  ProductArchitectureFunctionDuplicateGroupRow,
+  ProductArchitectureSourceTemplateDuplicateGroupRow,
+  ProductArchitectureFunctionControlFlowShapeGroupRow,
+  ProductArchitectureValue,
+} from "../inquiry/runtime/product-architecture-lenses.js";
 import { LensId } from "../inquiry/lens.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
 import { createApi } from "../session/index.js";
@@ -13,156 +26,8 @@ import {
   type ScriptSourceRef,
 } from "./script-output.js";
 
-interface ProductArchitectureValue {
-  readonly areas?: readonly SummaryRow[];
-  readonly classSurfaces?: readonly ClassSurfaceRow[];
-  readonly callDependencies?: readonly SummaryRow[];
-  readonly callSites?: readonly CallSiteRow[];
-  readonly cycles?: readonly SummaryRow[];
-  readonly declarations?: readonly SummaryRow[];
-  readonly dependencies?: readonly SummaryRow[];
-  readonly areaDependencies?: readonly SummaryRow[];
-  readonly fieldProvenanceConstructions?: readonly SummaryRow[];
-  readonly functionSurfaces?: readonly FunctionSurfaceRow[];
-  readonly sourceTemplates?: readonly SourceTemplateRow[];
-  readonly sourceTemplateDuplicateGroups?: readonly SourceTemplateDuplicateGroupRow[];
-  readonly functionDuplicateGroups?: readonly FunctionDuplicateGroupRow[];
-  readonly functionControlFlowShapeGroups?: readonly FunctionControlFlowShapeGroupRow[];
-  readonly kernelRecordBatches?: readonly SummaryRow[];
-  readonly kernelRecordConstructions?: readonly SummaryRow[];
-  readonly modules?: readonly ModuleRow[];
-  readonly symbolDependencies?: readonly SummaryRow[];
-  readonly symbolReferences?: readonly SummaryRow[];
-}
-
 interface SummaryRow {
   readonly summary: string;
-  readonly source?: ScriptSourceRef;
-}
-
-interface ClassSurfaceRow {
-  readonly name: string;
-  readonly filePath: string;
-  readonly lineCount: number;
-  readonly methodCount: number;
-  readonly propertyCount: number;
-  readonly methods: readonly string[];
-  readonly staticMethods: readonly string[];
-  readonly accessors: readonly string[];
-  readonly properties: readonly string[];
-  readonly auLinkIds: readonly string[];
-  readonly auLinkCatalogIdsForName: readonly string[];
-  readonly surfaceRole: string;
-  readonly surfaceRoleReason: string;
-  readonly source?: ScriptSourceRef;
-}
-
-interface FunctionSurfaceRow {
-  readonly name: string;
-  readonly functionKind: string;
-  readonly className: string | null;
-  readonly parentFunctionName: string | null;
-  readonly filePath: string;
-  readonly lineCount: number;
-  readonly parameterCount: number;
-  readonly callSiteCount: number;
-  readonly localCallSiteCount: number;
-  readonly crossAreaCallSiteCount: number;
-  readonly distinctCalleeCount: number;
-  readonly sampleCalleeNames: readonly string[];
-  readonly sampleCalleeTexts: readonly string[];
-  readonly switchTopologyFingerprint: string | null;
-  readonly switchTopologyCount: number;
-  readonly source?: ScriptSourceRef;
-}
-
-interface FunctionDuplicateGroupRow {
-  readonly name: string;
-  readonly functionCount: number;
-  readonly fileCount: number;
-  readonly lineCount: number;
-  readonly filePaths: readonly string[];
-  readonly distinctBodyFingerprintCount: number | null;
-  readonly repeatedBodyFingerprintCount: number;
-  readonly distinctBodyShapeFingerprintCount: number | null;
-  readonly repeatedBodyShapeFingerprintCount: number;
-  readonly samples: readonly string[];
-  readonly source?: ScriptSourceRef;
-}
-
-interface SourceTemplateRow {
-  readonly templateName: string;
-  readonly argumentKind: string;
-  readonly staticText: boolean;
-  readonly filePath: string;
-  readonly lineCount: number;
-  readonly templateLineCount: number;
-  readonly templateCharacterCount: number;
-  readonly templateFingerprint: string | null;
-  readonly placeholderNames: readonly string[];
-  readonly source?: ScriptSourceRef;
-}
-
-interface SourceTemplateDuplicateGroupRow {
-  readonly templateFingerprint: string;
-  readonly templateCount: number;
-  readonly fileCount: number;
-  readonly templateLineCount: number;
-  readonly templateCharacterCount: number;
-  readonly templateNames: readonly string[];
-  readonly filePaths: readonly string[];
-  readonly placeholderNames: readonly string[];
-  readonly samples: readonly string[];
-  readonly source?: ScriptSourceRef;
-}
-
-interface FunctionControlFlowShapeGroupRow {
-  readonly switchTopologyFingerprint: string;
-  readonly functionCount: number;
-  readonly nameCount: number;
-  readonly fileCount: number;
-  readonly lineCount: number;
-  readonly switchTopologyCount: number;
-  readonly functionKinds: readonly string[];
-  readonly nameSamples: readonly string[];
-  readonly filePaths: readonly string[];
-  readonly fileSamples: readonly string[];
-  readonly source?: ScriptSourceRef;
-}
-
-interface CallSiteRow {
-  readonly callKind: string;
-  readonly fromFilePath: string;
-  readonly className: string | null;
-  readonly functionName: string | null;
-  readonly calleeName: string;
-  readonly calleeText: string;
-  readonly calleeType: string | null;
-  readonly calleeSymbolName: string | null;
-  readonly targetPackageId: string | null;
-  readonly targetFilePath: string | null;
-  readonly local: boolean;
-  readonly crossesArea: boolean;
-  readonly signature: string | null;
-  readonly argumentCount: number;
-  readonly firstArgumentText?: string | null;
-  readonly firstArgumentSyntaxKind?: string | null;
-  readonly firstArgumentOriginKind?: string;
-  readonly firstArgumentOriginText?: string | null;
-  readonly source?: ScriptSourceRef;
-  readonly targetSource?: ScriptSourceRef | null;
-}
-
-interface ModuleRow {
-  readonly filePath: string;
-  readonly area: string;
-  readonly lineCount: number;
-  readonly functionSurfaceCount: number;
-  readonly largeFunctionCount: number;
-  readonly maxFunctionLineCount: number;
-  readonly maxFunctionName: string | null;
-  readonly crossAreaImportCount: number;
-  readonly localImportInCount: number;
   readonly source?: ScriptSourceRef;
 }
 
@@ -363,7 +228,7 @@ function printSummaryRows(label: string, rows: readonly SummaryRow[]): void {
   }
 }
 
-function printClasses(rows: readonly ClassSurfaceRow[]): void {
+function printClasses(rows: readonly ProductArchitectureClassSurfaceRow[]): void {
   console.log("");
   console.log("classes");
   printEmptyRows(rows);
@@ -381,7 +246,7 @@ function printClasses(rows: readonly ClassSurfaceRow[]): void {
   }
 }
 
-function printFunctions(rows: readonly FunctionSurfaceRow[]): void {
+function printFunctions(rows: readonly ProductArchitectureFunctionSurfaceRow[]): void {
   console.log("");
   console.log("functions");
   printEmptyRows(rows);
@@ -406,7 +271,7 @@ function printFunctions(rows: readonly FunctionSurfaceRow[]): void {
   }
 }
 
-function printSourceTemplates(rows: readonly SourceTemplateRow[]): void {
+function printSourceTemplates(rows: readonly ProductArchitectureSourceTemplateRow[]): void {
   console.log("");
   console.log("source templates");
   printEmptyRows(rows);
@@ -422,7 +287,7 @@ function printSourceTemplates(rows: readonly SourceTemplateRow[]): void {
 }
 
 function printSourceTemplateDuplicateGroups(
-  rows: readonly SourceTemplateDuplicateGroupRow[],
+  rows: readonly ProductArchitectureSourceTemplateDuplicateGroupRow[],
 ): void {
   console.log("");
   console.log("source template duplicate groups");
@@ -441,7 +306,7 @@ function printSourceTemplateDuplicateGroups(
 }
 
 function printFunctionControlFlowShapeGroups(
-  rows: readonly FunctionControlFlowShapeGroupRow[],
+  rows: readonly ProductArchitectureFunctionControlFlowShapeGroupRow[],
 ): void {
   console.log("");
   console.log("function control-flow shape groups");
@@ -459,7 +324,7 @@ function printFunctionControlFlowShapeGroups(
   }
 }
 
-function printFunctionDuplicateGroups(rows: readonly FunctionDuplicateGroupRow[]): void {
+function printFunctionDuplicateGroups(rows: readonly ProductArchitectureFunctionDuplicateGroupRow[]): void {
   console.log("");
   console.log("function duplicate groups");
   printEmptyRows(rows);
@@ -477,7 +342,7 @@ function printFunctionDuplicateGroups(rows: readonly FunctionDuplicateGroupRow[]
   }
 }
 
-function printCallSites(rows: readonly CallSiteRow[]): void {
+function printCallSites(rows: readonly ProductArchitectureCallSiteRow[]): void {
   console.log("");
   console.log("call sites");
   printEmptyRows(rows);
@@ -510,7 +375,7 @@ function printCallSites(rows: readonly CallSiteRow[]): void {
   }
 }
 
-function printModules(rows: readonly ModuleRow[]): void {
+function printModules(rows: readonly ProductArchitectureModuleRow[]): void {
   console.log("");
   console.log("modules");
   printEmptyRows(rows);

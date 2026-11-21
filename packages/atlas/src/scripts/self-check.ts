@@ -2,6 +2,10 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import ts from "typescript";
+import { assertFrameworkRenderingQueries } from "./self-check-rendering.js";
+import { assertFrameworkIdentityAndComposition } from "./self-check-bridge.js";
+import { assertWorkRouterScope } from "./self-check-work-router.js";
+import { assertFrameworkTerrain } from "./self-check-terrain.js";
 
 import { OutcomeKind } from "../inquiry/answer.js";
 import {
@@ -204,6 +208,36 @@ if (mapAnswer.outcome !== OutcomeKind.Hit || map === undefined) {
 if (map.packageName !== "@aurelia-ls/atlas") {
   throw new Error("Unexpected Atlas package identity.");
 }
+
+const runtimeContracts = await api.ask({
+  lens: LensId.AtlasSelf,
+  locus: { kind: LocusKind.Repo },
+  projection: "contracts",
+  page: { size: map.lenses.length },
+  budget: { evidencePerSubject: 0 },
+});
+const contractRows = (runtimeContracts.value as SelfValue).contracts ?? [];
+if (contractRows.length !== map.lenses.length || runtimeContracts.evidence.length !== 0) {
+  throw new Error("Atlas contract rows must survive suppression of their display evidence.");
+}
+for (const row of contractRows) {
+  if (!row.implemented) continue;
+  const source = row.source;
+  const line = source && readFileSync(path.join(findRepoRoot(), source.filePath), "utf8").split(/\r?\n/u)[source.start.line];
+  if (!source || !row.implementationFunction || source.start.line !== source.end.line ||
+      line?.slice(source.start.character, source.end.character) !== row.implementationFunction) {
+    throw new Error(`Missing checker-resolved answer function for ${row.lensId}.`);
+  }
+}
+const routeList = await api.ask({ lens: LensId.AtlasWorkRouter, projection: "routes" });
+const defaultRouteBudget = map.lenses.find(spec => spec.id === LensId.AtlasWorkRouter)?.defaultBudget?.rows;
+if (routeList.page?.size !== defaultRouteBudget) {
+  throw new Error("Work Router page size differs from its advertised default.");
+}
+await assertFrameworkRenderingQueries(api);
+await assertFrameworkIdentityAndComposition(api);
+await assertWorkRouterScope(api);
+await assertFrameworkTerrain(api);
 
 for (const lens of map.lenses) {
   if (

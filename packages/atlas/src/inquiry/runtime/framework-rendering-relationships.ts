@@ -34,7 +34,7 @@ import {
   readFrameworkInstructionDispatches,
   readFrameworkRenderingSyntaxProducts,
 } from "./framework-rendering-graph.js";
-import { sourceRangeForCallSiteEntry } from "./framework-support.js";
+import { admittedFrameworkSourceFile, sourceRangeForCallSiteEntry } from "./framework-support.js";
 import { uniqueFrameworkSymbolPackageIdentity } from "./framework-symbol-package-index.js";
 
 /** Graph row derived from framework rendering catalogs. */
@@ -122,26 +122,28 @@ export function readFrameworkRenderingRelationships(
   sourceProject: SourceProject,
   filters: FrameworkRenderingRelationshipFilters,
 ): readonly FrameworkRenderingRelationshipRow[] {
+  // Match the normalized relationship text once the mechanism and endpoints are known.
+  const sourceFilters = { ...filters, query: undefined };
   const rows = uniqueRenderingRelationships([
-    ...readFrameworkRenderingSyntaxProducts(sourceProject, filters).flatMap(
+    ...readFrameworkRenderingSyntaxProducts(sourceProject, sourceFilters).flatMap(
       syntaxProductRelationships,
     ),
-    ...readFrameworkInstructionDispatches(sourceProject, filters).map(
+    ...readFrameworkInstructionDispatches(sourceProject, sourceFilters).map(
       (row) => instructionDispatchRelationship(sourceProject, row),
     ),
-    ...readFrameworkControllerCreations(sourceProject, filters).flatMap(
+    ...readFrameworkControllerCreations(sourceProject, sourceFilters).flatMap(
       controllerCreationRelationships,
     ),
-    ...readFrameworkBindingProducts(sourceProject, filters).flatMap(
+    ...readFrameworkBindingProducts(sourceProject, sourceFilters).flatMap(
       bindingProductRelationships,
     ),
-    ...readFrameworkBindingAdmissions(sourceProject, filters).map(
+    ...readFrameworkBindingAdmissions(sourceProject, sourceFilters).map(
       bindingAdmissionRelationship,
     ),
-    ...readFrameworkBindingEffects(sourceProject, filters).map(
+    ...readFrameworkBindingEffects(sourceProject, sourceFilters).map(
       bindingEffectRelationship,
     ),
-    ...readFrameworkBindingSetups(sourceProject, filters).map(
+    ...readFrameworkBindingSetups(sourceProject, sourceFilters).map(
       bindingSetupRelationship,
     ),
     ...bindablesDefinitionRelationships(sourceProject),
@@ -162,14 +164,8 @@ export function readFrameworkRenderingRelationships(
 function bindablesDefinitionRelationships(
   sourceProject: SourceProject,
 ): readonly FrameworkRenderingRelationshipRow[] {
-  const sourceFile = sourceProject
-    .ownedSourceFiles()
-    .find((file) =>
-      file.fileName
-        .replace(/\\/gu, "/")
-        .endsWith("aurelia/packages/runtime-html/src/bindable.ts"),
-    );
-  if (sourceFile === undefined) {
+  const sourceFile = admittedFrameworkSourceFile(sourceProject, "runtime-html", "aurelia/packages/runtime-html/src/bindable.ts");
+  if (sourceFile === null) {
     return [];
   }
   const classDeclaration = sourceFile.statements.find(

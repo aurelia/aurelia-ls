@@ -122,6 +122,9 @@ export interface AtlasSelfClassSurfaceRow {
   readonly summary: string;
 }
 
+/** Lexical owner of a function implementation counted by self-analysis. */
+export type AtlasSelfFunctionKind = "top-level" | "nested-function" | "class-method";
+
 /** Source-level function or method declaration surface. */
 export interface AtlasSelfFunctionSurfaceRow {
   /** Stable row id. */
@@ -131,7 +134,7 @@ export interface AtlasSelfFunctionSurfaceRow {
   /** Function or method name. Class methods use ClassName.methodName. */
   readonly name: string;
   /** Declaration family. */
-  readonly functionKind: "top-level" | "class-method";
+  readonly functionKind: AtlasSelfFunctionKind;
   /** Owning class name for class methods. */
   readonly className: string | null;
   /** True when exported from the source module, or when the owning class is exported for methods. */
@@ -209,7 +212,7 @@ export interface AtlasSelfFunctionShapeGroupRow {
   /** Total declaration line count across grouped surfaces. */
   readonly lineCount: number;
   /** Function-kind families represented in the group. */
-  readonly functionKinds: readonly ("top-level" | "class-method")[];
+  readonly functionKinds: readonly AtlasSelfFunctionKind[];
   /** Bounded declaration-name samples for compact review. */
   readonly nameSamples: readonly string[];
   /** Bounded file samples for compact review. */
@@ -237,7 +240,7 @@ export interface AtlasSelfFunctionControlFlowShapeGroupRow {
   /** Maximum number of switch statements contributing to one grouped surface. */
   readonly switchTopologyCount: number;
   /** Function-kind families represented in the group. */
-  readonly functionKinds: readonly ("top-level" | "class-method")[];
+  readonly functionKinds: readonly AtlasSelfFunctionKind[];
   /** Bounded declaration-name samples for compact review. */
   readonly nameSamples: readonly string[];
   /** Bounded file samples for compact review. */
@@ -261,7 +264,7 @@ export interface AtlasSelfFunctionWrapperRow {
   /** Function or method name. Class methods use ClassName.methodName. */
   readonly name: string;
   /** Declaration family. */
-  readonly functionKind: "top-level" | "class-method";
+  readonly functionKind: AtlasSelfFunctionKind;
   /** Owning class name for class methods. */
   readonly className: string | null;
   /** True when exported from the source module, or when the owning class is exported for methods. */
@@ -338,21 +341,23 @@ export interface AtlasSelfSourceFileSurfaceRow {
   readonly summary: string;
 }
 
-/** Runtime function that answers one lens from the engine switch. */
+/** Runtime function that answers one lens from a registered engine binding. */
 export interface AtlasSelfLensImplementationRow {
   /** Stable row id. */
   readonly id: string;
-  /** LensId member name from the engine switch. */
+  /** LensId member name from a registered engine binding. */
   readonly lensMember: string;
   /** Lens id value when it can be joined to the runtime enum. */
   readonly lensId: string | null;
   /** Answer function called by the engine. */
   readonly implementationFunction: string;
-  /** Source file that owns the engine switch row. */
+  /** Source file declaring the registered answer function. */
   readonly filePath: string;
   /** Functions reachable through local function calls from the implementation function. */
   readonly reachableFunctions: readonly string[];
-  /** Exact engine switch case source. */
+  /** Checker-resolved declaration of the answer function. */
+  readonly implementationSource: SourceRange;
+  /** Source of the engine registry binding. */
   readonly source: SourceRange;
   /** Compact row summary. */
   readonly summary: string;
@@ -600,6 +605,7 @@ export interface AtlasSelfAnalysis {
     readonly classPropertyCount: number;
     readonly functionSurfaceCount: number;
     readonly topLevelFunctionCount: number;
+    readonly nestedFunctionCount: number;
     readonly classMethodFunctionCount: number;
     readonly variableSurfaceCount: number;
     readonly exportedVariableSurfaceCount: number;

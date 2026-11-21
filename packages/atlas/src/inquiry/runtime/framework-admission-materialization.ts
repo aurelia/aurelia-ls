@@ -1,4 +1,5 @@
 import type { FrameworkAdmissionRelationshipRow } from "../../framework/admission.js";
+import { frameworkDeclaredDiKeyAtSource } from "../../framework/di-index.js";
 import { uniqueSortedStrings } from "../../collections.js";
 import {
   FrameworkAdmissionMaterializationLinkKind,
@@ -95,15 +96,16 @@ export interface FrameworkAdmissionMaterializationLinkRow {
 type AdmissionMaterializationLinker = (
   relationship: FrameworkAdmissionRelationshipRow,
   materialization: FrameworkMaterializationIndex,
+  sourceProject: SourceProject,
 ) => readonly FrameworkAdmissionMaterializationLinkRow[];
 
 const materializationLinkersByAdmittedEndpointKind =
   new Map<FrameworkRelationshipEndpointKind, AdmissionMaterializationLinker>([
     [
       FrameworkRelationshipEndpointKind.DiKey,
-      (relationship, materialization) =>
+      (relationship, materialization, sourceProject) =>
         materialization.instantiations.flatMap((instantiation) =>
-          diLinkForInstantiation(relationship, instantiation),
+          diLinkForInstantiation(sourceProject, relationship, instantiation),
         ),
     ],
     [
@@ -127,7 +129,7 @@ export function readFrameworkAdmissionMaterializationLinks(
   const materialization = readFrameworkMaterializationIndex(sourceProject);
   return relationships
     .flatMap((relationship) =>
-      materializationLinksForRelationship(relationship, materialization),
+      materializationLinksForRelationship(relationship, materialization, sourceProject),
     )
     .filter((row) => linkMatches(row, filters))
     .sort(
@@ -143,18 +145,21 @@ export function readFrameworkAdmissionMaterializationLinks(
 function materializationLinksForRelationship(
   relationship: FrameworkAdmissionRelationshipRow,
   materialization: FrameworkMaterializationIndex,
+  sourceProject: SourceProject,
 ): readonly FrameworkAdmissionMaterializationLinkRow[] {
   return materializationLinkersByAdmittedEndpointKind.get(relationship.to.kind)?.(
     relationship,
     materialization,
+    sourceProject,
   ) ?? [];
 }
 
 function diLinkForInstantiation(
+  sourceProject: SourceProject,
   relationship: FrameworkAdmissionRelationshipRow,
   instantiation: FrameworkMaterializationInstantiationRow,
 ): readonly FrameworkAdmissionMaterializationLinkRow[] {
-  const matchBasis = diMatchBasis(relationship, instantiation);
+  const matchBasis = diMatchBasis(sourceProject, relationship, instantiation);
   if (matchBasis === null) {
     return [];
   }
@@ -167,33 +172,24 @@ function diLinkForInstantiation(
       admissionRelationshipId: relationship.id,
       admissionRelation: relationship.relation,
       associationKind: relationship.associationKind,
-      linkKind: diMaterializationLinkKind(),
+      linkKind: FrameworkAdmissionMaterializationLinkKind.DiKeyInstantiation,
       matchBasis,
       admittedTarget: relationship.to,
       materializedTarget: instantiation.provider,
       materializationId: instantiation.id,
       materializationKind: instantiation.routeKind,
       routeId: instantiation.routeId,
-      materializationSiteKinds: diMaterializationSiteKinds(instantiation),
+      materializationSiteKinds: instantiation.constructionSites.map(site => site.siteKind),
       materializationRelations: diMaterializationRelations(instantiation),
-      materializationMechanisms: diMaterializationMechanisms(instantiation),
-      materializationPhases: diMaterializationPhases(),
-      closure: instantiation.closure,
+      materializationMechanisms: uniqueSortedStrings(instantiation.constructionSites.map(site => site.mechanism)),
+      materializationPhases: [FrameworkRelationshipPhase.Materialization],
+      closure: matchBasis === FrameworkAdmissionMaterializationMatchBasis.DiKeyDeclaration
+        ? instantiation.closure : FrameworkRelationshipClosure.Partial,
       source: relationship.source,
       materializationSource: instantiation.source,
       summary: `${relationship.exportName} admits DI key ${relationship.to.name}; ${instantiation.summary}`,
     },
   ];
-}
-
-function diMaterializationLinkKind(): FrameworkAdmissionMaterializationLinkKind {
-  return FrameworkAdmissionMaterializationLinkKind.DiKeyInstantiation;
-}
-
-function diMaterializationSiteKinds(
-  instantiation: FrameworkMaterializationInstantiationRow,
-): readonly string[] {
-  return instantiation.constructionSites.map((site) => site.siteKind);
 }
 
 function diMaterializationRelations(
@@ -205,20 +201,17 @@ function diMaterializationRelations(
   ];
 }
 
-function diMaterializationMechanisms(
-  instantiation: FrameworkMaterializationInstantiationRow,
-): readonly FrameworkRelationshipMechanism[] {
-  return uniqueSortedStrings(instantiation.constructionSites.map((site) => site.mechanism));
-}
-
-function diMaterializationPhases(): readonly FrameworkRelationshipPhase[] {
-  return [FrameworkRelationshipPhase.Materialization];
-}
-
 function diMatchBasis(
+  sourceProject: SourceProject,
   relationship: FrameworkAdmissionRelationshipRow,
   instantiation: FrameworkMaterializationInstantiationRow,
 ): FrameworkAdmissionMaterializationMatchBasis | null {
+  const admitted = frameworkDeclaredDiKeyAtSource(sourceProject, relationship.to.source);
+  const target = frameworkDeclaredDiKeyAtSource(sourceProject, instantiation.keyEndpoint.source);
+  if (admitted !== null || target !== null) {
+    return admitted !== null && admitted.id === target?.id
+      ? FrameworkAdmissionMaterializationMatchBasis.DiKeyDeclaration : null;
+  }
   const names = admissionTargetNames(relationship);
   if (names.has(instantiation.key)) {
     return FrameworkAdmissionMaterializationMatchBasis.DiKeyName;
@@ -265,7 +258,8 @@ function resourceLinkForInstantiation(
       materializationRelations: relations,
       materializationMechanisms: mechanisms,
       materializationPhases: phases,
-      closure: resource.closure,
+      closure: matchBasis === FrameworkAdmissionMaterializationMatchBasis.ResourceSourceCarrier
+        ? resource.closure : FrameworkRelationshipClosure.Partial,
       source: relationship.source,
       materializationSource: resource.source,
       summary: `${relationship.exportName} admits ${resource.resourceKind} ${relationship.to.name}; ${resource.summary}`,
@@ -277,6 +271,7 @@ function resourceMatchBasis(
   relationship: FrameworkAdmissionRelationshipRow,
   resource: FrameworkResourceInstantiationRow,
 ): FrameworkAdmissionMaterializationMatchBasis | null {
+  if (relationship.to.packageId !== undefined && relationship.to.packageId !== resource.packageId) return null;
   if (
     relationship.to.resourceKind !== undefined &&
     relationship.to.resourceKind !== resource.resourceKind

@@ -37,6 +37,7 @@ import {
   type TypeScriptUsageOwner,
   type TypeScriptUsageRoleId,
   usageOwnerForNode,
+  usageOwnerSourceKey,
 } from "../source/index.js";
 
 const aureliaApiUsageIndexMemo = new SourceProjectMemo<AureliaApiUsageIndex>();
@@ -166,7 +167,7 @@ export interface AureliaApiImplementationShapeRow {
   readonly summary: string;
 }
 
-/** Repo-wide TypeChecker-resolved use of an Aurelia API facet or member slot. */
+/** TypeChecker-resolved use in the admitted source project of an Aurelia API facet or member slot. */
 export interface AureliaApiUsageRow {
   readonly id: string;
   readonly subjectId: string;
@@ -183,6 +184,17 @@ export interface AureliaApiUsageRow {
   readonly owner: TypeScriptUsageOwner;
   readonly call?: TypeScriptUsageCallSite;
   readonly summary: string;
+}
+
+/** Exact framework API subject/member and consuming source declaration that own a usage group. */
+export function aureliaApiUsageConsumerId(usage: AureliaApiUsageRow): string {
+  return [
+    "framework-api-usage-consumer",
+    usage.subjectId,
+    usage.memberName ?? "<subject>",
+    usage.consumerPackageId ?? "<external>",
+    usageOwnerSourceKey(usage.owner),
+  ].join(":");
 }
 
 /** Compact rollup for the shared Aurelia API usage substrate. */
@@ -203,7 +215,7 @@ export interface AureliaApiUsageRollup {
   readonly usageRoles: Readonly<Record<string, number>>;
 }
 
-/** Shared exact index for framework public APIs and their repo-wide TypeScript usages. */
+/** Shared exact index for framework public APIs and their uses in the admitted TypeScript project. */
 export interface AureliaApiUsageIndex {
   readonly rollup: AureliaApiUsageRollup;
   readonly subjects: readonly AureliaApiSubjectRow[];
@@ -323,10 +335,7 @@ class AureliaApiUsageIndexBuilder {
     const memberSlotsWithUsage = this.#attachUsageToMemberSlots(memberSlots, usages);
     const subjectsWithUsage = this.#attachUsageToSubjects(subjects, memberSlotsWithUsage, usages);
     const implementationShapes = this.#buildImplementationShapes(subjectsWithUsage, memberSlotsWithUsage, usages);
-    const rollup = this.#rollup(subjectsWithUsage, implementationShapes, memberSlotsWithUsage, usages);
-
-    return {
-      rollup,
+    const rows = {
       subjects: subjectsWithUsage,
       facets: this.#facets.map(facetRow).sort(compareFacetIdentityRows),
       mergeEdges: this.#mergeEdges.sort(compareApiRelationEdges),
@@ -335,6 +344,7 @@ class AureliaApiUsageIndexBuilder {
       memberSlots: memberSlotsWithUsage,
       usages,
     };
+    return { rollup: aureliaApiUsageRollup(rows), ...rows };
   }
 
   #collectFrameworkExportFacets(): void {
@@ -356,6 +366,7 @@ class AureliaApiUsageIndexBuilder {
         for (const [index, declaration] of declarations.entries()) {
           this.#addFacet({
             surfaceKind: "package-export",
+            surfaceFile: sourceFile,
             packageId: packageInfo.id,
             packageName: packageInfo.packageName,
             exportName: exported.getName(),
@@ -382,6 +393,7 @@ class AureliaApiUsageIndexBuilder {
       for (const declaration of exportedTopLevelDeclarations(sourceFile)) {
         this.#addFacet({
           surfaceKind: "module-export",
+          surfaceFile: sourceFile,
           packageId: packageInfo.id,
           packageName: packageInfo.packageName,
           exportName: declarationName(declaration) ?? `default:${index}`,
@@ -397,6 +409,7 @@ class AureliaApiUsageIndexBuilder {
 
   #addFacet(input: {
     readonly surfaceKind: AureliaApiSurfaceKind;
+    readonly surfaceFile: ts.SourceFile;
     readonly packageId: string;
     readonly packageName: string;
     readonly exportName: string;
@@ -450,7 +463,7 @@ class AureliaApiUsageIndexBuilder {
         pushMapValue(this.#facetsBySymbolKey, canonicalSourceSymbolKey(key), facet);
       }
     }
-    pushMapValue(this.#facetsByExport, `${facet.packageId}:${facet.exportName}`, facet);
+    pushMapValue(this.#facetsByExport, `${input.surfaceFile.fileName}\0${facet.exportName}`, facet);
     pushMapValue(this.#facetsByDeclaration, sourceRangeKey(source), facet);
   }
 
@@ -985,29 +998,26 @@ class AureliaApiUsageIndexBuilder {
       .sort(compareImplementationShapes);
   }
 
-  #rollup(
-    subjects: readonly AureliaApiSubjectRow[],
-    implementationShapes: readonly AureliaApiImplementationShapeRow[],
-    memberSlots: readonly AureliaApiMemberSlotRow[],
-    usages: readonly AureliaApiUsageRow[],
-  ): AureliaApiUsageRollup {
-    return {
-      subjectCount: subjects.length,
-      mergedSubjectCount: subjects.filter((subject) => subject.facetCount > 1).length,
-      facetCount: this.#facets.length,
-      mergeEdgeCount: this.#mergeEdges.length,
-      shapeEdgeCount: this.#shapeEdges.length,
-      implementationShapeCount: implementationShapes.length,
-      memberSlotCount: memberSlots.length,
-      usageCount: usages.length,
-      memberUsageCount: usages.filter((usage) => usage.memberSlotId !== undefined).length,
-      packages: countBy(this.#facets, (facet) => facet.packageId),
-      consumerPackages: countBy(usages, (usage) => usage.consumerPackageId ?? "<external>"),
-      mergeRelations: countBy(this.#mergeEdges, (edge) => edge.relation),
-      shapeRelations: countBy(this.#shapeEdges, (edge) => edge.relation),
-      usageRoles: countBy(usages, (usage) => usage.role),
-    };
-  }
+}
+
+/** Roll up exactly the facet, subject, edge and usage collections displayed by the selected projections. */
+export function aureliaApiUsageRollup(rows: Omit<AureliaApiUsageIndex, "rollup">): AureliaApiUsageRollup {
+  return {
+    subjectCount: rows.subjects.length,
+    mergedSubjectCount: rows.subjects.filter((subject) => subject.facetCount > 1).length,
+    facetCount: rows.facets.length,
+    mergeEdgeCount: rows.mergeEdges.length,
+    shapeEdgeCount: rows.shapeEdges.length,
+    implementationShapeCount: rows.implementationShapes.length,
+    memberSlotCount: rows.memberSlots.length,
+    usageCount: rows.usages.length,
+    memberUsageCount: rows.usages.filter((usage) => usage.memberSlotId !== undefined).length,
+    packages: countBy(rows.facets, (facet) => facet.packageId),
+    consumerPackages: countBy(rows.usages, (usage) => usage.consumerPackageId ?? "<external>"),
+    mergeRelations: countBy(rows.mergeEdges, (edge) => edge.relation),
+    shapeRelations: countBy(rows.shapeEdges, (edge) => edge.relation),
+    usageRoles: countBy(rows.usages, (usage) => usage.role),
+  };
 }
 
 function facetRow(facet: MutableFacet): AureliaApiFacetRow {

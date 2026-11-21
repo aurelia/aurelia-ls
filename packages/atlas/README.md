@@ -21,7 +21,7 @@ Stable identifiers are represented with commented `const enum` declarations. Exp
 `src/inquiry/navigation.ts` declares the reusable route grammar that turns answer-local continuations into auditable
 source/type/semantic route claims.
 
-`src/session` is the default request surface. `createApi()` auto-starts or reuses the local daemon before every request, giving long-running work a place to keep hot state while still restarting when the compiled build output changes.
+`src/session` is the default request surface. Keep one `createApi()` instance while paging or following an answer. It pins the daemon that owns the TypeScript Program. Create a fresh API to observe a changed project. The [session contract](src/session/README.md) specifies which inputs are pinned and which lenses read live filesystem evidence.
 
 `createApi().orient()` is the highest-level entrypoint. It returns daemon status, the surface map, the `atlas.self`
 maintenance answer, first continuations, package scripts, and compact follow-up docs through the same auto-starting
@@ -122,9 +122,7 @@ framework ontology. Re-run it with
 
 ## Fast Agent Lanes
 
-- Start broad work with `pnpm --filter @aurelia-ls/atlas orient`; it is the compact live map of lenses, projections,
-  terrain, source footing, first moves, shortcut scripts, and compact follow-up docs. Use `orient:json` only when a
-  tool needs the full machine-readable orientation payload.
+- Start broad work with `pnpm --filter @aurelia-ls/atlas orient`. It prints the admitted source scope and runnable first questions. `orient:json` includes the lens and projection catalogs, scripts, terrain and documentation.
 - Use `atlas.memory` before reading large workbenches for prior intent. It is
   the source-backed memory/task lane: durable records are explicit JSON, but
   active/resolved/stale status is computed from the current worktree when

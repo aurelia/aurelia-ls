@@ -1,4 +1,5 @@
 import { LensId } from "../inquiry/lens.js";
+import { OutcomeKind } from "../inquiry/answer.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
 import type {
   FrameworkCapabilitiesValue,
@@ -52,7 +53,7 @@ const rows = scriptNumberArgumentValue("--rows=");
 const targetRows = scriptNumberArgumentValue("--targetRows=");
 const targetEvidenceRows = scriptNumberArgumentValue("--targetEvidenceRows=");
 const displayRowLimit = rows ?? (detail ? 80 : 24);
-const answerRowBudget = rows ?? (detail ? 120 : 60);
+const answerRowBudget = rows ?? (projection === "evidence-trace" ? undefined : detail ? 120 : 60);
 
 const filters = {
   ...scriptOptionalStringFilter("id"),
@@ -78,7 +79,9 @@ const answer = await api.ask({
   budget: { rows: answerRowBudget, evidencePerSubject: detail ? 2 : 0 },
 });
 
-assertHitOrMissAnswer(`framework.capabilities:${projection}`, answer);
+if (answer.outcome !== OutcomeKind.Partial) {
+  assertHitOrMissAnswer(`framework.capabilities:${projection}`, answer);
+}
 const value = answerValue<FrameworkCapabilitiesValue>(answer);
 
 if (json) {
@@ -89,6 +92,7 @@ if (json) {
     summary: answer.summary,
     value,
     page: answer.page,
+    openSeams: answer.openSeams,
   }, null, 2));
   process.exit(0);
 }
@@ -106,8 +110,20 @@ if (value !== undefined) {
   printEvidenceRows(value.evidenceRows ?? [], displayRowLimit, detail);
   printEvidenceTraceRows(value.evidenceTraceRows ?? [], displayRowLimit, detail);
   printGroundingRows(value.groundingRows ?? [], displayRowLimit, detail);
-    printInventoryRows(value.inventoryRows ?? [], displayRowLimit, detail);
-    printReverseCoverageRows(value.reverseCoverageRows ?? [], displayRowLimit, detail);
+  printInventoryRows(value.inventoryRows ?? [], displayRowLimit, detail);
+  for (const seam of answer.openSeams) {
+    console.log(`- ${seam.summary}`);
+  }
+  printReverseCoverageRows(value.reverseCoverageRows ?? [], displayRowLimit, detail);
+  for (const row of value.coverageRows ?? []) {
+    console.log(`- ${row.family}: ${row.accounted}/${row.total} constructs named in the capability text (source basis ${row.basisClosure}, ${row.basisRowCount}/${row.basisTotalRows ?? "unknown"} rows)`);
+    if (detail) {
+      printReverseCoverageGroups(row.notAccountedByShape, "unmentioned");
+    }
+  }
+  for (const row of value.clusterRows ?? []) {
+    console.log(`- ${row.key}: ${row.memberCount} member(s)${detail ? "; " + row.members.join(", ") : ""}`);
+  }
 }
 
 function printInventoryRows(

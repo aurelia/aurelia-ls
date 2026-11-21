@@ -59,7 +59,18 @@ export class EvaluationEnvironment {
   constructor(
     /** Module or call-frame key that owns this environment. */
     readonly moduleKey: string,
+    private readonly parent: EvaluationEnvironment | null = null,
   ) {}
+
+  /** A block owns its declarations and can assign visible bindings in its surrounding scope. */
+  child(moduleKey = this.moduleKey): EvaluationEnvironment {
+    return new EvaluationEnvironment(moduleKey, this);
+  }
+
+  /** Whether a closure captures this evaluation's live lexical chain. */
+  hasLexicalScope(candidate: EvaluationEnvironment): boolean {
+    return this === candidate || this.parent?.hasLexicalScope(candidate) === true;
+  }
 
   /** Declare or replace a binding cell. */
   declareBinding(
@@ -90,6 +101,9 @@ export class EvaluationEnvironment {
     /** Source node that declared this binding, when known. */
     declaration: ts.Node | null,
   ): EvaluationBinding {
+    if (bindingKind === EvaluationBindingKind.Var && this.parent !== null) {
+      return this.parent.initializeBinding(name, value, bindingKind, mutable, declaration);
+    }
     const binding = this.#bindings.get(name) ?? this.declareBinding(name, bindingKind, mutable, declaration);
     binding.value = value;
     binding.state = value.kind === EvaluationValueKind.Unknown
@@ -105,8 +119,8 @@ export class EvaluationEnvironment {
     /** Value to store. */
     value: EvaluationValue,
   ): boolean {
-    const binding = this.#bindings.get(name);
-    if (binding === undefined || !binding.mutable) {
+    const binding = this.readBinding(name);
+    if (binding === null || !binding.mutable) {
       return false;
     }
     binding.value = value;
@@ -121,7 +135,7 @@ export class EvaluationEnvironment {
     /** Name used for lexical lookup. */
     name: string,
   ): EvaluationBinding | null {
-    return this.#bindings.get(name) ?? null;
+    return this.#bindings.get(name) ?? this.parent?.readBinding(name) ?? null;
   }
 
   /** Read a binding value by lexical name. */
@@ -129,12 +143,15 @@ export class EvaluationEnvironment {
     /** Name used for lexical lookup. */
     name: string,
   ): EvaluationValue | null {
-    return this.#bindings.get(name)?.value ?? null;
+    return this.readBinding(name)?.value ?? null;
   }
 
   /** Read all binding cells in insertion order. */
   readBindings(): readonly EvaluationBinding[] {
-    return [...this.#bindings.values()];
+    if (this.parent === null) return [...this.#bindings.values()];
+    const visible = new Map(this.parent.readBindings().map(binding => [binding.name, binding]));
+    for (const binding of this.#bindings.values()) visible.set(binding.name, binding);
+    return [...visible.values()];
   }
 
   /** Clone this environment for branch or function-call interpretation. */
@@ -143,7 +160,7 @@ export class EvaluationEnvironment {
     moduleKey: string = this.moduleKey,
   ): EvaluationEnvironment {
     const clone = new EvaluationEnvironment(moduleKey);
-    for (const binding of this.#bindings.values()) {
+    for (const binding of this.readBindings()) {
       clone.#bindings.set(
         binding.name,
         new EvaluationBinding(

@@ -1,6 +1,6 @@
 import { OutcomeKind, createAnswer, type Answer } from "./answer.js";
 import type { Basis } from "./basis.js";
-import type { Continuation } from "./continuation.js";
+import { ContinuationKind, type Continuation } from "./continuation.js";
 import {
   evidenceArray,
   type Evidence,
@@ -11,6 +11,7 @@ import {
   evidenceLimit,
   pageInfo,
   pageRows,
+  parseOffsetCursor,
   type PageRows,
 } from "./paging.js";
 
@@ -78,12 +79,21 @@ export class PagedRowFamily<TRow> {
   answer<TValue>(
     init: PagedRowFamilyAnswerInit<TRow, TValue>,
   ): Answer<TValue> {
+    const cursor = init.inquiry.page?.cursor;
+    if (cursor !== undefined && parseOffsetCursor(cursor) === undefined) {
+      return createAnswer(init.inquiry, OutcomeKind.Reroute, "Invalid row cursor. Use a cursor from this projection.", {
+        basis: init.basis,
+        continuations: [{
+          kind: ContinuationKind.Reroute, rationale: "Restart the selected row query at its first page.",
+          inquiry: { ...init.inquiry, page: { size: init.limit } },
+        }],
+      });
+    }
     const page = pageRows(init.rows, init.offset, init.limit);
-    const evidenceByRow = page.rows
-      .slice(0, evidenceLimit(init.inquiry))
-      .map((row, index) =>
-        evidenceArray(this.#evidenceForRow(row, init.offset + index)),
-      );
+    const perRow = init.inquiry.budget?.evidencePerSubject === 0 ? 0 : evidenceLimit(init.inquiry);
+    const evidenceByRow = page.rows.map((row, index) => perRow === 0 ? [] :
+      evidenceArray(this.#evidenceForRow(row, init.offset + index)).slice(0, perRow),
+    );
     const evidence = evidenceByRow.flat();
     const openSeams = init.openSeams?.(page, evidence, evidenceByRow) ?? [];
     const outcome =

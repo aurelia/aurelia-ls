@@ -120,6 +120,11 @@ export function readFrameworkInstructionDispatches(
     )
     .filter(
       (row) =>
+        filters.rendererName === undefined ||
+        row.rendererName === filters.rendererName,
+    )
+    .filter(
+      (row) =>
         filters.query === undefined ||
         row.slotName.includes(filters.query) ||
         row.rendererName.includes(filters.query) ||

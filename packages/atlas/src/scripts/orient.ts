@@ -11,50 +11,27 @@ if (process.argv.includes("--json")) {
 }
 
 function printCompactOrientation(orientation: Orientation): void {
+  const { guide, session } = orientation;
   console.log("Atlas orientation");
-  console.log(`- session: pid=${orientation.session.pid} uptimeMs=${orientation.session.uptimeMs}`);
-  console.log(`- source: ${orientation.guide.sourceProject.identity}`);
-  console.log(`- counts: lenses=${orientation.session.world.lensContracts} substrates=${orientation.session.world.substrateContracts} packages=${orientation.guide.sourceProject.packageCount} files=${orientation.guide.sourceProject.ownedSourceFileCount} declarations=${orientation.guide.sourceProject.declarationCount}`);
-  console.log(`- answers: map=${orientation.answers.map.outcome} self=${orientation.answers.self.outcome}`);
+  console.log(`- session: pid=${session.pid}; map=${orientation.answers.map.outcome}; self=${orientation.answers.self.outcome}`);
+  console.log(`- source: ${guide.sourceProject.identity}`);
+  const firstPartyRoots = Object.values(guide.sourceProject.packageRoots).filter((root) => root.startsWith("packages/"));
+  console.log(`- repository packages admitted to the TypeScript program: ${firstPartyRoots.join(", ")}`);
+  console.log(`- indexed: ${guide.sourceProject.ownedSourceFileCount} files, ${guide.sourceProject.declarationCount} declarations; ${guide.implementedLenses.length} implemented lenses`);
 
-  console.log("");
-  console.log("Docs");
-  for (const doc of orientation.guide.docs) {
-    console.log(`- ${doc.path}: ${doc.summary}`);
+  for (const script of guide.scripts.filter((row) => ["work:router", "memory:next", "pressure:product-architecture"].includes(row.id))) {
+    console.log("");
+    console.log(script.summary);
+    console.log(script.command);
   }
-
-  console.log("");
-  console.log("Scripts");
-  for (const script of orientation.guide.scripts) {
-    console.log(`- ${script.command}`);
-  }
-
-  console.log("");
-  console.log("Implemented lenses");
-  for (const lens of orientation.guide.implementedLenses) {
-    console.log(`- ${lens.id}: ${lens.projectionIds.join(", ")}`);
-  }
-
-  console.log("");
-  console.log("First moves");
-  for (const move of orientation.guide.firstMoves) {
-    console.log(`- ${move.id ?? move.kind}: ${move.rationale}`);
-  }
-
-  console.log("");
-  console.log("Capability moves");
-  for (const move of orientation.guide.capabilityMoves) {
-    console.log(`- ${move.id}: ${move.summary}`);
-  }
-
-  if (orientation.guide.openSeams.length > 0) {
+  if (guide.openSeams.length > 0) {
     console.log("");
     console.log("Open seams");
-    for (const seam of orientation.guide.openSeams) {
+    for (const seam of guide.openSeams) {
       console.log(`- ${seam.kind}: ${seam.summary}`);
     }
   }
 
   console.log("");
-  console.log("Use `pnpm --filter @aurelia-ls/atlas orient:json` for the full request-shaped bundle.");
+  console.log("For exact inquiry shapes, lenses, sources and continuations: pnpm --filter @aurelia-ls/atlas orient:json");
 }

@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import path from "node:path";
 
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
 import {
@@ -23,6 +24,7 @@ import {
 } from "../evidence.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
+import { LensCatalog } from "../lens-catalog.js";
 import { LocusKind, RepoRootLocus, type SourceRange } from "../locus.js";
 import {
   NavigationPlane,
@@ -30,9 +32,11 @@ import {
   navigationRoute,
 } from "../navigation.js";
 import { PagedRowFamily } from "../paged-row-family.js";
-import { evidenceLimit, pageOffset, rowLimit } from "../paging.js";
+import { RepoTerrain } from "../terrain.js";
+import { evidenceLimit, pageInfo, pageOffset, rowLimit } from "../paging.js";
 import type { SourceDeclarationRow, SourceProject } from "../../source/index.js";
 import {
+  repoRelativePath,
   sourceRangeFromFileSpan,
   sourceRangeFromOneBasedReference,
 } from "../../source/index.js";
@@ -52,6 +56,7 @@ import {
   atlasMemoryRecordRowHasSymbol,
 } from "./atlas-memory-row-matching.js";
 import { readAtlasMemoryAnalysis } from "./atlas-memory-store.js";
+import { packageScriptAnchorIssue } from "./atlas-memory-integrity.js";
 import {
   type FrameworkCorpusExpectedEffectDescriptorRow,
   type FrameworkCorpusFixtureSeedRow,
@@ -105,6 +110,7 @@ import {
   routeMatchStrengthMeets,
   scoredRoutesForFilters,
   normalizeRoutePath,
+  routePathAnchorMatches,
   sourcePathMatches,
   type AtlasWorkRouterFilters,
   type ScoredRoute,
@@ -119,7 +125,6 @@ import type {
   AtlasWorkRouteQueryCanaryRow,
   AtlasWorkRouteRow,
   AtlasWorkRouteSourcePlanRow,
-  AtlasWorkRouteWorksetFileRow,
   AtlasWorkRouteWorksetRow,
   AtlasWorkRouterRollup,
   AtlasWorkRouterValue,
@@ -174,10 +179,53 @@ export function answerAtlasWorkRouter(
   inquiry: Inquiry,
   sourceProject: SourceProject,
 ): Answer<AtlasWorkRouterValue> {
+  const scoped = routeInquiryForLocus(inquiry, sourceProject);
+  if ("outcome" in scoped) return scoped;
+  inquiry = scoped;
   const projection = atlasWorkRouterProjection(inquiry);
   const filters = atlasWorkRouterFilters(inquiry);
   const selectedRoutes = scoredRoutesForFilters(filters);
-  const basis = atlasWorkRouterBasis(sourceProject);
+  const routeLookup = projection === "summary" || projection === "routes" ||
+    projection === "route-plan" || projection === "next" || projection === "next-questions";
+  if (routeLookup && selectedRoutes.length === 0) {
+    return createAnswer(inquiry, OutcomeKind.Miss,
+      `No match among ${ATLAS_WORK_ROUTES.length} curated Atlas routes. Search the relevant package sources and tests for an owner, then try its path or symbol.`,
+      {
+        basis: atlasWorkRouterBasis(),
+        value: {
+          version: ATLAS_WORK_ROUTER_VERSION,
+          rollup: routerRollup([], []),
+          routes: [],
+          routePlans: [],
+        },
+        page: projection === "summary" ? undefined : pageInfo(inquiry, 0, 0, rowLimit(inquiry), undefined),
+        continuations: filters.query === undefined ? [] : [{
+          id: "atlas.work-router:memory-guidance",
+          kind: ContinuationKind.SwitchLens,
+          priority: ContinuationPriority.Primary,
+          rationale: "Search durable maintenance guidance for the same question.",
+          inquiry: {
+            lens: LensId.AtlasMemory,
+            locus: RepoRootLocus,
+            projection: "guidance",
+            filters: {
+              query: filters.query,
+              ...(filters.path === undefined ? {} : { path: filters.path }),
+              ...(filters.symbolName === undefined ? {} : { symbolName: filters.symbolName }),
+            },
+            budget: inquiry.budget,
+          },
+          route: navigationRoute(
+            NavigationPlane.Maintenance,
+            NavigationRelation.DiagnosticsFor,
+            [BasisKind.HumanJudgement],
+            "Look for guidance outside the work-route catalog.",
+          ),
+        }],
+      },
+    );
+  }
+  const basis = atlasWorkRouterBasis(projection === "schema" || projection === "coverage" ? undefined : sourceProject);
 
   switch (projection) {
     case "schema":
@@ -236,6 +284,77 @@ export function answerAtlasWorkRouter(
         basis,
       );
   }
+}
+
+function routeInquiryForLocus(inquiry: Inquiry, project: SourceProject): Inquiry | Answer<AtlasWorkRouterValue> {
+  const locus = inquiry.locus;
+  if (locus.kind === LocusKind.Repo) return inquiry;
+  const requested = atlasWorkRouterFilters(inquiry);
+  const invalidScope = (summary: string): Answer<AtlasWorkRouterValue> => createAnswer(
+    inquiry, OutcomeKind.Reroute, summary, {
+      basis: atlasWorkRouterBasis(),
+      openSeams: [{ kind: OpenSeamKind.UnsupportedLocus, summary }],
+    },
+  );
+  const catalogPath = (value: string) => {
+    const absolute = path.resolve(project.repoRoot, value);
+    return repoRelativePath(project.repoRoot, absolute) ?? normalizeRoutePath(absolute);
+  };
+  let selectedPath = requested.path === undefined ? undefined : catalogPath(requested.path) || undefined;
+  let root: string | undefined;
+  let file: string | undefined;
+  let symbol = requested.symbolName;
+  switch (locus.kind) {
+    case LocusKind.RepoArea:
+      root = RepoTerrain.find(area => area.id === locus.areaId)?.root;
+      if (root === undefined) return invalidScope(`Unknown work-route terrain area '${locus.areaId}'.`);
+      break;
+    case LocusKind.Package:
+      root = locus.relativePath;
+      if (root === undefined) return invalidScope("A resolved package root is needed to scope work routes.");
+      break;
+    case LocusKind.SourceFile:
+      file = locus.filePath;
+      break;
+    case LocusKind.Symbol:
+      if (symbol !== undefined && symbol !== locus.name) {
+        return invalidScope("The symbol locus and symbolName filter select different names.");
+      }
+      symbol = locus.name;
+      file = locus.filePath;
+      if (locus.packageName !== undefined) {
+        const ownerPath = file === undefined ? selectedPath : catalogPath(file);
+        const owners = project.summary().packages.filter(pkg => pkg.packageName === locus.packageName &&
+          (ownerPath === undefined || sourcePathMatches(catalogPath(pkg.rootPath), ownerPath)));
+        if (owners.length !== 1) {
+          return invalidScope(`The symbol's package and path select ${owners.length} admitted package roots.`);
+        }
+        root = owners[0]!.rootPath;
+      }
+      break;
+    default:
+      return invalidScope(`Unsupported work-route locus '${locus.kind}'.`);
+  }
+  if (file !== undefined) {
+    const filePath = catalogPath(file);
+    if (selectedPath !== undefined && filePath !== selectedPath && !filePath.startsWith(`${selectedPath}/`)) {
+      return invalidScope("The source locus and path filter select different paths.");
+    }
+    selectedPath = filePath;
+  }
+  if (root !== undefined) {
+    const rootPath = catalogPath(root);
+    if (selectedPath === undefined || selectedPath === rootPath || rootPath.startsWith(`${selectedPath}/`)) {
+      selectedPath = rootPath;
+    } else if (!selectedPath.startsWith(`${rootPath}/`)) {
+      return invalidScope("The scoped path is outside the requested package or terrain area.");
+    }
+  }
+  return { ...inquiry, filters: {
+    ...inquiry.filters,
+    ...(selectedPath === undefined ? {} : { path: selectedPath }),
+    ...(symbol === undefined ? {} : { symbolName: symbol }),
+  } };
 }
 
 function answerAtlasWorkRouterSummary(
@@ -357,7 +476,7 @@ function answerAtlasWorkRouterRoutePlans(
       return {
         version: ATLAS_WORK_ROUTER_VERSION,
         rollup: routerRollup(effectiveScoredRoutes, pagePlans),
-        routes: effectiveScoredRoutes.map((entry) => entry.row),
+        routes: page.rows.map((entry) => entry.row),
         routePlans: pagePlans,
       };
     },
@@ -377,7 +496,7 @@ function answerAtlasWorkRouterRouteHealth(
   const filters = atlasWorkRouterFilters(inquiry);
   const planFor = createRoutePlanReader(state, filters);
   const plans = scoredRoutes.map(planFor);
-  const healthRows = plans.map((plan) => routeHealthRow(plan));
+  const healthRows = plans.map((plan) => routeHealthRow(plan, state.sourceProject.repoRoot));
   const rowFamily = new PagedRowFamily<AtlasWorkRouteHealthRow>({
     id: "atlas.work-router:route-health",
     rowLabel: "Atlas work route health row(s)",
@@ -400,7 +519,7 @@ function answerAtlasWorkRouterRouteHealth(
     value: (page) => ({
       version: ATLAS_WORK_ROUTER_VERSION,
       rollup: routerRollup(scoredRoutes, plans),
-      routes: scoredRoutes.map((entry) => entry.row),
+      routes: routeRowsForPage(scoredRoutes, page.rows.map((row) => row.routeId)),
       routePlans: plans.filter((plan) =>
         page.rows.some((row) => row.routeId === plan.routeId),
       ),
@@ -452,7 +571,7 @@ function answerAtlasWorkRouterCoverage(
     value: (page) => ({
       version: ATLAS_WORK_ROUTER_VERSION,
       rollup: routerRollup(scoredRoutes, []),
-      routes: scoredRoutes.map((entry) => entry.row),
+      routes: routeRowsForPage(scoredRoutes, page.rows.map((row) => row.routeId)),
       routeCoverage: page.rows,
     }),
   });
@@ -467,7 +586,13 @@ function answerAtlasWorkRouterWorkset(
 ): Answer<AtlasWorkRouterValue> {
   const filters = atlasWorkRouterFilters(inquiry);
   const planFor = createRoutePlanReader(state, filters);
-  const worktreeFiles = readWorktreeFiles(sourceProject.repoRoot);
+  let worktreeFiles: readonly WorktreeFile[];
+  try {
+    worktreeFiles = readWorktreeFiles(sourceProject.repoRoot);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return createAnswer(inquiry, OutcomeKind.Error, `Could not read the Git worktree: ${reason}`, { basis });
+  }
   const fileSampleLimit = worksetFileSampleLimit(inquiry);
   const rows = scoredRoutes
     .map((entry) =>
@@ -512,7 +637,7 @@ function answerAtlasWorkRouterWorkset(
       return {
         version: ATLAS_WORK_ROUTER_VERSION,
         rollup: routerRollup(worksetScoredRoutes, pagePlans),
-        routes: worksetScoredRoutes.map((entry) => entry.row),
+        routes: routeRowsForPage(worksetScoredRoutes, page.rows.map((row) => row.routeId)),
         routePlans: pagePlans.slice(0, 3),
         workset: page.rows,
       };
@@ -575,7 +700,7 @@ function answerAtlasWorkRouterMemoryCoverage(
       return {
         version: ATLAS_WORK_ROUTER_VERSION,
         rollup: routerRollup(scoredRoutes, pagePlans),
-        routes: scoredRoutes.map((entry) => entry.row),
+        routes: routeRowsForPage(scoredRoutes, pagePlans.map((plan) => plan.routeId)),
         routePlans: pagePlans.slice(0, 3),
         memoryCoverage: page.rows,
       };
@@ -586,8 +711,17 @@ function answerAtlasWorkRouterMemoryCoverage(
   });
 }
 
+function routeRowsForPage(
+  scoredRoutes: readonly ScoredRoute[],
+  routeIds: readonly string[],
+): readonly AtlasWorkRouteRow[] {
+  const pageIds = new Set(routeIds);
+  return scoredRoutes.filter((entry) => pageIds.has(entry.route.id)).map((entry) => entry.row);
+}
+
 function routeScopedMemoryCoverage(filters: AtlasWorkRouterFilters): boolean {
-  return filters.routeIds.length > 0 || filters.relatedTo !== undefined;
+  return filters.routeIds.length > 0 || filters.relatedTo !== undefined ||
+    filters.path !== undefined || filters.symbolName !== undefined;
 }
 
 function compareMemoryCoverageRows(
@@ -805,6 +939,12 @@ function routePlan(
   const sourceAnchors = route.anchors
     .filter((anchor): anchor is AtlasWorkRouteSourceAnchor => anchor.kind === "source")
     .map((anchor) => sourcePlanForAnchor(anchor, state, context));
+  if (filters.symbolName !== undefined || filters.path !== undefined) {
+    const matchesSelector = ({ anchor }: AtlasWorkRouteSourcePlanRow) =>
+      (filters.symbolName === undefined || anchor.symbolName === filters.symbolName) &&
+      (filters.path === undefined || sourcePathMatches(anchor.filePath, filters.path));
+    sourceAnchors.sort((left, right) => Number(matchesSelector(right)) - Number(matchesSelector(left)));
+  }
   const lensAnchors = route.anchors
     .filter((anchor): anchor is AtlasWorkRouteLensAnchor => anchor.kind === "lens");
   const scriptAnchors = route.anchors
@@ -1249,8 +1389,8 @@ function coverageDepthSortOrder(depth: AtlasWorkRouteCoverageRow["depth"]): numb
   return 4;
 }
 
-function routeHealthRow(plan: AtlasWorkRoutePlanRow): AtlasWorkRouteHealthRow {
-  const issues = routeHealthIssues(plan);
+function routeHealthRow(plan: AtlasWorkRoutePlanRow, repoRoot: string): AtlasWorkRouteHealthRow {
+  const issues = routeHealthIssues(plan, repoRoot);
   const foundSourceAnchorCount = plan.sourceAnchors.filter((row) => row.found).length;
   const memoryAnchorCount = planMemoryJoinAnchorCount(plan);
   const corpusAnchorCount = planCorpusAnchorCount(plan);
@@ -1277,8 +1417,26 @@ function routeHealthRow(plan: AtlasWorkRoutePlanRow): AtlasWorkRouteHealthRow {
 
 function routeHealthIssues(
   plan: AtlasWorkRoutePlanRow,
+  repoRoot: string,
 ): readonly AtlasWorkRouteHealthIssue[] {
   const issues: AtlasWorkRouteHealthIssue[] = [];
+  for (const anchor of plan.scriptAnchors) {
+    const problem = packageScriptAnchorIssue(repoRoot, anchor.command);
+    if (problem !== undefined) {
+      issues.push({ kind: "invalid-script-anchor", severity: "warning", summary: problem.summary });
+    }
+  }
+  for (const anchor of plan.lensAnchors) {
+    const spec = LensCatalog.find(lens => lens.id === anchor.lensId);
+    const locus = anchor.locus ?? RepoRootLocus;
+    if (!spec?.supportedLoci.includes(locus.kind) ||
+        (anchor.projection !== undefined && !spec.projections.some(p => p.id === anchor.projection))) {
+      issues.push({
+        kind: "invalid-lens-anchor", severity: "warning",
+        summary: `${plan.routeId} references unsupported ${anchor.lensId} projection or locus: ${anchor.projection ?? "<default>"} at ${locus.kind}.`,
+      });
+    }
+  }
   for (const sourceAnchor of plan.sourceAnchors) {
     if (!sourceAnchor.found) {
       issues.push({
@@ -1384,7 +1542,7 @@ function sourcePlanForAnchor(
   const key = `${anchor.filePath}\0${anchor.symbolName ?? ""}`;
   const cached = context.sourcePlans.get(key);
   if (cached !== undefined) {
-    return cached;
+    return { ...cached, anchor };
   }
   const plan = sourcePlan(anchor, state);
   context.sourcePlans.set(key, plan);
@@ -1537,7 +1695,7 @@ function routeWorksetRow(
   ).length + docAnchors.filter((anchor) =>
     files.some((file) => sourcePathMatches(anchor.path, file.filePath)),
   ).length + pathAnchors.filter((anchor) =>
-    files.some((file) => sourcePathMatches(anchor.pathPrefix, file.filePath)),
+    files.some((file) => routePathAnchorMatches(anchor.pathPrefix, file.filePath)),
   ).length;
   const matchedMemoryShardCount = new Set(
     memoryRecords
@@ -1580,7 +1738,7 @@ function worksetFileMatchKinds(
   if (docAnchors.some((anchor) => sourcePathMatches(anchor.path, file.filePath))) {
     kinds.push("doc-anchor");
   }
-  if (pathAnchors.some((anchor) => sourcePathMatches(anchor.pathPrefix, file.filePath))) {
+  if (pathAnchors.some((anchor) => routePathAnchorMatches(anchor.pathPrefix, file.filePath))) {
     kinds.push("path-anchor");
   }
   if (memoryRecords.some((record) => record.shardPath === file.filePath)) {
@@ -1745,46 +1903,16 @@ function routePlanForRouteId(
 }
 
 function readWorktreeFiles(repoRoot: string): readonly WorktreeFile[] {
-  let output = "";
-  try {
-    output = execFileSync(
-      "git",
-      ["-C", repoRoot, "status", "--porcelain=v1", "-z", "--untracked-files=all"],
-      {
-        encoding: "utf8",
-        maxBuffer: 16 * 1024 * 1024,
-      },
-    );
-  } catch {
-    return [];
-  }
-  return parsePorcelainStatus(output);
-}
-
-function parsePorcelainStatus(output: string): readonly WorktreeFile[] {
-  const entries = output.split("\0").filter((entry) => entry.length > 0);
-  const files: WorktreeFile[] = [];
-  for (let i = 0; i < entries.length; ++i) {
-    const entry = entries[i]!;
-    if (entry.length < 4) {
-      continue;
-    }
-    const status = entry.slice(0, 2);
-    let filePath = normalizeWorktreePath(entry.slice(3));
-    if (isRenameOrCopyStatus(status) && entries[i + 1] !== undefined) {
-      filePath = normalizeWorktreePath(entries[++i]!);
-    }
-    files.push({ status, filePath });
-  }
-  return files;
-}
-
-function isRenameOrCopyStatus(status: string): boolean {
-  return status.includes("R") || status.includes("C");
-}
-
-function normalizeWorktreePath(filePath: string): string {
-  return filePath.replaceAll("\\", "/");
+  // Workset groups changed paths by owner. A move can touch two different routes.
+  const output = execFileSync(
+    "git",
+    ["-C", repoRoot, "status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all"],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 16 * 1024 * 1024 },
+  );
+  return output.split("\0").filter(Boolean).map((entry) => ({
+    status: entry.slice(0, 2),
+    filePath: entry.slice(3),
+  }));
 }
 
 function matchingMemoryRecords(
@@ -2025,16 +2153,6 @@ function memoryCoverageRow(
   };
 }
 
-function memoryNextActionAnchorScore(
-  row: AtlasMemoryNextActionRow,
-  anchor: AtlasWorkRouteMemoryAnchor,
-): number {
-  if (row.record !== undefined) {
-    return memoryRecordAnchorScore(row.record, anchor);
-  }
-  return routeMemoryDomainScore(row.domains, anchor.domains);
-}
-
 function memoryNextActionRouteScore(
   row: AtlasMemoryNextActionRow,
   route: AtlasWorkRoute,
@@ -2099,13 +2217,6 @@ function memoryFrontierMatchesSourceAnchor(
     (anchor.symbolName === undefined || anchor.symbolName === frontier.className);
 }
 
-function memoryFrontierMatchesPath(
-  frontier: AtlasMemoryNextActionRow["frontier"] | AtlasMemoryNextActionRow["sampleFrontier"],
-  pathPrefix: string,
-): boolean {
-  return frontier !== undefined && sourcePathMatches(pathPrefix, frontier.filePath);
-}
-
 function memoryRecordMatchesSourceAnchor(
   row: AtlasMemoryRecordRow,
   anchor: AtlasWorkRouteSourceAnchor,
@@ -2121,22 +2232,6 @@ function memoryRecordMatchesSourceAnchor(
   ) ||
     (row.record.liveChecks ?? []).some((check) =>
       memoryLiveCheckMatchesSourceAnchor(check, anchor)
-    );
-}
-
-function memoryRecordMatchesPath(
-  row: AtlasMemoryRecordRow,
-  pathPrefix: string,
-): boolean {
-  return (row.record.anchors ?? []).some((memoryAnchor) =>
-    "filePath" in memoryAnchor
-      ? sourcePathMatches(pathPrefix, memoryAnchor.filePath)
-      : "path" in memoryAnchor
-        ? sourcePathMatches(pathPrefix, memoryAnchor.path)
-        : false
-  ) ||
-    (row.record.liveChecks ?? []).some((check) =>
-      "filePath" in check && check.filePath !== undefined && sourcePathMatches(pathPrefix, check.filePath)
     );
 }
 
@@ -2595,8 +2690,8 @@ function routeMemoryCoverageEvidence(row: AtlasWorkRouteMemoryCoverageRow): Evid
   };
 }
 
-function atlasWorkRouterBasis(sourceProject: SourceProject): readonly Basis[] {
-  return [
+function atlasWorkRouterBasis(sourceProject?: SourceProject): readonly Basis[] {
+  const basis: Basis[] = [
     {
       kind: BasisKind.AtlasContract,
       closure: BasisClosure.Exact,
@@ -2615,7 +2710,9 @@ function atlasWorkRouterBasis(sourceProject: SourceProject): readonly Basis[] {
       summary:
         "Route definitions encode durable maintainer steering and are expected to evolve when weak matches expose missing ontology.",
     },
-    {
+  ];
+  if (sourceProject !== undefined) {
+    basis.push({
       kind: BasisKind.TypeScriptProgram,
       closure: BasisClosure.Budgeted,
       authority: BasisAuthority.Checker,
@@ -2623,8 +2720,9 @@ function atlasWorkRouterBasis(sourceProject: SourceProject): readonly Basis[] {
       identity: sourceProject.snapshot().identity,
       summary:
         "Route plans join catalog anchors to the live TypeScript/source project through product architecture, framework corpus, and memory substrates.",
-    },
-  ];
+    });
+  }
+  return basis;
 }
 
 function routerRollup(
@@ -2744,6 +2842,7 @@ function workRouterProjectionContinuation(
     inquiry: {
       ...inquiry,
       projection,
+      page: inquiry.page?.size === undefined ? undefined : { size: inquiry.page.size },
     },
     route: navigationRoute(
       NavigationPlane.Maintenance,
@@ -2816,7 +2915,7 @@ function lensAnchorContinuation(anchor: AtlasWorkRouteLensAnchor): Continuation 
     rationale: anchor.summary,
     inquiry: {
       lens: anchor.lensId,
-      locus: RepoRootLocus,
+      locus: anchor.locus ?? RepoRootLocus,
       projection: anchor.projection,
       filters: anchor.filters,
     },
@@ -2959,6 +3058,13 @@ function routePlanContinuations(row: AtlasWorkRoutePlanRow): readonly Continuati
             `Inspect declaration ${declaration.name} for route ${row.routeId}.`,
           ),
         ),
+        ...entry.functionSurfaces
+          .filter((fn) => fn.name === entry.anchor.symbolName)
+          .map((fn) => sourceRangeContinuation(
+            `atlas.work-router:source-function:${fn.id}`,
+            sourceRangeFromOneBasedReference(fn.source),
+            `Inspect ${fn.name} for route ${row.routeId}.`,
+          )),
         ...entry.atlasClassSurfaces.map((classRow) =>
           sourceRangeContinuation(
             `atlas.work-router:atlas-class:${classRow.id}`,
@@ -3068,6 +3174,10 @@ function firstRoutePlanSource(
     const declaration = sourceAnchor.declarations[0];
     if (declaration !== undefined) {
       return sourceRangeFromOneBasedReference(declaration.source);
+    }
+    const method = sourceAnchor.functionSurfaces.find((fn) => fn.name === sourceAnchor.anchor.symbolName);
+    if (method !== undefined) {
+      return sourceRangeFromOneBasedReference(method.source);
     }
     const atlasClass = sourceAnchor.atlasClassSurfaces[0];
     if (atlasClass !== undefined) {

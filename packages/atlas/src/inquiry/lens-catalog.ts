@@ -17,7 +17,7 @@ export const LensCatalog: readonly LensSpec[] = [
     stage: LensStage.Implemented,
     summary:
       "Orient around repository terrain, substrates, lenses, and active semantic priorities.",
-    supportedLoci: [LocusKind.Repo, LocusKind.RepoArea, LocusKind.Package],
+    supportedLoci: [LocusKind.Repo],
     requiredSubstrates: [SubstrateId.RepoTerrain, SubstrateId.AtlasContracts],
     projections: [
       { id: "summary", summary: "Compact orientation map." },
@@ -58,7 +58,6 @@ export const LensCatalog: readonly LensSpec[] = [
       LocusKind.SourceRange,
       LocusKind.Symbol,
       LocusKind.Handle,
-      LocusKind.GitTree,
     ],
     requiredSubstrates: [
       SubstrateId.SourceFiles,
@@ -68,22 +67,11 @@ export const LensCatalog: readonly LensSpec[] = [
       { id: "summary", summary: "Source metadata and evidence handles." },
       {
         id: "text",
-        summary: "Source text capped by the textChars budget.",
+        summary: "Source text paged over selected targets with one textChars budget per response.",
         defaultBudget: { textChars: 20_000 },
       },
     ],
-    parameters: [
-      {
-        id: "sourcePart",
-        role: ParameterRole.Projection,
-        summary: "Select name, declaration, body, file, or exact range text.",
-      },
-      {
-        id: "treeish",
-        role: ParameterRole.Basis,
-        summary: "Use a git-tree basis for historical source.",
-      },
-    ],
+    parameters: [],
     outputKinds: [EvidenceKind.SourceSpan, EvidenceKind.Symbol],
     defaultBudget: { textChars: 20_000 },
   },
@@ -1203,12 +1191,7 @@ export const LensCatalog: readonly LensSpec[] = [
     stage: LensStage.Implemented,
     summary:
       "Read Aurelia router framework architecture across router, route config, route context, route tree, route-recognizer, viewport-agent, DI, resource, lifecycle, flow, relationship rows, and cross-boundary semantic route continuations.",
-    supportedLoci: [
-      LocusKind.Repo,
-      LocusKind.RepoArea,
-      LocusKind.Package,
-      LocusKind.SourceFile,
-    ],
+    supportedLoci: [LocusKind.Repo, LocusKind.Package],
     requiredSubstrates: [
       SubstrateId.FrameworkRouter,
       SubstrateId.TypeScriptProgram,
@@ -1331,6 +1314,11 @@ export const LensCatalog: readonly LensSpec[] = [
         role: ParameterRole.Filter,
         summary:
           "Filter router flow self-audit rows by unmaterialized-descriptor, multi-materialized-descriptor, or duplicate-sequence.",
+      },
+      {
+        id: "mechanicKind",
+        role: ParameterRole.Filter,
+        summary: "Filter route-recognizer mechanic rows by their structural role.",
       },
       {
         id: "sequence",
@@ -1580,6 +1568,11 @@ export const LensCatalog: readonly LensSpec[] = [
         role: ParameterRole.Filter,
         summary:
           "Filter bridge usage owner rows by containing declaration kind.",
+      },
+      {
+        id: "ownerSourceKey",
+        role: ParameterRole.Filter,
+        summary: "Filter usage rows to one owner declaration or member by source key.",
       },
       {
         id: "ownerMemberName",
@@ -1988,7 +1981,7 @@ export const LensCatalog: readonly LensSpec[] = [
     family: LensFamily.Framework,
     stage: LensStage.Implemented,
     summary:
-      "Inspect Aurelia framework API declaration facets, exact merge edges, implementation shape edges, normalized member slots, and repo-wide TypeChecker-resolved usage rows.",
+      "Inspect Aurelia framework API declaration facets, exact merge edges, implementation shape edges, normalized member slots, and TypeChecker-resolved usage rows in the admitted source project.",
     supportedLoci: [
       LocusKind.Repo,
       LocusKind.RepoArea,
@@ -2040,7 +2033,7 @@ export const LensCatalog: readonly LensSpec[] = [
       {
         id: "usages",
         summary:
-          "Repo-wide TypeChecker-resolved API usage rows for subjects and member slots.",
+          "TypeChecker-resolved uses of subjects and member slots in the admitted source project.",
       },
       {
         id: "usage-consumers",
@@ -2053,6 +2046,11 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "packageId",
         role: ParameterRole.Filter,
         summary: "Filter API rows by Aurelia framework package id.",
+      },
+      {
+        id: "subjectId",
+        role: ParameterRole.Filter,
+        summary: "Filter to the exact merged API subject ID returned by the subjects projection.",
       },
       {
         id: "subjectName",
@@ -2097,6 +2095,11 @@ export const LensCatalog: readonly LensSpec[] = [
         role: ParameterRole.Filter,
         summary:
           "Filter usage rows by containing declaration kind.",
+      },
+      {
+        id: "consumerId",
+        role: ParameterRole.Filter,
+        summary: "Filter usage rows to the exact group ID returned by usage-consumers.",
       },
       {
         id: "ownerMemberName",
@@ -2211,13 +2214,7 @@ export const LensCatalog: readonly LensSpec[] = [
     stage: LensStage.Implemented,
     summary:
       "Converge Aurelia resource carriers with public exports, bundle admissions, syntax products, and materialization sites.",
-    supportedLoci: [
-      LocusKind.Repo,
-      LocusKind.RepoArea,
-      LocusKind.Package,
-      LocusKind.Symbol,
-      LocusKind.Handle,
-    ],
+    supportedLoci: [LocusKind.Repo, LocusKind.Package],
     requiredSubstrates: [
       SubstrateId.FrameworkResources,
       SubstrateId.FrameworkAdmission,
@@ -2285,6 +2282,16 @@ export const LensCatalog: readonly LensSpec[] = [
           "Filter by resource runtime-existence class such as view-model-container-invoke, expression-resource-lookup, compiler-command, renderer-singleton, or definition-only.",
       },
       {
+        id: "instructionName",
+        role: ParameterRole.Filter,
+        summary: "Select carriers that produce or handle the named instruction at a matching syntax site.",
+      },
+      {
+        id: "bindingName",
+        role: ParameterRole.Filter,
+        summary: "Select carriers that construct the named binding at a matching syntax site.",
+      },
+      {
         id: "materializationSiteKind",
         role: ParameterRole.Filter,
         summary:
@@ -2322,13 +2329,7 @@ export const LensCatalog: readonly LensSpec[] = [
     stage: LensStage.Implemented,
     summary:
       "Trace Aurelia framework compiler instruction production from binding commands and instruction factories into rendering consumers.",
-    supportedLoci: [
-      LocusKind.Repo,
-      LocusKind.RepoArea,
-      LocusKind.Package,
-      LocusKind.Symbol,
-      LocusKind.Handle,
-    ],
+    supportedLoci: [LocusKind.Repo, LocusKind.Package],
     requiredSubstrates: [
       SubstrateId.TypeScriptProgram,
       SubstrateId.TypeScriptChecker,
@@ -2441,13 +2442,7 @@ export const LensCatalog: readonly LensSpec[] = [
     stage: LensStage.Implemented,
     summary:
       "Trace Aurelia framework rendering from instruction products through renderer dispatch, binding admission, binding effects, and observer setup.",
-    supportedLoci: [
-      LocusKind.Repo,
-      LocusKind.RepoArea,
-      LocusKind.Package,
-      LocusKind.Symbol,
-      LocusKind.Handle,
-    ],
+    supportedLoci: [LocusKind.Repo, LocusKind.Package],
     requiredSubstrates: [
       SubstrateId.TypeScriptProgram,
       SubstrateId.TypeScriptChecker,
@@ -2658,15 +2653,7 @@ export const LensCatalog: readonly LensSpec[] = [
     stage: LensStage.Implemented,
     summary:
       "Trace Aurelia framework DI keys, relationship atoms, graph layers, dependency DAG, registrations, lookups, providers, and materialization mechanics.",
-    supportedLoci: [
-      LocusKind.Repo,
-      LocusKind.RepoArea,
-      LocusKind.Package,
-      LocusKind.SourceFile,
-      LocusKind.SourceRange,
-      LocusKind.Symbol,
-      LocusKind.Handle,
-    ],
+    supportedLoci: [LocusKind.Repo, LocusKind.Package],
     requiredSubstrates: [
       SubstrateId.FrameworkDi,
       SubstrateId.FrameworkStaticEvaluator,
@@ -2809,15 +2796,7 @@ export const LensCatalog: readonly LensSpec[] = [
     stage: LensStage.Implemented,
     summary:
       "Join DI provider seeds, resource carriers, checker facts, and evaluator effects into first-pass runtime materialization routes.",
-    supportedLoci: [
-      LocusKind.Repo,
-      LocusKind.RepoArea,
-      LocusKind.Package,
-      LocusKind.SourceFile,
-      LocusKind.SourceRange,
-      LocusKind.Symbol,
-      LocusKind.Handle,
-    ],
+    supportedLoci: [LocusKind.Repo, LocusKind.Package],
     requiredSubstrates: [
       SubstrateId.FrameworkDi,
       SubstrateId.TypeScriptChecker,
@@ -2949,15 +2928,7 @@ export const LensCatalog: readonly LensSpec[] = [
     stage: LensStage.Implemented,
     summary:
       "Trace Aurelia framework lifecycle surfaces across controller methods, binding lifecycle effects, resource materialization phases, and lifecycle relationships.",
-    supportedLoci: [
-      LocusKind.Repo,
-      LocusKind.RepoArea,
-      LocusKind.Package,
-      LocusKind.SourceFile,
-      LocusKind.SourceRange,
-      LocusKind.Symbol,
-      LocusKind.Handle,
-    ],
+    supportedLoci: [LocusKind.Repo, LocusKind.Package],
     requiredSubstrates: [
       SubstrateId.FrameworkDi,
       SubstrateId.FrameworkStaticEvaluator,
@@ -3090,15 +3061,7 @@ export const LensCatalog: readonly LensSpec[] = [
     stage: LensStage.Implemented,
     summary:
       "Trace Aurelia framework observer entities, binding observer lookup rows, observation setup overrides, and observation relationships.",
-    supportedLoci: [
-      LocusKind.Repo,
-      LocusKind.RepoArea,
-      LocusKind.Package,
-      LocusKind.SourceFile,
-      LocusKind.SourceRange,
-      LocusKind.Symbol,
-      LocusKind.Handle,
-    ],
+    supportedLoci: [LocusKind.Repo, LocusKind.Package],
     requiredSubstrates: [SubstrateId.TypeScriptChecker],
     projections: [
       { id: "summary", summary: "Observation rollup." },
@@ -3271,13 +3234,7 @@ export const LensCatalog: readonly LensSpec[] = [
     stage: LensStage.Implemented,
     summary:
       "Inspect Aurelia framework error/event code definitions, mapped messages, and usage sites.",
-    supportedLoci: [
-      LocusKind.Repo,
-      LocusKind.RepoArea,
-      LocusKind.Package,
-      LocusKind.SourceFile,
-      LocusKind.Symbol,
-    ],
+    supportedLoci: [LocusKind.Repo, LocusKind.Package],
     requiredSubstrates: [
       SubstrateId.TypeScriptProgram,
     ],
@@ -3371,6 +3328,11 @@ export const LensCatalog: readonly LensSpec[] = [
           "Filter diagnostic-authority gap rows: code-without-message, unused-code, unresolved-usage-code, raw-new-error, raw-error-factory-call, raw-error-usage, raw-error-authority-gap, intentionally-unclaimed-raw-authority, unresolved-semantic-runtime-reference, or unresolved-semantic-runtime-raw-reference.",
       },
       {
+        id: "disposition",
+        role: ParameterRole.Filter,
+        summary: "Filter diagnostic-code rows by the evaluated disposition, for example used exact semantic links or intentionally unclaimed authority.",
+      },
+      {
         id: "query",
         role: ParameterRole.Filter,
         summary:
@@ -3389,15 +3351,7 @@ export const LensCatalog: readonly LensSpec[] = [
     stage: LensStage.Implemented,
     summary:
       "Trace configuration and bundle admissions into DI keys, resources, registry exports, catalogs, factories, and lifecycle tasks.",
-    supportedLoci: [
-      LocusKind.Repo,
-      LocusKind.RepoArea,
-      LocusKind.Package,
-      LocusKind.SourceFile,
-      LocusKind.SourceRange,
-      LocusKind.Symbol,
-      LocusKind.Handle,
-    ],
+    supportedLoci: [LocusKind.Repo, LocusKind.Package],
     requiredSubstrates: [
       SubstrateId.FrameworkAdmission,
       SubstrateId.FrameworkStaticEvaluator,
@@ -3561,7 +3515,7 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "status",
         role: ParameterRole.Filter,
         summary:
-          "Filter world-formation rows by materialized, executed, expanded, admission-only, or open.",
+          "Filter world-formation rows by materialized, execution-site, expanded, admission-only, or open.",
       },
       {
         id: "slotName",
@@ -3751,12 +3705,7 @@ export const LensCatalog: readonly LensSpec[] = [
     stage: LensStage.Implemented,
     summary:
       "Map curated Aurelia capability terrain across framework concepts, app-author source forms, locality, resource kinds/source support, effects, requirements, constraints, and evidence.",
-    supportedLoci: [
-      LocusKind.Repo,
-      LocusKind.RepoArea,
-      LocusKind.Package,
-      LocusKind.Symbol,
-    ],
+    supportedLoci: [LocusKind.Repo],
     requiredSubstrates: [
       SubstrateId.AtlasContracts,
     ],
@@ -3785,6 +3734,7 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "evidence-trace",
         summary:
           "Evidence descriptors joined to backing lens answers, sampled backing value rows, source anchors, seams, and continuation counts.",
+        defaultBudget: { rows: 4 },
       },
       {
         id: "grounding",
@@ -3895,7 +3845,7 @@ export const LensCatalog: readonly LensSpec[] = [
     stage: LensStage.Implemented,
     summary:
       "Read Aurelia documentation, framework tests, documentation snippets, and test snippets as internal fixture and authoring pressure.",
-    supportedLoci: [LocusKind.Repo, LocusKind.RepoArea, LocusKind.Package],
+    supportedLoci: [LocusKind.Repo],
     requiredSubstrates: [SubstrateId.FrameworkCorpus, SubstrateId.SourceFiles],
     projections: [
       {
@@ -4020,6 +3970,21 @@ export const LensCatalog: readonly LensSpec[] = [
         summary:
           "Filter fixture-seed rows by app-pattern pressure hint such as form-state-surface, router-shell-surface, table-collection-operations, or pressure-fixture.",
       },
+      {
+        id: "classificationKind",
+        role: ParameterRole.Filter,
+        summary: "Filter fixture seeds by the kind of source classification evidence.",
+      },
+      {
+        id: "classificationKey",
+        role: ParameterRole.Filter,
+        summary: "Filter fixture seeds by a classification key, optionally qualified by its kind.",
+      },
+      {
+        id: "queryMode",
+        role: ParameterRole.Filter,
+        summary: "Choose all query tokens (default) or partial-token exploration.",
+      },
     ],
     outputKinds: [EvidenceKind.MaintenanceSignal, EvidenceKind.SourceSpan],
     defaultBudget: { rows: 80, evidencePerSubject: 4 },
@@ -4034,8 +3999,6 @@ export const LensCatalog: readonly LensSpec[] = [
       LocusKind.Repo,
       LocusKind.RepoArea,
       LocusKind.Package,
-      LocusKind.SourceFile,
-      LocusKind.Symbol,
     ],
     requiredSubstrates: [
       SubstrateId.AtlasContracts,
@@ -4174,6 +4137,14 @@ export const LensCatalog: readonly LensSpec[] = [
       },
     ],
     parameters: [
+      { id: "wrapperKind", role: ParameterRole.Filter, summary: "Select shallow wrapper functions by wrapper kind." },
+      { id: "wrappedTarget", role: ParameterRole.Filter, summary: "Select shallow wrappers calling the named target." },
+      { id: "maxIncomingCallCount", role: ParameterRole.Filter, summary: "Maximum observed incoming calls for a shallow wrapper." },
+      { id: "maxIncomingUsageCount", role: ParameterRole.Filter, summary: "Maximum observed calls and value references for a shallow wrapper." },
+      { id: "exported", role: ParameterRole.Filter, summary: "Select exported or internal functions and variables where the row exposes export status." },
+      { id: "enumContext", role: ParameterRole.Execution, summary: "Select none, standard or all contextual enum occurrence roles." },
+      { id: "includeFunctionBodyAnalysis", role: ParameterRole.Execution, summary: "Enable or suppress body fingerprint and control-flow shape analysis." },
+      { id: "includeSemanticTaxonomyAnalysis", role: ParameterRole.Execution, summary: "Enable or suppress the enum and source taxonomy pass." },
       {
         id: "packageId",
         role: ParameterRole.Filter,
@@ -4571,7 +4542,6 @@ export const LensCatalog: readonly LensSpec[] = [
       LocusKind.RepoArea,
       LocusKind.Package,
       LocusKind.SourceFile,
-      LocusKind.Symbol,
     ],
     requiredSubstrates: [
       SubstrateId.AtlasMemory,
@@ -4829,7 +4799,7 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "routeId",
         role: ParameterRole.Filter,
         summary:
-          "Select an exact typed work route by id; this is the strongest route match.",
+          "Select an exact typed work route by ID or declared alias.",
       },
       {
         id: "relatedTo",
@@ -4881,13 +4851,13 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "path",
         role: ParameterRole.Filter,
         summary:
-          "Filter routes that declare a matching source or documentation path anchor.",
+          "Filter routes by a source, documentation or workset path anchor. File, package and terrain loci scope this path.",
       },
       {
         id: "symbolName",
         role: ParameterRole.Filter,
         summary:
-          "Filter routes that declare a matching source symbol, auLink symbol, or memory symbol anchor.",
+          "Filter by a source, auLink or memory symbol. A scoped path and symbol must match the same anchor.",
       },
       {
         id: "auLinkId",

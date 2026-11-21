@@ -1,3 +1,4 @@
+import { matchesQualifiedEnumMember } from "../source/enum-usage.js";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -300,8 +301,7 @@ function filteredValueSpaces(
   rows: readonly TypeScriptEnumValueSpaceRow[],
 ): readonly TypeScriptEnumValueSpaceRow[] {
   return rows.filter((row) =>
-    (enumName === undefined || row.enumNames.includes(enumName)) &&
-    (memberName === undefined || row.memberKeys.some((key) => memberMatchesKey(key))) &&
+    matchesQualifiedEnumMember(memberNamesForKeys(row.memberKeys), enumName, memberName) &&
     matchesValue(row.value, row.valueKind) &&
     matchesQuery([
       String(row.value),
@@ -317,8 +317,7 @@ function filteredValueOccurrences(
   rows: readonly TypeScriptEnumValueOccurrenceRow[],
 ): readonly TypeScriptEnumValueOccurrenceRow[] {
   return rows.filter((row) =>
-    (enumName === undefined || row.memberKeys.some((key) => enumMatchesKey(key))) &&
-    (memberName === undefined || row.memberKeys.some((key) => memberMatchesKey(key))) &&
+    matchesQualifiedEnumMember(memberNamesForKeys(row.memberKeys), enumName, memberName) &&
     matchesRole(row.role) &&
     matchesControlFlow(row.controlFlow?.kind ?? null) &&
     matchesValue(row.value, row.valueKind) &&
@@ -541,20 +540,6 @@ function printPhaseProfileRows(rows: TypeScriptEnumUsageIndex["profile"]): void 
     const exclusive = row.exclusiveMilliseconds ?? row.milliseconds;
     console.log(`- ${row.phase}${itemCount}; total=${row.milliseconds.toFixed(2)}ms; self=${exclusive.toFixed(2)}ms`);
   }
-}
-
-function enumMatchesKey(key: string): boolean {
-  if (enumName === undefined) {
-    return true;
-  }
-  return memberNameForKey(key)?.startsWith(`${enumName}.`) ?? false;
-}
-
-function memberMatchesKey(key: string): boolean {
-  if (memberName === undefined) {
-    return true;
-  }
-  return memberNameForKey(key)?.endsWith(`.${memberName}`) ?? false;
 }
 
 function memberNamesForKeys(keys: readonly string[]): readonly string[] {

@@ -100,8 +100,8 @@ export const RepoTerrain: readonly RepoArea[] = [
 ];
 
 /** Return terrain areas that should participate in current semantic inquiry. */
-export function activeTerrain(): readonly RepoArea[] {
-  return RepoTerrain.filter((area) => area.status === RepoAreaStatus.Active);
+export function activeTerrain(terrain: readonly RepoArea[] = RepoTerrain): readonly RepoArea[] {
+  return terrain.filter((area) => area.status === RepoAreaStatus.Active);
 }
 
 /** Look up one terrain area by stable id. */

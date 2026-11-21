@@ -32,16 +32,17 @@ export function symbolForExpressionName(
   checker: ts.TypeChecker,
   expression: ts.Expression,
 ): ts.Symbol | null {
-  const symbolNode = ts.isPropertyAccessExpression(expression)
-    ? expression.name
-    : ts.isElementAccessExpression(expression) &&
-        expression.argumentExpression !== undefined
-      ? expression.argumentExpression
-    : expression;
-  const symbol =
-    checker.getSymbolAtLocation(symbolNode) ??
-    checker.getSymbolAtLocation(expression);
-  return symbol === undefined ? null : resolveAlias(checker, symbol);
+  if (ts.isPropertyAccessExpression(expression)) {
+    return symbolForNode(checker, expression.name) ?? symbolForNode(checker, expression);
+  }
+  if (ts.isElementAccessExpression(expression) && expression.argumentExpression !== undefined) {
+    const key = checker.getTypeAtLocation(expression.argumentExpression);
+    if (key.isStringLiteral() || key.isNumberLiteral()) {
+      const member = checker.getPropertyOfType(checker.getTypeAtLocation(expression.expression), String(key.value));
+      if (member !== undefined) return resolveAlias(checker, member);
+    }
+  }
+  return symbolForNode(checker, expression);
 }
 
 export function resolveAlias(

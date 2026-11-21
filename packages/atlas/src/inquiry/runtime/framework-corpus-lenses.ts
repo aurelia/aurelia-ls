@@ -86,7 +86,7 @@ export function answerFrameworkCorpus(
   sourceProject: SourceProject,
 ): Answer<FrameworkCorpusValue> {
   const analysis = readFrameworkCorpusAnalysis(sourceProject);
-  const basis = frameworkCorpusBasis(sourceProject);
+  const basis = frameworkCorpusBasis(analysis.sourceState);
   switch (frameworkCorpusProjection(inquiry)) {
     case "summary":
       return answerFrameworkCorpusSummary(inquiry, analysis, basis);
@@ -843,14 +843,16 @@ function sourceEvidence(
   };
 }
 
-function frameworkCorpusBasis(sourceProject: SourceProject): readonly Basis[] {
+function frameworkCorpusBasis(sourceState: FrameworkCorpusAnalysis["sourceState"]): readonly Basis[] {
   return [
     {
       kind: BasisKind.SourceText,
-      closure: BasisClosure.Exact,
+      closure: sourceState.docsPresent && sourceState.testsPresent && sourceState.expectedEffectsPresent
+        ? BasisClosure.Exact
+        : BasisClosure.Partial,
       authority: BasisAuthority.Contract,
       freshness: BasisFreshness.Live,
-      identity: sourceProject.snapshot().identity,
+      identity: sourceState.identity,
       summary:
         "Scanned the local Aurelia documentation and framework test corpus as fixture and authoring pressure seeds.",
       limitations: [

@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
 import { countBy } from "../../collections.js";
 import { errorMessage } from "../../errors.js";
@@ -7,7 +8,7 @@ import {
   readProductArchitectureAnalysis,
   type ProductArchitectureClassSurfaceRow,
 } from "./product-architecture-analysis.js";
-import type { SourceProject } from "../../source/index.js";
+import { sourceRangeForSourceFileNode, type SourceProject } from "../../source/index.js";
 import type { AtlasSelfAnalysis } from "./self-analysis.js";
 import {
   ATLAS_MEMORY_REPO_PATH,
@@ -32,10 +33,12 @@ import {
   readAtlasMemorySelfAnalysisIfNeeded,
 } from "./atlas-memory-live-checks.js";
 import { atlasMemoryIntegrityIssues } from "./atlas-memory-integrity.js";
-import { atlasMemoryProductClassKey } from "./atlas-memory-product-class-key.js";
+import { atlasMemoryProductClassKey, trackedAtlasMemoryProductClassKeys } from "./atlas-memory-product-class-key.js";
+import { readAtlasMemorySources, type AtlasMemorySources } from "./atlas-memory-source-helpers.js";
 import {
   normalizeAtlasMemoryManifest,
-  normalizeAtlasMemoryShard,
+  normalizeAtlasMemoryRecord,
+  atlasMemoryShardEntries,
 } from "./atlas-memory-normalization.js";
 
 export function staleAtlasMemoryRecordRows(
@@ -58,6 +61,7 @@ export function readAtlasMemoryAnalysis(
   sourceProject: SourceProject,
 ): AtlasMemoryAnalysis {
   const store = readAtlasMemoryStore(sourceProject);
+  const sources = readAtlasMemorySources(sourceProject);
   const records = store.database.records.map((stored) => stored.record);
   const atlasSelfAnalysis = readAtlasMemorySelfAnalysisIfNeeded(
     sourceProject,
@@ -70,20 +74,21 @@ export function readAtlasMemoryAnalysis(
   });
   const rows = store.database.records.map((stored) =>
     memoryRecordRow(
-      sourceProject,
+      sources,
       productArchitecture.classSurfaces,
       atlasSelfAnalysis,
       stored,
     ),
   );
-  const untrackedProductClassFrontiers =
-    untrackedProductLargeClassFrontiers(productArchitecture.classSurfaces, rows);
+  const tracked = trackedAtlasMemoryProductClassKeys(rows);
+  const untrackedProductClassFrontiers = untrackedProductLargeClassFrontiers(productArchitecture.classSurfaces, tracked);
   const issues = [
     ...store.issues,
     ...atlasMemoryIntegrityIssues(
-      sourceProject,
+      sources,
       productArchitecture.classSurfaces,
-      store.database.records,
+      records,
+      tracked,
     ),
   ];
   return {
@@ -182,18 +187,23 @@ function readAtlasMemoryShards(
     try {
       const raw = readFileSync(shardPath, "utf8");
       const parsed = JSON.parse(raw) as unknown;
-      const idLines = recordIdLines(raw);
-      const shardRecords = normalizeAtlasMemoryShard(
-        shard.path,
-        parsed,
-        issues,
-      ).records;
-      records.push(...shardRecords.map((record, shardIndex) => ({
-        record,
-        shardPath: shard.path,
-        shardIndex,
-        shardLine: takeFirstLine(idLines, record.id),
-      })));
+      const entries = atlasMemoryShardEntries(shard.path, parsed, issues);
+      const json = ts.parseJsonText(shard.path, raw);
+      const array = jsonProperty(json.statements[0]?.expression, "records")?.initializer;
+      let shardIndex = 0;
+      for (const [rawIndex, entry] of entries.entries()) {
+        const record = normalizeAtlasMemoryRecord(`${shard.path}:${rawIndex}`, entry, issues);
+        if (record === null) continue;
+        const node = array && ts.isArrayLiteralExpression(array) ? array.elements[rawIndex] : undefined;
+        const id = jsonProperty(node, "id");
+        records.push({
+          record,
+          shardPath: shard.path,
+          shardIndex: shardIndex++,
+          shardLine: id && json.getLineAndCharacterOfPosition(id.name.getStart(json)).line + 1,
+          storageSource: node && sourceRangeForSourceFileNode(shard.path, json, node),
+        });
+      }
     } catch (error) {
       issues.push({
         id: `atlas.memory:shard:${shard.path}:invalid-json`,
@@ -204,35 +214,16 @@ function readAtlasMemoryShards(
   return { records, issues };
 }
 
-function recordIdLines(raw: string): Map<string, number[]> {
-  const lines = raw.split(/\r?\n/u);
-  const byId = new Map<string, number[]>();
-  for (const [index, line] of lines.entries()) {
-    const match = /"id"\s*:\s*"([^"]+)"/u.exec(line);
-    const id = match?.[1];
-    if (id === undefined) {
-      continue;
-    }
-    const existing = byId.get(id);
-    if (existing === undefined) {
-      byId.set(id, [index + 1]);
-    } else {
-      existing.push(index + 1);
-    }
-  }
-  return byId;
-}
-
-function takeFirstLine(
-  byId: Map<string, number[]>,
-  recordId: string,
-): number | undefined {
-  const lines = byId.get(recordId);
-  return lines?.shift();
+function jsonProperty(node: ts.Node | undefined, name: string): ts.PropertyAssignment | undefined {
+  if (node === undefined || !ts.isObjectLiteralExpression(node)) return undefined;
+  // JSON.parse uses the last value for a repeated property.
+  return node.properties.findLast((p): p is ts.PropertyAssignment =>
+    ts.isPropertyAssignment(p) && ts.isStringLiteral(p.name) && p.name.text === name,
+  );
 }
 
 function memoryRecordRow(
-  sourceProject: SourceProject,
+  sources: AtlasMemorySources,
   productClasses: readonly ProductArchitectureClassSurfaceRow[],
   atlasSelfAnalysis: AtlasSelfAnalysis | undefined,
   stored: AtlasMemoryStoredRecord,
@@ -240,7 +231,7 @@ function memoryRecordRow(
   const { record } = stored;
   const liveChecks = (record.liveChecks ?? []).map((check) =>
     evaluateAtlasMemoryLiveCheck(
-      sourceProject,
+      sources,
       productClasses,
       atlasSelfAnalysis,
       check,
@@ -253,6 +244,7 @@ function memoryRecordRow(
     shardPath: stored.shardPath,
     shardIndex: stored.shardIndex,
     shardLine: stored.shardLine,
+    storageSource: stored.storageSource,
     kind: record.kind,
     domains: record.domains,
     status,
@@ -306,17 +298,8 @@ function computedRecordStatus(
 
 function untrackedProductLargeClassFrontiers(
   productClasses: readonly ProductArchitectureClassSurfaceRow[],
-  rows: readonly AtlasMemoryRecordRow[],
+  tracked: ReadonlySet<string>,
 ): readonly AtlasMemoryUntrackedProductClassFrontier[] {
-  const tracked = new Set(
-    rows.flatMap((row) =>
-      row.liveChecks.flatMap((result) =>
-        result.check.kind === "product-large-class" && result.status === "active"
-          ? [atlasMemoryProductClassKey(result.check)]
-          : [],
-      ),
-    ),
-  );
   return productClasses
     .filter((row) =>
       row.lineCount >= ATLAS_MEMORY_PRODUCT_LARGE_CLASS_LINE_THRESHOLD
@@ -344,7 +327,7 @@ function untrackedProductLargeClassFrontiers(
     }));
 }
 
-function memoryRollup(
+export function memoryRollup(
   records: readonly AtlasMemoryRecordRow[],
   untrackedProductClassFrontiers: readonly AtlasMemoryUntrackedProductClassFrontier[],
   issues: readonly AtlasMemoryStorageIssue[],

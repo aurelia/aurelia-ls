@@ -8,6 +8,7 @@ import {
   calleeNameForExpression,
   propertyNameText,
   requiredSourceFileIdentity,
+  resolveAlias,
   sourceReferenceForNode,
   stringLiteralArgument,
   type SourceProject,
@@ -302,6 +303,16 @@ function readVocabularyUsages(
   sourceProject: SourceProject,
   definitions: readonly ProductVocabularyDefinitionRow[],
 ): readonly ProductVocabularyUsageRow[] {
+  const rootSymbols = new Map<ts.Symbol, ProductVocabularyRootName>();
+  for (const module of [...vocabularyModules, {
+    filePath: "packages/semantic-runtime/src/kernel/vocabulary/index.ts",
+    rootName: "KernelVocabulary" as const,
+  }]) {
+    const file = sourceProject.readSourceFile(module.filePath);
+    const symbol = file === null ? undefined : sourceProject.checker.getSymbolAtLocation(file);
+    const exported = symbol && sourceProject.checker.getExportsOfModule(symbol).find(s => s.name === module.rootName);
+    if (exported !== undefined) rootSymbols.set(resolveAlias(sourceProject.checker, exported), module.rootName);
+  }
   const definitionByPath = new Map<string, ProductVocabularyDefinitionRow>();
   for (const definition of definitions) {
     definitionByPath.set(definitionPath(definition), definition);
@@ -309,9 +320,9 @@ function readVocabularyUsages(
   }
 
   const usages: ProductVocabularyUsageRow[] = [];
-  for (const sourceFile of sourceProject.ownedSourceFiles()) {
+  for (const sourceFile of sourceProject.ownedImplementationSourceFilesForPackage("semantic-runtime")) {
     const identity = requiredSourceFileIdentity(sourceProject, sourceFile);
-    if (identity.packageId !== "semantic-runtime") {
+    if (!identity.repoPath.startsWith("packages/semantic-runtime/src/")) {
       continue;
     }
     if (identity.repoPath.includes("/kernel/vocabulary/")) {
@@ -323,7 +334,7 @@ function readVocabularyUsages(
 
     const visit = (node: ts.Node): void => {
       if (ts.isPropertyAccessExpression(node)) {
-        const access = vocabularyAccess(node);
+        const access = vocabularyAccess(node, sourceProject.checker, rootSymbols);
         if (access !== null) {
           const definition = definitionByPath.get(access.entryPath) ?? null;
           usages.push({
@@ -933,6 +944,8 @@ function unwrapInitializer(node: ts.Expression | undefined): ts.Expression | und
 
 function vocabularyAccess(
   node: ts.PropertyAccessExpression,
+  checker: ts.TypeChecker,
+  rootSymbols: ReadonlyMap<ts.Symbol, ProductVocabularyRootName>,
 ): {
   readonly rootName: ProductVocabularyRootName;
   readonly namespace: string;
@@ -951,7 +964,7 @@ function vocabularyAccess(
   }
 
   if (node.name.text === "key" && ts.isPropertyAccessExpression(node.expression)) {
-    const definition = vocabularyDefinitionAccess(node.expression);
+    const definition = vocabularyDefinitionAccess(node.expression, checker, rootSymbols);
     return definition === null
       ? null
       : {
@@ -961,7 +974,7 @@ function vocabularyAccess(
         };
   }
 
-  const definition = vocabularyDefinitionAccess(node);
+  const definition = vocabularyDefinitionAccess(node, checker, rootSymbols);
   return definition === null
     ? null
     : {
@@ -972,6 +985,8 @@ function vocabularyAccess(
 
 function vocabularyDefinitionAccess(
   node: ts.PropertyAccessExpression,
+  checker: ts.TypeChecker,
+  rootSymbols: ReadonlyMap<ts.Symbol, ProductVocabularyRootName>,
 ): {
   readonly rootName: ProductVocabularyRootName;
   readonly namespace: string;
@@ -981,35 +996,25 @@ function vocabularyDefinitionAccess(
 } | null {
   const memberName = node.name.text;
   const namespaceAccess = node.expression;
-  if (!ts.isPropertyAccessExpression(namespaceAccess) || !ts.isIdentifier(namespaceAccess.expression)) {
+  if (!ts.isPropertyAccessExpression(namespaceAccess)) {
     return null;
   }
-  const rootName = namespaceAccess.expression.text as ProductVocabularyRootName;
-  if (!isVocabularyRootName(rootName)) {
+  const root = namespaceAccess.expression;
+  if (!ts.isIdentifier(root) && !ts.isPropertyAccessExpression(root)) return null;
+  const symbol = checker.getSymbolAtLocation(ts.isIdentifier(root) ? root : root.name);
+  const rootName = symbol && rootSymbols.get(resolveAlias(checker, symbol));
+  if (rootName === undefined) {
     return null;
   }
   const namespace = namespaceAccess.name.text;
-  const accessPath = `${rootName}.${namespace}.${memberName}`;
+  const accessPath = node.getText();
   return {
     rootName,
     namespace,
     memberName,
     accessPath,
-    entryPath: rootName === "KernelVocabulary"
-      ? `KernelVocabulary.${namespace}.${memberName}`
-      : accessPath,
+    entryPath: `${rootName}.${namespace}.${memberName}`,
   };
-}
-
-function isVocabularyRootName(value: string): value is ProductVocabularyRootName {
-  return (
-    value === "KernelProductKinds" ||
-    value === "KernelClaimPredicates" ||
-    value === "KernelOpenSeamKinds" ||
-    value === "KernelBindingKinds" ||
-    value === "KernelInstructionKinds" ||
-    value === "KernelVocabulary"
-  );
 }
 
 function isProductClaimEndpointKind(value: string): value is ProductClaimEndpointKind {

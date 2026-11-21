@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
 declare const repoRelativePathBrand: unique symbol;
 
@@ -23,7 +24,8 @@ class NormalizedFileKeyCache {
     if (cached !== undefined) {
       return cached;
     }
-    const normalized = toPosixPath(path.resolve(fileName)).toLowerCase();
+    const absolute = toPosixPath(path.resolve(fileName));
+    const normalized = ts.sys.useCaseSensitiveFileNames ? absolute : absolute.toLowerCase();
     this.#keys.set(fileName, normalized);
     return normalized;
   }
@@ -58,10 +60,11 @@ export function isPathWithin(
     path.resolve(rootPath),
     path.resolve(filePath),
   );
-  return (
-    relativePath === "" ||
-    (!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
-  );
+  return !escapesRoot(relativePath);
+}
+
+function escapesRoot(relativePath: string): boolean {
+  return relativePath === ".." || relativePath.startsWith(`..${path.sep}`) || path.isAbsolute(relativePath);
 }
 
 /** Walk upward from a directory until the repository workspace marker is found. */
@@ -105,7 +108,7 @@ export function repoRelativePath(
   if (relativePath === "") {
     return "" as RepoRelativePath;
   }
-  if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+  if (escapesRoot(relativePath)) {
     return null;
   }
   return toPosixPath(relativePath) as RepoRelativePath;
@@ -132,7 +135,7 @@ export function readTextFileOrNull(fileName: string): string | null {
   }
 }
 
-/** Return a case-insensitive absolute path key for source-project maps. */
+/** Return an absolute source-project key using the TypeScript host's filename case policy. */
 export function normalizeFileKey(
   /** Absolute or relative source file path. */
   fileName: string,

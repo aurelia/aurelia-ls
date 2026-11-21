@@ -94,6 +94,8 @@ export async function readAllPagedRows<TValue, TRow>(
 ): Promise<readonly TRow[]> {
   const pageSize = options.pageSize ?? 1_000;
   const rows: TRow[] = [];
+  const seenCursors = new Set<string>();
+  let total: number | undefined;
   let cursor: string | undefined;
   do {
     const answer = await api.ask({
@@ -105,9 +107,24 @@ export async function readAllPagedRows<TValue, TRow>(
       page: cursor === undefined ? undefined : { size: pageSize, cursor },
     });
     assertHitOrMissAnswer(options.label, answer);
-    rows.push(...options.rowsFromValue(answerValue<TValue>(answer)));
-    cursor = answer.page?.nextCursor;
+    const page = answer.page;
+    const batch = options.rowsFromValue(answerValue<TValue>(answer));
+    if (!page || page.returned !== batch.length || (total !== undefined && page.total !== total)) {
+      throw new Error(`${options.label} returned inconsistent paging metadata.`);
+    }
+    total = page.total;
+    rows.push(...batch);
+    cursor = page.nextCursor;
+    if (cursor !== undefined) {
+      if (seenCursors.has(cursor) || batch.length === 0) {
+        throw new Error(`${options.label} did not advance the page at cursor '${cursor}'.`);
+      }
+      seenCursors.add(cursor);
+    }
   } while (cursor !== undefined);
+  if (total !== undefined && rows.length !== total) {
+    throw new Error(`${options.label} exhausted after ${rows.length} of ${total} rows.`);
+  }
   return rows;
 }
 

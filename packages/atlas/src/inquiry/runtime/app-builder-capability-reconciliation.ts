@@ -1,5 +1,6 @@
 import { uniqueSortedStrings } from "../../collections.js";
 import type { SourceProject } from "../../source/index.js";
+import { symbolForExpressionName, unwrapExpression } from "../../source/semantic-surface/index.js";
 import ts from "typescript";
 import {
   FRAMEWORK_CAPABILITY_ROWS,
@@ -23,8 +24,8 @@ import {
  * `packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts`. Locality,
  * exclusivity, and prerequisites are NOT mirrored; they are joined live from the
  * capability rows so terrain drift (a cited capability id disappearing) surfaces
- * immediately. Mechanized drift detection against the live semantic-runtime enum
- * members is a deliberate follow-on; today the spine is reviewed by hand.
+ * immediately. The checker also enumerates the current lowering choice union,
+ * so values outside the reviewed mappings remain visible.
  */
 
 /** Whether an app-builder lowering axis is a single exclusive choice or a stackable set. */
@@ -493,8 +494,8 @@ export interface ReconciledLoweringValue {
   readonly mutuallyExclusiveWith: readonly string[];
   /** Prerequisites unioned from the resolved capability rows. */
   readonly requires: readonly FrameworkCapabilityRequirementRef[];
-  /** Whether the value has a public descriptor in the app-builder lowering descriptor inventory. */
-  readonly describedChoice: boolean;
+  /** Whether semantic-runtime declares this choice ID. Null when the declaration could not be read. */
+  readonly describedChoice: boolean | null;
   readonly note?: string;
 }
 
@@ -588,10 +589,13 @@ export interface AppBuilderCapabilityReconciliation {
   readonly tasteOnlyValues: readonly { readonly axisId: string; readonly valueId: string }[];
   /** Lowering choice ids described by the authored reconciliation axis map. */
   readonly describedLoweringChoiceIds: readonly string[];
+  /** IDs in semantic-runtime's choice union with no authored Atlas mapping. Null when the union is unavailable. */
+  readonly unmappedLoweringChoiceIds: readonly string[] | null;
   readonly totals: {
     readonly axisCount: number;
     readonly valueCount: number;
     readonly describedLoweringChoiceCount: number;
+    readonly declaredLoweringChoiceCount: number | null;
     readonly partCapabilityRowCount: number;
     readonly sourcePlanCapabilityRowCount: number;
     readonly domainFieldValueKindCount: number;
@@ -619,6 +623,7 @@ export function computeAppBuilderCapabilityReconciliation(
   }
   const describedLoweringChoiceIds = new Set(APP_BUILDER_LOWERING_AXIS_MAPS
     .flatMap((axis) => axis.values.map((value) => value.valueId)));
+  const declaredChoiceIds = sourceProject === undefined ? null : readDeclaredLoweringChoiceIds(sourceProject);
 
   const citedCapabilityIds = new Set<string>();
   const missingCapabilityIds = new Set<string>();
@@ -651,7 +656,7 @@ export function computeAppBuilderCapabilityReconciliation(
         localities: uniqueLocalities(resolved.flatMap((row) => row.localities)),
         mutuallyExclusiveWith: uniqueSortedStrings(resolved.flatMap((row) => row.mutuallyExclusiveWith)),
         requires: dedupeRequirements(resolved.flatMap((row) => row.requires)),
-        describedChoice: describedLoweringChoiceIds.has(value.valueId),
+        describedChoice: declaredChoiceIds?.has(value.valueId) ?? null,
         note: value.note,
       };
     });
@@ -742,10 +747,14 @@ export function computeAppBuilderCapabilityReconciliation(
     missingCapabilityIds: [...missingCapabilityIds].sort(),
     tasteOnlyValues,
     describedLoweringChoiceIds: [...describedLoweringChoiceIds].sort(),
+    unmappedLoweringChoiceIds: declaredChoiceIds === null
+      ? null
+      : [...declaredChoiceIds].filter((id) => !describedLoweringChoiceIds.has(id)).sort(),
     totals: {
       axisCount: axes.length,
       valueCount: axes.reduce((sum, axis) => sum + axis.values.length, 0),
       describedLoweringChoiceCount: describedLoweringChoiceIds.size,
+      declaredLoweringChoiceCount: declaredChoiceIds?.size ?? null,
       partCapabilityRowCount: partCapabilities.length,
       sourcePlanCapabilityRowCount: sourcePlanCapabilities.length,
       domainFieldValueKindCount: domainFieldValueKinds.length,
@@ -762,6 +771,18 @@ export function computeAppBuilderCapabilityReconciliation(
       informationAxisCount: axes.filter((axis) => axis.findings.some((finding) => finding.severity === AppBuilderReconciliationFindingSeverity.Information)).length,
     },
   };
+}
+
+function readDeclaredLoweringChoiceIds(sourceProject: SourceProject): ReadonlySet<string> | null {
+  const file = sourceProject.readSourceFile("packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts");
+  const alias = file?.statements.find((node): node is ts.TypeAliasDeclaration =>
+    ts.isTypeAliasDeclaration(node) && node.name.text === "AppBuilderAureliaLoweringChoiceId",
+  );
+  if (alias === undefined) return null;
+  const type = sourceProject.checker.getTypeFromTypeNode(alias.type);
+  const members = type.isUnion() ? type.types : [type];
+  if (!members.every((member) => member.isStringLiteral())) return null;
+  return new Set(members.map((member) => member.value));
 }
 
 function reconciliationFindingsForAxis(
@@ -942,10 +963,8 @@ function sourceDerivedPartCapabilities(
   rowsById: ReadonlyMap<string, FrameworkCapabilityRow>,
   missingCapabilityIds: Set<string>,
 ): readonly ReconciledAppBuilderPartCapability[] {
-  const staticStringValues = readSemanticRuntimeStaticStringValues(sourceProject);
-  const staticStringArrayValues = readSemanticRuntimeStaticStringArrayValues(sourceProject, staticStringValues);
   const partRows = PART_CATALOG_SPECS.flatMap((spec) =>
-    sourceDerivedPartRows(sourceProject, spec, staticStringValues, staticStringArrayValues),
+    sourceDerivedPartRows(sourceProject, spec),
   );
 
   return partRows
@@ -1341,7 +1360,6 @@ function sourceDerivedSlotDescriptorRows(
   if (array === null) {
     return [];
   }
-  const staticStringValues = readSemanticRuntimeStaticStringValues(sourceProject);
   const rows: SourceDerivedSlotDescriptorRow[] = [];
   for (const element of array.elements) {
     if (!ts.isObjectLiteralExpression(element)) {
@@ -1349,8 +1367,8 @@ function sourceDerivedSlotDescriptorRows(
     }
     const slotKindExpression = propertyInitializer(element, "slotKind");
     const valueLanguageExpression = propertyInitializer(element, "valueLanguage");
-    const slotKind = slotKindExpression === null ? null : staticStringValue(slotKindExpression, staticStringValues);
-    const valueLanguage = valueLanguageExpression === null ? null : staticStringValue(valueLanguageExpression, staticStringValues);
+    const slotKind = slotKindExpression === null ? null : staticStringValue(slotKindExpression, sourceProject.checker);
+    const valueLanguage = valueLanguageExpression === null ? null : staticStringValue(valueLanguageExpression, sourceProject.checker);
     if (slotKind === null || valueLanguage === null) {
       continue;
     }
@@ -1396,8 +1414,6 @@ function sourceDerivedExpressionParserSignals(
 function sourceDerivedPartRows(
   sourceProject: SourceProject,
   spec: SourceDerivedPartCatalogSpec,
-  staticStringValues: ReadonlyMap<string, string>,
-  staticStringArrayValues: ReadonlyMap<string, readonly string[]>,
 ): readonly SourceDerivedPartCatalogRow[] {
   const sourceFile = sourceProject.readSourceFile(spec.filePath);
   if (sourceFile === null) {
@@ -1414,14 +1430,14 @@ function sourceDerivedPartRows(
       rows.push(...sourceDerivedPartRowsFromSpreadElement(
         spec,
         element,
-        staticStringValues,
+        sourceProject.checker,
       ));
       continue;
     }
     if (!ts.isObjectLiteralExpression(element)) {
       continue;
     }
-    const row = sourceDerivedPartRowFromObjectLiteral(spec, element, staticStringValues, staticStringArrayValues);
+    const row = sourceDerivedPartRowFromObjectLiteral(spec, element, sourceProject.checker);
     if (row !== null) {
       rows.push(row);
     }
@@ -1432,11 +1448,10 @@ function sourceDerivedPartRows(
 function sourceDerivedPartRowFromObjectLiteral(
   spec: SourceDerivedPartCatalogSpec,
   element: ts.ObjectLiteralExpression,
-  staticStringValues: ReadonlyMap<string, string>,
-  staticStringArrayValues: ReadonlyMap<string, readonly string[]>,
+  checker: ts.TypeChecker,
 ): SourceDerivedPartCatalogRow | null {
   const idExpression = propertyInitializer(element, "id");
-  const partId = idExpression === null ? null : staticStringValue(idExpression, staticStringValues);
+  const partId = idExpression === null ? null : staticStringValue(idExpression, checker);
   if (partId === null) {
     return null;
   }
@@ -1445,23 +1460,23 @@ function sourceDerivedPartRowFromObjectLiteral(
     partKind: spec.partKind,
     partId,
     sourceFilePath: spec.filePath,
-    valueChannelNames: valueChannelNames(element, staticStringArrayValues),
+    valueChannelNames: valueChannelNames(element, checker),
     valueChannelResolutionName: enumMemberPropertyName(element, "valueChannelResolution"),
-    resourceRef: resourceRef(element, staticStringValues),
+    resourceRef: resourceRef(element, checker),
     syntaxPackageName: syntaxPackageName(element),
     syntaxCommandName: syntaxCommandName(element),
-    frameworkSyntaxName: staticStringPropertyValue(element, "specialAttributeName", staticStringValues),
+    frameworkSyntaxName: staticStringPropertyValue(element, "specialAttributeName", checker),
     frameworkApiModuleSpecifier: stringLiteralPropertyText(element, "moduleSpecifier"),
     frameworkApiName: stringLiteralPropertyText(element, "exportName"),
-    resourceMetadataName: staticStringPropertyValue(element, "metadataPropertyName", staticStringValues),
-    componentLifecycleHookName: staticStringPropertyValue(element, "hookName", staticStringValues),
+    resourceMetadataName: staticStringPropertyValue(element, "metadataPropertyName", checker),
+    componentLifecycleHookName: staticStringPropertyValue(element, "hookName", checker),
   };
 }
 
 function sourceDerivedPartRowsFromSpreadElement(
   spec: SourceDerivedPartCatalogSpec,
   element: ts.SpreadElement,
-  staticStringValues: ReadonlyMap<string, string>,
+  checker: ts.TypeChecker,
 ): readonly SourceDerivedPartCatalogRow[] {
   if (spec.variableName !== "APP_BUILDER_FRAMEWORK_APIS") {
     return [];
@@ -1478,17 +1493,17 @@ function sourceDerivedPartRowsFromSpreadElement(
   if (request === undefined || !ts.isObjectLiteralExpression(request)) {
     return [];
   }
-  return sourceDerivedNamedResourceFrameworkApiRows(spec, request, staticStringValues);
+  return sourceDerivedNamedResourceFrameworkApiRows(spec, request, checker);
 }
 
 function sourceDerivedNamedResourceFrameworkApiRows(
   spec: SourceDerivedPartCatalogSpec,
   request: ts.ObjectLiteralExpression,
-  staticStringValues: ReadonlyMap<string, string>,
+  checker: ts.TypeChecker,
 ): readonly SourceDerivedPartCatalogRow[] {
-  const decoratorId = staticStringPropertyValue(request, "decoratorId", staticStringValues);
-  const staticAuId = staticStringPropertyValue(request, "staticAuId", staticStringValues);
-  const defineCallId = staticStringPropertyValue(request, "defineCallId", staticStringValues);
+  const decoratorId = staticStringPropertyValue(request, "decoratorId", checker);
+  const staticAuId = staticStringPropertyValue(request, "staticAuId", checker);
+  const defineCallId = staticStringPropertyValue(request, "defineCallId", checker);
   const decoratorExportName = stringLiteralPropertyText(request, "decoratorExportName");
   const staticAuExportName = stringLiteralPropertyText(request, "staticAuExportName");
   const staticAuModuleSpecifier = stringLiteralPropertyText(request, "staticAuModuleSpecifier");
@@ -1764,96 +1779,6 @@ function unwrapArrayLiteral(expression: ts.Expression): ts.ArrayLiteralExpressio
   return null;
 }
 
-function readSemanticRuntimeStaticStringValues(sourceProject: SourceProject): ReadonlyMap<string, string> {
-  const valueByExpression = new Map<string, string>();
-  const constInitializers: { readonly name: string; readonly initializer: ts.Expression }[] = [];
-  for (const sourceFile of sourceProject.ownedImplementationSourceFilesForPackage("semantic-runtime")) {
-    const visit = (node: ts.Node): void => {
-      if (ts.isEnumDeclaration(node)) {
-        for (const member of node.members) {
-          const memberName = propertyNameText(member.name);
-          if (memberName === null) {
-            continue;
-          }
-          const key = `${node.name.text}.${memberName}`;
-          const value = member.initializer !== undefined && ts.isStringLiteralLike(member.initializer)
-            ? member.initializer.text
-            : memberName;
-          valueByExpression.set(key, value);
-        }
-      }
-      if (
-        ts.isVariableDeclaration(node) &&
-        ts.isIdentifier(node.name) &&
-        node.initializer !== undefined &&
-        (ts.getCombinedNodeFlags(node) & ts.NodeFlags.Const) !== 0
-      ) {
-        constInitializers.push({ name: node.name.text, initializer: node.initializer });
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(sourceFile);
-  }
-
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const candidate of constInitializers) {
-      if (valueByExpression.has(candidate.name)) {
-        continue;
-      }
-      const value = staticStringValue(candidate.initializer, valueByExpression);
-      if (value === null) {
-        continue;
-      }
-      valueByExpression.set(candidate.name, value);
-      changed = true;
-    }
-  }
-
-  return valueByExpression;
-}
-
-function readSemanticRuntimeStaticStringArrayValues(
-  sourceProject: SourceProject,
-  staticStringValues: ReadonlyMap<string, string>,
-): ReadonlyMap<string, readonly string[]> {
-  const valueByExpression = new Map<string, readonly string[]>();
-  const constInitializers: { readonly name: string; readonly initializer: ts.Expression }[] = [];
-  for (const sourceFile of sourceProject.ownedImplementationSourceFilesForPackage("semantic-runtime")) {
-    const visit = (node: ts.Node): void => {
-      if (
-        ts.isVariableDeclaration(node) &&
-        ts.isIdentifier(node.name) &&
-        node.initializer !== undefined &&
-        (ts.getCombinedNodeFlags(node) & ts.NodeFlags.Const) !== 0
-      ) {
-        constInitializers.push({ name: node.name.text, initializer: node.initializer });
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(sourceFile);
-  }
-
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const candidate of constInitializers) {
-      if (valueByExpression.has(candidate.name)) {
-        continue;
-      }
-      const value = staticStringArrayValue(candidate.initializer, staticStringValues, valueByExpression);
-      if (value === null) {
-        continue;
-      }
-      valueByExpression.set(candidate.name, value);
-      changed = true;
-    }
-  }
-
-  return valueByExpression;
-}
-
 function propertyInitializer(
   objectLiteral: ts.ObjectLiteralExpression,
   propertyName: string,
@@ -1876,68 +1801,45 @@ function propertyNameText(name: ts.PropertyName): string | null {
   return null;
 }
 
-function staticStringValue(
-  expression: ts.Expression,
-  staticStringValues: ReadonlyMap<string, string>,
-): string | null {
-  if (ts.isStringLiteralLike(expression)) {
-    return expression.text;
+/** Resolve the constant that owns a catalog expression, following actual import aliases. */
+function catalogValueExpression(expression: ts.Expression, checker: ts.TypeChecker): ts.Expression | null {
+  let current = unwrapExpression(expression);
+  const visited = new Set<ts.Declaration>();
+  while (ts.isIdentifier(current) || ts.isPropertyAccessExpression(current)) {
+    const declaration = symbolForExpressionName(checker, current)?.valueDeclaration;
+    if (declaration === undefined || !ts.isVariableDeclaration(declaration)) break;
+    if ((ts.getCombinedNodeFlags(declaration) & ts.NodeFlags.Const) === 0
+      || declaration.initializer === undefined || visited.has(declaration)) return null;
+    visited.add(declaration);
+    current = unwrapExpression(declaration.initializer);
   }
-  if (ts.isIdentifier(expression)) {
-    return staticStringValues.get(expression.text) ?? null;
-  }
-  if (ts.isAsExpression(expression) || ts.isSatisfiesExpression(expression)) {
-    return staticStringValue(expression.expression, staticStringValues);
-  }
-  if (
-    ts.isPropertyAccessExpression(expression) &&
-    ts.isIdentifier(expression.expression)
-  ) {
-    return staticStringValues.get(`${expression.expression.text}.${expression.name.text}`) ?? expression.name.text;
-  }
-  return null;
+  return current;
 }
 
-function staticStringArrayValue(
-  expression: ts.Expression,
-  staticStringValues: ReadonlyMap<string, string>,
-  staticStringArrayValues: ReadonlyMap<string, readonly string[]>,
-): readonly string[] | null {
-  if (ts.isArrayLiteralExpression(expression)) {
-    const values = expression.elements.flatMap((element) => {
-      const propertyMembers = propertyAccessMemberName(element);
-      return propertyMembers.length > 0
-        ? propertyMembers
-        : staticStringValue(element, staticStringValues) == null
-          ? []
-          : [staticStringValue(element, staticStringValues)!];
-    });
-    return values.length === expression.elements.length ? values : null;
-  }
-  if (ts.isIdentifier(expression)) {
-    return staticStringArrayValues.get(expression.text) ?? null;
-  }
-  if (ts.isAsExpression(expression) || ts.isSatisfiesExpression(expression)) {
-    return staticStringArrayValue(expression.expression, staticStringValues, staticStringArrayValues);
-  }
-  return null;
+function staticStringValue(expression: ts.Expression, checker: ts.TypeChecker): string | null {
+  const value = catalogValueExpression(expression, checker);
+  if (value === null) return null;
+  if (ts.isStringLiteralLike(value)) return value.text;
+  if (!ts.isPropertyAccessExpression(value) && !ts.isElementAccessExpression(value)) return null;
+  const member = symbolForExpressionName(checker, value)?.valueDeclaration;
+  if (member === undefined || !ts.isEnumMember(member)) return null;
+  const constant = checker.getConstantValue(member);
+  return typeof constant === "string" ? constant : null;
 }
 
-function valueChannelNames(
-  objectLiteral: ts.ObjectLiteralExpression,
-  staticStringArrayValues: ReadonlyMap<string, readonly string[]>,
-): readonly string[] {
-  const valueChannels = propertyInitializer(objectLiteral, "valueChannels");
-  if (valueChannels !== null) {
-    if (ts.isArrayLiteralExpression(valueChannels)) {
-      return valueChannels.elements.flatMap((element) => propertyAccessMemberName(element));
-    }
-    if (ts.isIdentifier(valueChannels)) {
-      return staticStringArrayValues.get(valueChannels.text) ?? [];
-    }
-  }
-  const valueChannel = propertyInitializer(objectLiteral, "valueChannel");
-  return valueChannel === null ? [] : propertyAccessMemberName(valueChannel);
+function valueChannelNames(objectLiteral: ts.ObjectLiteralExpression, checker: ts.TypeChecker): readonly string[] {
+  const expr = propertyInitializer(objectLiteral, "valueChannels") ?? propertyInitializer(objectLiteral, "valueChannel");
+  if (expr === null) return [];
+  const value = catalogValueExpression(expr, checker);
+  if (value === null) return [];
+  const elements = ts.isArrayLiteralExpression(value) ? value.elements : [value];
+  return elements.flatMap((element) => {
+    const member = catalogValueExpression(element, checker);
+    if (member === null) return [];
+    if (ts.isStringLiteralLike(member)) return [member.text];
+    const declaration = symbolForExpressionName(checker, member)?.valueDeclaration;
+    return declaration !== undefined && ts.isEnumMember(declaration) ? [declaration.name.getText()] : [];
+  });
 }
 
 function propertyAccessArrayMemberNames(
@@ -1956,7 +1858,7 @@ function propertyAccessMemberName(expression: ts.Expression): readonly string[] 
 
 function resourceRef(
   objectLiteral: ts.ObjectLiteralExpression,
-  staticStringValues: ReadonlyMap<string, string>,
+  checker: ts.TypeChecker,
 ): SourceDerivedResourceRef | null {
   const resource = propertyInitializer(objectLiteral, "resource");
   if (resource === null || !ts.isCallExpression(resource)) {
@@ -1969,7 +1871,7 @@ function resourceRef(
   return {
     packageName: packageExpression === undefined ? null : enumMemberName(packageExpression),
     resourceKind: kindExpression === undefined ? null : enumMemberName(kindExpression),
-    resourceName: nameExpression === undefined ? null : staticStringValue(nameExpression, staticStringValues),
+    resourceName: nameExpression === undefined ? null : staticStringValue(nameExpression, checker),
   };
 }
 
@@ -2012,10 +1914,10 @@ function enumMemberPropertyName(
 function staticStringPropertyValue(
   objectLiteral: ts.ObjectLiteralExpression,
   propertyName: string,
-  staticStringValues: ReadonlyMap<string, string>,
+  checker: ts.TypeChecker,
 ): string | null {
   const expression = propertyInitializer(objectLiteral, propertyName);
-  return expression === null ? null : staticStringValue(expression, staticStringValues);
+  return expression === null ? null : staticStringValue(expression, checker);
 }
 
 function stringLiteralPropertyText(

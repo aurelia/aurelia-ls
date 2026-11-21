@@ -4,10 +4,10 @@ import {
 } from "../../framework/di-index.js";
 import {
   readFrameworkConfigurationDiWorld,
-  type FrameworkDiDependencyRow,
-  type FrameworkDiResolverSlot,
-  type FrameworkDiResourceSlot,
-  type FrameworkDiVariableDependencyRead,
+  FrameworkDiDependencyRow,
+  FrameworkDiResolverSlot,
+  FrameworkDiResourceSlot,
+  FrameworkDiVariableDependencyRead,
 } from "../../framework/di-world.js";
 import {
   FrameworkRelationshipEndpointKind,
@@ -33,6 +33,7 @@ import {
   EvidenceConfidence,
   EvidenceKind,
   EvidenceRole,
+  OpenSeamKind,
   type Evidence,
 } from "../evidence.js";
 import type { Inquiry } from "../inquiry.js";
@@ -41,7 +42,7 @@ import {
   NavigationPlane,
   NavigationRelation,
 } from "../navigation.js";
-import { pageOffset, rowLimit } from "../paging.js";
+import { evidenceLimit, pageInfo, pageOffset, pageRows, rowLimit } from "../paging.js";
 import {
   FrameworkRowContinuationBuilder,
   nextPageContinuation,
@@ -188,40 +189,36 @@ export function answerFrameworkDi(
       frameworkDiBasis(sourceProject),
       frameworkDiWorldBasis(sourceProject),
     ];
-    const worldPackageId = filters.configurationPackageId ?? "runtime-html";
+    const worldPackageId = filters.configurationPackageId ?? filters.packageId ?? "runtime-html";
     const worldExportName = filters.configurationExportName ?? "StandardConfiguration";
     const world = readFrameworkConfigurationDiWorld(
       sourceProject,
       worldPackageId,
       worldExportName,
     );
-    const worldSlots = world.resolverSlots.filter((row) =>
-      diWorldSlotMatches(row, filters),
-    );
-    const resourceSlots = world.resourceSlots.filter((row) =>
-      diWorldResourceSlotMatches(row, filters),
-    );
-    const worldDependencies = world.dependencies.filter((row) =>
-      diWorldDependencyMatches(row, filters),
-    );
-    const worldVariableDependencies = world.variableDependencies.filter((row) =>
-      diWorldVariableDependencyMatches(row, filters),
-    );
-    const evidence = [
-      ...worldSlots.slice(0, 3).map(evidenceForDiWorldResolverSlot),
-      ...resourceSlots.slice(0, 3).map(evidenceForDiWorldResourceSlot),
-      ...worldDependencies.slice(0, 3).map(evidenceForDiWorldLookupSupport),
-      ...worldVariableDependencies.slice(0, 3).map(evidenceForDiWorldLookupSupport),
-    ];
+    const rows = (projection === "dependencies"
+      ? [...world.dependencies.filter(row => diWorldDependencyMatches(row, filters)),
+         ...world.variableDependencies.filter(row => diWorldVariableDependencyMatches(row, filters))]
+      : [...world.resolverSlots.filter(row => diWorldSlotMatches(row, filters)),
+         ...world.resourceSlots.filter(row => diWorldResourceSlotMatches(row, filters))])
+      .filter(row => {
+        if (filters.packageId === undefined) return true;
+        const file = row.source && sourceProject.readSourceFile(row.source.filePath);
+        return file != null && sourceProject.sourceFileIdentity(file)?.packageId === filters.packageId;
+      });
+    const page = pageRows<typeof rows[number]>(rows, offset, limit);
+    const evidence = page.rows.slice(0, evidenceLimit(inquiry)).map(row => {
+      if (row instanceof FrameworkDiResolverSlot) return evidenceForDiWorldResolverSlot(row);
+      if (row instanceof FrameworkDiResourceSlot) return evidenceForDiWorldResourceSlot(row);
+      return evidenceForDiWorldLookupSupport(row);
+    });
+    const outcome = world.opens.length === 0
+      ? (rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit)
+      : (rows.length === 0 ? OutcomeKind.Open : OutcomeKind.Partial);
     return createAnswer(
       inquiry,
-      worldSlots.length === 0 &&
-        resourceSlots.length === 0 &&
-        worldDependencies.length === 0 &&
-        worldVariableDependencies.length === 0
-        ? OutcomeKind.Miss
-        : OutcomeKind.Hit,
-      `${world.configurationExport} DI world has ${world.resolverSlots.length} resolver slot(s), ${world.resourceSlots.length} resource slot(s), ${world.dependencies.length} exact dependency edge(s), and ${world.variableDependencies.length} variable-carried dependency read(s).`,
+      outcome,
+      `Returned ${page.rows.length} of ${rows.length} matching ${projection === "dependencies" ? "dependency" : "slot"} row(s) from ${world.configurationExport}; ${world.opens.length} open configuration boundary(s).`,
       {
         value: {
           version: index.version,
@@ -242,18 +239,30 @@ export function answerFrameworkDi(
             openCount: world.opens.length,
             ...(projection === "dependencies"
               ? {
-                  dependencies: worldDependencies.slice(offset, offset + limit),
-                  variableDependencies: worldVariableDependencies.slice(offset, offset + limit),
+                  dependencies: page.rows.filter(row => row instanceof FrameworkDiDependencyRow),
+                  variableDependencies: page.rows.filter(row => row instanceof FrameworkDiVariableDependencyRead),
                 }
               : {
-                  resolverSlots: worldSlots.slice(offset, offset + limit),
-                  resourceSlots: resourceSlots.slice(offset, offset + limit),
+                  resolverSlots: page.rows.filter(row => row instanceof FrameworkDiResolverSlot),
+                  resourceSlots: page.rows.filter(row => row instanceof FrameworkDiResourceSlot),
                 }),
           },
         },
         basis: worldBasis,
         evidence,
-        continuations: diWorldContinuations(inquiry),
+        openSeams: world.opens.slice(0, Math.max(1, evidenceLimit(inquiry))).map(open => ({
+          id: open.id,
+          kind: OpenSeamKind.InsufficientBasis,
+          summary: open.reason,
+          evidence: { kind: EvidenceKind.OpenSeam, role: EvidenceRole.Boundary, summary: open.reason, source: open.source },
+        })),
+        page: pageInfo(inquiry, page.rows.length, rows.length, limit, page.nextOffset),
+        continuations: [
+          ...(page.nextOffset === undefined ? [] : [
+            nextPageContinuation(inquiry, `framework.di:${projection}:next-page`, "Read the next page of this DI world.", page.nextOffset, limit),
+          ]),
+          ...diWorldContinuations(inquiry, worldPackageId, worldExportName, filters),
+        ],
       },
     );
   }
@@ -684,8 +693,8 @@ function diSummaryContinuations(inquiry: Inquiry): readonly Continuation[] {
   ];
 }
 
-function diWorldContinuations(inquiry: Inquiry): readonly Continuation[] {
-  return [
+function diWorldContinuations(inquiry: Inquiry, packageId: string, exportName: string, filters: FrameworkDiFilters): readonly Continuation[] {
+  const continuations = [
     projectionContinuation(
       inquiry,
       "framework.di:world",
@@ -700,17 +709,25 @@ function diWorldContinuations(inquiry: Inquiry): readonly Continuation[] {
       "Inspect provider dependency edges produced by the DI world scanner.",
       { basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker] },
     ),
-    projectionContinuation(
+  ];
+  if (packageId === "runtime-html" && exportName === "StandardConfiguration") {
+    continuations.push(projectionContinuation(
       inquiry,
       "framework.materialization:dependencies",
       "dependencies",
-      "Inspect the same dependency edges through materialization routes.",
+      "Inspect materialization evidence from StandardConfiguration and declared DI provider seeds.",
       {
         lens: LensId.FrameworkMaterialization,
         basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
+        filters: {
+          ...(filters.packageId ? { packageId: filters.packageId } : {}),
+          ...(filters.key ? { key: filters.key } : {}),
+          ...(filters.dependencyKey ? { dependencyKey: filters.dependencyKey } : {}),
+        },
       },
-    ),
-  ];
+    ));
+  }
+  return continuations;
 }
 
 function diKeyContinuations(

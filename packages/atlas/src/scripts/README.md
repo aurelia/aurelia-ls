@@ -43,7 +43,7 @@ helpers.
   points at a lane that needs exact row filters. It accepts `--query=...`, exact projection filters such as
   `--className=...`, `--functionName=...`, `--enumName=...`, `--role=...`, `--valueKind=...`, `--contextualOnly=true`,
   `--enumContext=all`, `--enumContext=none`, `--includeSemanticTaxonomyAnalysis=true`, `--includeFunctionBodyAnalysis=true`,
-  `--minExclusiveMilliseconds=...`, `--orderBy=...`, `--rows=...` / `--limit=...`, `--detail`, and `--json`. Prefer this
+  `--minExclusiveMilliseconds=...`, `--orderBy=...`, `--rows=...` / `--limit=...`, `--cursor=...`, `--detail`, and `--json`. Prefer this
   wrapper over throwaway inquiry scripts when the needed substrate is already exposed by `atlas.self`. Source-surface
   projections skip enum/string taxonomy unless a taxonomy projection or the semantic-taxonomy flag asks for it. Function
   body fingerprints and switch topology are a separate explicit body-analysis lane; use the boolean flag or the

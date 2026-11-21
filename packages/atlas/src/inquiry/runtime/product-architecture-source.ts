@@ -1,6 +1,70 @@
+import path from "node:path";
 import ts from "typescript";
 
-import { propertyNameText } from "../../source/index.js";
+import { propertyNameText, repoRelativePath } from "../../source/index.js";
+import { HandleKind } from "../handle.js";
+import { LocusKind, type Locus } from "../locus.js";
+
+export const semanticRuntimeSourceRoot = "packages/semantic-runtime/src";
+
+/** Product architecture and vocabulary read this cohort. A null result means the locus cannot select a product source. */
+export function productSourceLocusPath(locus: Locus | undefined, repoRoot?: string): string | null {
+  if (locus === undefined || locus.kind === LocusKind.Repo) {
+    return semanticRuntimeSourceRoot;
+  }
+  switch (locus.kind) {
+    case LocusKind.RepoArea:
+      return locus.areaId === "semantic-runtime" ? semanticRuntimeSourceRoot : null;
+    case LocusKind.Package:
+      if ((locus.packageId !== undefined && locus.packageId !== "semantic-runtime")
+        || (locus.packageName !== undefined && locus.packageName !== "@aurelia-ls/semantic-runtime")) {
+        return null;
+      }
+      if (locus.relativePath === undefined) {
+        return locus.packageId !== undefined || locus.packageName !== undefined ? semanticRuntimeSourceRoot : null;
+      }
+      return productSourcePath(locus.relativePath, repoRoot);
+    case LocusKind.SourceFile:
+      return productSourcePath(locus.filePath, repoRoot);
+    case LocusKind.SourceRange:
+      return productSourcePath(locus.range.filePath, repoRoot);
+    case LocusKind.Symbol:
+      if (locus.packageName !== undefined && locus.packageName !== "@aurelia-ls/semantic-runtime") {
+        return null;
+      }
+      return locus.filePath === undefined ? null : productSourcePath(locus.filePath, repoRoot);
+    case LocusKind.Handle:
+      if (locus.handle.kind === HandleKind.Package) {
+        return locus.handle.id === "semantic-runtime" ? semanticRuntimeSourceRoot : null;
+      }
+      return "filePath" in locus.handle && typeof locus.handle.filePath === "string"
+        ? productSourcePath(locus.handle.filePath, repoRoot) : null;
+    default:
+      return null;
+  }
+}
+
+function productSourcePath(value: string, repoRoot?: string): string | null {
+  const normalized = repoRoot === undefined
+    ? normalizeInquiryPath(value).replace(/\/+$/u, "")
+    : repoRelativePath(repoRoot, path.resolve(repoRoot, value));
+  if (normalized === "packages/semantic-runtime") return semanticRuntimeSourceRoot;
+  return normalized === semanticRuntimeSourceRoot || normalized?.startsWith(`${semanticRuntimeSourceRoot}/`) ? normalized : null;
+}
+
+export function matchesProductPathPrefix(value: string, prefix: string | undefined): boolean {
+  if (prefix === undefined) return true;
+  const path = normalizeInquiryPath(value);
+  const root = normalizeInquiryPath(prefix).replace(/\/+$/u, "");
+  return path === root || path.startsWith(`${root}/`);
+}
+
+function normalizeInquiryPath(value: string): string {
+  const normalized = value.replace(/\\/gu, "/").replace(/^\.\//u, "");
+  const marker = `/${semanticRuntimeSourceRoot}`;
+  const index = normalized.indexOf(marker);
+  return index < 0 ? normalized : normalized.slice(index + 1);
+}
 
 /** Semantic-runtime source reference with editor-friendly one-based coordinates. */
 export interface ProductArchitectureSourceReference {

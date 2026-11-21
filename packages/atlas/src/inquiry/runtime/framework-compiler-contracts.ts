@@ -14,10 +14,11 @@ import {
   type SourceProject,
 } from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
+import { admittedFrameworkSourceFile } from "./framework-support.js";
+import { FRAMEWORK_JIT_COMPILER_PACKAGE_ID } from "./framework-jit-compiler-corridor.js";
 import type { FrameworkCompilerFilters } from "./framework-compiler-model.js";
 import type { FrameworkCompilerRelationshipRow } from "./framework-compiler-products.js";
 
-const TEMPLATE_COMPILER_PACKAGE_ID = "template-compiler";
 const TEMPLATE_COMPILER_PACKAGE_NAME = "@aurelia/template-compiler";
 const TEMPLATE_COMPILER_FILE =
   "aurelia/packages/template-compiler/src/template-compiler.ts";
@@ -31,6 +32,9 @@ export function readFrameworkCompilerContractRelationships(
   sourceProject: SourceProject,
   filters: FrameworkCompilerFilters,
 ): readonly FrameworkCompilerRelationshipRow[] {
+  if (filters.packageId !== undefined && filters.packageId !== FRAMEWORK_JIT_COMPILER_PACKAGE_ID) {
+    return [];
+  }
   return [
     ...bindingCommandContractRows(sourceProject),
     ...attributePatternContractRows(sourceProject),
@@ -41,15 +45,14 @@ export function readFrameworkCompilerContractRelationships(
 function bindingCommandContractRows(
   sourceProject: SourceProject,
 ): readonly FrameworkCompilerRelationshipRow[] {
-  const sourceFile = frameworkSourceFile(sourceProject, BINDING_COMMAND_FILE);
+  const sourceFile = admittedFrameworkSourceFile(sourceProject, FRAMEWORK_JIT_COMPILER_PACKAGE_ID, BINDING_COMMAND_FILE);
   if (sourceFile === null) {
     return [];
   }
   return [
     contractRow(sourceProject, sourceFile, {
       sourceNode:
-        nodeContaining(sourceFile, "new BindingCommandDefinition") ??
-        declarationNamed(sourceFile, "BindingCommandDefinition"),
+        nodeContaining(sourceFile, "new BindingCommandDefinition"),
       idSegment: "binding-command-definition",
       from: compilerContractMethodEndpoint("BindingCommandDefinition.create"),
       to: compilerSymbolEndpoint("BindingCommandDefinition"),
@@ -60,8 +63,7 @@ function bindingCommandContractRows(
     }),
     contractRow(sourceProject, sourceFile, {
       sourceNode:
-        nodeContaining(sourceFile, "container.get<BindingCommandInstance>") ??
-        declarationNamed(sourceFile, "BindingCommandInstance"),
+        nodeContaining(sourceFile, "container.get<BindingCommandInstance>"),
       idSegment: "binding-command-instance",
       from: compilerContractMethodEndpoint("BindingCommand.get"),
       to: compilerSymbolEndpoint("BindingCommandInstance"),
@@ -72,7 +74,6 @@ function bindingCommandContractRows(
     }),
     contractRow(sourceProject, sourceFile, {
       sourceNode:
-        declarationNamed(sourceFile, "ICommandBuildInfo") ??
         nodeContaining(sourceFile, "build(info: ICommandBuildInfo"),
       idSegment: "command-build-info",
       from: compilerContractMethodEndpoint("BindingCommandInstance.build"),
@@ -88,15 +89,14 @@ function bindingCommandContractRows(
 function attributePatternContractRows(
   sourceProject: SourceProject,
 ): readonly FrameworkCompilerRelationshipRow[] {
-  const sourceFile = frameworkSourceFile(sourceProject, ATTRIBUTE_PATTERN_FILE);
+  const sourceFile = admittedFrameworkSourceFile(sourceProject, FRAMEWORK_JIT_COMPILER_PACKAGE_ID, ATTRIBUTE_PATTERN_FILE);
   if (sourceFile === null) {
     return [];
   }
   return [
     contractRow(sourceProject, sourceFile, {
       sourceNode:
-        nodeContaining(sourceFile, "registerPattern(patterns: AttributePatternDefinition[]") ??
-        declarationNamed(sourceFile, "AttributePatternDefinition"),
+        nodeContaining(sourceFile, "this._pendingDefs.push(...patterns)"),
       idSegment: "attribute-pattern-definition",
       from: compilerContractMethodEndpoint("AttributeParser.registerPattern"),
       to: compilerSymbolEndpoint("AttributePatternDefinition"),
@@ -107,8 +107,7 @@ function attributePatternContractRows(
     }),
     contractRow(sourceProject, sourceFile, {
       sourceNode:
-        nodeContaining(sourceFile, "new CompiledPattern(def)") ??
-        declarationNamed(sourceFile, "CompiledPattern"),
+        nodeContaining(sourceFile, "new CompiledPattern(def)"),
       idSegment: "compiled-pattern",
       from: compilerContractMethodEndpoint("SyntaxInterpreter.add"),
       to: compilerSymbolEndpoint("CompiledPattern"),
@@ -123,15 +122,14 @@ function attributePatternContractRows(
 function templateCompilerContractRows(
   sourceProject: SourceProject,
 ): readonly FrameworkCompilerRelationshipRow[] {
-  const sourceFile = frameworkSourceFile(sourceProject, TEMPLATE_COMPILER_FILE);
+  const sourceFile = admittedFrameworkSourceFile(sourceProject, FRAMEWORK_JIT_COMPILER_PACKAGE_ID, TEMPLATE_COMPILER_FILE);
   if (sourceFile === null) {
     return [];
   }
   return [
     contractRow(sourceProject, sourceFile, {
       sourceNode:
-        nodeContaining(sourceFile, "_getBindables(def: IAttributeComponentDefinition): IAttributeBindablesInfo") ??
-        declarationNamed(sourceFile, "IAttributeBindablesInfo"),
+        nodeContaining(sourceFile, "_getBindables(def: IAttributeComponentDefinition): IAttributeBindablesInfo"),
       idSegment: "attribute-bindables-info",
       from: compilerContractMethodEndpoint("CompilationContext._getBindables"),
       to: compilerSymbolEndpoint("IAttributeBindablesInfo"),
@@ -142,8 +140,7 @@ function templateCompilerContractRows(
     }),
     contractRow(sourceProject, sourceFile, {
       sourceNode:
-        nodeContaining(sourceFile, "_getBindables(def: IElementComponentDefinition): IElementBindablesInfo") ??
-        declarationNamed(sourceFile, "IElementBindablesInfo"),
+        nodeContaining(sourceFile, "_getBindables(def: IElementComponentDefinition): IElementBindablesInfo"),
       idSegment: "element-bindables-info",
       from: compilerContractMethodEndpoint("CompilationContext._getBindables"),
       to: compilerSymbolEndpoint("IElementBindablesInfo"),
@@ -184,7 +181,7 @@ function contractRow(
     relation: input.relation,
     mechanism: input.mechanism,
     phase: FrameworkRelationshipPhase.Compilation,
-    packageId: TEMPLATE_COMPILER_PACKAGE_ID,
+    packageId: FRAMEWORK_JIT_COMPILER_PACKAGE_ID,
     packageName: TEMPLATE_COMPILER_PACKAGE_NAME,
     from: { ...input.from, source },
     to: { ...input.to, source },
@@ -192,43 +189,6 @@ function contractRow(
     sourceRowId: `framework-compiler-contract:${input.idSegment}`,
     summary: input.summary,
   };
-}
-
-function frameworkSourceFile(
-  sourceProject: SourceProject,
-  suffix: string,
-): ts.SourceFile | null {
-  const normalizedSuffix = suffix.replace(/\\/gu, "/");
-  return sourceProject
-    .ownedSourceFiles()
-    .find((sourceFile) =>
-      sourceFile.fileName.replace(/\\/gu, "/").endsWith(normalizedSuffix),
-    ) ?? null;
-}
-
-function declarationNamed(
-  sourceFile: ts.SourceFile,
-  name: string,
-): ts.Node | null {
-  for (const statement of sourceFile.statements) {
-    if (
-      (ts.isClassDeclaration(statement) ||
-        ts.isInterfaceDeclaration(statement) ||
-        ts.isTypeAliasDeclaration(statement) ||
-        ts.isFunctionDeclaration(statement)) &&
-      statement.name?.text === name
-    ) {
-      return statement.name;
-    }
-    if (ts.isVariableStatement(statement)) {
-      for (const declaration of statement.declarationList.declarations) {
-        if (ts.isIdentifier(declaration.name) && declaration.name.text === name) {
-          return declaration.name;
-        }
-      }
-    }
-  }
-  return null;
 }
 
 function nodeContaining(sourceFile: ts.SourceFile, text: string): ts.Node | null {
@@ -266,7 +226,7 @@ function compilerContractMethodEndpoint(name: string): FrameworkRelationshipEndp
   return {
     kind: FrameworkRelationshipEndpointKind.Method,
     name,
-    packageId: TEMPLATE_COMPILER_PACKAGE_ID,
+    packageId: FRAMEWORK_JIT_COMPILER_PACKAGE_ID,
     packageName: TEMPLATE_COMPILER_PACKAGE_NAME,
   };
 }
@@ -275,7 +235,7 @@ function compilerSymbolEndpoint(name: string): FrameworkRelationshipEndpoint {
   return {
     kind: FrameworkRelationshipEndpointKind.Symbol,
     name,
-    packageId: TEMPLATE_COMPILER_PACKAGE_ID,
+    packageId: FRAMEWORK_JIT_COMPILER_PACKAGE_ID,
     packageName: TEMPLATE_COMPILER_PACKAGE_NAME,
   };
 }

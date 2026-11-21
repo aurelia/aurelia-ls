@@ -14,7 +14,7 @@ import {
 import type { Evidence } from "../evidence.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
-import { LocusKind, type SourceRange } from "../locus.js";
+import { LocusKind, RepoRootLocus, type SourceRange } from "../locus.js";
 import {
   NavigationPlane,
   NavigationRelation,
@@ -163,7 +163,7 @@ export function auLinkMemoryContinuation(
     rationale,
     inquiry: {
       lens: LensId.AtlasMemory,
-      locus: inquiry.locus,
+      locus: RepoRootLocus,
       projection: "records",
       filters: { auLinkId: linkId },
       budget: inquiry.budget ?? AULINK_MIRROR_DETAIL_BUDGET,

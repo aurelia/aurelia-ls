@@ -19,7 +19,6 @@ import {
   sourceRangeKey,
   sourceRangeForSourceFileNode,
   SourceProjectKeyedMemo,
-  SourceProjectMemo,
 } from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
 import type { FrameworkObserverEntityRow } from "./framework-entities.js";
@@ -1740,10 +1739,8 @@ const effectCallClassifications: readonly ObservationCallClassification[] = [
   },
 ];
 
-const observationInternalsMemo =
-  new SourceProjectMemo<ObservationInternalsIndex>();
 const observationInternalsBySurfaceKind = new SourceProjectKeyedMemo<
-  string,
+  string | undefined,
   ObservationInternalsIndex
 >();
 
@@ -1947,11 +1944,13 @@ export function readFrameworkObservationFlowEntityLinks(
   sourceProject: SourceProject,
   filters: FrameworkObservationInternalFilters,
 ): readonly FrameworkObservationFlowEntityLinkRow[] {
-  const entities = readFrameworkObserverEntities(sourceProject, {});
+  const entities = readFrameworkObserverEntities(sourceProject, {}).filter(isInternalObserverEntity);
+  // The linked export, its classification and match basis exist only after the join.
+  const sites = readFrameworkObservationFlowSites(sourceProject, {
+    ...filters, query: undefined, targetName: undefined,
+  });
   return uniqueFlowEntityLinks(
-    readFrameworkObservationFlowSites(sourceProject, filters).flatMap((site) =>
-      flowEntityLinksForSite(site, entities.filter(isInternalObserverEntity)),
-    ),
+    sites.flatMap((site) => flowEntityLinksForSite(site, entities)),
   )
     .filter((row) => observationFlowEntityLinkMatches(row, filters))
     .sort(compareFlowEntityLinks);
@@ -1964,30 +1963,6 @@ function isInternalObserverEntity(entity: FrameworkObserverEntityRow): boolean {
 function readObservationInternalsIndex(
   sourceProject: SourceProject,
   surfaceKind?: string,
-): ObservationInternalsIndex {
-  if (surfaceKind !== undefined) {
-    return readObservationSurfaceInternalsIndex(sourceProject, surfaceKind);
-  }
-  return observationInternalsMemo.read(sourceProject, () => {
-    const rows = sourceProject
-      .ownedSourceFiles()
-      .flatMap((sourceFile) =>
-        observationInternalsForSourceFile(sourceProject, sourceFile),
-      );
-    const methods = rows
-      .flatMap((row) => row.methods)
-      .sort(compareSurfaceMethods);
-    const sites = rows.flatMap((row) => row.sites).sort(compareFlowSites);
-    const relationships = sites
-      .map(observationRelationshipForFlowSite)
-      .sort(compareInternalRelationships);
-    return { methods, sites, relationships };
-  });
-}
-
-function readObservationSurfaceInternalsIndex(
-  sourceProject: SourceProject,
-  surfaceKind: string,
 ): ObservationInternalsIndex {
   return observationInternalsBySurfaceKind.read(
     sourceProject,

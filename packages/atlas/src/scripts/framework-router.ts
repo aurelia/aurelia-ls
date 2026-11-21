@@ -87,7 +87,7 @@ function printRollup(
 ): void {
   const rollup = value.rollup;
   console.log("");
-  console.log("rollup");
+  console.log("rollup across admitted router packages");
   console.log(`- source baseline: ${value.sourceState.status}`);
   console.log(`- expected Aurelia commit: ${value.sourceState.baseline.aureliaCommit}`);
   console.log(`- actual Aurelia commit: ${value.sourceState.actualAureliaCommit ?? "unknown"}`);

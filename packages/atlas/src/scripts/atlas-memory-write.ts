@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { isRecord } from "../collections.js";
@@ -6,14 +6,20 @@ import { errorMessage } from "../errors.js";
 import {
   ATLAS_MEMORY_REPO_PATH,
   ATLAS_MEMORY_SCHEMA_VERSION,
-  atlasMemoryNextActionPolicyValue,
   type AtlasMemoryAnchor,
   type AtlasMemoryManifest,
   type AtlasMemoryRecord,
   type AtlasMemoryRecordKind,
-  type AtlasMemoryShard,
   type AtlasMemoryShardReference,
+  type AtlasMemoryStorageIssue,
 } from "../inquiry/runtime/atlas-memory-contracts.js";
+import {
+  atlasMemoryShardEntries,
+  normalizeAtlasMemoryManifest,
+  normalizeAtlasMemoryRecord,
+  recordKindValue,
+} from "../inquiry/runtime/atlas-memory-normalization.js";
+import { normalizeAtlasMemoryRepoPath } from "../inquiry/runtime/atlas-memory-source-helpers.js";
 import { findRepoRoot } from "../source/index.js";
 import {
   requiredScriptArgumentValue,
@@ -25,7 +31,15 @@ type MemoryWriteMode = "template" | "list-shards" | "upsert" | "remove";
 interface LoadedShard {
   readonly reference: AtlasMemoryShardReference;
   readonly absolutePath: string;
-  readonly shard: AtlasMemoryShard;
+  readonly shard: {
+    readonly schemaVersion: typeof ATLAS_MEMORY_SCHEMA_VERSION;
+    readonly records: readonly StoredRecordHeader[];
+  };
+}
+
+interface StoredRecordHeader {
+  readonly id: string;
+  readonly createdAt?: unknown;
 }
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
@@ -45,11 +59,34 @@ switch (mode) {
     listShards();
     break;
   case "upsert":
-    upsertRecord();
+    writeWithLock(upsertRecord);
     break;
   case "remove":
-    removeRecord();
+    writeWithLock(removeRecord);
     break;
+}
+
+/** Serialize read-modify-write across shards, including moves to a different shard. */
+function writeWithLock(update: () => void): void {
+  if (dryRun) return update();
+  const lockPath = path.join(repoRoot, ".temp/atlas/memory-write.lock");
+  mkdirSync(path.dirname(lockPath), { recursive: true });
+  let lock: number;
+  try {
+    lock = openSync(lockPath, "wx");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      throw new Error(`Atlas memory writer lock at ${lockPath}. Retry after the writer finishes. If it was interrupted, verify the recorded PID has exited before removing the lock.`);
+    }
+    throw error;
+  }
+  try {
+    writeFileSync(lock, `${process.pid}\n`);
+    update();
+  } finally {
+    closeSync(lock);
+    rmSync(lockPath);
+  }
 }
 
 function printUsage(): void {
@@ -137,7 +174,8 @@ function upsertRecord(): void {
   const existing = loadedShards
     .flatMap((loaded) => loaded.shard.records)
     .find((candidate) => candidate.id === record.id);
-  const nextRecord = recordWithDates(record, existing?.createdAt, today);
+  const previousCreatedAt = typeof existing?.createdAt === "string" ? existing.createdAt : undefined;
+  const nextRecord = recordWithDates(record, previousCreatedAt, today);
   const changed = loadedShards.map((loaded) =>
     loaded.reference.path === targetPath
       ? upsertIntoShard(loaded, nextRecord)
@@ -152,17 +190,17 @@ function upsertRecord(): void {
     throw new Error(`Target shard ${targetPath} was not loaded.`);
   }
 
+  if (!dryRun) {
+    // A failed cross-shard move can be retried while either copy still exists.
+    writeChangedShards([target, ...changed.filter((entry) => entry !== target)]);
+  }
   console.log(
     `${dryRun ? "would upsert" : "upserted"} ${nextRecord.id} into ${targetPath}` +
-      (removedElsewhere.length === 0
-        ? ""
-        : `; removed duplicate from ${removedElsewhere.join(", ")}`),
+      (removedElsewhere.length === 0 ? "" : ` (moved from ${removedElsewhere.join(", ")})`),
   );
   if (dryRun) {
     console.log(JSON.stringify(nextRecord, null, 2));
-    return;
   }
-  writeChangedShards(changed);
 }
 
 function removeRecord(): void {
@@ -177,29 +215,17 @@ function removeRecord(): void {
   if (changedPaths.length === 0) {
     throw new Error(`No Atlas memory record with id ${recordId} was found.`);
   }
-  console.log(
-    `${dryRun ? "would remove" : "removed"} ${recordId} from ${changedPaths.join(", ")}`,
-  );
   if (!dryRun) {
     writeChangedShards(changed);
   }
+  console.log(`${dryRun ? "would remove" : "removed"} ${recordId} from ${changedPaths.join(", ")}`);
 }
 
 function readManifest(): AtlasMemoryManifest {
   const manifestPath = path.join(repoRoot, ATLAS_MEMORY_REPO_PATH);
-  const parsed = readJsonFile(manifestPath);
-  if (!isRecord(parsed) || parsed.schemaVersion !== ATLAS_MEMORY_SCHEMA_VERSION) {
-    throw new Error(
-      `Atlas memory manifest must use schemaVersion ${ATLAS_MEMORY_SCHEMA_VERSION}.`,
-    );
-  }
-  if (!Array.isArray(parsed.shards)) {
-    throw new Error("Atlas memory manifest must declare a shards array.");
-  }
-  return {
-    schemaVersion: ATLAS_MEMORY_SCHEMA_VERSION,
-    shards: parsed.shards.map((entry, index) => shardReference(entry, index)),
-  };
+  const issues: AtlasMemoryStorageIssue[] = [];
+  const manifest = normalizeAtlasMemoryManifest(manifestPath, readJsonFile(manifestPath), issues);
+  return requireValid(manifest, issues);
 }
 
 function readShards(
@@ -207,33 +233,41 @@ function readShards(
 ): readonly LoadedShard[] {
   return manifest.shards.map((reference) => {
     const absolutePath = path.join(repoRoot, reference.path);
-    const parsed = readJsonFile(absolutePath);
-    if (!isRecord(parsed) || parsed.schemaVersion !== ATLAS_MEMORY_SCHEMA_VERSION) {
-      throw new Error(
-        `Atlas memory shard ${reference.path} must use schemaVersion ${ATLAS_MEMORY_SCHEMA_VERSION}.`,
-      );
-    }
-    if (!Array.isArray(parsed.records)) {
-      throw new Error(`Atlas memory shard ${reference.path} must declare records.`);
-    }
+    const issues: AtlasMemoryStorageIssue[] = [];
+    const entries = atlasMemoryShardEntries(reference.path, readJsonFile(absolutePath), issues);
+    const records = requireValid(entries, issues).map((entry, index) => {
+      if (!hasStoredRecordId(entry)) {
+        throw new Error(`Missing record id at ${reference.path}:${index}.`);
+      }
+      // Preserve unrelated entries verbatim as JSON values when rewriting this shard.
+      return entry;
+    });
     return {
       reference,
       absolutePath,
       shard: {
         schemaVersion: ATLAS_MEMORY_SCHEMA_VERSION,
-        records: parsed.records.map((entry, index) =>
-          memoryRecord(entry, `${reference.path}:${index}`),
-        ),
+        records,
       },
     };
   });
 }
 
+function hasStoredRecordId(value: unknown): value is StoredRecordHeader {
+  return isRecord(value) && typeof value.id === "string";
+}
+
 function readRecordDraft(recordPath: string): AtlasMemoryRecord {
-  return memoryRecord(
-    readJsonFile(path.resolve(repoRoot, recordPath)),
-    recordPath,
-  );
+  const issues: AtlasMemoryStorageIssue[] = [];
+  const record = normalizeAtlasMemoryRecord(recordPath, readJsonFile(path.resolve(repoRoot, recordPath)), issues);
+  return requireValid(record, issues);
+}
+
+function requireValid<T>(value: T | null, issues: readonly AtlasMemoryStorageIssue[]): T {
+  if (value === null || issues.length > 0) {
+    throw new Error(issues.map((issue) => `${issue.id}: ${issue.summary}`).join("\n"));
+  }
+  return value;
 }
 
 function readJsonFile(filePath: string): unknown {
@@ -245,52 +279,6 @@ function readJsonFile(filePath: string): unknown {
   } catch (error) {
     throw new Error(`Could not parse ${filePath}: ${errorMessage(error)}`);
   }
-}
-
-function shardReference(
-  value: unknown,
-  index: number,
-): AtlasMemoryShardReference {
-  if (!isRecord(value) || typeof value.path !== "string") {
-    throw new Error(`Atlas memory manifest shard ${index} must have a path.`);
-  }
-  return {
-    path: normalizeRepoPath(value.path),
-    summary: typeof value.summary === "string" ? value.summary : undefined,
-  };
-}
-
-function memoryRecord(
-  value: unknown,
-  context: string,
-): AtlasMemoryRecord {
-  if (!isRecord(value)) {
-    throw new Error(`Atlas memory record ${context} must be an object.`);
-  }
-  if (
-    typeof value.id !== "string" ||
-    typeof value.summary !== "string" ||
-    !isRecordKind(value.kind)
-  ) {
-    throw new Error(
-      `Atlas memory record ${context} requires string id, known kind, and summary.`,
-    );
-  }
-  return {
-    id: value.id,
-    kind: value.kind,
-    domains: stringArray(value.domains),
-    summary: value.summary,
-    rationale: stringValue(value.rationale),
-    guidance: stringArrayOrUndefined(value.guidance),
-    nextActionPolicy: atlasMemoryNextActionPolicyValue(value.nextActionPolicy),
-    anchors: Array.isArray(value.anchors) ? value.anchors as [] : undefined,
-    liveChecks: Array.isArray(value.liveChecks)
-      ? value.liveChecks as []
-      : undefined,
-    createdAt: stringValue(value.createdAt),
-    updatedAt: stringValue(value.updatedAt),
-  };
 }
 
 function chooseTargetShardPath(
@@ -314,7 +302,7 @@ function resolveShardSpecifier(
   shards: readonly AtlasMemoryShardReference[],
   specifier: string,
 ): string {
-  const normalized = normalizeRepoPath(
+  const normalized = normalizeAtlasMemoryRepoPath(
     specifier.endsWith(".json")
       ? specifier
       : `packages/atlas/memory/records/${specifier}.json`,
@@ -368,10 +356,13 @@ function writeChangedShards(
 ): void {
   for (const loaded of shards) {
     if (loaded.changed) {
-      writeFileSync(
-        loaded.absolutePath,
-        `${JSON.stringify(loaded.shard, null, 2)}\n`,
-      );
+      const tempPath = `${loaded.absolutePath}.${process.pid}.tmp`;
+      try {
+        writeFileSync(tempPath, `${JSON.stringify(loaded.shard, null, 2)}\n`);
+        renameSync(tempPath, loaded.absolutePath);
+      } finally {
+        rmSync(tempPath, { force: true });
+      }
     }
   }
 }
@@ -391,7 +382,7 @@ function recordWithDates(
     nextActionPolicy: record.nextActionPolicy,
     anchors: record.anchors,
     liveChecks: record.liveChecks,
-    createdAt: record.createdAt ?? previousCreatedAt ?? today,
+    createdAt: previousCreatedAt ?? record.createdAt ?? today,
     updatedAt: today,
   };
 }
@@ -419,21 +410,10 @@ function memoryWriteModeValue(value: string): MemoryWriteMode {
 
 function recordKindArgument(): AtlasMemoryRecordKind | undefined {
   const value = scriptArgumentValue("--kind=");
-  return value === undefined
-    ? undefined
-    : isRecordKind(value)
-      ? value
-      : undefined;
-}
-
-function isRecordKind(value: unknown): value is AtlasMemoryRecordKind {
-  return (
-    value === "pressure-frontier" ||
-    value === "intentional-shape" ||
-    value === "reuse-guide" ||
-    value === "decision" ||
-    value === "doc-shard"
-  );
+  if (value === undefined) return undefined;
+  const kind = recordKindValue(value);
+  if (kind === undefined) throw new Error(`Unknown Atlas memory record kind: ${value}.`);
+  return kind;
 }
 
 function domainsArgument(): readonly string[] {
@@ -442,26 +422,6 @@ function domainsArgument(): readonly string[] {
   return domains === undefined
     ? ["atlas", "memory"]
     : domains.split(/[,\s]+/u).map((entry) => entry.trim()).filter(Boolean);
-}
-
-function stringArray(value: unknown): readonly string[] {
-  return Array.isArray(value)
-    ? value.filter((entry): entry is string => typeof entry === "string")
-    : [];
-}
-
-function stringArrayOrUndefined(value: unknown): readonly string[] | undefined {
-  return Array.isArray(value)
-    ? value.filter((entry): entry is string => typeof entry === "string")
-    : undefined;
-}
-
-function stringValue(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
-}
-
-function normalizeRepoPath(value: string): string {
-  return value.replace(/\\/gu, "/").replace(/^\.?\//u, "");
 }
 
 function dateStamp(): string {

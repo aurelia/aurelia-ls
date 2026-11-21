@@ -19,6 +19,7 @@ import {
 } from "../evidence.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
+import { RepoRootLocus } from "../locus.js";
 import { PagedRowFamily } from "../paged-row-family.js";
 import { evidenceLimit, pageOffset, rowLimit } from "../paging.js";
 import type { SourceProject } from "../../source/index.js";
@@ -52,6 +53,7 @@ import {
 export interface FrameworkRouterValue {
   readonly version: FrameworkRouterAnalysis["version"];
   readonly sourceState: FrameworkRouterAnalysis["sourceState"];
+  /** Census of the full router analysis. Scoped package counts are on the package rows. */
   readonly rollup: FrameworkRouterAnalysis["rollup"];
   readonly packages?: readonly FrameworkRouterPackageRow[];
   readonly surfaces?: readonly FrameworkRouterSurfaceRow[];
@@ -80,7 +82,14 @@ export function answerFrameworkRouter(
 ): Answer<FrameworkRouterValue> {
   const analysis = readFrameworkRouterAnalysis(sourceProject);
   const basis = frameworkRouterBasis(sourceProject);
-  switch (frameworkRouterProjection(inquiry)) {
+  const projection = frameworkRouterProjection(inquiry);
+  if ((projection === "flow-issues" || projection === "recognizer-issues") && inquiryPackageIdFilter(inquiry) !== undefined) {
+    return createAnswer(inquiry, OutcomeKind.Unsupported, "Router descriptor issues compare the complete framework checkout to its source baseline. Ask for the repository-wide issue projection.", {
+      basis,
+      continuations: frameworkRouterContinuations(inquiry).filter((next) => next.inquiry.projection === projection),
+    });
+  }
+  switch (projection) {
     case "summary":
       return answerFrameworkRouterSummary(inquiry, analysis, basis);
     case "packages":
@@ -165,11 +174,16 @@ function answerFrameworkRouterSummary(
   analysis: FrameworkRouterAnalysis,
   basis: readonly Basis[],
 ): Answer<FrameworkRouterValue> {
-  const packages = filterPackages(analysis.packages, inquiry).slice(0, rowLimit(inquiry));
+  const matching = filterPackages(analysis.packages, inquiry);
+  const packages = matching.slice(0, rowLimit(inquiry));
+  const packageScoped = inquiryPackageIdFilter(inquiry) !== undefined;
+  const summary = packageScoped
+    ? matching.map((row) => row.summary).join(" ") || "No matching router package."
+    : `Read ${analysis.rollup.packageCount} router package(s), ${analysis.rollup.surfaceCount} router surface row(s), ${analysis.rollup.flowCount} ordered route-flow row(s), ${analysis.rollup.routeRecognizerMechanicCount} route-recognizer mechanic row(s), ${analysis.rollup.relationshipCount} router relationship row(s), ${analysis.rollup.flowIssueCount} flow self-audit issue row(s), ${analysis.rollup.routeRecognizerMechanicIssueCount} recognizer self-audit issue row(s), ${analysis.rollup.routeContextCount} route-context row(s), ${analysis.rollup.routeTreeCount} route-tree row(s), and ${analysis.rollup.routeRecognizerCount} route-recognizer surface row(s). ${analysis.sourceState.summary}`;
   return createAnswer(
     inquiry,
-    OutcomeKind.Hit,
-    `Read ${analysis.rollup.packageCount} router package(s), ${analysis.rollup.surfaceCount} router surface row(s), ${analysis.rollup.flowCount} ordered route-flow row(s), ${analysis.rollup.routeRecognizerMechanicCount} route-recognizer mechanic row(s), ${analysis.rollup.relationshipCount} router relationship row(s), ${analysis.rollup.flowIssueCount} flow self-audit issue row(s), ${analysis.rollup.routeRecognizerMechanicIssueCount} recognizer self-audit issue row(s), ${analysis.rollup.routeContextCount} route-context row(s), ${analysis.rollup.routeTreeCount} route-tree row(s), and ${analysis.rollup.routeRecognizerCount} route-recognizer surface row(s). ${analysis.sourceState.summary}`,
+    packageScoped && matching.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+    summary,
     {
       value: {
         ...frameworkSourceStateBaseValue(analysis),
@@ -697,9 +711,11 @@ function frameworkRouterContinuations(inquiry: Inquiry): readonly Continuation[]
       id: "framework.router:flow-issues",
       kind: ContinuationKind.SwitchProjection,
       priority: ContinuationPriority.Secondary,
-      rationale: "Inspect self-audit rows for stale or ambiguous router flow descriptors.",
+      rationale: "Inspect the repository-wide audit of stale or ambiguous router flow descriptors.",
       inquiry: {
-        ...inquiry,
+        lens: LensId.FrameworkRouter,
+        locus: RepoRootLocus,
+        budget: inquiry.budget,
         projection: "flow-issues",
       },
     },
@@ -717,9 +733,11 @@ function frameworkRouterContinuations(inquiry: Inquiry): readonly Continuation[]
       id: "framework.router:recognizer-issues",
       kind: ContinuationKind.SwitchProjection,
       priority: ContinuationPriority.Secondary,
-      rationale: "Inspect self-audit rows for stale or ambiguous route-recognizer mechanic descriptors.",
+      rationale: "Inspect the repository-wide audit of stale or ambiguous route-recognizer mechanic descriptors.",
       inquiry: {
-        ...inquiry,
+        lens: LensId.FrameworkRouter,
+        locus: RepoRootLocus,
+        budget: inquiry.budget,
         projection: "recognizer-issues",
       },
     },

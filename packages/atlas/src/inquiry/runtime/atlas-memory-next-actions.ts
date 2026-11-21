@@ -58,6 +58,7 @@ export interface AtlasMemoryNextActionRow {
 /** Rank next moves from live memory state without storing them as tasks. */
 export function atlasMemoryNextActionRows(
   analysis: AtlasMemoryAnalysis,
+  untrackedClassLimit = 24,
 ): readonly AtlasMemoryNextActionRow[] {
   return [
     ...analysis.issues.map(storageIssueNextAction),
@@ -66,7 +67,7 @@ export function atlasMemoryNextActionRows(
     ...analysis.untrackedProductClassFrontiers
       .slice()
       .sort(compareUntrackedFrontierPressure)
-      .slice(0, 24)
+      .slice(0, untrackedClassLimit)
       .map(untrackedFrontierNextAction),
     ...analysis.records
       .filter((row) =>

@@ -1,3 +1,4 @@
+import type { SourceRange } from "../locus.js";
 import type {
   ProductArchitectureClassSurfaceRoleId,
   ProductArchitectureClassSurfaceRow,
@@ -380,6 +381,8 @@ export interface AtlasMemoryStoredRecord {
   readonly shardIndex: number;
   /** One-based line of the record id inside the shard file, when found. */
   readonly shardLine?: number;
+  /** Exact authored JSON object in the shard. */
+  readonly storageSource?: SourceRange;
 }
 
 /** Durable memory records loaded from every manifest shard. */
@@ -444,6 +447,8 @@ export interface AtlasMemoryRecordRow {
   readonly shardIndex: number;
   /** One-based line of the record id inside the shard file, when found. */
   readonly shardLine?: number;
+  /** Exact authored JSON object, when the row came from a durable shard. */
+  readonly storageSource?: SourceRange;
   /** Record kind copied for filters. */
   readonly kind: AtlasMemoryRecordKind;
   /** Domains copied for filters. */
@@ -521,5 +526,3 @@ export interface AtlasMemoryAnalysis {
   /** Storage issues. */
   readonly issues: readonly AtlasMemoryStorageIssue[];
 }
-
-/** Select stale or resolved durable memory rows that need re-checking before reuse. */

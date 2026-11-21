@@ -52,6 +52,7 @@ assertKnownScriptArguments("atlas.work-router", [
   "--coverageState=",
   "--coverageDepth=",
   "--rows=",
+  "--cursor=",
   "--limit=",
   "--plans",
   "--includePlans",
@@ -83,6 +84,7 @@ const coverageDimension = scriptArgumentValue("--coverageDimension=");
 const coverageState = scriptArgumentValue("--coverageState=");
 const coverageDepth = scriptArgumentValue("--coverageDepth=");
 const rows = scriptNumberArgumentValue("--rows=");
+const cursor = scriptArgumentValue("--cursor=");
 const rowLimit = rows ?? scriptNumberArgumentValue("--limit=");
 const displayRowLimit = rowLimit ?? (detail ? 20 : 8);
 const answerRowBudget = rowLimit ?? (detail ? 40 : 16);
@@ -126,6 +128,7 @@ const answer = await api.ask({
   locus: RepoRootLocus,
   projection,
   filters,
+  page: cursor === undefined ? undefined : { cursor },
   budget: { rows: answerRowBudget, evidencePerSubject: detail ? 4 : 2 },
 });
 
@@ -140,7 +143,7 @@ if (json) {
     value,
     page: answer.page,
   }, null, 2));
-  process.exit(0);
+  process.exit(answer.outcome === OutcomeKind.Error ? 1 : 0);
 }
 
 console.log("atlas.work-router");
@@ -153,6 +156,9 @@ if (fileRows !== undefined) {
   console.log(`workset file rows: ${fileRows}`);
 }
 console.log(answer.summary);
+if (answer.page?.nextCursor !== undefined) {
+  console.log(`Next page: --cursor=${answer.page.nextCursor}`);
+}
 
 if (value?.rollup !== undefined) {
   console.log("");
@@ -305,7 +311,7 @@ function printRouteHealth(
     const status = row.issues.length === 0 ? "ok" : `${row.issues.length} warning(s)`;
     console.log(`- ${row.routeId}: ${status}`);
     console.log(
-      `  sources ${row.foundSourceAnchorCount}/${row.sourceAnchorCount}; memory ${row.memoryRecordCount} record(s) from ${row.memoryAnchorCount} anchor(s); corpus ${row.fixtureSeedCount} fixture seed(s), ${row.expectedEffectCount} expected-effect descriptor(s) from ${row.corpusAnchorCount} anchor(s); query canaries ${row.queryCanaryCount - row.failingQueryCanaryCount}/${row.queryCanaryCount}`,
+      `  sources ${row.foundSourceAnchorCount}/${row.sourceAnchorCount}; memory ${row.memoryRecordCount} record(s) from ${row.memoryAnchorCount} anchor(s); corpus ${row.fixtureSeedCount} fixture seed(s), ${row.expectedEffectCount} expected-effect descriptor(s) from ${row.corpusAnchorCount} anchor(s); known query phrases ${row.queryCanaryCount - row.failingQueryCanaryCount}/${row.queryCanaryCount}`,
     );
     if (detail && row.issues.length > 0) {
       for (const issue of row.issues.slice(0, 3)) {

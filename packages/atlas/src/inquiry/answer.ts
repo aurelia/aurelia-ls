@@ -97,7 +97,7 @@ export function createAnswer<TValue, TInquiry extends Inquiry>(
     summary,
     value: options.value,
     basis: options.basis ?? [UnsupportedBasis],
-    evidence: options.evidence ?? [],
+    evidence: inquiry.budget?.evidencePerSubject === 0 ? [] : options.evidence ?? [],
     openSeams: options.openSeams ?? [],
     page: options.page,
     continuations: options.continuations ?? [],

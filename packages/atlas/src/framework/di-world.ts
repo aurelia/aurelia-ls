@@ -8,6 +8,7 @@ import {
   EvaluationFunctionValue,
   EvaluationUnknownValue,
   EvaluationValueKind,
+  readEvaluationTruthiness,
   StaticEvaluator,
   type EvaluationValue,
 } from "../evaluation/index.js";
@@ -30,13 +31,13 @@ import {
   FrameworkDiResolverStrategy,
   FrameworkRelationshipClosure,
   FrameworkRelationshipEndpointKind,
-  FrameworkRelationshipMechanism,
   FrameworkRelationshipRelation,
   type FrameworkRelationshipAtom,
   type FrameworkRelationshipEndpoint,
 } from "./relationships.js";
 import { readFrameworkModuleBootIndex } from "./module-boot.js";
-import { readFrameworkDiIndex } from "./di-index.js";
+import { frameworkDiKeyAtSource, frameworkRegistrationFactoryStrategy, readFrameworkDiIndex, type FrameworkDiKeyRow } from "./di-index.js";
+import { sourceNodeForDiRange } from "./di-source.js";
 import {
   FrameworkResourceRuntimePolicy,
   type FrameworkResourceInstanceLifetime,
@@ -282,49 +283,6 @@ export class FrameworkDiWorld {
     readonly opens: readonly FrameworkDiWorldOpen[],
   ) {}
 
-  /** Read dependencies for a materialization route key/provider pair. */
-  readDependenciesForRoute(
-    key: string,
-    provider: string,
-  ): readonly FrameworkDiDependencyRow[] {
-    const exact = this.dependencies.filter(
-      (row) => row.ownerKey.name === key && row.ownerProvider.name === provider,
-    );
-    if (exact.length > 0) {
-      return exact;
-    }
-    const keyOwned = this.dependencies.filter((row) => row.ownerKey.name === key);
-    if (key === provider && keyOwned.length > 0) {
-      return keyOwned;
-    }
-    return this.dependencies.filter(
-      (row) =>
-        row.ownerProvider.name === provider ||
-        row.ownerProvider.name === key,
-    );
-  }
-
-  /** Read dynamic dependencies for a materialization route key/provider pair. */
-  readVariableDependenciesForRoute(
-    key: string,
-    provider: string,
-  ): readonly FrameworkDiVariableDependencyRead[] {
-    const exact = this.variableDependencies.filter(
-      (row) => row.ownerKey.name === key && row.ownerProvider.name === provider,
-    );
-    if (exact.length > 0) {
-      return exact;
-    }
-    const keyOwned = this.variableDependencies.filter((row) => row.ownerKey.name === key);
-    if (key === provider && keyOwned.length > 0) {
-      return keyOwned;
-    }
-    return this.variableDependencies.filter(
-      (row) =>
-        row.ownerProvider.name === provider ||
-        row.ownerProvider.name === key,
-    );
-  }
 }
 
 /** Build/read one configuration or bundle's abstract DI world from linked framework source values. */
@@ -350,8 +308,8 @@ class FrameworkDiWorldBuilder {
   readonly #dependencies: FrameworkDiDependencyRow[] = [];
   readonly #variableDependencies: FrameworkDiVariableDependencyRead[] = [];
   readonly #opens: FrameworkDiWorldOpen[] = [];
-  readonly #spentRegistries = new Set<string>();
-  readonly #spentDefaultInterfaceKeys = new Set<string>();
+  readonly #activeRegisterFunctions = new Set<ts.FunctionLikeDeclaration>();
+  readonly #checkedDefaultInterfaceKeys = new Set<string>();
   readonly #dependencyScanKeys = new Set<string>();
   #admissionSequence = 0;
   #slotSequence = 0;
@@ -416,8 +374,8 @@ class FrameworkDiWorldBuilder {
     return new FrameworkDiWorld(
       owner,
       [...this.#admissions],
-      uniqueFirstByKey(this.#resolverSlots, (row) => `${row.key.name}:${row.provider.name}:${row.strategy}:${row.role}`),
-      uniqueFirstByKey(this.#resourceSlots, (row) => `${row.key.name}:${row.resource.name}:${row.instanceLifetime}`),
+      [...this.#resolverSlots],
+      [...this.#resourceSlots],
       uniqueFirstByKey(this.#dependencies, (row) => `${row.slotId}:${row.dependencyKey.name}:${row.access}:${row.source?.filePath}:${row.source?.start.line}:${row.source?.start.character}`),
       uniqueFirstByKey(this.#variableDependencies, (row) => `${row.slotId}:${row.variableKey.expressionText}:${row.access}:${row.source?.filePath}:${row.source?.start.line}:${row.source?.start.character}`),
       [...this.#opens],
@@ -429,33 +387,34 @@ class FrameworkDiWorldBuilder {
     owner: string,
     path: readonly string[],
     thisValue: EvaluationValue | null = null,
+    caller?: { readonly container: EvaluationValue; readonly args: readonly EvaluationValue[]; readonly frame: EvaluationEnvironment },
   ): void {
     const body = register.declaration.body;
     if (body === undefined) {
       this.open(owner, "Register function has no body.", sourceRangeForValue(this.sourceProject, register));
       return;
     }
-    const frame = register.environment.clone(`${owner}:di-register`);
+    if (this.#activeRegisterFunctions.has(register.declaration)) {
+      this.open(owner, "Register function is already active on this invocation path.", sourceRangeForValue(this.sourceProject, register));
+      return;
+    }
+    const environment = caller?.frame.hasLexicalScope(register.environment)
+      ? register.environment : register.environment.clone(`${owner}:di-register`);
+    const frame = environment.child();
+    const container = caller?.container ?? new EvaluationUnknownValue("Abstract registration container.", register.declaration, true);
+    frame.initializeBinding("$container", container, EvaluationBindingKind.Parameter, false, register.declaration);
     register.declaration.parameters.forEach((parameter, index) => {
       if (!ts.isIdentifier(parameter.name)) {
         return;
       }
       frame.initializeBinding(
         parameter.name.text,
-        new EvaluationUnknownValue("Abstract DI container parameter.", parameter),
+        caller?.args[index] ?? (caller === undefined && index === 0
+          ? container : new EvaluationUnknownValue("Register argument was not evaluated.", parameter)),
         EvaluationBindingKind.Parameter,
         true,
         parameter,
       );
-      if (index === 0) {
-        frame.initializeBinding(
-          "$container",
-          new EvaluationUnknownValue("Abstract DI container parameter.", parameter),
-          EvaluationBindingKind.Parameter,
-          true,
-          parameter,
-        );
-      }
     });
     if (thisValue !== null) {
       frame.initializeBinding(
@@ -467,14 +426,12 @@ class FrameworkDiWorldBuilder {
       );
     }
 
-    if (!ts.isBlock(body)) {
-      this.spendRegisterExpression(body, frame, owner, path);
-      return;
-    }
-
-    for (const statement of body.statements) {
-      this.evaluateLocalStatement(statement, frame, owner);
-      this.spendRegisterStatement(statement, frame, owner, path);
+    this.#activeRegisterFunctions.add(register.declaration);
+    try {
+      if (ts.isBlock(body)) this.spendRegisterStatement(body, frame, owner, path);
+      else this.spendRegisterExpression(body, frame, owner, path);
+    } finally {
+      this.#activeRegisterFunctions.delete(register.declaration);
     }
   }
 
@@ -520,17 +477,52 @@ class FrameworkDiWorldBuilder {
     frame: EvaluationEnvironment,
     owner: string,
     path: readonly string[],
-  ): void {
-    const visit = (node: ts.Node): void => {
-      if (ts.isFunctionLike(node) || ts.isClassLike(node)) {
-        return;
+  ): boolean {
+    if (ts.isBlock(statement)) {
+      const block = frame.child();
+      for (const child of statement.statements) {
+        if (ts.isFunctionDeclaration(child) && child.name) {
+          block.initializeBinding(child.name.text, new EvaluationFunctionValue(child, block, child), EvaluationBindingKind.Function, false, child);
+        }
       }
-      if (ts.isCallExpression(node)) {
-        this.spendRegisterExpression(node, frame, owner, path);
+      return statement.statements.every(child => this.spendRegisterStatement(child, block, owner, path));
+    }
+    if (ts.isIfStatement(statement)) {
+      const condition = this.#evaluator.evaluateExpressionInEnvironment(statement.expression, frame, owner).value;
+      const truthy = readEvaluationTruthiness(condition);
+      if (truthy === null) {
+        this.open(owner, "Registration depends on a condition whose value is open.", sourceRangeForOptionalNode(this.sourceProject, statement.expression));
+        this.#evaluator.invalidatePossibleWrites(statement, frame);
+        return !mayChangeRegistrationContinuation(statement);
       }
-      ts.forEachChild(node, visit);
-    };
-    visit(statement);
+      const branch = truthy ? statement.thenStatement : statement.elseStatement;
+      return branch === undefined || this.spendRegisterStatement(branch, frame, owner, path);
+    }
+    if (ts.isReturnStatement(statement)) {
+      if (statement.expression) this.spendRegisterExpression(statement.expression, frame, owner, path);
+      return false;
+    }
+    if (ts.isThrowStatement(statement)) {
+      this.open(owner, "Registration stopped at a throw.", sourceRangeForOptionalNode(this.sourceProject, statement));
+      return false;
+    }
+    if (ts.isVariableStatement(statement)) {
+      this.evaluateLocalStatement(statement, frame, owner);
+      for (const declaration of statement.declarationList.declarations) {
+        if (declaration.initializer && (ts.isCallExpression(unwrapExpression(declaration.initializer)) || containsRegisterCall(declaration.initializer))) {
+          this.spendRegisterExpression(declaration.initializer, frame, owner, path);
+        }
+      }
+      return true;
+    }
+    if (ts.isExpressionStatement(statement)) {
+      this.spendRegisterExpression(statement.expression, frame, owner, path);
+      return true;
+    }
+    if (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement) || ts.isEmptyStatement(statement)) return true;
+    this.open(owner, `Registration statement ${ts.SyntaxKind[statement.kind]} is not interpreted.`, sourceRangeForOptionalNode(this.sourceProject, statement));
+    this.#evaluator.invalidatePossibleWrites(statement, frame);
+    return !mayChangeRegistrationContinuation(statement);
   }
 
   private spendRegisterExpression(
@@ -541,9 +533,20 @@ class FrameworkDiWorldBuilder {
   ): void {
     const current = unwrapExpression(expression);
     if (!ts.isCallExpression(current)) {
+      if (containsRegisterCall(current)) {
+        this.open(owner, "Nested registration depends on an unsupported expression.", sourceRangeForOptionalNode(this.sourceProject, current));
+        this.#evaluator.invalidatePossibleWrites(current, frame);
+      } else {
+        this.#evaluator.evaluateExpressionInEnvironment(current, frame, owner);
+      }
       return;
     }
-    if (isRegistrationProductRegisterCall(current)) {
+    if (isRegistrationProductRegisterCall(this.sourceProject, current)) {
+      const target = current.arguments[0];
+      if (target === undefined || !ts.isIdentifier(target) || frame.readValue(target.text) !== frame.readValue("$container")) {
+        this.open(owner, "Registration targets a different or unresolved container.", sourceRangeForOptionalNode(this.sourceProject, current));
+        return;
+      }
       this.spendRegistrationHelperCall(
         current.expression.expression,
         frame,
@@ -553,6 +556,37 @@ class FrameworkDiWorldBuilder {
       return;
     }
     if (!isContainerRegisterCall(current)) {
+      const container = frame.readValue("$container");
+      const callee = this.#evaluator.evaluateExpressionInEnvironment(current.expression, frame, owner).value;
+      const capturesFrame = callee.kind === EvaluationValueKind.Function && frame.hasLexicalScope(callee.environment);
+      const passesContainer = current.arguments.some(arg => ts.isIdentifier(arg) && frame.readValue(arg.text) === container);
+      if (container !== null && (capturesFrame || passesContainer)) {
+        if (callee.kind === EvaluationValueKind.Function && current.arguments.every(arg => !ts.isSpreadElement(arg))) {
+          const args = current.arguments.map(arg => this.#evaluator.evaluateExpressionInEnvironment(arg, frame, owner).value);
+          this.spendRegisterFunction(callee, owner, [...path, "helper"], null, { container, args, frame });
+        } else {
+          this.open(owner, "Container is passed to a helper whose registration effects are open.", sourceRangeForOptionalNode(this.sourceProject, current));
+        }
+      } else if (containsRegisterCall(current)) {
+        this.open(owner, "A nested registry call has no modeled spending path.", sourceRangeForOptionalNode(this.sourceProject, current));
+      } else {
+        const args = current.arguments.filter(ts.isIdentifier).map(arg => frame.readValue(arg.text));
+        const mutable = args.filter(arg => arg?.kind === EvaluationValueKind.Object || arg?.kind === EvaluationValueKind.Array);
+        if (mutable.length > 0) {
+          const body = callee.kind === EvaluationValueKind.Function ? callee.declaration.body : undefined;
+          if (!body || !ts.isBlock(body) || body.statements.length > 0) {
+            const reason = "A helper may mutate registration options passed to it.";
+            this.open(owner, reason, sourceRangeForOptionalNode(this.sourceProject, current));
+            for (const value of mutable) this.#evaluator.invalidateObjectAliases(frame, value, new EvaluationUnknownValue(reason, current));
+          }
+        }
+      }
+      return;
+    }
+    const receiver = current.expression;
+    if (!ts.isPropertyAccessExpression(receiver) || !ts.isIdentifier(receiver.expression) ||
+        frame.readValue(receiver.expression.text) !== frame.readValue("$container") || frame.readValue("$container") === null) {
+      this.open(owner, "Register receiver is not the current configuration container.", sourceRangeForOptionalNode(this.sourceProject, current));
       return;
     }
     current.arguments.forEach((argument, index) =>
@@ -585,6 +619,9 @@ class FrameworkDiWorldBuilder {
           [...path, `spread:${index}`],
         ),
       );
+      if (spread.mayHaveUnknownElements) {
+        this.open(owner, "Register spread contains open elements.", sourceRangeForOptionalNode(this.sourceProject, argument));
+      }
       return;
     }
     const value = this.#evaluator.evaluateExpressionInEnvironment(argument, frame, owner).value;
@@ -605,16 +642,18 @@ class FrameworkDiWorldBuilder {
       return;
     }
 
+    const interfaceKey = frameworkDiKeyAtSource(this.sourceProject, sourceRangeForOptionalNode(this.sourceProject, expression));
+    if (interfaceKey !== null) {
+      this.spendInterfaceDefault(interfaceKey, owner, path, true);
+      return;
+    }
+
     if (value.kind === EvaluationValueKind.Object) {
       const register = value.properties.get("register")?.value;
       const ref = valueRefForValue(this.sourceProject, value, expression);
       if (register?.kind === EvaluationValueKind.Function) {
         const admission = this.admit(owner, "registry", ref, path, expression);
-        const registryKey = `${admission.value.name}:${admission.source?.filePath}:${admission.source?.start.line}:${admission.source?.start.character}`;
-        if (!this.#spentRegistries.has(registryKey)) {
-          this.#spentRegistries.add(registryKey);
-          this.spendRegisterFunction(register, admission.value.name, [...path, "registry"]);
-        }
+        this.spendRegisterFunction(register, admission.value.name, [...path, "registry"], value);
         return;
       }
       if (isInterfaceSymbolValue(value)) {
@@ -648,9 +687,13 @@ class FrameworkDiWorldBuilder {
     if (!ts.isCallExpression(call)) {
       return false;
     }
-    const helper = registrationHelperForCall(call);
+    const helper = frameworkRegistrationFactoryStrategy(this.sourceProject, call);
     if (helper === null) {
       return false;
+    }
+    if (helper === FrameworkDiResolverStrategy.Defer) {
+      this.open(owner, "Deferred registration requires a registry lookup.", sourceRangeForOptionalNode(this.sourceProject, call));
+      return true;
     }
     const keyArgument =
       helper === FrameworkDiResolverStrategy.Alias ? call.arguments[1] : call.arguments[0];
@@ -670,13 +713,15 @@ class FrameworkDiWorldBuilder {
     const key = valueRefForValue(this.sourceProject, keyValue, keyArgument);
     const provider = valueRefForValue(this.sourceProject, providerValue, providerArgument);
     const admission = this.admit(owner, "registration-helper", provider, path, call);
+    const unresolved = key.kind === "unknown" || provider.kind === "unknown";
+    if (unresolved) this.open(owner, "Registration key or provider identity remains open.", sourceRangeForOptionalNode(this.sourceProject, call));
     this.addResolverSlot(
       admission.id,
       key,
       provider,
       helper,
       "di-key-provider",
-      FrameworkRelationshipClosure.Exact,
+      unresolved ? FrameworkRelationshipClosure.Partial : FrameworkRelationshipClosure.Exact,
       sourceRangeForOptionalNode(this.sourceProject, call),
     );
     return true;
@@ -787,74 +832,42 @@ class FrameworkDiWorldBuilder {
 
   private closeDefaultInterfaceDependencyGraph(): void {
     this.scanProviderDependencies();
-    for (let iteration = 0; iteration < 12; iteration++) {
-      const beforeDependencyCount = this.#dependencies.length;
-      const requestedKeys = new Set(
-        this.#dependencies.map((row) => row.dependencyKey.name),
-      );
-      const added = this.spendDefaultInterfaceRegistrationsForKeys(requestedKeys);
+    while (this.spendDefaultInterfaceRegistrationsForKeys()) {
       this.scanProviderDependencies();
-      if (!added && this.#dependencies.length === beforeDependencyCount) {
-        return;
-      }
     }
   }
 
-  private spendDefaultInterfaceRegistrationsForKeys(
-    keys: ReadonlySet<string>,
-  ): boolean {
+  private spendDefaultInterfaceRegistrationsForKeys(): boolean {
+    const registered = new Set(this.#resolverSlots.map(row => frameworkDiKeyAtSource(this.sourceProject, row.key.source)?.id));
     let added = false;
-    for (const relationship of readFrameworkDiIndex(this.sourceProject).relationships) {
-      if (
-        relationship.mechanism !== FrameworkRelationshipMechanism.ResolverBuilder ||
-        relationship.strategy === undefined ||
-        (relationship.relation !== FrameworkRelationshipRelation.ProvidesKey &&
-          relationship.relation !== FrameworkRelationshipRelation.AliasesKey)
-      ) {
-        continue;
-      }
-      const keyName = relationship.key ?? relationship.from.name;
-      if (
-        !keys.has(keyName) ||
-        this.#spentDefaultInterfaceKeys.has(keyName) ||
-        this.#resolverSlots.some((slot) => slot.key.name === keyName)
-      ) {
-        continue;
-      }
-      const sourceNode =
-        sourceNodeForRange(this.sourceProject, relationship.to.source) ??
-        sourceNodeForRange(this.sourceProject, relationship.source);
-      if (sourceNode === null) {
-        continue;
-      }
-      const key = new FrameworkDiValueRef(
-        "interface",
-        keyName,
-        relationship.from.source ?? relationship.source,
-      );
-      const provider = valueRefForEndpoint(relationship.to);
-      const admission = this.admit(
-        "framework:createInterface-defaults",
-        "interface-default",
-        provider,
-        [relationship.packageId, key.name],
-        sourceNode,
-      );
-      this.addResolverSlot(
-        admission.id,
-        key,
-        provider,
-        relationship.relation === FrameworkRelationshipRelation.AliasesKey
-          ? FrameworkDiResolverStrategy.Alias
-          : relationship.strategy,
-        "di-key-provider",
-        FrameworkRelationshipClosure.Exact,
-        relationship.to.source ?? relationship.source,
-      );
-      this.#spentDefaultInterfaceKeys.add(keyName);
-      added = true;
+    for (const dependency of this.#dependencies) {
+      if (dependency.access !== "get" && dependency.access !== "resolve") continue;
+      const key = frameworkDiKeyAtSource(this.sourceProject, dependency.dependencyKey.source);
+      if (!key || registered.has(key.id) || this.#checkedDefaultInterfaceKeys.has(key.id)) continue;
+      this.#checkedDefaultInterfaceKeys.add(key.id);
+      if (this.spendInterfaceDefault(key, "framework:createInterface-defaults", [key.packageId, key.interfaceKey], false)) added = true;
     }
     return added;
+  }
+
+  private spendInterfaceDefault(key: FrameworkDiKeyRow, owner: string, path: readonly string[], explicitlyRegistered: boolean): boolean {
+    const providers = readFrameworkDiIndex(this.sourceProject).relationships.filter(row =>
+      key.defaultRegistrationAtomIds.includes(row.id) && row.strategy !== undefined &&
+      (row.relation === FrameworkRelationshipRelation.ProvidesKey || row.relation === FrameworkRelationshipRelation.AliasesKey));
+    const provider = providers[0];
+    const syntax = provider && sourceNodeForDiRange(this.sourceProject, provider.source);
+    if (providers.length !== 1 || provider?.closure !== FrameworkRelationshipClosure.Exact || !provider.strategy || !syntax) {
+      if (explicitlyRegistered || providers.length > 0) {
+        this.open(owner, `Interface ${key.interfaceKey} has no single proven default registration.`, key.source);
+      }
+      return false;
+    }
+    const ref = valueRefForEndpoint(provider.to);
+    const admission = this.admit(owner, "interface-default", ref, path, syntax);
+    this.addResolverSlot(admission.id, new FrameworkDiValueRef("interface", key.interfaceKey, key.source), ref,
+      provider.strategy, "di-key-provider", explicitlyRegistered ? FrameworkRelationshipClosure.Exact : FrameworkRelationshipClosure.Modeled,
+      provider.source);
+    return true;
   }
 
   private admit(
@@ -1286,6 +1299,18 @@ class FrameworkDiWorldBuilder {
   }
 }
 
+function containsRegisterCall(node: ts.Node): boolean {
+  if (ts.isFunctionLike(node) || ts.isClassLike(node)) return false;
+  if (ts.isCallExpression(node) && propertyOrIdentifierName(node.expression) === "register") return true;
+  return ts.forEachChild(node, child => containsRegisterCall(child) || undefined) === true;
+}
+
+function mayChangeRegistrationContinuation(node: ts.Node): boolean {
+  if (ts.isFunctionLike(node) || ts.isClassLike(node)) return false;
+  if (ts.isReturnStatement(node) || ts.isThrowStatement(node)) return true;
+  return ts.forEachChild(node, child => mayChangeRegistrationContinuation(child) || undefined) === true;
+}
+
 function dependencyKeyRefForValue(
   sourceProject: SourceProject,
   value: EvaluationValue,
@@ -1373,36 +1398,6 @@ function isModuleScopeDeclaration(declaration: ts.Declaration): boolean {
   return false;
 }
 
-function registrationHelperForCall(
-  call: ts.CallExpression,
-): FrameworkDiResolverStrategy | null {
-  const name = propertyOrIdentifierName(call.expression);
-  switch (name) {
-    case "instance":
-    case "instanceRegistration":
-      return FrameworkDiResolverStrategy.Instance;
-    case "singleton":
-    case "singletonRegistration":
-      return FrameworkDiResolverStrategy.Singleton;
-    case "transient":
-    case "transientRegistation":
-    case "transientRegistration":
-      return FrameworkDiResolverStrategy.Transient;
-    case "callback":
-    case "callbackRegistration":
-      return FrameworkDiResolverStrategy.Callback;
-    case "cachedCallback":
-    case "cachedCallbackRegistration":
-      return FrameworkDiResolverStrategy.CachedCallback;
-    case "aliasTo":
-    case "aliasRegistration":
-    case "aliasToRegistration":
-      return FrameworkDiResolverStrategy.Alias;
-    default:
-      return null;
-  }
-}
-
 function isContainerRegisterCall(call: ts.CallExpression): boolean {
   const expression = unwrapExpression(call.expression);
   return (
@@ -1412,7 +1407,7 @@ function isContainerRegisterCall(call: ts.CallExpression): boolean {
   );
 }
 
-function isRegistrationProductRegisterCall(call: ts.CallExpression): call is ts.CallExpression & {
+function isRegistrationProductRegisterCall(project: SourceProject, call: ts.CallExpression): call is ts.CallExpression & {
   readonly expression: ts.PropertyAccessExpression & { readonly expression: ts.CallExpression };
 } {
   const expression = unwrapExpression(call.expression);
@@ -1424,7 +1419,7 @@ function isRegistrationProductRegisterCall(call: ts.CallExpression): call is ts.
     expression.name.text === "register" &&
     receiver !== null &&
     ts.isCallExpression(receiver) &&
-    registrationHelperForCall(receiver) !== null
+    frameworkRegistrationFactoryStrategy(project, receiver) !== null
   );
 }
 
@@ -1931,36 +1926,6 @@ function classDeclarationForSource(
   return found ?? symbolBacked;
 }
 
-function sourceNodeForRange(
-  sourceProject: SourceProject,
-  source: SourceRange | undefined,
-): ts.Node | null {
-  if (source === undefined) {
-    return null;
-  }
-  const sourceFile = sourceProject.readSourceFile(source.filePath);
-  if (sourceFile === null) {
-    return null;
-  }
-  const position = sourceFile.getPositionOfLineAndCharacter(
-    source.start.line,
-    source.start.character,
-  );
-  let found: ts.Node | null = null;
-  const visit = (node: ts.Node): void => {
-    if (found !== null) {
-      return;
-    }
-    if (node.getStart(sourceFile) === position) {
-      found = node;
-      return;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  return found ?? sourceFile;
-}
-
 function valueRefForEndpoint(
   endpoint: FrameworkRelationshipEndpoint,
 ): FrameworkDiValueRef {
@@ -1985,6 +1950,10 @@ function valueRefForValue(
   value: EvaluationValue,
   expression: ts.Node,
 ): FrameworkDiValueRef {
+  const key = frameworkDiKeyAtSource(sourceProject, sourceRangeForOptionalNode(sourceProject, expression));
+  if (key !== null) {
+    return new FrameworkDiValueRef("interface", key.interfaceKey, key.source);
+  }
   const source =
     sourceRangeForValue(sourceProject, value) ??
     sourceRangeForOptionalNode(sourceProject, expression);

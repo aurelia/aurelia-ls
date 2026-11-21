@@ -113,24 +113,12 @@ const CONSEQUENCE_OVERVIEW_KIND_QUOTAS: Readonly<
   "template-controller-link": 1,
 };
 
-/** Read compact rendering consequences derived from normalized relationship rows. */
-export function readFrameworkRenderConsequences(
-  sourceProject: SourceProject,
-  filters: FrameworkRenderConsequenceFilters,
-): readonly FrameworkRenderConsequenceRow[] {
-  return readFrameworkRenderConsequenceRead(sourceProject, filters).rows;
-}
-
 /** Read compact rendering consequences while preserving overview/detail counts. */
 export function readFrameworkRenderConsequenceRead(
   sourceProject: SourceProject,
   filters: FrameworkRenderConsequenceFilters,
 ): FrameworkRenderConsequenceRead {
-  const allRows = readFrameworkRenderingRelationships(sourceProject, filters)
-    .map(renderConsequenceForRelationship)
-    .filter((row): row is FrameworkRenderConsequenceRow => row !== null)
-    .filter((row) => renderConsequenceMatches(row, filters))
-    .sort(renderConsequenceCompare);
+  const allRows = readFrameworkRenderConsequenceRows(sourceProject, filters);
   const overviewRows = renderConsequenceOverviewRows(allRows);
   const useOverview = shouldUseRenderConsequenceOverview(filters);
   return {
@@ -146,7 +134,7 @@ export function readFrameworkRenderConsequenceRows(
   sourceProject: SourceProject,
   filters: FrameworkRenderConsequenceFilters,
 ): readonly FrameworkRenderConsequenceRow[] {
-  return readFrameworkRenderingRelationships(sourceProject, filters)
+  return readFrameworkRenderingRelationships(sourceProject, { ...filters, query: undefined })
     .map(renderConsequenceForRelationship)
     .filter((row): row is FrameworkRenderConsequenceRow => row !== null)
     .filter((row) => renderConsequenceMatches(row, filters))

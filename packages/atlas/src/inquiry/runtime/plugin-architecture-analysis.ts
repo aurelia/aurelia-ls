@@ -3,8 +3,6 @@ import ts from "typescript";
 import { countBy, countByWhere, countWhere } from "../../collections.js";
 import {
   AURELIA_PLUGIN_PACKAGE_ID_PREFIX,
-  assignmentTargetReceiverName,
-  declarationInitializer,
   firstArgumentText,
   ownerNameForNode,
   requiredSourceFileIdentity,
@@ -20,22 +18,17 @@ import {
 } from "./aurelia-bindable-carriers.js";
 import {
   AureliaSourceImports,
+  collectAureliaServiceReceivers,
+  aureliaDiResolutionMechanismForCall,
   aureliaAppTaskMechanismForCall,
   aureliaDecoratorExportNameForExpression,
   aureliaRegistrationFactoryMechanismForCall,
-  isContainerLookupMethodName,
   isInsideImportDeclaration,
   isInsideCommonJsRequireDeclaration,
-  isAureliaContainerReference,
   isAureliaContainerReceiverTypeNode,
-  isAureliaKernelReference,
-  isReceiverDeclaration,
   isRouterInstanceMethodName,
-  isRouterReceiverInitializer,
-  isRouterReceiverTypeNode,
   isRouterReceiverValueExpression,
   readAureliaSourceImportsInto,
-  type ReceiverDeclaration,
 } from "./aurelia-source-imports.js";
 import {
   aureliaConventionResourceForClass,
@@ -291,46 +284,6 @@ interface MutablePluginPackageRow {
   templateReferenceCount: number;
 }
 
-class PluginSourceBindings extends AureliaSourceImports {
-  readonly containerReceiverNames = new Set<string>();
-}
-
-function readPluginSourceBindings(sourceFile: ts.SourceFile): PluginSourceBindings {
-  const bindings = new PluginSourceBindings();
-  readAureliaSourceImportsInto(sourceFile, bindings);
-  collectPluginReceiverBindings(sourceFile, bindings);
-  return bindings;
-}
-
-function collectPluginReceiverBindings(
-  sourceFile: ts.SourceFile,
-  bindings: PluginSourceBindings,
-): void {
-  const visit = (node: ts.Node): void => {
-    if (isReceiverDeclaration(node) && ts.isIdentifier(node.name)) {
-      if (declarationHasContainerReceiverShape(node, bindings)) {
-        bindings.containerReceiverNames.add(node.name.text);
-      }
-      if (pluginDeclarationHasRouterReceiverShape(node, bindings)) {
-        bindings.routerReceiverNames.add(node.name.text);
-      }
-    }
-    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
-      const targetName = assignmentTargetReceiverName(node.left);
-      if (targetName !== null) {
-        if (isContainerReceiverValueExpression(node.right, bindings)) {
-          bindings.containerReceiverNames.add(targetName);
-        }
-        if (isRouterReceiverValueExpression(node.right, bindings)) {
-          bindings.routerReceiverNames.add(targetName);
-        }
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-}
-
 function pluginPackageRow(row: MutablePluginPackageRow): PluginPackageRow {
   return {
     ...row,
@@ -345,7 +298,9 @@ function scanPluginSourceFile(
   packageName: string,
   surfaces: PluginSurfaceRow[],
 ): void {
-  const bindings = readPluginSourceBindings(sourceFile);
+  const bindings = new AureliaSourceImports(sourceProject.checker);
+  readAureliaSourceImportsInto(sourceFile, bindings);
+  collectAureliaServiceReceivers(sourceFile, bindings);
   const visit = (node: ts.Node): void => {
     for (const surface of pluginSurfacesForNode(
       sourceProject,
@@ -368,7 +323,7 @@ function pluginSurfacesForNode(
   packageId: string,
   packageName: string,
   node: ts.Node,
-  bindings: PluginSourceBindings,
+  bindings: AureliaSourceImports,
 ): readonly PluginSurfaceRow[] {
   const rows: PluginSurfaceRow[] = [];
   if (ts.canHaveDecorators(node)) {
@@ -515,7 +470,7 @@ function pluginConventionResourceRowForClass(
   packageId: string,
   packageName: string,
   node: ts.ClassDeclaration,
-  bindings: PluginSourceBindings,
+  bindings: AureliaSourceImports,
 ): PluginSurfaceRow | null {
   const convention = aureliaConventionResourceForClass(sourceFile, node, bindings);
   if (convention === null) {
@@ -540,7 +495,7 @@ function pluginSurfaceRowForDecorator(
   packageName: string,
   decorator: ts.Decorator,
   decoratedNode: ts.Node,
-  bindings: PluginSourceBindings,
+  bindings: AureliaSourceImports,
 ): PluginSurfaceRow | null {
   const expression = decorator.expression;
   const call =
@@ -607,10 +562,10 @@ function pluginSurfaceRowsForCallExpression(
   packageId: string,
   packageName: string,
   call: ts.CallExpression,
-  bindings: PluginSourceBindings,
+  bindings: AureliaSourceImports,
 ): readonly PluginSurfaceRow[] {
   const rows: PluginSurfaceRow[] = [];
-  const diResolutionMechanism = pluginDiResolutionMechanismForCall(call, bindings);
+  const diResolutionMechanism = aureliaDiResolutionMechanismForCall(call, bindings);
   if (diResolutionMechanism !== null) {
     const row = rowForNode(
       sourceProject,
@@ -727,95 +682,26 @@ function rowForNode(
 
 function registerMethodHasContainerParameter(
   node: ts.MethodDeclaration,
-  bindings: PluginSourceBindings,
+  bindings: AureliaSourceImports,
 ): boolean {
   return node.parameters.some((parameter) =>
     isAureliaContainerReceiverTypeNode(parameter.type, bindings),
   );
 }
 
-function declarationHasContainerReceiverShape(
-  node: ReceiverDeclaration,
-  bindings: PluginSourceBindings,
-): boolean {
-  return (
-    isAureliaContainerReceiverTypeNode(node.type, bindings) ||
-    isContainerReceiverInitializer(declarationInitializer(node), bindings)
-  );
-}
-
-function pluginDeclarationHasRouterReceiverShape(
-  node: ReceiverDeclaration,
-  bindings: PluginSourceBindings,
-): boolean {
-  return (
-    isRouterReceiverTypeNode(node.type, bindings) ||
-    isRouterReceiverInitializer(declarationInitializer(node), bindings)
-  );
-}
-
-function isContainerReceiverInitializer(
-  expression: ts.Expression | undefined,
-  bindings: PluginSourceBindings,
-): boolean {
-  if (expression === undefined) {
-    return false;
-  }
-  if (
-    ts.isCallExpression(expression) &&
-    isAureliaKernelReference(expression.expression, "resolve", bindings)
-  ) {
-    const first = expression.arguments[0];
-    return first !== undefined && isAureliaContainerReference(first, bindings);
-  }
-  return isContainerReceiverValueExpression(expression, bindings);
-}
-
-function isContainerReceiverValueExpression(
-  expression: ts.Expression,
-  bindings: PluginSourceBindings,
-): boolean {
-  return (
-    (ts.isIdentifier(expression) && bindings.containerReceiverNames.has(expression.text)) ||
-    (
-      ts.isPropertyAccessExpression(expression) &&
-      expression.expression.kind === ts.SyntaxKind.ThisKeyword &&
-      bindings.containerReceiverNames.has(expression.name.text)
-    )
-  );
-}
-
 function isPluginContainerRegisterCall(
   call: ts.CallExpression,
-  bindings: PluginSourceBindings,
+  bindings: AureliaSourceImports,
 ): boolean {
   return ts.isPropertyAccessExpression(call.expression) &&
     call.expression.name.text === "register" &&
-    isContainerReceiverValueExpression(call.expression.expression, bindings);
-}
-
-function pluginDiResolutionMechanismForCall(
-  call: ts.CallExpression,
-  bindings: PluginSourceBindings,
-): string | null {
-  if (isAureliaKernelReference(call.expression, "resolve", bindings)) {
-    return "kernel.resolve";
-  }
-  const expression = call.expression;
-  if (
-    ts.isPropertyAccessExpression(expression) &&
-    isContainerLookupMethodName(expression.name.text) &&
-    isContainerReceiverValueExpression(expression.expression, bindings)
-  ) {
-    return `container.${expression.name.text}`;
-  }
-  return null;
+    bindings.containerReceivers.has(call.expression.expression);
 }
 
 function pluginRouterMechanismForCall(
   call: ts.CallExpression,
   sourceFile: ts.SourceFile,
-  bindings: PluginSourceBindings,
+  bindings: AureliaSourceImports,
 ): string | null {
   const expression = call.expression;
   if (!ts.isPropertyAccessExpression(expression)) {

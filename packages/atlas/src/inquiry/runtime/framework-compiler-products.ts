@@ -62,18 +62,20 @@ export function readFrameworkCompilerRelationships(
   sourceProject: SourceProject,
   filters: FrameworkCompilerFilters,
 ): readonly FrameworkCompilerRelationshipRow[] {
+  // A qualified endpoint such as TemplateCompiler._compileNode is formed by the join.
+  const sourceFilters = { ...filters, query: undefined };
   return [
     ...compilerRelationshipsFromProducts(
       sourceProject,
-      readFrameworkCompilerInstructionProducts(sourceProject, filters),
+      readFrameworkCompilerInstructionProducts(sourceProject, sourceFilters),
       filters,
     ),
     ...compilerRelationshipsFromCompileFlow(
-      readAllFrameworkCompileFlowRows(sourceProject, filters),
+      readAllFrameworkCompileFlowRows(sourceProject, sourceFilters),
       filters,
     ),
     ...compilerRelationshipsFromAttributeClassification(
-      readFrameworkAttributeClassificationRows(sourceProject, filters),
+      readFrameworkAttributeClassificationRows(sourceProject, sourceFilters),
       filters,
     ),
     ...readFrameworkCompilerContractRelationships(sourceProject, filters),
@@ -175,30 +177,50 @@ export function compilerRelationshipsFromAttributeClassification(
 function compilerRelationshipsForAttributeClassificationRow(
   row: FrameworkAttributeClassificationRow,
 ): readonly FrameworkCompilerRelationshipRow[] {
-  const targets = [
-    ...(row.targetKind === undefined ? [] : [row.targetKind]),
-    ...row.instructionNames,
-  ].filter(isConcreteCompilerTarget);
-  if (targets.length === 0) {
-    return [];
+  // A classified attribute category is independent of the concrete instruction types the branch emits.
+  const edges = row.instructionNames.map((name) => ({
+    target: compilerTargetEndpoint(name),
+    relation: FrameworkRelationshipRelation.ProducesInstruction,
+  }));
+  if (row.branchKind === "parse-attribute" && row.targetKind !== undefined) {
+    edges.push({
+      target: compilerTargetEndpoint(row.targetKind),
+      relation: FrameworkRelationshipRelation.ParsesAttribute,
+    });
   }
-  return uniqueValues(targets).map((target) => {
-    const relation = attributeClassificationRelation(row, target);
-    return {
-      id: `${row.id}:compiler-relationship:${relation}:${target}`,
-      family: FrameworkRelationshipFamily.Compiler,
-      relation,
-      mechanism: attributeClassificationMechanism(row),
-      phase: FrameworkRelationshipPhase.Compilation,
-      packageId: "template-compiler",
-      packageName: "@aurelia/template-compiler",
-      from: compilerMethodEndpoint(row.methodName, row.source),
-      to: compilerTargetEndpoint(target),
-      source: row.source,
-      sourceRowId: row.id,
-      summary: `${row.ownerName}.${row.methodName} ${relation} ${target} in ${row.branchKind}: ${row.summary}`,
-    };
-  });
+  if (row.branchKind === "binding-command-resolution" && row.targetKind !== undefined) {
+    edges.push({
+      target: compilerTargetEndpoint(row.targetKind),
+      relation: FrameworkRelationshipRelation.LooksUpResource,
+    });
+  }
+  if (row.branchKind === "attribute-resource-lookup" && row.targetKind !== undefined) {
+    edges.push({
+      target: { kind: FrameworkRelationshipEndpointKind.Concept, name: row.targetKind },
+      relation: FrameworkRelationshipRelation.LooksUpResource,
+    });
+  }
+  if (row.branchKind === "ignored-binding-command" || row.branchKind === "element-bindables-command" ||
+      row.branchKind === "plain-binding-command") {
+    edges.push({
+      target: { ...compilerTargetEndpoint("BindingCommandInstance.build"), kind: FrameworkRelationshipEndpointKind.Method },
+      relation: FrameworkRelationshipRelation.InvokesCallback,
+    });
+  }
+  return edges.map(({ target, relation }) => ({
+    id: `${row.id}:compiler-relationship:${relation}:${target.name}`,
+    family: FrameworkRelationshipFamily.Compiler,
+    relation,
+    mechanism: attributeClassificationMechanism(row),
+    phase: FrameworkRelationshipPhase.Compilation,
+    packageId: "template-compiler",
+    packageName: "@aurelia/template-compiler",
+    from: compilerMethodEndpoint(row.methodName, row.source),
+    to: target,
+    source: row.source,
+    sourceRowId: row.id,
+    summary: `${row.ownerName}.${row.methodName} ${relation} ${target.name} in ${row.branchKind}: ${row.summary}`,
+  }));
 }
 
 function compilerFlowTargets(row: FrameworkCompileFlowRow): readonly string[] {
@@ -246,26 +268,6 @@ function compileFlowRelation(
   }
   if (target.startsWith("_")) {
     return FrameworkRelationshipRelation.InvokesCallback;
-  }
-  return FrameworkRelationshipRelation.CollectsDependency;
-}
-
-function attributeClassificationRelation(
-  row: FrameworkAttributeClassificationRow,
-  target: string,
-): FrameworkRelationshipRelation {
-  if (row.operation === "parse" || target === "AttrSyntax") {
-    return FrameworkRelationshipRelation.ParsesExpression;
-  }
-  if (row.operation === "find") {
-    return FrameworkRelationshipRelation.LooksUpResource;
-  }
-  if (
-    row.operation === "emit" ||
-    row.operation === "build" ||
-    target.endsWith("Instruction")
-  ) {
-    return FrameworkRelationshipRelation.ProducesInstruction;
   }
   return FrameworkRelationshipRelation.CollectsDependency;
 }

@@ -7,7 +7,7 @@ import {
 interface RouteQuestionRule {
   /** Stable route id this question belongs to. */
   readonly routeId: string;
-  /** Lowercase query fragments that can trigger the question. Fragments are exact substring checks, not fuzzy synonyms. */
+  /** Query fragments matched as case-insensitive substrings. */
   readonly queryAny?: readonly string[];
   /** Exact expected-effect filter that can trigger the question. */
   readonly effectKind?: string;
@@ -189,7 +189,7 @@ export function routeNextQuestions(
   const focused = RouteQuestionRules
     .filter((rule) => ruleMatchesRouteQuestion(rule, route, filters, query, frameworkErrorCode))
     .flatMap((rule) => renderRouteQuestion(rule, filters, frameworkErrorCode));
-  return uniqueRouteQuestions([...focused, ...route.nextQuestions]);
+  return [...new Set([...focused, ...route.nextQuestions])];
 }
 
 function ruleMatchesRouteQuestion(
@@ -203,7 +203,7 @@ function ruleMatchesRouteQuestion(
     return false;
   }
   return (
-    (rule.queryAny?.some((term) => query.includes(term)) ?? false) ||
+    (rule.queryAny?.some((term) => query.includes(term.toLocaleLowerCase())) ?? false) ||
     (rule.effectKind !== undefined && filters.effectKind === rule.effectKind) ||
     (rule.requiresAppPatternKey === true && filters.appPatternKey !== undefined) ||
     (rule.requiresSeedUse === true && filters.seedUse !== undefined) ||
@@ -220,17 +220,4 @@ function renderRouteQuestion(
     ? rule.question
     : rule.question(filters, frameworkErrorCode);
   return question === undefined ? [] : [question];
-}
-
-function uniqueRouteQuestions(questions: readonly string[]): readonly string[] {
-  const unique: string[] = [];
-  const seen = new Set<string>();
-  for (const question of questions) {
-    if (seen.has(question)) {
-      continue;
-    }
-    seen.add(question);
-    unique.push(question);
-  }
-  return unique;
 }

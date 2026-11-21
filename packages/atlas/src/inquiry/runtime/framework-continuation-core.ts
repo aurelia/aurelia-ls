@@ -117,6 +117,8 @@ export interface FrameworkSemanticRouteSpecInit {
   readonly navigationSpecId: string;
   /** Declared target endpoint. */
   readonly target: FrameworkRouteEndpoint;
+  /** Explicit destination scope for a relationship whose target can live outside the source package. */
+  readonly targetLocus?: Inquiry["locus"];
   /** Exact route relation being followed. */
   readonly relation: NavigationRelation;
   /** Basis kinds that support this route. */
@@ -149,6 +151,7 @@ export class FrameworkSemanticRouteSpec {
   readonly id: string;
   readonly navigationSpecId: string;
   readonly target: FrameworkRouteEndpoint;
+  readonly targetLocus?: Inquiry["locus"];
   readonly relation: NavigationRelation;
   readonly basis: readonly BasisKind[];
   readonly summary: string;
@@ -159,6 +162,7 @@ export class FrameworkSemanticRouteSpec {
     this.id = init.id;
     this.navigationSpecId = init.navigationSpecId;
     this.target = init.target;
+    this.targetLocus = init.targetLocus;
     this.relation = init.relation;
     this.basis = init.basis;
     this.summary = init.summary;
@@ -177,7 +181,12 @@ export class FrameworkSemanticRouteSpec {
       kind: instance.kind ?? this.kind ?? this.kindFor(inquiry),
       priority: instance.priority ?? this.priority ?? ContinuationPriority.Primary,
       rationale: instance.rationale,
-      inquiry: this.target.toInquiry(inquiry, instance),
+      inquiry: this.targetLocus === undefined
+        ? this.target.toInquiry(inquiry, instance)
+        : this.target.toInquiry({ ...inquiry, subject: undefined, filters: undefined }, {
+            ...instance,
+            locus: instance.locus ?? this.targetLocus,
+          }),
       evidence: evidence === undefined
         ? undefined
         : Array.isArray(evidence) ? evidence : [evidence],

@@ -16,7 +16,7 @@ It defines the nouns that later TypeScript, product, framework, bridge, and Atla
 - [continuation.ts](continuation.ts) defines semantic next-question moves.
 - [budget.ts](budget.ts) defines shared budget and pagination lanes. Keep `rows` for flat row-family pages,
   `facts` for fact projections that do not expose normal paging, `members` for nested member/detail expansion,
-  and `evidencePerSubject` for answer evidence display.
+  and `evidencePerSubject` for answer evidence display. In a paged row family each returned row gets that many witnesses. An explicit zero leaves the result and its outstanding questions available without the evidence list. Caller budgets override projection defaults, which override lens defaults.
 - [composition.ts](composition.ts) defines the shared actor/claim composition answer shape. Use it when a lens can
   expose precise signed claims (`subject -> predicate -> object`) around semantic actors instead of returning only
   lens-local rows plus continuations. Claim families, predicates, mechanisms, phases, entity kinds, and source lenses

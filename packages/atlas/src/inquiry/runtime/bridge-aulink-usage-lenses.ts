@@ -21,7 +21,7 @@ import {
 import { HandleKind, HandleNamespace } from "../handle.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
-import type { SourceRange } from "../locus.js";
+import { RepoRootLocus, type SourceRange } from "../locus.js";
 import {
   NavigationPlane,
   NavigationRelation,
@@ -29,6 +29,7 @@ import {
 } from "../navigation.js";
 import { PagedRowFamily } from "../paged-row-family.js";
 import {
+  usageOwnerSourceKey,
   type AuLinkRollup,
   type SourceProject,
 } from "../../source/index.js";
@@ -1279,6 +1280,7 @@ function auLinkUsageConsumerContinuations(
         {
           linkId: row.linkId,
           side: row.side,
+          ownerSourceKey: usageOwnerSourceKey(row),
           ownerName: row.ownerName,
           memberName: row.memberName,
           ownerMemberName: row.ownerMemberName,
@@ -1348,14 +1350,8 @@ function auLinkUsageConsumerContinuations(
         );
       }
     }
-    const frameworkApiContinuation = frameworkApiUsageConsumerContinuation(
-      inquiry,
-      row,
-      index,
-      evidence,
-    );
-    if (frameworkApiContinuation !== undefined) {
-      continuations.push(frameworkApiContinuation);
+    for (const [nativeIndex, consumerId] of row.frameworkApiConsumerIds.entries()) {
+      continuations.push(frameworkApiUsageConsumerContinuation(inquiry, row, index, nativeIndex, consumerId, evidence));
     }
   }
   return continuations;
@@ -1365,27 +1361,23 @@ function frameworkApiUsageConsumerContinuation(
   inquiry: Inquiry,
   row: AuLinkUsageConsumerRow,
   index: number,
+  nativeIndex: number,
+  consumerId: string,
   evidence: Evidence,
-): Continuation | undefined {
-  if (row.side !== "framework") {
-    return undefined;
-  }
+): Continuation {
   const usageRoles = Object.keys(row.usageRoles);
   return {
-    id: `bridge.aulink:usage-consumers:framework-api:${index}`,
+    id: `bridge.aulink:usage-consumers:framework-api:${index}:${nativeIndex}`,
     kind: ContinuationKind.SwitchLens,
     priority: ContinuationPriority.Secondary,
     rationale:
       "Inspect the native framework.api owner group behind this framework-side bridge usage consumer.",
     inquiry: {
       lens: LensId.FrameworkApi,
-      locus: inquiry.locus,
+      locus: RepoRootLocus,
       projection: "usage-consumers",
       filters: {
-        implementationName: row.symbolName,
-        memberName: row.memberName,
-        ownerName: row.ownerName,
-        ownerMemberName: row.ownerMemberName,
+        consumerId,
         role: usageRoles.length === 1 ? usageRoles[0] : undefined,
         ...singletonRecordFilter(row.callCalleeNames, "callCalleeName"),
         ...singletonRecordFilter(row.callArgumentTexts, "callArgumentText"),
@@ -1494,6 +1486,7 @@ function usageSiteContinuations(
         {
           linkId: row.linkId,
           side: row.side,
+          ownerSourceKey: usageOwnerSourceKey(row.owner),
           ownerName: row.owner.ownerName,
           memberName: row.memberName,
           ownerMemberName: row.owner.ownerMemberName,

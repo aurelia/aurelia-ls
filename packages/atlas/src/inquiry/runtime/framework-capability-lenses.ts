@@ -8,6 +8,7 @@ import {
   type Basis,
 } from "../basis.js";
 import {
+  ContinuationKind,
   ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
@@ -21,9 +22,9 @@ import {
 } from "../evidence.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
-import { RepoRootLocus, type SourceRange } from "../locus.js";
+import { LocusKind, RepoRootLocus, type Locus, type SourceRange } from "../locus.js";
 import { PagedRowFamily } from "../paged-row-family.js";
-import { pageOffset, rowLimit } from "../paging.js";
+import { evidenceLimit, pageInfo, pageOffset, pageRows, rowLimit } from "../paging.js";
 import { FrameworkResourceDefinitionKind } from "../../framework/index.js";
 import type { SourceProject } from "../../source/index.js";
 import {
@@ -36,9 +37,11 @@ import { answerFrameworkApi } from "./framework-api-lenses.js";
 import { answerFrameworkCompiler } from "./framework-compiler-lenses.js";
 import { answerFrameworkComposition } from "./framework-composition-lenses.js";
 import { answerFrameworkCorpus } from "./framework-corpus-lenses.js";
+import { FrameworkResourceCarrierKind } from "./framework-entities.js";
+import { answerTsStructure } from "./ts-lenses.js";
+import { optionalNextPageContinuation } from "./lens-continuation-utils.js";
 import { answerFrameworkDi } from "./framework-di-lenses.js";
 import { answerFrameworkDiscovery } from "./framework-discovery-answerer.js";
-import { answerFrameworkEvaluator } from "./framework-evaluator-lenses.js";
 import { answerFrameworkLifecycle } from "./framework-lifecycle-lenses.js";
 import { answerFrameworkObservation } from "./framework-observation-lenses.js";
 import { answerFrameworkRendering } from "./framework-lenses.js";
@@ -47,15 +50,16 @@ import { answerFrameworkRouter } from "./framework-router-lenses.js";
 import { answerPluginArchitecture } from "./plugin-architecture-lenses.js";
 import { answerWorkspaceArchitecture } from "./workspace-architecture-lenses.js";
 import {
-  enumerateFrameworkTerritoryConstructs,
+  readFrameworkTerritoryInventory,
   FrameworkCoverageBasisClosure,
-  frameworkCapabilityClusters,
+  readFrameworkCapabilityClusters,
   frameworkForwardCoverage,
   frameworkReverseCoverage,
   type FrameworkCapabilityCluster,
   type FrameworkForwardCoverageFamily,
   type FrameworkReverseCoverageFamily,
   type FrameworkTerritoryConstruct,
+  type FrameworkTerritoryInput,
 } from "./framework-capability-territory.js";
 import {
   inquiryLowerStringFilter,
@@ -243,6 +247,8 @@ export const enum FrameworkCapabilityEvidenceLane {
 
 /** Curated pointer to the substrate that should prove or refine a capability row. */
 export interface FrameworkCapabilityEvidenceRef {
+  /** Exact input locus when the target inspects a specific source file. */
+  readonly locus?: Locus;
   /** Evidence family behind this pointer. */
   readonly lane: FrameworkCapabilityEvidenceLane;
   /** Optional Atlas lens that can inspect the backing terrain. */
@@ -280,25 +286,13 @@ export interface FrameworkCapabilityMatrixRow {
 }
 
 /** One materialized evidence descriptor for a capability row. */
-export interface FrameworkCapabilityEvidenceRow {
+export interface FrameworkCapabilityEvidenceRow extends FrameworkCapabilityEvidenceRef {
   /** Stable evidence row id. */
   readonly id: string;
-  /** Capability row that owns this evidence descriptor. */
+  /** Capability row that owns this descriptor. */
   readonly capabilityId: string;
-  /** Evidence lane. */
-  readonly lane: FrameworkCapabilityEvidenceLane;
-  /** Grounding strength inferred from the evidence lane and target. */
+  /** Grounding strength inferred from the lane and target. */
   readonly groundingStrength: FrameworkCapabilityGroundingStrength;
-  /** Optional Atlas lens that can inspect the backing terrain. */
-  readonly lensId?: LensId;
-  /** Optional lens projection that should be queried. */
-  readonly projection?: string;
-  /** Optional query/filter hint for the target lens. */
-  readonly query?: string;
-  /** Optional framework or analyzer symbol name to inspect. */
-  readonly symbolName?: string;
-  /** Grounded explanation of what this evidence is expected to show. */
-  readonly summary: string;
 }
 
 /** Compact witness extracted from one backing answer evidence row. */
@@ -328,25 +322,9 @@ export interface FrameworkCapabilityEvidenceTraceCollection {
 }
 
 /** Evidence descriptor joined to a backing lens answer. */
-export interface FrameworkCapabilityEvidenceTraceRow {
-  /** Stable trace row id. */
-  readonly id: string;
-  /** Capability row that owns the evidence descriptor. */
-  readonly capabilityId: string;
-  /** Evidence descriptor row id. */
+export interface FrameworkCapabilityEvidenceTraceRow extends FrameworkCapabilityEvidenceRow {
+  /** Descriptor that was materialized. */
   readonly evidenceRowId: string;
-  /** Evidence lane being traced. */
-  readonly lane: FrameworkCapabilityEvidenceLane;
-  /** Grounding strength inferred from the evidence lane and target. */
-  readonly groundingStrength: FrameworkCapabilityGroundingStrength;
-  /** Target lens that was asked, when the descriptor had one. */
-  readonly lensId?: LensId;
-  /** Target projection that was asked. */
-  readonly projection?: string;
-  /** Target query/filter hint. */
-  readonly query?: string;
-  /** Target symbol hint. */
-  readonly symbolName?: string;
   /** Outcome from the backing lens answer, when materialized. */
   readonly targetOutcome?: OutcomeKind;
   /** Summary from the backing lens answer, when materialized. */
@@ -459,6 +437,8 @@ export interface FrameworkCapabilitiesValue {
   readonly groundingRows?: readonly FrameworkCapabilityGroundingRow[];
   /** Source-derived concrete inventory constructs returned by the inventory projection. */
   readonly inventoryRows?: readonly FrameworkTerritoryConstruct[];
+  /** Source-family pages used to derive inventory or cluster rows, before output pagination. */
+  readonly inputPages?: readonly FrameworkTerritoryInput[];
   /** Per-family reverse-coverage rows (concrete constructs vs auLink correspondences) from reverse-coverage. */
   readonly reverseCoverageRows?: readonly FrameworkReverseCoverageFamily[];
   /** Per-family forward-coverage rows (concrete constructs grounded by a curated category) from coverage. */
@@ -574,26 +554,6 @@ const EVIDENCE_ROW_FAMILY = new PagedRowFamily<FrameworkCapabilityEvidenceRow>({
       ],
 });
 
-const EVIDENCE_TRACE_ROW_FAMILY =
-  new PagedRowFamily<FrameworkCapabilityEvidenceTraceRow>({
-    id: "framework.capabilities:evidence-trace",
-    rowLabel: "framework capability evidence trace rows",
-    evidenceForRow: (row) => evidenceTraceEvidence(row),
-    continuationsForPage: (inquiry, _rows, nextOffset, limit) =>
-      nextOffset === undefined
-        ? []
-        : [
-            nextPageContinuation(
-              inquiry,
-              "framework.capabilities:evidence-trace:next-page",
-              "Continue materialized framework capability evidence traces.",
-              nextOffset,
-              limit,
-              { priority: ContinuationPriority.Secondary },
-            ),
-          ],
-  });
-
 const GROUNDING_ROW_FAMILY = new PagedRowFamily<FrameworkCapabilityGroundingRow>({
   id: "framework.capabilities:grounding",
   rowLabel: "framework capability grounding rows",
@@ -676,7 +636,7 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     summary:
       "Aurelia can infer named resources from active naming conventions when the conventions capability is admitted.",
     evidence: [
-      lensEvidence(LensId.FrameworkResources, "convergence", "Framework resource convergence exposes convention-discovered carriers."),
+      declarationEvidence("aurelia/packages-tooling/plugin-conventions/src/name-convention.ts", "nameConvention", "The conventions plugin derives the resource kind and normalized name from the class name."),
     ],
   }),
   capability({
@@ -694,7 +654,7 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     effects: [FrameworkCapabilityEffect.ResourceDefinition],
     summary:
       "Aurelia can read resource definitions from class decorator metadata on resource classes.",
-    evidence: [lensEvidence(LensId.FrameworkResources, "convergence", "Framework resource convergence follows decorator carriers.")],
+    evidence: [declarationEvidence("aurelia/packages/runtime-html/src/resources/value-converter.ts", "valueConverter", "The resource decorator initializer defines converter metadata on its class.")],
   }),
   capability({
     id: "resource-source:static-au",
@@ -711,7 +671,7 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     effects: [FrameworkCapabilityEffect.ResourceDefinition],
     summary:
       "Aurelia can read class-side static $au resource definition metadata without decorators.",
-    evidence: [lensEvidence(LensId.FrameworkResources, "convergence", "Resource convergence follows static resource metadata carriers.")],
+    evidence: [lensEvidence(LensId.FrameworkResources, "convergence", "Resource convergence follows static resource metadata carriers.", FrameworkResourceCarrierKind.StaticAu)],
   }),
   capability({
     id: "resource-source:define-call",
@@ -732,8 +692,7 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     summary:
       "Aurelia can define resource metadata through imperative definition APIs on resource definition kinds.",
     evidence: [
-      lensEvidence(LensId.FrameworkResources, "convergence", "Framework resource rows include define-call materialization sites."),
-      lensEvidence(LensId.FrameworkEvaluator, "effects", "Static evaluator is the correct substrate for define-call effects."),
+      lensEvidence(LensId.FrameworkResources, "convergence", "Resource convergence identifies the imperative definition call and its backing declaration.", FrameworkResourceCarrierKind.DefineCall),
     ],
   }),
   capability({
@@ -885,7 +844,7 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     ],
     summary:
       "Attribute patterns are compiler syntax resources that recognize custom attribute command shapes.",
-    evidence: [lensEvidence(LensId.FrameworkCompiler, "attribute-classification", "Compiler lens follows attribute pattern classification before binding command lookup.")],
+    evidence: [declarationEvidence("aurelia/packages/template-compiler/src/attribute-pattern.ts", "AttributeParser", "AttributeParser interprets attribute patterns before command selection.")],
   }),
   capability({
     id: "resource:bindable",
@@ -906,7 +865,7 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     summary:
       "Aurelia can expose component and attribute properties as bindable target APIs with binding-mode metadata.",
     evidence: [
-      lensEvidence(LensId.FrameworkResources, "convergence", "Framework resource rows expose bindable metadata lanes."),
+      declarationEvidence("aurelia/packages/runtime-html/src/bindable.ts", "BindableDefinition", "The bindable definition records attribute, binding mode and property configuration."),
       lensEvidence(LensId.FrameworkObservation, "summary", "Observation lens anchors bindable-backed observer and writeback behavior."),
     ],
   }),
@@ -943,7 +902,7 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     effects: [FrameworkCapabilityEffect.ResourceVisibility],
     summary:
       "Local resource visibility constrains which elements, attributes, converters, and behaviors are legal in a template.",
-    evidence: [lensEvidence(LensId.FrameworkResources, "convergence", "Framework resource convergence is the grounding lens for local dependency lookup.")],
+    evidence: [declarationEvidence("aurelia/packages/runtime-html/src/templating/controller.ts", "$el", "Custom element controller creation registers the definition dependencies in the component container.")],
   }),
   capability({
     id: "resource:as-element",
@@ -1024,7 +983,7 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     evidence: [
       lensEvidence(LensId.FrameworkApi, "subjects", "Framework API rows expose IAppRootConfig.allowActionlessForm and AppRoot behavior.", "IAppRootConfig"),
       lensEvidence(LensId.BridgeAuLink, "anchors", "auLink anchors connect the semantic-runtime AppRootConfig mirror to the framework app-root config.", "runtime-html:IAppRootConfig"),
-      docsEvidence("submit.trigger", "Forms documentation explains actionless form submit prevention and the allowActionlessForm override."),
+      docsEvidence("allowActionlessForm", "The testing guide demonstrates enabling the actionless form override.", "doc-snippets"),
     ],
   }),
   capability({
@@ -1326,7 +1285,7 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     ],
     summary:
       "The Aurelia ecosystem can provide state-management capabilities through the state plugin package.",
-    evidence: [lensEvidence(LensId.PluginArchitecture, "summary", "Plugin architecture lens grounds plugin-provided store surfaces.")],
+    evidence: [lensEvidence(LensId.FrameworkAdmission, "relationships", "StateDefaultConfiguration registers the framework package's store services.", "StateDefaultConfiguration")],
   }),
   capability({
     id: "state:binding-behavior",
@@ -1350,8 +1309,8 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     summary:
       "`& state` evaluates ordinary binding expressions against a store-backed state scope while preserving the original template scope as parent.",
     evidence: [
-      lensEvidence(LensId.PluginArchitecture, "surfaces", "Plugin architecture should expose the state plugin binding behavior resource.", "StateBindingBehavior"),
-      lensEvidence(LensId.FrameworkObservation, "flow-sites", "Observation flow-sites are the grounding lane for the createStateBindingScope handoff.", "state binding behavior"),
+      lensEvidence(LensId.FrameworkResources, "convergence", "The framework state binding behavior is a resource admitted by StateDefaultConfiguration.", "StateBindingBehavior"),
+      declarationEvidence("aurelia/packages/state/src/state-utilities.ts", "createStateBindingScope", "State templating creates a scope with the state object and the authored parent scope."),
       lensEvidence(LensId.BridgeAuLink, "anchors", "auLink anchors connect the semantic-runtime StateBindingBehavior mirror to the framework plugin class.", "state:StateBindingBehavior"),
     ],
   }),
@@ -1382,7 +1341,7 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     summary:
       "`.state` is a plugin binding command that lowers target/store syntax into a StateBinding expression evaluated against the configured store-state scope.",
     evidence: [
-      lensEvidence(LensId.PluginArchitecture, "surfaces", "Plugin architecture should expose the state attribute pattern and binding command registrations.", "StateBindingCommand"),
+      lensEvidence(LensId.FrameworkResources, "convergence", "StateBindingCommand joins the state package resource carrier, admission and syntax product.", "StateBindingCommand"),
       lensEvidence(LensId.FrameworkCompiler, "attribute-classification", "Compiler classification grounds binding-command syntax and attribute-pattern handoff.", "state"),
       lensEvidence(LensId.BridgeAuLink, "anchors", "auLink anchors connect StateAttributePattern and StateBindingCommand mirrors to framework plugin classes.", "state:StateBindingCommand"),
     ],
@@ -1413,8 +1372,8 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     summary:
       "`.dispatch` is a plugin event binding command that evaluates an action expression in the store-state scope plus listener `$event`, then dispatches the result to the selected store.",
     evidence: [
-      lensEvidence(LensId.PluginArchitecture, "surfaces", "Plugin architecture should expose the state dispatch binding command and renderer registrations.", "DispatchBindingCommand"),
-      lensEvidence(LensId.FrameworkCompiler, "attribute-classification", "Compiler classification grounds dispatch command syntax and attribute-pattern handoff.", "dispatch"),
+      lensEvidence(LensId.FrameworkResources, "convergence", "DispatchBindingCommand joins the framework package carrier, admission and syntax product.", "DispatchBindingCommand"),
+      declarationEvidence("aurelia/packages/state/src/state-templating.ts", "DispatchBindingCommand", "The dispatch command builds the instruction for the authored event expression."),
       lensEvidence(LensId.BridgeAuLink, "anchors", "auLink anchors connect DispatchBindingCommand and StateDispatchBinding mirrors to framework plugin classes.", "state:DispatchBindingCommand"),
     ],
   }),
@@ -1486,7 +1445,7 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     summary:
       "Aurelia can observe array, map, and set collection access or mutation through observer-locator and proxy/connectable collection semantics.",
     evidence: [
-      lensEvidence(LensId.FrameworkObservation, "collection-methods", "Observation lens exposes collection method and mutation observation policy."),
+      lensEvidence(LensId.FrameworkObservation, "collection-methods", "Observation rows identify collection receiver operations and their tracking behavior.", "array"),
       lensEvidence(LensId.FrameworkObservation, "observer-locator-decisions", "Observer locator decisions expose array length/index and collection-size observer branches."),
     ],
   }),
@@ -1532,7 +1491,7 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     ],
     summary:
       "Aurelia can observe and write checked state for checkbox and radio inputs through checked observers.",
-    evidence: [lensEvidence(LensId.FrameworkObservation, "flow-sites", "Observation lens anchors checked observer semantics.")],
+    evidence: [lensEvidence(LensId.FrameworkObservation, "flow-sites", "CheckedObserver source rows show event handling, subscriber notification and model comparison.", "CheckedObserver")],
   }),
   capability({
     id: "binding:select-channel",
@@ -1564,7 +1523,10 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     ],
     summary:
       "Aurelia can bind class and style targets through dedicated binding and interpolation forms.",
-    evidence: [lensEvidence(LensId.FrameworkRendering, "binding-effects", "Rendering and binding lanes expose class/style target operations.")],
+    evidence: [
+      declarationEvidence("aurelia/packages/runtime-html/src/observation/class-attribute-accessor.ts", "ClassAttributeAccessor", "ClassAttributeAccessor updates the element class list from binding values."),
+      declarationEvidence("aurelia/packages/runtime-html/src/observation/style-attribute-accessor.ts", "StyleAttributeAccessor", "StyleAttributeAccessor updates CSS declarations from binding values."),
+    ],
   }),
   capability({
     id: "binding:writeback-direction",
@@ -1579,7 +1541,7 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     ],
     summary:
       "Aurelia can configure whether a binding reads from the view model, writes from the view, or does both.",
-    evidence: [lensEvidence(LensId.FrameworkRendering, "binding-effects", "Rendering binding effects expose binding-mode and writeback behavior.")],
+    evidence: [declarationEvidence("aurelia/packages/runtime-html/src/binding/property-binding.ts", "updateSource", "PropertyBinding.updateSource assigns the observer value through the expression AST.")],
   }),
   capability({
     id: "template-controller:if-else",
@@ -1718,7 +1680,7 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     ],
     summary:
       "Aurelia applications can compose runtime feature bundles instead of relying only on StandardConfiguration.",
-    evidence: [lensEvidence(LensId.FrameworkAdmission, "bundles", "Admission lens exposes bundle/configuration effects beyond the standard bundle.")],
+    evidence: [lensEvidence(LensId.FrameworkAdmission, "bundles", "Admitted configuration bundles describe the framework values they register.", "Configuration")],
   }),
   capability({
     id: "configuration:app-task",
@@ -1792,7 +1754,7 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     summary:
       "@aurelia/i18n admits translation binding commands/patterns, value converters, binding behaviors, and configuration resources into the app world.",
     evidence: [
-      lensEvidence(LensId.PluginArchitecture, "surfaces", "Plugin architecture lens grounds plugin-provided i18n resource surfaces.", "I18nConfiguration"),
+      lensEvidence(LensId.FrameworkAdmission, "bundles", "Aurelia's i18n configuration contributes resources through framework bundle registration.", "I18nConfiguration"),
       lensEvidence(LensId.FrameworkAdmission, "relationships", "Admission lens should expose package configuration and registration relationships for i18n.", "I18nConfiguration"),
     ],
   }),
@@ -1836,7 +1798,7 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     summary:
       "@aurelia/validation-html admits validate binding behavior and validation display resources into templates.",
     evidence: [
-      lensEvidence(LensId.PluginArchitecture, "surfaces", "Plugin architecture lens grounds validation-html resource surfaces.", "ValidationHtmlConfiguration"),
+      lensEvidence(LensId.FrameworkAdmission, "bundles", "The validation-html framework package contributes the validation configuration bundle.", "ValidationHtmlConfiguration"),
       lensEvidence(LensId.BridgeAuLink, "anchors", "auLink anchors connect semantic-runtime validate binding behavior mirrors to framework plugin classes.", "validation-html:ValidateBindingBehavior"),
       docsEvidence("validation-html", "Validation docs/tests seed promoted validate binding behavior and validation display forms."),
     ],
@@ -1891,7 +1853,7 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     summary:
       "@aurelia/ui-virtualization admits the exact virtual-repeat.for pattern, plugin-owned forof command/instruction renderer, virtual-repeat controller, and its collection-strategy and DOM-renderer services.",
     evidence: [
-      lensEvidence(LensId.PluginArchitecture, "surfaces", "Plugin architecture lens grounds ui-virtualization resource and DI surfaces.", "DefaultVirtualizationConfiguration"),
+      lensEvidence(LensId.FrameworkAdmission, "bundles", "The UI virtualization framework package owns its default resource bundle.", "DefaultVirtualizationConfiguration"),
       lensEvidence(LensId.FrameworkAdmission, "relationships", "Admission lens should expose DefaultVirtualizationConfiguration's registered CollectionStrategyLocator, DefaultDomRenderer, VirtualRepeatForAttributePattern, IterateBindingCommand, IterateBindingRenderer, and VirtualRepeat.", "DefaultVirtualizationConfiguration"),
       docsEvidence("ui-virtualization", "UI virtualization source/tests ground the exact virtual-repeat.for syntax, semicolon options including non-negative static gap, and deeper scroller behavior."),
     ],
@@ -1927,7 +1889,10 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     requires: [capabilityRequirement("resource:value-converter")],
     summary:
       "Aurelia expressions can invoke value converter toView/fromView hooks as part of binding evaluation.",
-    evidence: [lensEvidence(LensId.FrameworkRendering, "summary", "Rendering and expression lanes expose converter invocation points.")],
+    evidence: [
+      declarationEvidence("aurelia/packages/runtime-html/src/binding/binding-utils.ts", "evaluatorUseConverter", "The AST evaluator dispatches the requested converter hook and preserves the input when it is absent."),
+      docsEvidence("templates/value-converters.md", "The value converter guide describes model-to-view and view-to-model conversion."),
+    ],
   }),
   capability({
     id: "expression:binding-behavior-application",
@@ -1943,7 +1908,7 @@ export const FRAMEWORK_CAPABILITY_ROWS: readonly FrameworkCapabilityRow[] = [
     requires: [capabilityRequirement("resource:binding-behavior")],
     summary:
       "Aurelia expressions can apply binding behaviors that modify binding setup, lifecycle, or observation behavior.",
-    evidence: [lensEvidence(LensId.FrameworkRendering, "binding-effects", "Rendering binding effects expose behavior application surfaces.")],
+    evidence: [declarationEvidence("aurelia/packages/runtime-html/src/binding/binding-utils.ts", "evaluatorBindBehavior", "The binding evaluator resolves the behavior and invokes its bind hook.")],
   }),
 
 
@@ -2002,7 +1967,7 @@ const REVERSE_COVERAGE_ROW_FAMILY = new PagedRowFamily<FrameworkReverseCoverageF
 function inventoryEvidence(row: FrameworkTerritoryConstruct): readonly Evidence[] {
   return [
     {
-      id: `framework.capability.inventory:${row.family}:${row.identity}`,
+      id: `framework.capability.inventory:${row.family}:${row.packageId ?? ""}:${row.identity}`,
       kind: EvidenceKind.MaintenanceSignal,
       role: EvidenceRole.Subject,
       confidence: EvidenceConfidence.Strong,
@@ -2054,7 +2019,12 @@ const COVERAGE_ROW_FAMILY = new PagedRowFamily<FrameworkForwardCoverageFamily>({
   id: "framework.capabilities:coverage",
   rowLabel: "framework forward-coverage family rows",
   evidenceForRow: (row) => coverageEvidence(row),
-  continuationsForPage: () => [],
+  continuationsForPage: (inquiry, _rows, nextOffset, limit) =>
+    optionalNextPageContinuation(inquiry, nextOffset, limit, {
+      id: "framework.capabilities:coverage:next-page",
+      rationale: "Continue the forward-coverage family rows.",
+      routeSummary: "Next page of forward coverage.",
+    }),
 });
 
 function coverageEvidence(row: FrameworkForwardCoverageFamily): readonly Evidence[] {
@@ -2075,7 +2045,12 @@ const CLUSTER_ROW_FAMILY = new PagedRowFamily<FrameworkCapabilityCluster>({
   id: "framework.capabilities:clusters",
   rowLabel: "framework capability cluster rows",
   evidenceForRow: (row) => clusterEvidence(row),
-  continuationsForPage: () => [],
+  continuationsForPage: (inquiry, _rows, nextOffset, limit) =>
+    optionalNextPageContinuation(inquiry, nextOffset, limit, {
+      id: "framework.capabilities:clusters:next-page",
+      rationale: "Continue the capability clusters.",
+      routeSummary: "Next page of capability clusters.",
+    }),
 });
 
 function clusterEvidence(row: FrameworkCapabilityCluster): readonly Evidence[] {
@@ -2197,20 +2172,33 @@ export function answerFrameworkCapabilities(
   }
 
   if (projection === "evidence-trace") {
-    const evidenceTraceRows = buildEvidenceTraceRows(filteredRows, filters, sourceProject);
-    return EVIDENCE_TRACE_ROW_FAMILY.answer({
+    // A descriptor can invoke a whole source lens. Resolve only the requested page.
+    const descriptors = filteredRows.flatMap((row) =>
+      row.evidence.map((ref, index) => ({ row, ref, index })),
+    );
+    const page = pageRows(descriptors, offset, limit);
+    const evidenceTraceRows = page.rows.map(({ row, ref, index }) =>
+      buildEvidenceTraceRow(row, ref, index, filters, sourceProject),
+    );
+    return createAnswer(
       inquiry,
-      rows: evidenceTraceRows,
-      offset,
-      limit,
-      basis: [CAPABILITY_BASIS],
-      value: (page) => ({
-        ...rollup,
-        evidenceTraceRows: page.rows,
-      }),
-      summary: (page) =>
-        `Returned ${page.rows.length} of ${evidenceTraceRows.length} materialized capability evidence trace rows from ${filteredRows.length} curated Aurelia capability rows.`,
-    });
+      evidenceTraceRows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+      `Returned ${evidenceTraceRows.length} of ${descriptors.length} capability evidence traces from ${filteredRows.length} curated Aurelia capability rows.`,
+      {
+        value: { ...rollup, evidenceTraceRows },
+        basis: [CAPABILITY_BASIS],
+        evidence: evidenceTraceRows.slice(0, evidenceLimit(inquiry)).flatMap(evidenceTraceEvidence),
+        page: pageInfo(inquiry, evidenceTraceRows.length, descriptors.length, limit, page.nextOffset),
+        continuations: page.nextOffset === undefined ? [] : [nextPageContinuation(
+          inquiry,
+          "framework.capabilities:evidence-trace:next-page",
+          "Continue materialized framework capability evidence traces.",
+          page.nextOffset,
+          limit,
+          { priority: ContinuationPriority.Secondary },
+        )],
+      },
+    );
   }
 
   if (projection === "grounding") {
@@ -2231,8 +2219,8 @@ export function answerFrameworkCapabilities(
   }
 
   if (projection === "inventory") {
-    const inventoryRows = enumerateFrameworkTerritoryConstructs(sourceProject);
-    return INVENTORY_ROW_FAMILY.answer({
+    const { rows: inventoryRows, inputPages } = readFrameworkTerritoryInventory(sourceProject);
+    return qualifyTerritoryInputs(INVENTORY_ROW_FAMILY.answer({
       inquiry,
       rows: inventoryRows,
       offset,
@@ -2241,15 +2229,16 @@ export function answerFrameworkCapabilities(
       value: (page) => ({
         ...rollup,
         inventoryRows: page.rows,
+        inputPages,
       }),
       summary: (page) =>
         `Returned ${page.rows.length} of ${inventoryRows.length} source-derived framework inventory constructs.`,
-    });
+    }), inputPages);
   }
 
   if (projection === "clusters") {
-    const clusterRows = frameworkCapabilityClusters(sourceProject);
-    return CLUSTER_ROW_FAMILY.answer({
+    const { rows: clusterRows, inputPages } = readFrameworkCapabilityClusters(sourceProject);
+    return qualifyTerritoryInputs(CLUSTER_ROW_FAMILY.answer({
       inquiry,
       rows: clusterRows,
       offset,
@@ -2258,10 +2247,11 @@ export function answerFrameworkCapabilities(
       value: (page) => ({
         ...rollup,
         clusterRows: page.rows,
+        inputPages,
       }),
       summary: (page) =>
         `Returned ${page.rows.length} of ${clusterRows.length} derived framework capability clusters.`,
-    });
+    }), inputPages);
   }
 
   if (projection === "coverage") {
@@ -2280,6 +2270,15 @@ export function answerFrameworkCapabilities(
         ...rollup,
         coverageRows: page.rows,
       }),
+      openSeams: (page) => page.rows
+        .filter((row) => row.basisClosure === FrameworkCoverageBasisClosure.Partial)
+        .map((row) => ({
+          id: `framework.capability.coverage:${row.family}:partial-basis`,
+          kind: OpenSeamKind.InsufficientBasis,
+          summary: `The ${row.family} source lens returned ${row.basisRowCount}/${row.basisTotalRows ?? "unknown"} rows.`,
+          basis: CAPABILITY_BASIS,
+        })),
+      outcome: (page, seams) => seams.length ? OutcomeKind.Partial : page.rows.length ? OutcomeKind.Hit : OutcomeKind.Miss,
       summary: (page) =>
         `Returned ${page.rows.length} of ${coverageRows.length} framework forward-coverage family rows.`,
     });
@@ -2302,8 +2301,7 @@ export function answerFrameworkCapabilities(
           const seam = reverseCoverageOpenSeam(row, evidenceByRow[index]?.[0]);
           return seam === null ? [] : [seam];
         }),
-      outcome: (_page, openSeams) =>
-        openSeams.length === 0 ? OutcomeKind.Hit : OutcomeKind.Partial,
+      outcome: (page, seams) => seams.length ? OutcomeKind.Partial : page.rows.length ? OutcomeKind.Hit : OutcomeKind.Miss,
       summary: (page) =>
         `Returned ${page.rows.length} of ${reverseCoverageRows.length} framework reverse-coverage family rows.`,
     });
@@ -2322,6 +2320,33 @@ export function answerFrameworkCapabilities(
     summary: (page) =>
       `Returned ${page.rows.length} of ${filteredRows.length} curated Aurelia capability rows for ${projection}.`,
   });
+}
+
+function qualifyTerritoryInputs<T>(answer: Answer<T>, inputPages: readonly FrameworkTerritoryInput[]): Answer<T> {
+  const partial = inputPages.filter((input) => input.closure === FrameworkCoverageBasisClosure.Partial);
+  if (partial.length === 0) return answer;
+  const id = `framework.capabilities:${answer.inquiry.projection}:input`;
+  return {
+    ...answer,
+    outcome: OutcomeKind.Partial,
+    summary: `Partial source census. ${answer.summary} Counts cover the examined inputs (${partial.length} incomplete source family page(s)).`,
+    openSeams: [...answer.openSeams, ...partial.map((input) => ({
+      id: `${id}:${input.family}`,
+      kind: OpenSeamKind.InsufficientBasis,
+      summary: `${input.lens}:${input.projection} supplied ${input.returned}/${input.total ?? "unknown"} rows (${input.outcome ?? "no answer"}).`,
+      data: input,
+    }))],
+    continuations: [
+      ...answer.continuations,
+      ...partial.flatMap((input): Continuation[] => input.next === undefined ? [] : [{
+        id: `${id}:${input.family}:next`,
+        kind: ContinuationKind.SwitchLens,
+        priority: ContinuationPriority.Primary,
+        rationale: `Inspect the first unexamined ${input.family} source page before drawing absence or completeness conclusions.`,
+        inquiry: input.next,
+      }]),
+    ],
+  };
 }
 
 function readFilters(inquiry: Inquiry): FrameworkCapabilityFilters {
@@ -2494,18 +2519,6 @@ function buildEvidenceRows(
   );
 }
 
-function buildEvidenceTraceRows(
-  rows: readonly FrameworkCapabilityRow[],
-  filters: FrameworkCapabilityFilters,
-  sourceProject: SourceProject,
-): readonly FrameworkCapabilityEvidenceTraceRow[] {
-  return rows.flatMap((row) =>
-    row.evidence.map((evidenceRef, index) =>
-      buildEvidenceTraceRow(row, evidenceRef, index, filters, sourceProject),
-    ),
-  );
-}
-
 function buildEvidenceTraceRow(
   row: FrameworkCapabilityRow,
   evidenceRef: FrameworkCapabilityEvidenceRef,
@@ -2532,15 +2545,9 @@ function buildEvidenceTraceRow(
   const targetEvidenceSamples =
     targetAnswer?.evidence.slice(0, filters.targetEvidenceRows).map(evidenceTraceSample) ?? [];
   return {
+    ...evidenceRow,
     id: `framework.capability.evidence-trace:${row.id}:${index}`,
-    capabilityId: row.id,
     evidenceRowId: evidenceRow.id,
-    lane: evidenceRow.lane,
-    groundingStrength: evidenceRow.groundingStrength,
-    lensId: evidenceRow.lensId,
-    projection: evidenceRow.projection,
-    query: evidenceRow.query,
-    symbolName: evidenceRow.symbolName,
     targetOutcome: targetAnswer?.outcome,
     targetSummary: targetAnswer?.summary,
     targetReturned: targetAnswer?.page?.returned,
@@ -2560,15 +2567,10 @@ function buildEvidenceRow(
   index: number,
 ): FrameworkCapabilityEvidenceRow {
   return {
+    ...evidenceRef,
     id: `framework.capability.evidence:${row.id}:${index}`,
     capabilityId: row.id,
-    lane: evidenceRef.lane,
     groundingStrength: groundingStrengthForEvidence(evidenceRef),
-    lensId: evidenceRef.lensId,
-    projection: evidenceRef.projection,
-    query: evidenceRef.query,
-    symbolName: evidenceRef.symbolName,
-    summary: evidenceRef.summary,
   };
 }
 
@@ -2679,6 +2681,8 @@ function answerCapabilityEvidenceTarget(
   }
   const inquiry = targetInquiryForEvidence(row, evidenceRef, filters, targetRows, targetEvidenceRows);
   switch (evidenceRef.lensId) {
+    case LensId.TsStructure:
+      return answerTsStructure(inquiry, sourceProject);
     case LensId.BridgeAuLink:
       return answerBridgeAuLink(inquiry, sourceProject);
     case LensId.FrameworkAdmission:
@@ -2695,8 +2699,6 @@ function answerCapabilityEvidenceTarget(
       return answerFrameworkDi(inquiry, sourceProject);
     case LensId.FrameworkDiscovery:
       return answerFrameworkDiscovery(inquiry, sourceProject);
-    case LensId.FrameworkEvaluator:
-      return answerFrameworkEvaluator(inquiry, sourceProject);
     case LensId.FrameworkLifecycle:
       return answerFrameworkLifecycle(inquiry, sourceProject);
     case LensId.FrameworkObservation:
@@ -2725,7 +2727,7 @@ function targetInquiryForEvidence(
 ): Inquiry {
   return {
     lens: evidenceRef.lensId ?? LensId.FrameworkCapabilities,
-    locus: RepoRootLocus,
+    locus: evidenceRef.locus ?? RepoRootLocus,
     projection: evidenceRef.projection ?? "summary",
     filters: targetFiltersForEvidence(row, evidenceRef, filters),
     budget: {
@@ -2912,14 +2914,22 @@ function lensEvidence(
   };
 }
 
+function declarationEvidence(filePath: string, name: string, summary: string): FrameworkCapabilityEvidenceRef {
+  return {
+    ...lensEvidence(LensId.TsStructure, "document-symbols", summary, name),
+    locus: { kind: LocusKind.SourceFile, filePath },
+  };
+}
+
 function docsEvidence(
   query: string,
   summary: string,
+  projection = "docs",
 ): FrameworkCapabilityEvidenceRef {
   return {
     lane: FrameworkCapabilityEvidenceLane.FrameworkDocs,
     lensId: LensId.FrameworkCorpus,
-    projection: "docs",
+    projection,
     query,
     summary,
   };
@@ -3009,15 +3019,13 @@ function capabilityRowContinuations(
   if (firstLensEvidence?.lensId !== undefined) {
     continuations.push(
       projectionContinuation(
-        inquiry,
+        { ...inquiry, locus: firstLensEvidence.locus ?? RepoRootLocus },
         `framework.capabilities:${row.id}:evidence`,
         firstLensEvidence.projection ?? "summary",
         `Inspect Atlas evidence for ${row.id}.`,
         {
           lens: firstLensEvidence.lensId,
-          filters: firstLensEvidence.query === undefined
-            ? undefined
-            : { query: firstLensEvidence.query },
+          filters: targetFiltersForEvidence(row, firstLensEvidence, readFilters(inquiry)) ?? {},
           priority: ContinuationPriority.Secondary,
           evidence: capabilityEvidence(row),
           basis: [BasisKind.AtlasContract],

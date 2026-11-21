@@ -31,71 +31,15 @@ const moduleEvaluationByFile = new SourceProjectKeyedMemo<
 >();
 
 export function localVariableInitializerForIdentifier(
+  sourceProject: SourceProject,
   identifier: ts.Identifier,
 ): ts.Expression | null {
-  const identifierPosition = identifier.getStart(identifier.getSourceFile());
-  let scope: ts.Node | undefined = containingExecutionScope(identifier);
-  while (scope !== undefined) {
-    const initializer = variableInitializerInScope(
-      scope,
-      identifier.text,
-      identifierPosition,
-    );
-    if (initializer !== null) {
-      return initializer;
-    }
-    scope = containingExecutionScope(scope);
-  }
-  return null;
-}
-
-export function variableInitializerInScope(
-  scope: ts.Node,
-  name: string,
-  beforePosition: number,
-): ts.Expression | null {
-  let match: ts.Expression | null = null;
-  const visit = (node: ts.Node): void => {
-    if (match !== null) {
-      return;
-    }
-    if (node !== scope && isNestedExecutionBoundary(node)) {
-      return;
-    }
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === name &&
-      node.initializer !== undefined &&
-      node.getStart(node.getSourceFile()) < beforePosition
-    ) {
-      match = node.initializer;
-      return;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(scope);
-  return match;
-}
-
-export function containingExecutionScope(node: ts.Node): ts.Node | undefined {
-  let current = node.parent;
-  while (current !== undefined) {
-    if (
-      ts.isSourceFile(current) ||
-      ts.isFunctionDeclaration(current) ||
-      ts.isFunctionExpression(current) ||
-      ts.isArrowFunction(current) ||
-      ts.isMethodDeclaration(current) ||
-      ts.isConstructorDeclaration(current) ||
-      ts.isGetAccessorDeclaration(current) ||
-      ts.isSetAccessorDeclaration(current)
-    ) {
-      return current;
-    }
-    current = current.parent;
-  }
-  return undefined;
+  const initializer = initializerForIdentifier(sourceProject, identifier);
+  return initializer !== null &&
+    initializer.getSourceFile() === identifier.getSourceFile() &&
+    initializer.end <= identifier.getStart()
+    ? initializer
+    : null;
 }
 
 export function containingCallbackParameterScope(
@@ -342,7 +286,7 @@ export function readResourceName(
     return current.text;
   }
   if (ts.isIdentifier(current)) {
-    const initializer = localVariableInitializerForIdentifier(current);
+    const initializer = localVariableInitializerForIdentifier(sourceProject, current);
     if (initializer !== null) {
       const localName = readStaticStringProperty(
         sourceProject,
@@ -429,10 +373,6 @@ function initializerForIdentifier(
   sourceProject: SourceProject,
   identifier: ts.Identifier,
 ): ts.Expression | null {
-  const local = localVariableInitializerForIdentifier(identifier);
-  if (local !== null) {
-    return local;
-  }
   const symbol = sourceProject.checker.getSymbolAtLocation(identifier);
   if (symbol === undefined) {
     return null;
@@ -458,7 +398,7 @@ export function readStaticStringLikeExpression(
     return current.text;
   }
   if (ts.isIdentifier(current)) {
-    const initializer = localVariableInitializerForIdentifier(current);
+    const initializer = localVariableInitializerForIdentifier(sourceProject, current);
     if (initializer !== null) {
       const local = readStaticStringLikeExpression(
         sourceProject,

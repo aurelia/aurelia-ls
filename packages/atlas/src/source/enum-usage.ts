@@ -340,7 +340,6 @@ class TypeScriptEnumUsageIndexBuilder {
   readonly #members: EnumMemberSeed[] = [];
   readonly #membersByKey = new Map<string, EnumMemberSeed>();
   readonly #membersByDeclarationKey = new Map<string, EnumMemberSeed>();
-  readonly #membersByQualifiedName = new Map<string, EnumMemberSeed[]>();
   readonly #membersByValueKey = new Map<string, EnumMemberSeed[]>();
   readonly #enumNames = new Set<string>();
   readonly #memberNames = new Set<string>();
@@ -464,33 +463,13 @@ class TypeScriptEnumUsageIndexBuilder {
     node: ts.EnumDeclaration,
   ): readonly EnumMemberSeed[] {
     const members: EnumMemberSeed[] = [];
-    let nextImplicitNumber: number | null = 0;
     for (const member of node.members) {
       const memberName = propertyNameText(member.name, context.sourceFile);
       if (memberName === null) {
-        nextImplicitNumber = null;
         continue;
       }
-      const explicitValue = enumMemberExplicitValue(member, context.sourceFile);
-      const value: string | number | null =
-        explicitValue.value !== null
-          ? explicitValue.value
-          : nextImplicitNumber === null
-          ? null
-          : nextImplicitNumber;
-      const valueKind: TypeScriptEnumValueKind =
-        explicitValue.valueKind === "computed" && value !== null
-          ? typeof value === "string"
-            ? "string"
-            : "number"
-          : explicitValue.valueKind;
-      if (typeof value === "number") {
-        nextImplicitNumber = value + 1;
-      } else if (explicitValue.value === null && explicitValue.valueKind === "computed") {
-        nextImplicitNumber = null;
-      } else if (typeof value === "string") {
-        nextImplicitNumber = null;
-      }
+      const value = this.#checker.getConstantValue(member) ?? null;
+      const valueKind: TypeScriptEnumValueKind = value === null ? "computed" : typeof value === "number" ? "number" : "string";
       const key = enumDeclarationKey(context.file, member, context.sourceFile);
       members.push({
         key,
@@ -513,10 +492,6 @@ class TypeScriptEnumUsageIndexBuilder {
     this.#membersByKey.set(member.key, member);
     this.#membersByDeclarationKey.set(member.key, member);
     this.#memberNames.add(member.memberName);
-    const qualifiedName = `${member.enumName}.${member.memberName}`;
-    const qualifiedRows = this.#membersByQualifiedName.get(qualifiedName) ?? [];
-    qualifiedRows.push(member);
-    this.#membersByQualifiedName.set(qualifiedName, qualifiedRows);
     if (member.valueKey !== null) {
       const valueRows = this.#membersByValueKey.get(member.valueKey) ?? [];
       valueRows.push(member);
@@ -1104,17 +1079,6 @@ class TypeScriptEnumUsageIndexBuilder {
   ): EnumMemberSeed | null {
     const expressionText = memberReferenceQualifierText(node, sourceFile);
     const memberName = memberReferenceNameText(node);
-    const syntacticMember = this.#uniqueQualifiedMember(
-      expressionText,
-      memberName,
-    );
-    if (syntacticMember !== null) {
-      this.#profiler.countRepeated(
-        "member-reference.syntax-exact",
-        "Exact Enum.Member text resolved without a checker lookup.",
-      );
-      return syntacticMember;
-    }
     if (
       !this.#enumNames.has(expressionText) &&
       !this.#memberNames.has(memberName)
@@ -1128,25 +1092,7 @@ class TypeScriptEnumUsageIndexBuilder {
         ts.isPropertyAccessExpression(node) ? node.name : node.right,
       ),
     );
-    const symbolMember = this.#memberForSymbol(symbol);
-    if (symbolMember !== null) {
-      return symbolMember;
-    }
-    const rows = this.#membersByQualifiedName.get(
-      `${expressionText}.${memberName}`,
-    );
-    return rows?.length === 1 ? rows[0]! : null;
-  }
-
-  #uniqueQualifiedMember(
-    enumName: string,
-    memberName: string,
-  ): EnumMemberSeed | null {
-    if (!this.#enumNames.has(enumName)) {
-      return null;
-    }
-    const rows = this.#membersByQualifiedName.get(`${enumName}.${memberName}`);
-    return rows?.length === 1 ? rows[0]! : null;
+    return this.#memberForSymbol(symbol);
   }
 
   #memberForSymbol(symbol: ts.Symbol | undefined): EnumMemberSeed | null {
@@ -1315,38 +1261,6 @@ class TypeScriptEnumUsageIndexBuilder {
       };
     });
   }
-}
-
-function enumMemberExplicitValue(
-  member: ts.EnumMember,
-  sourceFile: ts.SourceFile,
-): {
-  readonly value: string | number | null;
-  readonly valueKind: TypeScriptEnumValueKind;
-} {
-  const initializer = member.initializer;
-  if (initializer === undefined) {
-    return { value: null, valueKind: "computed" };
-  }
-  const literal = literalValue(initializer);
-  if (literal !== null) {
-    return {
-      value: literal,
-      valueKind: typeof literal === "string" ? "string" : "number",
-    };
-  }
-  if (
-    ts.isPrefixUnaryExpression(initializer) &&
-    ts.isNumericLiteral(initializer.operand)
-  ) {
-    const value = Number(initializer.operand.text);
-    return {
-      value:
-        initializer.operator === ts.SyntaxKind.MinusToken ? -value : value,
-      valueKind: "number",
-    };
-  }
-  return { value: initializer.getText(sourceFile), valueKind: "computed" };
 }
 
 function literalValue(
@@ -2159,4 +2073,18 @@ function compareCouplingEdges(
 
 function formatEnumValue(value: string | number): string {
   return typeof value === "string" ? JSON.stringify(value) : String(value);
+}
+
+/** Require the selected enum and member to belong to the same qualified declaration name. */
+export function matchesQualifiedEnumMember(
+  names: readonly string[],
+  enumName: string | undefined,
+  memberName: string | undefined,
+): boolean {
+  if (enumName === undefined && memberName === undefined) return true;
+  return names.some(name => {
+    const dot = name.indexOf(".");
+    return dot >= 0 && (enumName === undefined || name.slice(0, dot) === enumName) &&
+      (memberName === undefined || name.slice(dot + 1) === memberName);
+  });
 }

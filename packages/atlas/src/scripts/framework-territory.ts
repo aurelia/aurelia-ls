@@ -1,5 +1,6 @@
 import { LensId } from "../inquiry/lens.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
+import { FRAMEWORK_TERRITORY_FAMILIES } from "../inquiry/runtime/framework-capability-territory.js";
 import { createApi } from "../session/index.js";
 import { assertKnownScriptArguments, scriptNumberArgumentValue } from "./script-output.js";
 
@@ -34,15 +35,8 @@ interface FamilyProbe {
 }
 
 const FAMILY_PROBES: readonly FamilyProbe[] = [
-  { id: "resources", lens: LensId.FrameworkResources, projection: "definitions" },
-  { id: "observation", lens: LensId.FrameworkObservation, projection: "entities" },
-  { id: "router", lens: LensId.FrameworkRouter, projection: "relationships" },
-  { id: "di", lens: LensId.FrameworkDi, projection: "registrations" },
-  { id: "rendering", lens: LensId.FrameworkRendering, projection: "binding-products" },
-  { id: "compiler", lens: LensId.FrameworkCompiler, projection: "instruction-products" },
+  ...FRAMEWORK_TERRITORY_FAMILIES,
   { id: "composition", lens: LensId.FrameworkComposition, projection: "actors" },
-  { id: "admission", lens: LensId.FrameworkAdmission, projection: "catalogs" },
-  { id: "expression", lens: LensId.FrameworkDiscovery, projection: "expression-entities" },
   { id: "observation-decisions", lens: LensId.FrameworkObservation, projection: "observer-locator-decisions" },
   { id: "rendering-syntax", lens: LensId.FrameworkRendering, projection: "syntax-products" },
   { id: "rendering-controllers", lens: LensId.FrameworkRendering, projection: "controller-creations" },
@@ -78,12 +72,15 @@ for (const probe of FAMILY_PROBES) {
       budget: { rows: rowBudget, evidencePerSubject: 0 },
     });
     const arrays = arrayFieldsOf(answer.value);
-    report[probe.id] = { lens: probe.lens, projection: probe.projection, outcome: answer.outcome, arrays };
+    report[probe.id] = { lens: probe.lens, projection: probe.projection, outcome: answer.outcome, page: answer.page, arrays };
     if (json) {
       continue;
     }
     console.log("");
     console.log(`family ${probe.id} -> ${probe.lens}:${probe.projection} (${answer.outcome})`);
+    if (answer.page !== undefined) {
+      console.log(`  source rows: ${answer.page.returned}/${answer.page.total ?? "unknown"}`);
+    }
     if (arrays.length === 0) {
       console.log("  (no array fields in value)");
     }
@@ -97,7 +94,10 @@ for (const probe of FAMILY_PROBES) {
       }
     }
   } catch (error) {
-    console.log(`family ${probe.id} (${probe.lens}:${probe.projection}) -> ERROR ${(error as Error).message}`);
+    const message = error instanceof Error ? error.message : String(error);
+    report[probe.id] = { lens: probe.lens, projection: probe.projection, error: message };
+    console.error(`family ${probe.id} (${probe.lens}:${probe.projection}) -> ERROR ${message}`);
+    process.exitCode = 1;
   }
 }
 

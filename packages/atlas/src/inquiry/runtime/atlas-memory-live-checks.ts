@@ -20,6 +20,7 @@ import type {
   AtlasMemorySourceFileExistsCheck,
 } from "./atlas-memory-contracts.js";
 import {
+  type AtlasMemorySources,
   atlasMemoryRepoPathExists,
   atlasMemorySourceProjectHasDeclaration,
 } from "./atlas-memory-source-helpers.js";
@@ -41,28 +42,28 @@ export function readAtlasMemorySelfAnalysisIfNeeded(
 
 /** Evaluate one durable memory live check against the current source project. */
 export function evaluateAtlasMemoryLiveCheck(
-  sourceProject: SourceProject,
+  sources: AtlasMemorySources,
   productClasses: readonly ProductArchitectureClassSurfaceRow[],
   atlasSelfAnalysis: AtlasSelfAnalysis | undefined,
   check: AtlasMemoryLiveCheck,
 ): AtlasMemoryLiveCheckResult {
   switch (check.kind) {
     case "product-large-class":
-      return evaluateProductLargeClassCheck(sourceProject, productClasses, check);
+      return evaluateProductLargeClassCheck(sources, productClasses, check);
     case "source-file-exists":
-      return evaluateSourceFileExistsCheck(sourceProject, check);
+      return evaluateSourceFileExistsCheck(sources, check);
     case "source-declaration-exists":
-      return evaluateSourceDeclarationExistsCheck(sourceProject, check);
+      return evaluateSourceDeclarationExistsCheck(sources, check);
     case "atlas-self-source-file":
-      return evaluateAtlasSelfSourceFileCheck(sourceProject, atlasSelfAnalysis, check);
+      return evaluateAtlasSelfSourceFileCheck(sources, atlasSelfAnalysis, check);
     case "atlas-self-class":
-      return evaluateAtlasSelfClassCheck(sourceProject, atlasSelfAnalysis, check);
+      return evaluateAtlasSelfClassCheck(sources, atlasSelfAnalysis, check);
     case "atlas-self-function":
-      return evaluateAtlasSelfFunctionCheck(sourceProject, atlasSelfAnalysis, check);
+      return evaluateAtlasSelfFunctionCheck(sources, atlasSelfAnalysis, check);
     case "atlas-self-variable":
-      return evaluateAtlasSelfVariableCheck(sourceProject, atlasSelfAnalysis, check);
+      return evaluateAtlasSelfVariableCheck(sources, atlasSelfAnalysis, check);
     case "auLink-exists":
-      return evaluateAuLinkExistsCheck(sourceProject, productClasses, check);
+      return evaluateAuLinkExistsCheck(sources, productClasses, check);
   }
 }
 
@@ -80,16 +81,24 @@ function memoryNeedsAtlasSelfAnalysis(
 }
 
 function evaluateProductLargeClassCheck(
-  sourceProject: SourceProject,
+  sources: AtlasMemorySources,
   productClasses: readonly ProductArchitectureClassSurfaceRow[],
   check: AtlasMemoryProductLargeClassCheck,
 ): AtlasMemoryLiveCheckResult {
-  const row = productClasses.find((entry) =>
+  const matches = productClasses.filter((entry) =>
     entry.name === check.className &&
     (check.filePath === undefined || entry.filePath === check.filePath),
   );
+  if (matches.length > 1) {
+    return {
+      check,
+      status: "stale-check",
+      summary: `Multiple class declarations match ${check.className}. Check the class name and file path.`,
+    };
+  }
+  const row = matches[0];
   if (row === undefined) {
-    return missingProductClassCheck(sourceProject, check);
+    return missingProductClassCheck(sources, check);
   }
   const lineThreshold =
     check.minLineCount ?? ATLAS_MEMORY_PRODUCT_LARGE_CLASS_LINE_THRESHOLD;
@@ -108,12 +117,12 @@ function evaluateProductLargeClassCheck(
 }
 
 function missingProductClassCheck(
-  sourceProject: SourceProject,
+  sources: AtlasMemorySources,
   check: AtlasMemoryProductLargeClassCheck,
 ): AtlasMemoryLiveCheckResult {
   if (
     check.filePath !== undefined &&
-    !atlasMemoryRepoPathExists(sourceProject, check.filePath)
+    !atlasMemoryRepoPathExists(sources, check.filePath)
   ) {
     return {
       check,
@@ -129,10 +138,10 @@ function missingProductClassCheck(
 }
 
 function evaluateSourceFileExistsCheck(
-  sourceProject: SourceProject,
+  sources: AtlasMemorySources,
   check: AtlasMemorySourceFileExistsCheck,
 ): AtlasMemoryLiveCheckResult {
-  const exists = atlasMemoryRepoPathExists(sourceProject, check.filePath);
+  const exists = atlasMemoryRepoPathExists(sources, check.filePath);
   return {
     check,
     status: exists ? "present" : "stale-source",
@@ -143,10 +152,10 @@ function evaluateSourceFileExistsCheck(
 }
 
 function evaluateSourceDeclarationExistsCheck(
-  sourceProject: SourceProject,
+  sources: AtlasMemorySources,
   check: AtlasMemorySourceDeclarationExistsCheck,
 ): AtlasMemoryLiveCheckResult {
-  if (!atlasMemoryRepoPathExists(sourceProject, check.filePath)) {
+  if (!atlasMemoryRepoPathExists(sources, check.filePath)) {
     return {
       check,
       status: "stale-source",
@@ -154,7 +163,7 @@ function evaluateSourceDeclarationExistsCheck(
     };
   }
   const exists = atlasMemorySourceProjectHasDeclaration(
-    sourceProject,
+    sources,
     check.filePath,
     check.symbolName,
   );
@@ -168,7 +177,7 @@ function evaluateSourceDeclarationExistsCheck(
 }
 
 function evaluateAtlasSelfSourceFileCheck(
-  sourceProject: SourceProject,
+  sources: AtlasMemorySources,
   atlasSelfAnalysis: AtlasSelfAnalysis | undefined,
   check: AtlasMemoryAtlasSelfSourceFileCheck,
 ): AtlasMemoryLiveCheckResult {
@@ -183,7 +192,7 @@ function evaluateAtlasSelfSourceFileCheck(
     entry.filePath === check.filePath,
   );
   if (row === undefined) {
-    return missingAtlasSelfCheck(sourceProject, check, check.filePath, "Atlas source file");
+    return missingAtlasSelfCheck(sources, check, check.filePath, "Atlas source file");
   }
   const active =
     row.lineCount >= (check.minLineCount ?? 0) &&
@@ -203,7 +212,7 @@ function evaluateAtlasSelfSourceFileCheck(
 }
 
 function evaluateAtlasSelfClassCheck(
-  sourceProject: SourceProject,
+  sources: AtlasMemorySources,
   atlasSelfAnalysis: AtlasSelfAnalysis | undefined,
   check: AtlasMemoryAtlasSelfClassCheck,
 ): AtlasMemoryLiveCheckResult {
@@ -220,7 +229,7 @@ function evaluateAtlasSelfClassCheck(
   );
   if (row === undefined) {
     return missingAtlasSelfCheck(
-      sourceProject,
+      sources,
       check,
       check.filePath,
       `Atlas class ${check.className}`,
@@ -241,7 +250,7 @@ function evaluateAtlasSelfClassCheck(
 }
 
 function evaluateAtlasSelfFunctionCheck(
-  sourceProject: SourceProject,
+  sources: AtlasMemorySources,
   atlasSelfAnalysis: AtlasSelfAnalysis | undefined,
   check: AtlasMemoryAtlasSelfFunctionCheck,
 ): AtlasMemoryLiveCheckResult {
@@ -258,7 +267,7 @@ function evaluateAtlasSelfFunctionCheck(
   );
   if (row === undefined) {
     return missingAtlasSelfCheck(
-      sourceProject,
+      sources,
       check,
       check.filePath,
       `Atlas function ${check.functionName}`,
@@ -279,7 +288,7 @@ function evaluateAtlasSelfFunctionCheck(
 }
 
 function evaluateAtlasSelfVariableCheck(
-  sourceProject: SourceProject,
+  sources: AtlasMemorySources,
   atlasSelfAnalysis: AtlasSelfAnalysis | undefined,
   check: AtlasMemoryAtlasSelfVariableCheck,
 ): AtlasMemoryLiveCheckResult {
@@ -296,7 +305,7 @@ function evaluateAtlasSelfVariableCheck(
   );
   if (row === undefined) {
     return missingAtlasSelfCheck(
-      sourceProject,
+      sources,
       check,
       check.filePath,
       `Atlas variable ${check.variableName}`,
@@ -320,7 +329,7 @@ function evaluateAtlasSelfVariableCheck(
 }
 
 function evaluateAuLinkExistsCheck(
-  sourceProject: SourceProject,
+  sources: AtlasMemorySources,
   productClasses: readonly ProductArchitectureClassSurfaceRow[],
   check: AtlasMemoryAuLinkExistsCheck,
 ): AtlasMemoryLiveCheckResult {
@@ -340,7 +349,7 @@ function evaluateAuLinkExistsCheck(
   }
   if (
     check.filePath !== undefined &&
-    !atlasMemoryRepoPathExists(sourceProject, check.filePath)
+    !atlasMemoryRepoPathExists(sources, check.filePath)
   ) {
     return {
       check,
@@ -356,7 +365,7 @@ function evaluateAuLinkExistsCheck(
 }
 
 function missingAtlasSelfCheck(
-  sourceProject: SourceProject,
+  sources: AtlasMemorySources,
   check:
     | AtlasMemoryAtlasSelfSourceFileCheck
     | AtlasMemoryAtlasSelfClassCheck
@@ -367,7 +376,7 @@ function missingAtlasSelfCheck(
 ): AtlasMemoryLiveCheckResult {
   if (
     filePath !== undefined &&
-    !atlasMemoryRepoPathExists(sourceProject, filePath)
+    !atlasMemoryRepoPathExists(sources, filePath)
   ) {
     return {
       check,

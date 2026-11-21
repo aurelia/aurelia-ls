@@ -52,7 +52,7 @@ export interface SelfContractRow {
   readonly stage: LensStage;
   /** True when the runtime engine reports an implementation. */
   readonly implemented: boolean;
-  /** Runtime answer function when found in the engine switch. */
+  /** Runtime answer function resolved from its registry binding. */
   readonly implementationFunction: string | null;
   /** Declared projection ids from LensCatalog. */
   readonly declaredProjectionIds: readonly string[];
@@ -120,7 +120,7 @@ export class SelfContractReader {
     const coherenceFacts = this.#coherenceFacts(
       lens,
       implemented,
-      implementation?.source,
+      implementation?.implementationSource,
       extraRuntimeProjectionIds,
       duplicateParameterIds,
     );
@@ -145,7 +145,7 @@ export class SelfContractReader {
       declaredParameterIds,
       duplicateParameterIds,
       coherenceFacts,
-      source: implementation?.source,
+      source: implementation?.implementationSource,
       summary: `${lens.id} declares ${
         declaredProjectionIds.length
       } projection(s), has ${
@@ -197,8 +197,8 @@ export class SelfContractReader {
           `engine-implemented:${String(implemented)}`,
         ],
         interpretationSpace: [
-          "The lens stage may be stale relative to the runtime switch.",
-          "The runtime switch may be carrying a temporary implementation path.",
+          "The lens stage may be stale relative to the runtime registry.",
+          "The runtime registry may be carrying a temporary implementation path.",
           "The ontology may need a stage between contracted and fully implemented.",
         ],
         nextInquiries: [contractInquiry(lens.id)],

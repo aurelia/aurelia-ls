@@ -1,5 +1,6 @@
 import {
   readFrameworkDiIndex,
+  frameworkDeclaredDiKeyAtSource,
   type FrameworkDiKeyRow,
 } from "../../framework/di-index.js";
 import {
@@ -17,7 +18,7 @@ import {
   type FrameworkRelationshipAtom,
   type FrameworkRelationshipEndpoint,
 } from "../../framework/relationships.js";
-import type { SourceProject } from "../../source/index.js";
+import { sourceRangeFromFileSpan, sourceRangeKey, type SourceProject } from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
 import type {
   FrameworkMaterializationRelationshipRow,
@@ -155,7 +156,7 @@ export interface FrameworkDiGraphIndex {
   readonly value: FrameworkDiGraphValue;
 }
 
-const FRAMEWORK_DI_GRAPH_VERSION = "framework-di-graph@1";
+const FRAMEWORK_DI_GRAPH_VERSION = "framework-di-graph@2";
 
 /** Build a product-model-shaped DI graph over the Aurelia framework source. */
 export function readFrameworkDiGraph(
@@ -197,6 +198,8 @@ class FrameworkDiGraphBuilder {
     FrameworkDiGraphEdgeRow
   >();
   readonly #knownKeyNames = new Set<string>();
+  readonly #declaredKeyNames = new Set<string>();
+  readonly #keyIdsBySpelling = new Map<string, Set<string>>();
 
   constructor(
     readonly sourceProject: SourceProject,
@@ -211,9 +214,16 @@ class FrameworkDiGraphBuilder {
     );
     for (const key of diIndex.keys) {
       this.#knownKeyNames.add(key.interfaceKey);
+      this.#declaredKeyNames.add(key.interfaceKey);
+      this.#declaredKeyNames.add(key.exportName);
     }
     for (const route of materialization.routes) {
       this.#knownKeyNames.add(route.key);
+      const declaration = frameworkDeclaredDiKeyAtSource(this.sourceProject, route.keyEndpoint.source);
+      if (declaration !== null) {
+        this.#declaredKeyNames.add(declaration.name);
+        this.#declaredKeyNames.add(route.key);
+      }
     }
     for (const relationship of materialization.relationships) {
       if (relationship.relation === FrameworkRelationshipRelation.DependsOnKey) {
@@ -285,6 +295,8 @@ class FrameworkDiGraphBuilder {
       (filters.key === undefined ||
         edge.fromName === filters.key ||
         edge.toName === filters.key ||
+        this.#keyIdsBySpelling.get(filters.key)?.has(edge.fromNodeId) ||
+        this.#keyIdsBySpelling.get(filters.key)?.has(edge.toNodeId) ||
         from?.name === filters.key ||
         to?.name === filters.key) &&
       (filters.query === undefined ||
@@ -443,11 +455,15 @@ class FrameworkDiGraphBuilder {
     layer: "lookup" | "resolution",
   ): void {
     const consumer = this.nodeForEndpoint(row.from, "consumer");
+    const argument = row.callSite?.arguments[0];
+    const source = argument && row.callSite
+      ? sourceRangeFromFileSpan(row.callSite.file.repoPath, argument.expression.span)
+      : row.to.source ?? row.source;
     const key = this.keyLikeNode(
       row.key ?? row.to.name,
       row.packageId,
       row.packageName,
-      row.to.source ?? row.source,
+      source,
     );
     this.#graph.addEdge(edgeFromAtom(row, edgeKind, layer, consumer, key));
   }
@@ -551,6 +567,26 @@ class FrameworkDiGraphBuilder {
     packageName: string | undefined,
     source: SourceRange | undefined,
   ): FrameworkDiGraphNodeRow {
+    const origin = frameworkDeclaredDiKeyAtSource(this.sourceProject, source);
+    if (origin !== null) {
+      if (name !== origin.name) {
+        const ids = this.#keyIdsBySpelling.get(name);
+        if (ids === undefined) this.#keyIdsBySpelling.set(name, new Set([origin.id]));
+        else ids.add(origin.id);
+      }
+      return this.#graph.addNode({
+        id: origin.id,
+        kind: "di-key",
+        name: origin.name,
+        packageId: origin.packageId,
+        packageName: origin.packageName,
+        source: origin.source,
+        summary: `${origin.packageName} declares DI key ${origin.name}.`,
+      });
+    }
+    if (this.#declaredKeyNames.has(name)) {
+      return this.keyExpressionNode(name, packageId, packageName, source);
+    }
     return this.#graph.addNode({
       id: nodeId("di-key", undefined, name),
       kind: "di-key",
@@ -569,7 +605,7 @@ class FrameworkDiGraphBuilder {
     source: SourceRange | undefined,
   ): FrameworkDiGraphNodeRow {
     return this.#graph.addNode({
-      id: nodeId("key-expression", packageId, name),
+      id: nodeId("key-expression", packageId, source === undefined ? name : `${name}:${sourceRangeKey(source)}`),
       kind: "key-expression",
       name,
       packageId,
@@ -585,7 +621,7 @@ class FrameworkDiGraphBuilder {
     packageName: string | undefined,
     source: SourceRange | undefined,
   ): FrameworkDiGraphNodeRow {
-    return this.#knownKeyNames.has(name)
+    return this.#knownKeyNames.has(name) || frameworkDeclaredDiKeyAtSource(this.sourceProject, source) !== null
       ? this.keyNode(name, packageId, packageName, source)
       : this.keyExpressionNode(name, packageId, packageName, source);
   }

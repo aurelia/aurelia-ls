@@ -127,7 +127,7 @@ export class EvaluationArrayElement {
   ) {}
 }
 
-/** Array value with known elements and explicit openness for spread/hole pressure. */
+/** Array value with known entries and explicit openness for unresolved spreads. */
 export class EvaluationArrayValue {
   /** Value category discriminator. */
   readonly kind = EvaluationValueKind.Array;
@@ -135,10 +135,12 @@ export class EvaluationArrayValue {
   constructor(
     /** Concrete element values in array order. */
     readonly elements: readonly EvaluationArrayElement[],
-    /** True when spread or holes prevented exact element closure. */
+    /** True when an unresolved spread prevented exact element closure. */
     readonly mayHaveUnknownElements: boolean,
     /** Syntax node that produced the value, when one exists. */
     readonly node: ts.Node | null = null,
+    /** Number of leading entries whose numeric offset is exact despite later open spreads. */
+    readonly knownPrefixLength: number = mayHaveUnknownElements ? 0 : elements.length,
   ) {}
 }
 
@@ -248,7 +250,7 @@ export function readEvaluationTruthiness(
     case EvaluationValueKind.Number:
       return value.value !== 0 && !Number.isNaN(value.value);
     case EvaluationValueKind.BigInt:
-      return value.text !== "0n";
+      return evaluationBigInt(value) !== 0n;
     case EvaluationValueKind.String:
       return value.value.length > 0;
     case EvaluationValueKind.Array:
@@ -258,6 +260,11 @@ export function readEvaluationTruthiness(
     case EvaluationValueKind.ModuleNamespace:
       return true;
   }
+}
+
+/** Interpret the spelling of a TypeScript BigInt literal, including its radix. */
+export function evaluationBigInt(value: EvaluationBigIntValue): bigint {
+  return BigInt(value.text.replace(/_/gu, "").replace(/n$/u, ""));
 }
 
 /** Return a property key string when a value can serve as a static property name. */

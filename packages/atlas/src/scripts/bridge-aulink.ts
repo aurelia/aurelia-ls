@@ -50,6 +50,7 @@ const filters = {
   ...scriptOptionalStringFilter("productMemberAccess"),
   ...scriptOptionalStringFilter("memberDeclarationKind"),
   ...scriptOptionalStringFilter("presence"),
+  ...scriptOptionalStringFilter("ownerSourceKey"),
   ...scriptOptionalStringFilter("ownerName"),
   ...scriptOptionalStringFilter("ownerKind"),
   ...scriptOptionalStringFilter("ownerMemberName"),

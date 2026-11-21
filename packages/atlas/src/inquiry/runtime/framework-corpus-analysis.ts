@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
@@ -7,14 +8,13 @@ import {
   countBy,
   uniqueSortedStrings,
 } from "../../collections.js";
-import { propertyNameText, SourceProjectMemo, type SourceProject } from "../../source/index.js";
+import { propertyNameText, type SourceProject } from "../../source/index.js";
 import { escapeRegExp } from "../../text-regex.js";
 import type { SourceRange } from "../locus.js";
 
-export const FRAMEWORK_CORPUS_ANALYSIS_VERSION = "framework-corpus-analysis.v26";
+export const FRAMEWORK_CORPUS_ANALYSIS_VERSION = "framework-corpus-analysis.v27";
 
-const frameworkCorpusAnalysisMemo =
-  new SourceProjectMemo<FrameworkCorpusAnalysis>();
+const frameworkCorpusAnalysisMemo = new WeakMap<SourceProject, FrameworkCorpusAnalysis>();
 
 export type FrameworkCorpusConcept =
   | "binding"
@@ -136,10 +136,13 @@ interface FixtureSeedSurfaceClassificationRule {
 }
 
 export interface FrameworkCorpusSourceState {
+  /** Content identity of the documentation, tests and expected-effect declarations read for this analysis. */
+  readonly identity: string;
   readonly docsRoot: string;
   readonly testsRoot: string;
   readonly docsPresent: boolean;
   readonly testsPresent: boolean;
+  readonly expectedEffectsPresent: boolean;
   readonly summary: string;
 }
 
@@ -353,25 +356,49 @@ const TEXT_CONCEPT_CONTEXT: ConceptExtractionContext = {
 export function readFrameworkCorpusAnalysis(
   sourceProject: SourceProject,
 ): FrameworkCorpusAnalysis {
-  return frameworkCorpusAnalysisMemo.read(sourceProject, () =>
-    buildFrameworkCorpusAnalysis(sourceProject.repoRoot),
-  );
-}
-
-function buildFrameworkCorpusAnalysis(repoRoot: string): FrameworkCorpusAnalysis {
-  const sourceState = frameworkCorpusSourceState(repoRoot);
-  const docs = frameworkDocRows(repoRoot);
-  const docSnippets = frameworkDocSnippetRows(repoRoot);
-  const tests = frameworkTestRows(repoRoot);
-  const testSnippets = frameworkTestSnippetRows(repoRoot);
-  const expectedEffectDescriptors = expectedEffectDescriptorRows(repoRoot);
+  // These inputs include files outside the immutable TypeScript Program. Fingerprint the same
+  // captured text used for row extraction so a live edit cannot mix old ranges with new text.
+  const repoRoot = sourceProject.repoRoot;
+  const docPaths = walk(repoRoot, FRAMEWORK_DOCS_ROOT, (file) => file.endsWith(".md"));
+  const testPaths = walk(repoRoot, FRAMEWORK_TESTS_ROOT, (file) => file.endsWith(".ts"));
+  const expectedEffectsPresent = existsSync(path.join(repoRoot, SEMANTIC_RUNTIME_EXPECTED_EFFECT_PATH));
+  const texts = new Map<string, string>();
+  const hash = createHash("sha256");
+  const files = [...docPaths, ...testPaths];
+  if (expectedEffectsPresent) files.push(SEMANTIC_RUNTIME_EXPECTED_EFFECT_PATH);
+  for (const file of files) {
+    const text = readFileSync(path.join(repoRoot, file), "utf8");
+    texts.set(file, text);
+    hash.update(`${file.length}:${file}${text.length}:`).update(text);
+  }
+  const docsPresent = existsSync(path.join(repoRoot, FRAMEWORK_DOCS_ROOT));
+  const testsPresent = existsSync(path.join(repoRoot, FRAMEWORK_TESTS_ROOT));
+  const identity = `framework-corpus:${hash.update(JSON.stringify([docsPresent, testsPresent])).digest("hex")}`;
+  const cached = frameworkCorpusAnalysisMemo.get(sourceProject);
+  if (cached?.sourceState.identity === identity) {
+    return cached;
+  }
+  const sourceState: FrameworkCorpusSourceState = {
+    identity,
+    docsRoot: FRAMEWORK_DOCS_ROOT,
+    testsRoot: FRAMEWORK_TESTS_ROOT,
+    docsPresent,
+    testsPresent,
+    expectedEffectsPresent,
+    summary: `Framework docs root ${docsPresent ? "is present" : "is missing"} and framework tests root ${testsPresent ? "is present" : "is missing"}.`,
+  };
+  const docs = frameworkDocRows(docPaths, texts);
+  const docSnippets = frameworkDocSnippetRows(docPaths, texts);
+  const tests = frameworkTestRows(testPaths, texts);
+  const testSnippets = frameworkTestSnippetRows(testPaths, texts);
+  const expectedEffectDescriptors = expectedEffectDescriptorRows(texts.get(SEMANTIC_RUNTIME_EXPECTED_EFFECT_PATH));
   const fixtureSeeds = fixtureSeedRows(
-    repoRoot,
+    texts,
     docSnippets,
     testSnippets,
     expectedEffectDescriptors,
   );
-  return {
+  const analysis: FrameworkCorpusAnalysis = {
     version: FRAMEWORK_CORPUS_ANALYSIS_VERSION,
     sourceState,
     rollup: frameworkCorpusRollup(
@@ -389,24 +416,14 @@ function buildFrameworkCorpusAnalysis(repoRoot: string): FrameworkCorpusAnalysis
     expectedEffectDescriptors,
     fixtureSeeds,
   };
+  frameworkCorpusAnalysisMemo.set(sourceProject, analysis);
+  return analysis;
 }
 
-function frameworkCorpusSourceState(repoRoot: string): FrameworkCorpusSourceState {
-  const docsPresent = existsSync(path.join(repoRoot, FRAMEWORK_DOCS_ROOT));
-  const testsPresent = existsSync(path.join(repoRoot, FRAMEWORK_TESTS_ROOT));
-  return {
-    docsRoot: FRAMEWORK_DOCS_ROOT,
-    testsRoot: FRAMEWORK_TESTS_ROOT,
-    docsPresent,
-    testsPresent,
-    summary: `Framework docs root ${docsPresent ? "is present" : "is missing"} and framework tests root ${testsPresent ? "is present" : "is missing"}.`,
-  };
-}
-
-function frameworkDocRows(repoRoot: string): readonly FrameworkCorpusDocRow[] {
-  return walk(repoRoot, FRAMEWORK_DOCS_ROOT, (file) => file.endsWith(".md"))
+function frameworkDocRows(docPaths: readonly string[], texts: ReadonlyMap<string, string>): readonly FrameworkCorpusDocRow[] {
+  return docPaths
     .map((filePath) => {
-      const text = read(repoRoot, filePath);
+      const text = texts.get(filePath)!;
       const fences = markdownFences(text);
       const conceptCounts = conceptCountsFor(text, TEXT_CONCEPT_CONTEXT);
       const concepts = conceptsFromCounts(conceptCounts);
@@ -428,10 +445,10 @@ function frameworkDocRows(repoRoot: string): readonly FrameworkCorpusDocRow[] {
     });
 }
 
-function frameworkDocSnippetRows(repoRoot: string): readonly FrameworkCorpusDocSnippetRow[] {
-  return walk(repoRoot, FRAMEWORK_DOCS_ROOT, (file) => file.endsWith(".md"))
+function frameworkDocSnippetRows(docPaths: readonly string[], texts: ReadonlyMap<string, string>): readonly FrameworkCorpusDocSnippetRow[] {
+  return docPaths
     .flatMap((filePath) => {
-      const text = read(repoRoot, filePath);
+      const text = texts.get(filePath)!;
       return markdownFences(text).map((fence, index) => {
         const concepts = conceptsFromCounts(conceptCountsFor(fence.text, conceptContextForDocFence(fence.language)));
         const source = sourceRangeForOffsets(filePath, text, fence.start, fence.end);
@@ -451,10 +468,10 @@ function frameworkDocSnippetRows(repoRoot: string): readonly FrameworkCorpusDocS
     .sort(compareSourceRows);
 }
 
-function frameworkTestRows(repoRoot: string): readonly FrameworkCorpusTestRow[] {
-  return walk(repoRoot, FRAMEWORK_TESTS_ROOT, (file) => file.endsWith(".ts"))
+function frameworkTestRows(testPaths: readonly string[], texts: ReadonlyMap<string, string>): readonly FrameworkCorpusTestRow[] {
+  return testPaths
     .map((filePath) => {
-      const text = read(repoRoot, filePath);
+      const text = texts.get(filePath)!;
       const conceptCounts = conceptCountsFor(text, {
         aureliaInterpolation: "mixed-template-host",
       });
@@ -478,10 +495,10 @@ function frameworkTestRows(repoRoot: string): readonly FrameworkCorpusTestRow[] 
     });
 }
 
-function frameworkTestSnippetRows(repoRoot: string): readonly FrameworkCorpusTestSnippetRow[] {
-  return walk(repoRoot, FRAMEWORK_TESTS_ROOT, (file) => file.endsWith(".ts"))
+function frameworkTestSnippetRows(testPaths: readonly string[], texts: ReadonlyMap<string, string>): readonly FrameworkCorpusTestSnippetRow[] {
+  return testPaths
     .flatMap((filePath) => {
-      const text = read(repoRoot, filePath);
+      const text = texts.get(filePath)!;
       const sourceFile = ts.createSourceFile(filePath, text, ts.ScriptTarget.Latest, true);
       const snippets: FrameworkCorpusTestSnippetRow[] = [];
       visit(sourceFile, (node) => {
@@ -604,15 +621,14 @@ function frameworkCorpusRollup(
 }
 
 function fixtureSeedRows(
-  repoRoot: string,
+  texts: ReadonlyMap<string, string>,
   docSnippets: readonly FrameworkCorpusDocSnippetRow[],
   testSnippets: readonly FrameworkCorpusTestSnippetRow[],
   expectedEffectDescriptors: readonly FrameworkCorpusExpectedEffectDescriptorRow[],
 ): readonly FrameworkCorpusFixtureSeedRow[] {
   const descriptors = expectedEffectDescriptorMap(expectedEffectDescriptors);
-  const sourceTextCache = new Map<string, string>();
   const snippetText = (source: SourceRange) =>
-    sourceTextForRange(repoRoot, source, sourceTextCache);
+    sourceTextForRange(texts.get(source.filePath)!, source);
   return [
     ...docSnippets.flatMap((row) => fixtureSeedForDocSnippet(row, descriptors, snippetText(row.source))),
     ...testSnippets.flatMap((row) => fixtureSeedForTestSnippet(row, descriptors, snippetText(row.source))),
@@ -740,13 +756,11 @@ function fixtureSeedExpectedEffects(
 }
 
 function expectedEffectDescriptorRows(
-  repoRoot: string,
+  text: string | undefined,
 ): readonly FrameworkCorpusExpectedEffectDescriptorRow[] {
-  const absolute = path.join(repoRoot, SEMANTIC_RUNTIME_EXPECTED_EFFECT_PATH);
-  if (!existsSync(absolute)) {
+  if (text === undefined) {
     return [];
   }
-  const text = read(repoRoot, SEMANTIC_RUNTIME_EXPECTED_EFFECT_PATH);
   const sourceFile = ts.createSourceFile(
     SEMANTIC_RUNTIME_EXPECTED_EFFECT_PATH,
     text,
@@ -2763,29 +2777,13 @@ function lineIndexForOffset(
 }
 
 function sourceTextForRange(
-  repoRoot: string,
+  text: string,
   source: SourceRange,
-  cache: Map<string, string>,
 ): string {
-  const text = cachedSourceText(repoRoot, source.filePath, cache);
   return text.slice(
     sourceOffsetForPosition(text, source.start),
     sourceOffsetForPosition(text, source.end),
   );
-}
-
-function cachedSourceText(
-  repoRoot: string,
-  filePath: string,
-  cache: Map<string, string>,
-): string {
-  const cached = cache.get(filePath);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const text = read(repoRoot, filePath);
-  cache.set(filePath, text);
-  return text;
 }
 
 function sourceOffsetForPosition(
@@ -2832,10 +2830,6 @@ function walk(
     }
   }
   return result.sort();
-}
-
-function read(repoRoot: string, relativePath: string): string {
-  return readFileSync(path.join(repoRoot, relativePath), "utf8");
 }
 
 function sourceGroup(file: string, prefix: string): string {

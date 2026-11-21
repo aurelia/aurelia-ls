@@ -1,4 +1,5 @@
 import type { LensId } from "../lens.js";
+import type { Locus } from "../locus.js";
 
 /** Schema marker for Atlas's typed work-routing catalog. */
 export const ATLAS_WORK_ROUTER_VERSION = "atlas-work-router.v1";
@@ -32,7 +33,7 @@ export type AtlasWorkRouteRole =
   | "document"
   | "improve-atlas";
 
-/** Spoken or task-shaped query that must keep routing to a route through structural ontology. */
+/** Known task phrase advertised by a route and replayed by its health check. */
 export interface AtlasWorkRouteQueryCanary {
   /** Query phrase future agents or users are likely to ask. */
   readonly query: string;
@@ -126,6 +127,8 @@ export interface AtlasWorkRouteLensAnchor {
   readonly kind: "lens";
   /** Stable Atlas lens id. */
   readonly lensId: LensId;
+  /** Owner to inspect when this lens needs a more specific starting point than the repository. */
+  readonly locus?: Locus;
   /** Preferred projection to ask first. */
   readonly projection?: string;
   /** Preferred structural filters to apply. */
@@ -228,7 +231,7 @@ export interface AtlasWorkRouteDocAnchor {
 export interface AtlasWorkRoutePathAnchor {
   /** Anchor discriminator. */
   readonly kind: "path";
-  /** Repository-relative file or directory prefix owned by this route for workset/path filtering. */
+  /** Repository-relative file or directory. A terminal * matches a filename prefix under its parent. */
   readonly pathPrefix: string;
   /** How this anchor should be weighed inside the route. */
   readonly role: AtlasWorkRouteAnchorRole;
@@ -263,7 +266,7 @@ export interface AtlasWorkRoute {
   readonly roles: readonly AtlasWorkRouteRole[];
   /** Declared search terms owned by the route; query hits here are weaker than structural filters but stronger than prose. */
   readonly terms: readonly string[];
-  /** Human-language route canaries checked by route-health; these do not replace ontology terms or anchors. */
+  /** Known query phrases used in routing and replayed by route-health. */
   readonly queryCanaries?: readonly AtlasWorkRouteQueryCanary[];
   /** Explicit cross-cutting coverage rows, used when a topic should rediscover broader incomplete dimensions. */
   readonly coverage?: readonly AtlasWorkRouteCoverage[];

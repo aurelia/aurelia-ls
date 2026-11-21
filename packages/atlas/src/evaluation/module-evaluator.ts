@@ -15,10 +15,15 @@ import {
 import {
   EvaluationModuleNamespaceValue,
   EvaluationUnknownValue,
-  EvaluationValueKind,
   type EvaluationValue,
 } from "./value.js";
 import type { SourceProject } from "../source/index.js";
+
+interface ExportBinding {
+  readonly moduleKey: string;
+  readonly name: string;
+  readonly node: ts.Node;
+}
 
 /** Result of evaluating a graph of local ECMAScript modules. */
 export class StaticModuleGraphEvaluationResult {
@@ -33,9 +38,9 @@ export class StaticModuleGraphEvaluationResult {
 /** Evaluates module records with import/export linkage over an already-built module graph. */
 export class StaticModuleGraphEvaluator {
   private readonly moduleResults = new Map<string, ModuleEvaluationResult>();
-  private readonly openValues: EvaluationUnknownValue[] = [];
+  private readonly openValues = new Map<string, EvaluationUnknownValue>();
   private readonly evaluatingModules = new Set<string>();
-  private readonly resolvingExports = new Set<string>();
+  private readonly namespaces = new Map<string, EvaluationModuleNamespaceValue>();
 
   constructor(
     /** Source project used by the underlying expression evaluator. */
@@ -49,7 +54,7 @@ export class StaticModuleGraphEvaluator {
     this.evaluateModule(entryModuleKey);
     return new StaticModuleGraphEvaluationResult(
       new Map(this.moduleResults),
-      [...this.openValues],
+      [...this.openValues.values()],
     );
   }
 
@@ -64,138 +69,74 @@ export class StaticModuleGraphEvaluator {
       return null;
     }
     if (this.evaluatingModules.has(moduleKey)) {
-      this.openValues.push(
-        new EvaluationUnknownValue(
-          `Circular module evaluation reached ${moduleKey}.`,
-          record.sourceFile,
-        ),
-      );
+      this.openValue(`Circular module evaluation reached ${moduleKey}.`, record.sourceFile);
       return null;
     }
 
     this.evaluatingModules.add(moduleKey);
-    const imports = this.resolveImportValues(record);
-    const result = new StaticEvaluator(this.sourceProject).evaluateSourceFile(
-      record.sourceFile,
-      moduleKey,
-      imports,
-    );
-    this.moduleResults.set(moduleKey, result);
-    this.evaluatingModules.delete(moduleKey);
+    try {
+      const imports = this.resolveImportValues(record);
+      const result = new StaticEvaluator(this.sourceProject).evaluateSourceFile(record.sourceFile, moduleKey, imports);
+      this.moduleResults.set(moduleKey, result);
+      return result;
+    } finally {
+      this.evaluatingModules.delete(moduleKey);
+    }
+  }
+
+  /** Resolve the owning binding before reading its value. Export-star diamonds compare bindings. */
+  readExportValue(moduleKey: string, exportName: string): EvaluationValue | null {
+    const binding = this.resolveExport(moduleKey, exportName, new Set());
+    if (binding instanceof EvaluationUnknownValue) return binding;
+    if (binding === null) {
+      return this.openValue(`Export '${exportName}' is not known on module ${moduleKey}.`, this.graph.readModule(moduleKey)?.sourceFile ?? null);
+    }
+    return this.evaluateModule(binding.moduleKey)?.environment.readValue(binding.name)
+      ?? this.openValue(`Export '${exportName}' could not read binding ${binding.moduleKey}#${binding.name}.`, binding.node);
+  }
+
+  private resolveExport(
+    moduleKey: string,
+    name: string,
+    visited: Set<string>,
+  ): ExportBinding | EvaluationUnknownValue | null {
+    const visit = `${moduleKey}\0${name}`;
+    if (visited.has(visit)) return null;
+    visited.add(visit);
+    const record = this.graph.readModule(moduleKey);
+    if (record === null) return this.openValue(`Module ${moduleKey} is not present.`, null);
+    const entry = record.exports.find(row => row.exportName === name && row.exportKind !== EvaluationExportKind.ExportAll);
+    if (entry !== undefined) {
+      if (entry.exportKind === EvaluationExportKind.ReExport && entry.moduleSpecifier !== null) {
+        return this.resolveLinkedExport(moduleKey, entry.moduleSpecifier, entry.localName ?? name, entry.node, visited);
+      }
+      if (entry.localName === null) return this.openValue(`Export '${name}' has no binding.`, entry.node);
+      const imported = record.imports.find(row => row.localName === entry.localName && row.exportName !== null);
+      if (imported?.exportName) {
+        return this.resolveLinkedExport(moduleKey, imported.moduleSpecifier, imported.exportName, imported.node, visited);
+      }
+      return { moduleKey, name: entry.localName, node: entry.node };
+    }
+    if (name === "default") return null;
+    let result: ExportBinding | null = null;
+    for (const star of record.exports) {
+      if (star.exportKind !== EvaluationExportKind.ExportAll || star.moduleSpecifier === null) continue;
+      const candidate = this.resolveLinkedExport(moduleKey, star.moduleSpecifier, name, star.node, visited);
+      if (candidate === null) continue;
+      if (candidate instanceof EvaluationUnknownValue) return candidate;
+      if (result && (result.moduleKey !== candidate.moduleKey || result.name !== candidate.name)) {
+        return this.openValue(`Export '${name}' is ambiguous across export-star entries in ${moduleKey}.`, record.sourceFile);
+      }
+      result = candidate;
+    }
     return result;
   }
 
-  /** Resolve one export value from a module, following re-export edges when possible. */
-  readExportValue(moduleKey: string, exportName: string): EvaluationValue | null {
-    return this.readExportValueCore(moduleKey, exportName, true);
-  }
-
-  private readExportValueCore(
-    moduleKey: string,
-    exportName: string,
-    reportMissing: boolean,
-  ): EvaluationValue | null {
-    const resolutionKey = `${moduleKey}\0${exportName}`;
-    if (this.resolvingExports.has(resolutionKey)) {
-      const record = this.graph.readModule(moduleKey);
-      return reportMissing
-        ? this.openValue(
-            `Circular export resolution reached '${exportName}' on ${moduleKey}.`,
-            record?.sourceFile ?? null,
-          )
-        : null;
-    }
-
-    this.resolvingExports.add(resolutionKey);
-    try {
-      return this.readExportValueCoreUnlocked(
-        moduleKey,
-        exportName,
-        reportMissing,
-      );
-    } finally {
-      this.resolvingExports.delete(resolutionKey);
-    }
-  }
-
-  private readExportValueCoreUnlocked(
-    moduleKey: string,
-    exportName: string,
-    reportMissing: boolean,
-  ): EvaluationValue | null {
-    const record = this.graph.readModule(moduleKey);
-    if (record === null) {
-      return this.openValue(`Module ${moduleKey} is not present.`, null);
-    }
-    const result = this.evaluateModule(moduleKey);
-    if (result === null) {
-      return this.openValue(
-        `Module ${moduleKey} could not be evaluated.`,
-        record.sourceFile,
-      );
-    }
-
-    for (const entry of record.exports) {
-      if (
-        entry.exportKind === EvaluationExportKind.Local &&
-        entry.exportName === exportName &&
-        entry.localName !== null
-      ) {
-        return (
-          result.environment.readValue(entry.localName) ??
-          this.openValue(
-            `Local export '${exportName}' did not resolve to an environment binding.`,
-            entry.node,
-          )
-        );
-      }
-      if (
-        entry.exportKind === EvaluationExportKind.Default &&
-        exportName === "default"
-      ) {
-        return entry.localName === null
-          ? this.openValue(
-              "Default export did not expose a local environment binding.",
-              entry.node,
-            )
-          : result.environment.readValue(entry.localName) ??
-              this.openValue(
-                "Default export did not resolve to a static value.",
-                entry.node,
-              );
-      }
-      if (
-        entry.exportKind === EvaluationExportKind.ReExport &&
-        entry.exportName === exportName &&
-        entry.moduleSpecifier !== null
-      ) {
-        return this.readReExportValue(
-          moduleKey,
-          entry.moduleSpecifier,
-          entry.exportName,
-          entry.node,
-          true,
-        );
-      }
-    }
-
-    const exportAllCandidates = this.readExportAllCandidates(record, exportName);
-    if (exportAllCandidates.length === 1) {
-      return exportAllCandidates[0] ?? null;
-    }
-    if (exportAllCandidates.length > 1) {
-      return this.openValue(
-        `Export '${exportName}' is ambiguous across export-star entries in ${moduleKey}.`,
-        record.sourceFile,
-      );
-    }
-
-    return reportMissing
-      ? this.openValue(
-          `Export '${exportName}' is not known on module ${moduleKey}.`,
-          record.sourceFile,
-        )
-      : null;
+  private resolveLinkedExport(from: string, specifier: string, name: string, node: ts.Node, visited: Set<string>) {
+    const linked = this.graph.readLinkedModule(from, specifier);
+    return linked === null
+      ? this.openValue(`Re-export '${specifier}' from ${from} did not resolve to a module.`, node)
+      : this.resolveExport(linked, name, visited);
   }
 
   private resolveImportValues(
@@ -229,12 +170,7 @@ export class StaticModuleGraphEvaluator {
       );
     }
     if (entry.importKind === EvaluationImportKind.Namespace) {
-      this.evaluateModule(targetModuleKey);
-      return new EvaluationModuleNamespaceValue(
-        targetModuleKey,
-        this.readModuleExportMap(targetModuleKey),
-        entry.node,
-      );
+      return this.readNamespace(targetModuleKey);
     }
     const exportName = entry.exportName ?? "default";
     return (
@@ -248,77 +184,44 @@ export class StaticModuleGraphEvaluator {
     );
   }
 
-  private readReExportValue(
-    fromModuleKey: string,
-    moduleSpecifier: string,
-    exportName: string,
-    node: ts.Node,
-    reportMissing: boolean,
-  ): EvaluationValue | null {
-    const targetModuleKey = this.graph.readLinkedModule(
-      fromModuleKey,
-      moduleSpecifier,
-    );
-    return targetModuleKey === null
-      ? this.openValue(
-          `Re-export '${moduleSpecifier}' from ${fromModuleKey} did not resolve to a local module.`,
-          node,
-        )
-      : this.readExportValueCore(targetModuleKey, exportName, reportMissing);
-  }
-
-  private readExportAllCandidates(
-    record: EvaluationModuleRecord,
-    exportName: string,
-  ): readonly EvaluationValue[] {
-    const candidates: EvaluationValue[] = [];
-    for (const entry of record.exports) {
-      if (
-        entry.exportKind !== EvaluationExportKind.ExportAll ||
-        entry.moduleSpecifier === null
-      ) {
-        continue;
-      }
-      const value = this.readReExportValue(
-        record.moduleKey,
-        entry.moduleSpecifier,
-        exportName,
-        entry.node,
-        false,
-      );
-      if (value !== null && value.kind !== EvaluationValueKind.Unknown) {
-        candidates.push(value);
+  private readNamespace(moduleKey: string): EvaluationModuleNamespaceValue {
+    const existing = this.namespaces.get(moduleKey);
+    if (existing !== undefined) return existing;
+    const values = new Map<string, EvaluationValue>();
+    const namespace = new EvaluationModuleNamespaceValue(moduleKey, values, this.graph.readModule(moduleKey)?.sourceFile ?? null);
+    this.namespaces.set(moduleKey, namespace);
+    const names = new Set<string>();
+    this.collectExportNames(moduleKey, moduleKey, names, new Set());
+    for (const name of names) {
+      const binding = this.resolveExport(moduleKey, name, new Set());
+      if (binding !== null && !(binding instanceof EvaluationUnknownValue)) {
+        const value = this.evaluateModule(binding.moduleKey)?.environment.readValue(binding.name);
+        if (value !== null && value !== undefined) values.set(name, value);
       }
     }
-    return candidates;
+    return namespace;
   }
 
-  private readModuleExportMap(
-    moduleKey: string,
-  ): ReadonlyMap<string, EvaluationValue> {
-    const exports = new Map<string, EvaluationValue>();
+  private collectExportNames(moduleKey: string, root: string, names: Set<string>, visited: Set<string>): void {
+    if (visited.has(moduleKey)) return;
+    visited.add(moduleKey);
     const record = this.graph.readModule(moduleKey);
-    if (record === null) {
-      return exports;
-    }
-    for (const entry of record.exports) {
-      if (
-        entry.exportKind === EvaluationExportKind.ExportAll ||
-        entry.exportName === "*"
-      ) {
-        continue;
-      }
-      const value = this.readExportValue(moduleKey, entry.exportName);
-      if (value !== null) {
-        exports.set(entry.exportName, value);
+    for (const entry of record?.exports ?? []) {
+      if (entry.exportKind === EvaluationExportKind.ExportAll && entry.moduleSpecifier !== null) {
+        const linked = this.graph.readLinkedModule(moduleKey, entry.moduleSpecifier);
+        if (linked !== null) this.collectExportNames(linked, root, names, visited);
+      } else if (entry.exportName !== "default" || moduleKey === root) {
+        names.add(entry.exportName);
       }
     }
-    return exports;
   }
 
   private openValue(reason: string, node: ts.Node | null): EvaluationUnknownValue {
+    const id = JSON.stringify([node?.getSourceFile().fileName, node?.pos, node?.end, reason]);
+    const existing = this.openValues.get(id);
+    if (existing !== undefined) return existing;
     const value = new EvaluationUnknownValue(reason, node);
-    this.openValues.push(value);
+    this.openValues.set(id, value);
     return value;
   }
 }

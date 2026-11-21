@@ -26,7 +26,7 @@ import {
   navigationRoute,
 } from "../navigation.js";
 import { createSurfaceMap, type InquirySurfaceMap } from "../surface-map.js";
-import { RepoAreaStatus } from "../terrain.js";
+import { RepoAreaId, RepoAreaStatus } from "../terrain.js";
 import type {
   SourceProject,
   TypeScriptEnumRawValueRoleSelection,
@@ -115,7 +115,7 @@ export function answerRepoMap(
       value: createSurfaceMap(world),
       basis: [contractBasis("Answered from the in-memory contract world.")],
       evidence: world.evidence,
-      continuations: [
+      continuations: ([
         {
           id: "repo.map:terrain",
           kind: ContinuationKind.SwitchLens,
@@ -451,7 +451,10 @@ export function answerRepoMap(
             "Atlas self-maintenance surfaces behind the surface map.",
           ),
         },
-      ],
+      ] satisfies Continuation[]).filter(({ inquiry: next }) => world.lenses.some(lens =>
+        lens.id === next.lens && lens.supportedLoci.includes(next.locus.kind) &&
+        lens.projections.some(projection => projection.id === next.projection),
+      )),
     },
   );
 }
@@ -461,24 +464,22 @@ export function answerRepoTerrain(
   world: InquiryWorld,
   inquiry: Inquiry,
 ): Answer<RepoTerrainValue> {
+  const locus = inquiry.locus;
+  const areas = locus.kind === LocusKind.RepoArea
+    ? world.terrain.filter(area => area.id === locus.areaId)
+    : world.terrain;
   const value: RepoTerrainValue = {
-    totalAreas: world.terrain.length,
-    activeAreas: world.terrain.filter(
-      (area) => area.status === RepoAreaStatus.Active,
-    ).length,
-    deferredAreas: world.terrain.filter(
-      (area) => area.status === RepoAreaStatus.Deferred,
-    ).length,
-    externalAreas: world.terrain.filter(
-      (area) => area.status === RepoAreaStatus.External,
-    ).length,
-    areas: world.terrain,
+    totalAreas: areas.length,
+    activeAreas: areas.filter(area => area.status === RepoAreaStatus.Active).length,
+    deferredAreas: areas.filter(area => area.status === RepoAreaStatus.Deferred).length,
+    externalAreas: areas.filter(area => area.status === RepoAreaStatus.External).length,
+    areas,
   };
 
   return createAnswer(
     inquiry,
-    OutcomeKind.Hit,
-    `Returned ${world.terrain.length} repository terrain area(s).`,
+    areas.length > 0 ? OutcomeKind.Hit : OutcomeKind.Miss,
+    `Returned ${areas.length} repository terrain area(s).`,
     {
       value,
       basis: [
@@ -517,6 +518,38 @@ export function answerSelf(
   implementedLensIds: ReadonlySet<LensId>,
   sourceProject: SourceProject,
 ): Answer<SelfValue> {
+  const locus = inquiry.locus;
+  if ((locus.kind === LocusKind.Package && locus.packageId !== RepoAreaId.Atlas) ||
+      (locus.kind === LocusKind.RepoArea && locus.areaId !== RepoAreaId.Atlas)) {
+    return createAnswer(inquiry, OutcomeKind.NoClaim, "Self analysis describes the Atlas package.", {
+      basis: [contractBasis("The selected package or area is outside Atlas self analysis.")],
+      continuations: [{
+        kind: ContinuationKind.SwitchLens,
+        priority: ContinuationPriority.Primary,
+        rationale: "Inspect the selected package or area through the TypeScript structure lens.",
+        inquiry: { lens: LensId.TsStructure, locus, projection: "module-graph" },
+      }],
+    });
+  }
+  const projection = inquiry.projection ?? "summary";
+  const disabled = projection !== "phase-profile" && projection !== "summary" && atlasSelfProjectionNeedsSemanticTaxonomyAnalysis(inquiry) &&
+    inquiryBooleanFilter(inquiry, "includeSemanticTaxonomyAnalysis") === false
+    ? "includeSemanticTaxonomyAnalysis"
+    : atlasSelfProjectionNeedsFunctionBodyAnalysis(inquiry) && inquiryBooleanFilter(inquiry, "includeFunctionBodyAnalysis") === false
+      ? "includeFunctionBodyAnalysis"
+      : undefined;
+  if (disabled !== undefined) {
+    const summary = `The requested ${projection} projection requires the disabled ${disabled} pass.`;
+    return createAnswer(inquiry, OutcomeKind.NoClaim, summary, {
+      basis: [contractBasis("The execution filter excludes the requested analysis.")],
+      openSeams: [{ kind: OpenSeamKind.InsufficientBasis, summary }],
+      continuations: [{
+        kind: ContinuationKind.Reroute, priority: ContinuationPriority.Primary,
+        rationale: `Run ${projection} with the required analysis enabled.`,
+        inquiry: { ...inquiry, filters: { ...inquiry.filters, [disabled]: true } },
+      }],
+    });
+  }
   return new AtlasSelfAnswerer(
     world,
     inquiry,
@@ -557,7 +590,7 @@ class AtlasSelfAnswerer {
       this.#unimplemented,
       this.#analysis,
       inquiryBooleanFilterOrDefault(inquiry, "includeSourceProject", false),
-      atlasSelfValueNeedsTaxonomy(inquiry),
+      atlasSelfValueNeedsTaxonomy(inquiry) && inquiryBooleanFilter(inquiry, "includeSemanticTaxonomyAnalysis") !== false,
     );
   }
 
@@ -739,8 +772,8 @@ function atlasSelfAnalysisOptionsForInquiry(
 ): AtlasSelfAnalysisOptions {
   return {
     enumRawValueContextRoles: enumRawValueContextRolesForInquiry(inquiry),
-    includeFunctionBodyAnalysis: atlasSelfProjectionNeedsFunctionBodyAnalysis(inquiry),
-    includeSemanticTaxonomyAnalysis: atlasSelfProjectionNeedsSemanticTaxonomyAnalysis(inquiry),
+    includeFunctionBodyAnalysis: inquiryBooleanFilter(inquiry, "includeFunctionBodyAnalysis") ?? atlasSelfProjectionNeedsFunctionBodyAnalysis(inquiry),
+    includeSemanticTaxonomyAnalysis: inquiryBooleanFilter(inquiry, "includeSemanticTaxonomyAnalysis") ?? atlasSelfProjectionNeedsSemanticTaxonomyAnalysis(inquiry),
   };
 }
 
@@ -752,10 +785,6 @@ function atlasSelfValueNeedsTaxonomy(inquiry: Inquiry): boolean {
 function atlasSelfProjectionNeedsSemanticTaxonomyAnalysis(
   inquiry: Inquiry,
 ): boolean {
-  const explicit = inquiryBooleanFilter(inquiry, "includeSemanticTaxonomyAnalysis");
-  if (explicit !== undefined) {
-    return explicit;
-  }
   switch (inquiry.projection ?? "summary") {
     case "summary":
     case "taxonomy":
@@ -781,10 +810,6 @@ function atlasSelfProjectionNeedsSemanticTaxonomyAnalysis(
 function atlasSelfProjectionNeedsFunctionBodyAnalysis(
   inquiry: Inquiry,
 ): boolean {
-  const explicit = inquiryBooleanFilter(inquiry, "includeFunctionBodyAnalysis");
-  if (explicit !== undefined) {
-    return explicit;
-  }
   const projection = inquiry.projection ?? "summary";
   if (
     projection === "function-shapes" ||
@@ -881,10 +906,14 @@ function answerSelfSummaryProjection(
   analysis: AtlasSelfAnalysis,
   openSeams: readonly OpenSeam[],
 ): Answer<SelfValue> {
+  const seams = value.taxonomy ? openSeams : [...openSeams, {
+    kind: OpenSeamKind.InsufficientBasis,
+    summary: "The semantic taxonomy pass was disabled. Enable includeSemanticTaxonomyAnalysis to inspect its counts.",
+  }];
   return createAnswer(
     inquiry,
-    openSeams.length === 0 ? OutcomeKind.Hit : OutcomeKind.Partial,
-    `Returned Atlas self status with ${value.implementedLensIds.length} implemented lens(es), ${value.unimplementedContractedLenses} missing contracted implementation(s), and source-backed taxonomy rollup.`,
+    seams.length === 0 ? OutcomeKind.Hit : OutcomeKind.Partial,
+    `Returned Atlas self status with ${value.implementedLensIds.length} implemented lens(es) and ${value.unimplementedContractedLenses} missing contracted implementation(s). ${value.taxonomy ? "Includes source-backed taxonomy." : "Taxonomy was not collected."}`,
     {
       value,
       basis: [
@@ -897,13 +926,13 @@ function answerSelfSummaryProjection(
       ],
       evidence: [
         ...world.evidence,
-        selfAnalysisEvidence(
+        ...(value.taxonomy ? [selfAnalysisEvidence(
           analysis,
           "atlas.self:taxonomy",
           "Atlas self-analysis derived enums, string literals, and relationship-like row surfaces.",
-        ),
+        )] : []),
       ],
-      openSeams,
+      openSeams: seams,
       continuations: selfSummaryContinuations(inquiry),
     },
   );

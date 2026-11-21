@@ -21,8 +21,9 @@ This is not a compatibility layer for old readers and not the default caller sur
   exposes the measured phase rows from the same source-analysis build as a queryable `atlas.self:phase-profile`
   projection, so cache/split decisions can be made through Atlas itself instead of profile-script prose. Keep enum and string ontology work in those
   modules unless it needs to join across broader Atlas surfaces.
-  Lens reachability follows same-file calls and exact named imports, which keeps fact ownership inspectable without
-  fuzzy global name matching.
+  Lens implementation links use checker-resolved registry bindings. Self-analysis follows named call targets to
+  declarations in the admitted Atlas source, including through re-exports. Indirect runtime dispatch and readers
+  outside that source world remain open.
   `atlas.self` exposes these as compact projections with source continuations; full source-project package details
   stay opt-in so self-maintenance queries do not flood the caller. Projection branch rows are observational: an
   unobserved projection may be handled by a default branch or pre-switch logic, so callers should treat it as a
@@ -153,8 +154,8 @@ This is not a compatibility layer for old readers and not the default caller sur
   duplicate verdict. `atlas.self:function-shapes` groups repeated canonical function body shapes across different names,
   and `atlas.self:function-control-flow-shapes` applies the same switch-topology canary to Atlas source itself, catching
   split-brain helpers that would be invisible to duplicate-name scans. `atlas.self:function-wrappers` surfaces direct constructor-return and
-  simple-call-return helpers with local direct-call, value-reference, and total-usage counts; it is a source-navigation lane for spotting
-  possible one-off wrapper soup, not a verdict that a wrapper should be inlined or extracted. `functions`,
+  simple-call-return helpers with checker-resolved direct calls and value references. An incoming count covers
+  statically identified uses in the selected Program. Overload signatures without bodies do not contribute implementation rows. `functions`,
   `call-sites`, and `call-dependencies` use compact call-site topology by default; `call-sites` accepts
   `includeCallDetails=true` when a caller needs checker callee type/signature displays. Without a detail `query`, those
   displays are materialized only for the returned page; with a detail `query`, Atlas performs the whole-set exact call

@@ -3,7 +3,6 @@ import path from "node:path";
 
 import { countBy } from "../../collections.js";
 import { LensCatalog } from "../lens.js";
-import type { SourceProject } from "../../source/index.js";
 import type { ProductArchitectureClassSurfaceRow } from "./product-architecture-analysis.js";
 import {
   type AtlasMemoryAuLinkAnchor,
@@ -11,30 +10,28 @@ import {
   type AtlasMemoryRecord,
   type AtlasMemoryScriptAnchor,
   type AtlasMemoryStorageIssue,
-  type AtlasMemoryStoredRecord,
 } from "./atlas-memory-contracts.js";
 import {
   ATLAS_MEMORY_PRODUCT_LARGE_CLASS_LINE_THRESHOLD,
 } from "./atlas-memory-live-checks.js";
 import { atlasMemoryProductClassKey } from "./atlas-memory-product-class-key.js";
 import {
+  type AtlasMemorySources,
   atlasMemoryRepoPathExists,
   atlasMemorySourceProjectHasDeclaration,
 } from "./atlas-memory-source-helpers.js";
 
 /** Validate durable memory records against live source, lens, and package-script contracts. */
 export function atlasMemoryIntegrityIssues(
-  sourceProject: SourceProject,
+  sources: AtlasMemorySources,
   productClasses: readonly ProductArchitectureClassSurfaceRow[],
-  storedRecords: readonly AtlasMemoryStoredRecord[],
+  records: readonly AtlasMemoryRecord[],
+  trackedProductClassKeys: ReadonlySet<string>,
 ): readonly AtlasMemoryStorageIssue[] {
-  const records = storedRecords.map((stored) => stored.record);
-  const trackedProductClassKeys = trackedProductLargeClassKeys(records);
   return [
     ...duplicateRecordIdIssues(records),
     ...records.flatMap((record) => [
-      ...recordDurabilityIssues(record),
-      ...anchorIntegrityIssues(sourceProject, productClasses, record),
+      ...anchorIntegrityIssues(sources, productClasses, record),
       ...sourceClassAnchorLiveCheckIssues(
         productClasses,
         trackedProductClassKeys,
@@ -56,25 +53,8 @@ function duplicateRecordIdIssues(
     }));
 }
 
-function recordDurabilityIssues(
-  record: AtlasMemoryRecord,
-): readonly AtlasMemoryStorageIssue[] {
-  if (
-    (record.kind === "pressure-frontier" || record.kind === "intentional-shape") &&
-    (record.liveChecks ?? []).length === 0
-  ) {
-    return [
-      {
-        id: `atlas.memory:record:${record.id}:missing-live-check`,
-        summary: `${record.kind} record ${record.id} needs at least one liveCheck so its status is not prose-only.`,
-      },
-    ];
-  }
-  return [];
-}
-
 function anchorIntegrityIssues(
-  sourceProject: SourceProject,
+  sources: AtlasMemorySources,
   productClasses: readonly ProductArchitectureClassSurfaceRow[],
   record: AtlasMemoryRecord,
 ): readonly AtlasMemoryStorageIssue[] {
@@ -86,12 +66,12 @@ function anchorIntegrityIssues(
       return anchor.kind === "lens"
         ? lensAnchorIntegrityIssues(record, anchor.lensId, anchor.projection, index)
         : anchor.kind === "script"
-          ? scriptAnchorIntegrityIssues(sourceProject, record, anchor, index)
+          ? scriptAnchorIntegrityIssues(sources, record, anchor, index)
           : auLinkAnchorIntegrityIssues(productClasses, record, anchor, index);
     }
     const filePath = anchor.kind === "source" ? anchor.filePath : anchor.path;
     const issues: AtlasMemoryStorageIssue[] = [];
-    if (!atlasMemoryRepoPathExists(sourceProject, filePath)) {
+    if (!atlasMemoryRepoPathExists(sources, filePath)) {
       issues.push({
         id: `atlas.memory:record:${record.id}:anchor:${index}:missing-path`,
         summary: `Memory record ${record.id} has a ${anchor.kind} anchor pointing at missing path ${filePath}.`,
@@ -102,7 +82,7 @@ function anchorIntegrityIssues(
       anchor.kind === "source" &&
       anchor.symbolName !== undefined &&
       !atlasMemorySourceProjectHasDeclaration(
-        sourceProject,
+        sources,
         anchor.filePath,
         anchor.symbolName,
       )
@@ -113,14 +93,14 @@ function anchorIntegrityIssues(
       });
     }
     if (anchor.kind === "doc") {
-      issues.push(...docAnchorHeadingIssues(sourceProject, record, anchor, index));
+      issues.push(...docAnchorHeadingIssues(sources, record, anchor, index));
     }
     return issues;
   });
 }
 
 function docAnchorHeadingIssues(
-  sourceProject: SourceProject,
+  sources: AtlasMemorySources,
   record: AtlasMemoryRecord,
   anchor: AtlasMemoryDocAnchor,
   index: number,
@@ -130,10 +110,12 @@ function docAnchorHeadingIssues(
   }
   let text: string;
   try {
-    text = readFileSync(path.join(sourceProject.repoRoot, anchor.path), "utf8");
+    text = readFileSync(path.join(sources.project.repoRoot, anchor.path), "utf8");
   } catch {
-    // Missing paths are already reported by the path-existence check above.
-    return [];
+    return [{
+      id: `atlas.memory:record:${record.id}:anchor:${index}:unreadable-doc`,
+      summary: `Memory record ${record.id} cites a heading in ${anchor.path}, but its text could not be read.`,
+    }];
   }
   const wanted = anchor.heading.trim().toLowerCase();
   const found = text.split(/\r?\n/u).some((line) => {
@@ -200,50 +182,41 @@ function lensAnchorIntegrityIssues(
 }
 
 function scriptAnchorIntegrityIssues(
-  sourceProject: SourceProject,
+  sources: AtlasMemorySources,
   record: AtlasMemoryRecord,
   anchor: AtlasMemoryScriptAnchor,
   index: number,
 ): readonly AtlasMemoryStorageIssue[] {
-  const command = recognizedPnpmFilterCommand(anchor.command);
-  if (command === undefined) {
-    return [];
-  }
+  const issue = packageScriptAnchorIssue(sources.project.repoRoot, anchor.command);
+  return issue === undefined ? [] : [{
+    id: `atlas.memory:record:${record.id}:anchor:${index}:${issue.kind}`,
+    summary: `Memory record ${record.id}: ${issue.summary}`,
+  }];
+}
+
+/** Check package scripts that Atlas can resolve from an exact pnpm --filter command. */
+export function packageScriptAnchorIssue(
+  repoRoot: string,
+  text: string,
+): { readonly kind: string; readonly summary: string } | undefined {
+  const command = recognizedPnpmFilterCommand(text);
+  if (command === undefined) return undefined;
   const packageJsonPath = packageJsonPathForFilterPackage(command.packageName);
   if (packageJsonPath === undefined) {
-    return [
-      {
-        id: `atlas.memory:record:${record.id}:anchor:${index}:unknown-script-package`,
-        summary: `Memory record ${record.id} points at package script ${anchor.command}, but Atlas memory does not know package ${command.packageName}.`,
-      },
-    ];
+    return { kind: "unknown-script-package", summary: `No package manifest mapping for ${command.packageName} in ${text}.` };
   }
-  const absolutePackageJsonPath = path.join(sourceProject.repoRoot, packageJsonPath);
-  if (!existsSync(absolutePackageJsonPath)) {
-    return [
-      {
-        id: `atlas.memory:record:${record.id}:anchor:${index}:missing-script-package`,
-        summary: `Memory record ${record.id} points at package script ${anchor.command}, but ${packageJsonPath} does not exist.`,
-      },
-    ];
+  const absolutePath = path.join(repoRoot, packageJsonPath);
+  if (!existsSync(absolutePath)) {
+    return { kind: "missing-script-package", summary: `Missing ${packageJsonPath} for ${text}.` };
   }
-  const scripts = packageScripts(absolutePackageJsonPath);
+  const scripts = packageScripts(absolutePath);
   if (scripts === undefined) {
-    return [
-      {
-        id: `atlas.memory:record:${record.id}:anchor:${index}:invalid-script-package`,
-        summary: `Memory record ${record.id} points at package script ${anchor.command}, but ${packageJsonPath} could not be read as a package manifest.`,
-      },
-    ];
+    return { kind: "invalid-script-package", summary: `Could not read scripts from ${packageJsonPath} for ${text}.` };
   }
-  return Object.hasOwn(scripts, command.scriptName)
-    ? []
-    : [
-      {
-        id: `atlas.memory:record:${record.id}:anchor:${index}:unknown-script`,
-        summary: `Memory record ${record.id} points at script ${command.scriptName} in ${command.packageName}, but that package.json script is not declared.`,
-      },
-    ];
+  if (!Object.hasOwn(scripts, command.scriptName)) {
+    return { kind: "unknown-script", summary: `Script ${command.scriptName} is absent from ${packageJsonPath}.` };
+  }
+  return undefined;
 }
 
 function recognizedPnpmFilterCommand(
@@ -291,20 +264,6 @@ function packageScripts(
   } catch {
     return undefined;
   }
-}
-
-function trackedProductLargeClassKeys(
-  records: readonly AtlasMemoryRecord[],
-): ReadonlySet<string> {
-  return new Set(
-    records.flatMap((record) =>
-      (record.liveChecks ?? []).flatMap((check) =>
-        check.kind === "product-large-class"
-          ? [atlasMemoryProductClassKey(check)]
-          : [],
-      ),
-    ),
-  );
 }
 
 function sourceClassAnchorLiveCheckIssues(

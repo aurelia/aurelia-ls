@@ -1,3 +1,4 @@
+import type { ProductArchitectureValue } from "../inquiry/runtime/product-architecture-lenses.js";
 import { performance } from "node:perf_hooks";
 
 import { OutcomeKind } from "../inquiry/answer.js";
@@ -6,22 +7,6 @@ import { RepoRootLocus } from "../inquiry/locus.js";
 import { productArchitectureProfileLaneName } from "../inquiry/runtime/product-architecture-profile-label.js";
 import { createApi } from "../session/index.js";
 import { scriptNumberArgumentValue } from "./script-output.js";
-
-interface ProductArchitectureProfileValue {
-  readonly profile?: {
-    readonly includeFunctionBodyAnalysis: boolean;
-    readonly includeCallSites: boolean;
-    readonly includeCallDetails: boolean;
-    readonly includeSymbols: boolean;
-    readonly includeKernelRecords: boolean;
-    readonly totalMilliseconds: number;
-    readonly phases: readonly {
-      readonly phase: string;
-      readonly milliseconds: number;
-      readonly count: number | null;
-    }[];
-  };
-}
 
 const api = createApi({ idleTtlMs: 120_000, requestTimeoutMs: 180_000 });
 const detail = process.argv.includes("--detail");
@@ -80,7 +65,7 @@ async function printProfile(
     throw new Error(`product.architecture profile returned ${answer.outcome}.`);
   }
 
-  const value = answer.value as ProductArchitectureProfileValue | undefined;
+  const value = answer.value as ProductArchitectureValue | undefined;
   const profile = value?.profile;
   if (profile === undefined) {
     throw new Error("product.architecture profile returned no profile payload.");

@@ -10,6 +10,10 @@ import {
   readTypeScriptExpressionFact,
   requiredSourceFileIdentity,
   sourceRangeForSourceFileNode,
+  requiredSourceRangeForNode,
+  sourceRangeKey,
+  symbolForExpressionName,
+  unwrapExpression,
   SourceProjectKeyedMemo,
   SourceProjectMemo,
   type SourceFileIdentity,
@@ -17,7 +21,7 @@ import {
   type TypeScriptCallSiteEntry,
 } from "../source/index.js";
 import type { SourceRange } from "../inquiry/locus.js";
-import { isCreateInterfaceCall } from "./di-source.js";
+import { isCreateInterfaceCall, sourceNodeForDiRange } from "./di-source.js";
 import {
   FrameworkDiResolverStrategy,
   FrameworkRelationshipClosure,
@@ -343,6 +347,72 @@ const resolverStrategyRegistrationFacts = {
 const FRAMEWORK_DI_RELATIONSHIP_INDEX_VERSION = "di-relationship-atoms@3";
 
 const frameworkDiIndexMemo = new SourceProjectMemo<FrameworkDiIndex>();
+const keysByCreationSite = new SourceProjectMemo<ReadonlyMap<string, FrameworkDiKeyRow>>();
+/** Module binding used as a DI key. An interface row additionally owns its default registration. */
+interface FrameworkDeclaredDiKey {
+  readonly id: string;
+  readonly name: string;
+  readonly source: SourceRange;
+  readonly packageId: string;
+  readonly packageName: string;
+  readonly interfaceRow?: FrameworkDiKeyRow;
+}
+const keyAtSource = new SourceProjectKeyedMemo<string, FrameworkDeclaredDiKey | null>();
+
+/** Recover an interface key from its creation site or a checker-linked const binding/import alias. */
+export function frameworkDiKeyAtSource(project: SourceProject, source: SourceRange | undefined): FrameworkDiKeyRow | null {
+  return frameworkDeclaredDiKeyAtSource(project, source)?.interfaceRow ?? null;
+}
+
+/** Trace a source-level class or interface binding through checker aliases to its owning declaration. */
+export function frameworkDeclaredDiKeyAtSource(project: SourceProject, source: SourceRange | undefined): FrameworkDeclaredDiKey | null {
+  if (source === undefined) return null;
+  const address = sourceRangeKey(source);
+  return keyAtSource.read(project, address, () => {
+    const keys = keysByCreationSite.read(project, () =>
+      new Map(readFrameworkDiIndex(project).keys.map(row => [sourceRangeKey(row.source), row])),
+    );
+    const direct = keys.get(address);
+    if (direct !== undefined) return interfaceDeclarationKey(direct);
+    const seen = new Set<ts.Node>();
+    let node = sourceNodeForDiRange(project, source);
+    while (node !== null && !seen.has(node)) {
+      seen.add(node);
+      if (ts.isClassDeclaration(node) && node.name !== undefined && ts.isSourceFile(node.parent) && !node.getSourceFile().isDeclarationFile) {
+        const owner = project.packageForFileName(node.getSourceFile().fileName);
+        if (owner === null) return null;
+        const declaration = requiredSourceRangeForNode(project, node);
+        return {
+          id: `framework-di-class-key:${sourceRangeKey(declaration)}`,
+          name: node.name.text,
+          source: declaration,
+          packageId: owner.id,
+          packageName: owner.packageName,
+        };
+      }
+      if (ts.isVariableDeclaration(node) && ts.isVariableDeclarationList(node.parent) &&
+          (node.parent.flags & ts.NodeFlags.Const) !== 0 && node.initializer !== undefined) {
+        node = unwrapExpression(node.initializer);
+      } else if (ts.isExpression(node)) {
+        const expression = unwrapExpression(node);
+        if (ts.isCallExpression(expression)) {
+          const key = keys.get(sourceRangeKey(requiredSourceRangeForNode(project, expression)));
+          return key === undefined ? null : interfaceDeclarationKey(key);
+        }
+        if (!ts.isIdentifier(expression) && !ts.isPropertyAccessExpression(expression)) return null;
+        node = symbolForExpressionName(project.checker, expression)?.valueDeclaration ?? null;
+      } else {
+        return null;
+      }
+    }
+    return null;
+  });
+}
+
+function interfaceDeclarationKey(row: FrameworkDiKeyRow): FrameworkDeclaredDiKey {
+  return { id: row.id, name: row.interfaceKey, source: row.source,
+    packageId: row.packageId, packageName: row.packageName, interfaceRow: row };
+}
 const frameworkDiPackagePayloadByPackage = new SourceProjectKeyedMemo<
   string,
   FrameworkDiPackagePayload
@@ -546,7 +616,7 @@ function createInterfaceKeyRow(
   );
   return {
     row: {
-      id: `framework-di-key:${packageId}:${exportName}`,
+      id: `framework-di-key:${packageId}:${file.repoPath}:${exportName}`,
       packageId,
       packageName,
       exportName,
@@ -575,14 +645,25 @@ function createInterfaceBuilderAtoms(
   interfaceKey: string,
 ): readonly FrameworkRelationshipAtom[] {
   const configure = createInterfaceConfigureArgument(call);
-  if (configure === null) {
+  if (configure === null || (!ts.isArrowFunction(configure) && !ts.isFunctionExpression(configure))) {
     return [];
   }
+  const builder = configure.parameters[0]?.name;
+  if (builder === undefined || !ts.isIdentifier(builder)) return [];
+  const builderSymbol = sourceProject.checker.getSymbolAtLocation(builder);
+  const body = configure.body;
+  const returned = ts.isBlock(body)
+    ? (body.statements.length === 1 && ts.isReturnStatement(body.statements[0]!) ? body.statements[0]!.expression : undefined)
+    : body;
   const atoms: FrameworkRelationshipAtom[] = [];
   const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node)) {
+    if (node !== configure && ts.isFunctionLike(node)) return;
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) &&
+        builderSymbol !== undefined && sourceProject.checker.getSymbolAtLocation(node.expression.expression) === builderSymbol) {
       const strategy = resolverBuilderStrategy(node);
       if (strategy !== null) {
+        const closure = returned !== undefined && unwrapExpression(returned) === node
+          ? FrameworkRelationshipClosure.Exact : FrameworkRelationshipClosure.Partial;
         const source = sourceRangeForSourceFileNode(file.repoPath, sourceFile, node);
         const callSite =
           readTypeScriptCallSiteEntry(sourceProject, sourceFile, node) ??
@@ -601,7 +682,7 @@ function createInterfaceBuilderAtoms(
           mechanism: FrameworkRelationshipMechanism.ResolverBuilder,
           phase: FrameworkRelationshipPhase.Definition,
           evidenceBasis: FrameworkRelationshipEvidenceBasis.Syntax,
-          closure: FrameworkRelationshipClosure.Exact,
+          closure,
           packageId,
           packageName,
           from: keyEndpoint,
@@ -632,7 +713,7 @@ function createInterfaceBuilderAtoms(
           providerArgument,
         );
         if (providerAtom !== null) {
-          atoms.push(providerAtom);
+          atoms.push({ ...providerAtom, closure });
         }
       }
     }
@@ -1038,12 +1119,7 @@ function classifyCall(
     propertyOrIdentifierName(call.expression, sourceFile) ??
     call.expression.getText(sourceFile);
   const calleeText = call.expression.getText(sourceFile);
-  const registrationStrategy = registrationFactoryStrategy(
-    sourceProject,
-    sourceFile,
-    call,
-    calleeName,
-  );
+  const registrationStrategy = frameworkRegistrationFactoryStrategy(sourceProject, call);
   if (registrationStrategy !== null) {
     return registrationFactoryClassification(registrationStrategy);
   }
@@ -1234,12 +1310,13 @@ function resolverNewExpressionClassification(
   };
 }
 
-function registrationFactoryStrategy(
+/** Classify a call to a kernel Registration factory through its checker-visible declaration. */
+export function frameworkRegistrationFactoryStrategy(
   sourceProject: SourceProject,
-  _sourceFile: ts.SourceFile,
   call: ts.CallExpression,
-  calleeName: string,
 ): FrameworkDiResolverStrategy | null {
+  const calleeName = propertyOrIdentifierName(call.expression, call.getSourceFile());
+  if (calleeName === null || calleeName === undefined) return null;
   if (
     !isFrameworkRegistrationFactoryCallee(
       sourceProject,

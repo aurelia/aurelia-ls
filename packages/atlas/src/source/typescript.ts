@@ -2,7 +2,7 @@ import path from "node:path";
 
 import ts from "typescript";
 
-import { uniqueByKey } from "../collections.js";
+import { countBy, uniqueByKey } from "../collections.js";
 import type { SourceRange } from "../inquiry/locus.js";
 import { repoRelativePath, resolveRepoPath, type RepoRelativePath } from "./path.js";
 import {
@@ -174,26 +174,67 @@ export function readSourceText(
   options: SourceTextReadOptions,
 ): SourceTextRead {
   const resolution = resolveSourceSelector(project, selector);
-  const readableTargets = resolution.targets
-    .map((target) => ({ target, text: textForTarget(target) }))
-    .filter((entry): entry is { readonly target: ResolvedSourceTarget; readonly text: string } => entry.text !== null);
-  const slices = readableTargets.map(({ target, text }) => {
-    const capped = text.slice(0, options.maxTextChars);
-    return {
-      target: rowForTarget(target),
-      programBacked: target.sourceFile !== undefined,
-      text: capped,
-      totalChars: text.length,
-      truncated: capped.length < text.length,
-    };
-  });
+  const page = options.page;
+  const targets: SourceTargetRow[] = [];
+  const slices: SourceTextSlice[] = [];
+  let index = page?.offset ?? 0;
+  let textOffset = page?.textOffset ?? 0;
+  let remaining = options.maxTextChars;
+  if (textOffset > 0) {
+    const first = resolution.targets[index];
+    const text = first === undefined ? null : textForTarget(first);
+    if (text === null || textOffset >= text.length) {
+      return {
+        resolution: { selector, targets: [], candidateCount: resolution.candidateCount, diagnostics: [
+          { code: "source.text.invalid-cursor", message: "The source cursor points outside the selected target text." },
+        ] },
+        targetCount: resolution.targets.length,
+        programTargetCount: 0,
+        filesystemTargetCount: 0,
+        slices: [],
+      };
+    }
+  }
+  while (index < resolution.targets.length && targets.length < (page?.limit ?? Infinity)) {
+    const target = resolution.targets[index]!;
+    const row = rowForTarget(target);
+    targets.push(row);
+    const text = textForTarget(target);
+    if (text !== null) {
+      const start = Math.min(textOffset, text.length);
+      const capped = text.slice(start, start + remaining);
+      const end = start + capped.length;
+      slices.push({
+        target: row,
+        programBacked: target.sourceFile !== undefined,
+        textOffset: start,
+        text: capped,
+        totalChars: text.length,
+        truncated: end < text.length,
+      });
+      if (page !== undefined && options.maxTextChars > 0) {
+        remaining -= capped.length;
+        if (end < text.length) {
+          textOffset = end;
+          break;
+        }
+      }
+    }
+    index++;
+    textOffset = 0;
+    if (page !== undefined && remaining === 0 && options.maxTextChars > 0) {
+      break;
+    }
+  }
   const programTargetCount = resolution.targets.filter((target) => target.sourceFile !== undefined).length;
   const filesystemTargetCount = resolution.targets.filter(
     (target) => target.sourceFile === undefined && target.sourceText !== undefined,
   ).length;
 
   return {
-    resolution: serializableResolution(resolution),
+    resolution: { selector, targets, candidateCount: resolution.candidateCount, diagnostics: resolution.diagnostics },
+    targetCount: resolution.targets.length,
+    nextCursor: index < resolution.targets.length ? (textOffset === 0 ? String(index) : `${index}:${textOffset}`) : undefined,
     programTargetCount,
     filesystemTargetCount,
     slices,
@@ -217,7 +258,7 @@ export function readApiSurface(
   const nextOffset = offset + entries.length < allEntries.length ? offset + entries.length : undefined;
 
   return {
-    resolution: serializableResolution(resolution),
+    resolution: serializableResolution(resolution, options.limit),
     rollup: {
       fileCount: selectedSourceFiles(resolution).length,
       totalEntries: allEntries.length,
@@ -248,7 +289,7 @@ export function readModuleGraph(
   const nextOffset = offset + edges.length < allEdges.length ? offset + edges.length : undefined;
 
   return {
-    resolution: serializableResolution(resolution),
+    resolution: serializableResolution(resolution, options.limit),
     fileCount: files.length,
     totalEdges: allEdges.length,
     edges,
@@ -290,7 +331,7 @@ export function readDocumentSymbols(
   const nextOffset = offset + symbols.length < allSymbols.length ? offset + symbols.length : undefined;
 
   return {
-    resolution: serializableResolution(resolution),
+    resolution: serializableResolution(resolution, options.limit),
     fileCount: files.length,
     query,
     totalSymbols: allSymbols.length,
@@ -330,7 +371,7 @@ export function readSymbolIndex(
   const nextOffset = offset + entries.length < allRows.length ? offset + entries.length : undefined;
 
   return {
-    resolution: serializableResolution(resolution),
+    resolution: serializableResolution(resolution, options.limit),
     query,
     totalEntries: allRows.length,
     entries,
@@ -371,7 +412,7 @@ export function readExportSurface(
   const nextOffset = offset + exports.length < allExports.length ? offset + exports.length : undefined;
 
   return {
-    resolution: serializableResolution(resolution),
+    resolution: serializableResolution(resolution, options.limit),
     surfaceCount: surfaces.length,
     totalExports: allExports.length,
     query,
@@ -411,7 +452,7 @@ export function readExportNames(
   const limit = Math.max(1, Math.trunc(options.limit));
   const exports = allExports.slice(offset, offset + limit);
   const nextOffset = offset + exports.length < allExports.length ? offset + exports.length : undefined;
-  const serializedResolution = serializableResolution(resolution);
+  const serializedResolution = serializableResolution(resolution, options.limit);
   const afterSerialize = performance.now();
   if (process.env.ATLAS_PROFILE_EXPORT_NAMES === "1") {
     console.error(JSON.stringify({
@@ -453,7 +494,7 @@ export function readTypeFacts(
   const checker = project.checker;
 
   return {
-    resolution: serializableResolution(resolution),
+    resolution: serializableResolution(resolution, options.limit),
     facts: targets.map((target) => typeFactForTarget(checker, target, Math.max(1, Math.trunc(options.memberLimit)))),
   };
 }
@@ -477,7 +518,7 @@ export function readReferences(
   const nextOffset = offset + references.length < allReferences.length ? offset + references.length : undefined;
 
   return {
-    resolution: serializableResolution(resolution),
+    resolution: serializableResolution(resolution, options.limit),
     totalReferences: allReferences.length,
     references,
     offset,
@@ -505,7 +546,7 @@ export function readNavigation(
   const nextOffset = offset + entries.length < allEntries.length ? offset + entries.length : undefined;
 
   return {
-    resolution: serializableResolution(resolution),
+    resolution: serializableResolution(resolution, options.limit),
     totalEntries: allEntries.length,
     entries,
     offset,
@@ -533,7 +574,7 @@ export function readCallHierarchy(
   const nextOffset = offset + edges.length < allEdges.length ? offset + edges.length : undefined;
 
   return {
-    resolution: serializableResolution(resolution),
+    resolution: serializableResolution(resolution, options.limit),
     items,
     totalEdges: allEdges.length,
     edges,
@@ -565,7 +606,7 @@ export function readCallSites(
   const nextOffset = offset + callSites.length < allCallSites.length ? offset + callSites.length : undefined;
 
   return {
-    resolution: serializableResolution(resolution),
+    resolution: serializableResolution(resolution, options.limit),
     totalCallSites: allCallSites.length,
     callSites,
     offset,
@@ -615,7 +656,9 @@ export function readDiagnostics(
   const nextOffset = offset + diagnostics.length < allDiagnostics.length ? offset + diagnostics.length : undefined;
 
   return {
-    resolution: serializableResolution(resolution),
+    resolution: serializableResolution(resolution, options.limit),
+    checkedFileCount: files.length,
+    categoryCounts: countBy(allDiagnostics, row => row.category),
     totalDiagnostics: allDiagnostics.length,
     diagnostics,
     offset,
@@ -624,7 +667,7 @@ export function readDiagnostics(
   };
 }
 
-/** Project bounded TypeScript rename locations for the first selected target. */
+/** Project TypeScript rename locations for a uniquely selected declaration or position. */
 export function readRename(
   /** Hot source project that owns the current LanguageService. */
   project: SourceProject,
@@ -633,16 +676,16 @@ export function readRename(
   /** Row budget options. */
   options: ApiSurfaceOptions,
 ): TypeScriptRenameRead {
-  const resolution = resolveSourceSelector(project, selector);
-  const target = typeTargetsForResolution(project, resolution)[0];
+  const selection = resolveSourceSelector(project, selector);
+  const { target, resolution } = singleEditTarget(selection, typeTargetsForResolution(project, selection));
   const position = target === undefined ? null : referencePositionForTarget(target);
   const offset = Math.max(0, Math.trunc(options.offset ?? 0));
   const limit = Math.max(1, Math.trunc(options.limit));
   if (target === undefined || position === null) {
     return {
-      resolution: serializableResolution(resolution),
+      resolution: serializableResolution(resolution, options.limit),
       canRename: false,
-      error: "No source target with a TypeScript position was resolved.",
+      error: resolution.diagnostics[0]?.message ?? "No source target with a TypeScript position was resolved.",
       totalLocations: 0,
       locations: [],
       offset,
@@ -653,7 +696,7 @@ export function readRename(
   const info = project.languageService.getRenameInfo(position.fileName, position.offset, {});
   if (!info.canRename) {
     return {
-      resolution: serializableResolution(resolution),
+      resolution: serializableResolution(resolution, options.limit),
       canRename: false,
       error: info.localizedErrorMessage,
       totalLocations: 0,
@@ -673,7 +716,7 @@ export function readRename(
   const nextOffset = offset + locations.length < allLocations.length ? offset + locations.length : undefined;
 
   return {
-    resolution: serializableResolution(resolution),
+    resolution: serializableResolution(resolution, options.limit),
     canRename: true,
     fileToRename: info.fileToRename === undefined ? undefined : fileIdentityForPath(project, info.fileToRename),
     displayName: info.displayName,
@@ -703,7 +746,7 @@ export function readRefactors(
   const limit = Math.max(1, Math.trunc(options.limit));
   if (target?.sourceFile === undefined || positionOrRange === null) {
     return {
-      resolution: serializableResolution(resolution),
+      resolution: serializableResolution(resolution, options.limit),
       totalActions: 0,
       actions: [],
       offset,
@@ -727,7 +770,7 @@ export function readRefactors(
   const nextOffset = offset + actions.length < allActions.length ? offset + actions.length : undefined;
 
   return {
-    resolution: serializableResolution(resolution),
+    resolution: serializableResolution(resolution, options.limit),
     totalActions: allActions.length,
     actions,
     offset,
@@ -756,7 +799,7 @@ export function readQuickInfo(
   const nextOffset = offset + entries.length < allEntries.length ? offset + entries.length : undefined;
 
   return {
-    resolution: serializableResolution(resolution),
+    resolution: serializableResolution(resolution, options.limit),
     totalEntries: allEntries.length,
     entries,
     offset,
@@ -781,7 +824,7 @@ export function readSignatureHelp(
   const limit = Math.max(1, Math.trunc(options.limit));
   if (target === undefined || position === null) {
     return {
-      resolution: serializableResolution(resolution),
+      resolution: serializableResolution(resolution, options.limit),
       totalItems: 0,
       items: [],
       offset,
@@ -791,7 +834,7 @@ export function readSignatureHelp(
   const help = project.languageService.getSignatureHelpItems(position.fileName, position.offset, undefined);
   if (help === undefined) {
     return {
-      resolution: serializableResolution(resolution),
+      resolution: serializableResolution(resolution, options.limit),
       totalItems: 0,
       items: [],
       offset,
@@ -805,7 +848,7 @@ export function readSignatureHelp(
   const nextOffset = offset + items.length < allItems.length ? offset + items.length : undefined;
 
   return {
-    resolution: serializableResolution(resolution),
+    resolution: serializableResolution(resolution, options.limit),
     applicableSpan,
     selectedItemIndex: help.selectedItemIndex,
     argumentIndex: help.argumentIndex,
@@ -834,7 +877,7 @@ export function readHighlights(
   const limit = Math.max(1, Math.trunc(options.limit));
   if (position === null) {
     return {
-      resolution: serializableResolution(resolution),
+      resolution: serializableResolution(resolution, options.limit),
       totalHighlights: 0,
       highlights: [],
       offset,
@@ -850,7 +893,7 @@ export function readHighlights(
   const nextOffset = offset + highlights.length < allHighlights.length ? offset + highlights.length : undefined;
 
   return {
-    resolution: serializableResolution(resolution),
+    resolution: serializableResolution(resolution, options.limit),
     totalHighlights: allHighlights.length,
     highlights,
     offset,
@@ -879,7 +922,7 @@ export function readCodeFixes(
   const nextOffset = offset + actions.length < allActions.length ? offset + actions.length : undefined;
 
   return {
-    resolution: serializableResolution(resolution),
+    resolution: serializableResolution(resolution, options.limit),
     totalActions: allActions.length,
     actions,
     offset,
@@ -897,12 +940,12 @@ export function readRefactorEdits(
   /** Refactor action and row budget options. */
   options: RefactorEditOptions,
 ): TypeScriptRefactorEditsRead {
-  const resolution = resolveSourceSelector(project, selector);
+  const selection = resolveSourceSelector(project, selector);
   const refactorName = options.refactorName;
   const actionName = options.actionName;
   if (refactorName === undefined || actionName === undefined) {
     return {
-      resolution: serializableResolution(resolution),
+      resolution: serializableResolution(selection, options.limit),
       refactorName,
       actionName,
       applicable: false,
@@ -911,15 +954,15 @@ export function readRefactorEdits(
       commandCount: 0,
     };
   }
-  const target = typeTargetsForResolution(project, resolution)[0];
+  const { target, resolution } = singleEditTarget(selection, typeTargetsForResolution(project, selection));
   const positionOrRange = target === undefined ? null : refactorPositionOrRange(target);
   if (target?.sourceFile === undefined || positionOrRange === null) {
     return {
-      resolution: serializableResolution(resolution),
+      resolution: serializableResolution(resolution, options.limit),
       refactorName,
       actionName,
       applicable: false,
-      notApplicableReason: "No source target with a TypeScript position was resolved.",
+      notApplicableReason: resolution.diagnostics[0]?.message ?? "No source target with a TypeScript position was resolved.",
       changes: [],
       commandCount: 0,
     };
@@ -935,7 +978,7 @@ export function readRefactorEdits(
   );
   if (editInfo === undefined) {
     return {
-      resolution: serializableResolution(resolution),
+      resolution: serializableResolution(resolution, options.limit),
       refactorName,
       actionName,
       applicable: false,
@@ -945,7 +988,7 @@ export function readRefactorEdits(
     };
   }
   return {
-    resolution: serializableResolution(resolution),
+    resolution: serializableResolution(resolution, options.limit),
     refactorName,
     actionName,
     applicable: editInfo.notApplicableReason === undefined,
@@ -982,7 +1025,7 @@ export function readOrganizeImports(
   const nextOffset = offset + changes.length < allChanges.length ? offset + changes.length : undefined;
 
   return {
-    resolution: serializableResolution(resolution),
+    resolution: serializableResolution(resolution, options.limit),
     totalFiles: allChanges.length,
     changes,
     offset,
@@ -1000,15 +1043,17 @@ export function readFileRenameEdits(
   /** File rename options. */
   options: FileRenameEditOptions,
 ): TypeScriptFileRenameEditsRead {
-  const resolution = resolveSourceSelector(project, selector);
-  const selectedFile = selectedSourceFiles(resolution)[0];
-  const oldFilePath = options.oldFilePath ?? selectedFile?.fileName;
+  const selection = resolveSourceSelector(project, selector);
+  const { resolution, target } = options.oldFilePath === undefined
+    ? singleEditTarget(selection, selectedSourceFiles(selection))
+    : { resolution: selection, target: undefined };
+  const oldFilePath = options.oldFilePath ?? target?.fileName;
   const newFilePath = options.newFilePath;
   if (oldFilePath === undefined || newFilePath === undefined) {
     return {
-      resolution: serializableResolution(resolution),
+      resolution: serializableResolution(resolution, options.limit),
       applicable: false,
-      notApplicableReason: "File rename edit reads require a selected old file and a newFilePath filter.",
+      notApplicableReason: resolution.diagnostics[0]?.message ?? "File rename edit reads require a selected old file and a newFilePath filter.",
       changes: [],
     };
   }
@@ -1021,7 +1066,7 @@ export function readFileRenameEdits(
     .sort(compareFileEdits);
 
   return {
-    resolution: serializableResolution(resolution),
+    resolution: serializableResolution(resolution, options.limit),
     applicable: true,
     oldFile: fileIdentityForPath(project, oldAbsolutePath),
     newFile: fileIdentityForPath(project, newAbsolutePath),
@@ -1223,7 +1268,7 @@ function moduleEdgesForFile(project: SourceProject, sourceFile: ts.SourceFile): 
         kind: TypeScriptModuleEdgeKind.Import,
         sourceFile: sourceIdentity,
         specifier: node.moduleSpecifier.text,
-        ...resolvedModuleField(project, sourceFile, node.moduleSpecifier.text),
+        ...resolvedModuleField(project, node.moduleSpecifier),
         importedNames: importNames(node.importClause),
         exportedNames: [],
         typeOnly: hasTrueIsTypeOnly(node.importClause),
@@ -1237,7 +1282,7 @@ function moduleEdgesForFile(project: SourceProject, sourceFile: ts.SourceFile): 
         kind: TypeScriptModuleEdgeKind.Export,
         sourceFile: sourceIdentity,
         specifier: node.moduleSpecifier.text,
-        ...resolvedModuleField(project, sourceFile, node.moduleSpecifier.text),
+        ...resolvedModuleField(project, node.moduleSpecifier),
         importedNames: [],
         exportedNames: exportNames(node.exportClause),
         typeOnly: node.isTypeOnly,
@@ -1248,7 +1293,7 @@ function moduleEdgesForFile(project: SourceProject, sourceFile: ts.SourceFile): 
     if (
       ts.isCallExpression(node)
       && node.expression.kind === ts.SyntaxKind.ImportKeyword
-      && node.arguments.length === 1
+      && node.arguments.length >= 1
       && ts.isStringLiteralLike(node.arguments[0]!)
     ) {
       const specifier = node.arguments[0]!.text;
@@ -1257,7 +1302,7 @@ function moduleEdgesForFile(project: SourceProject, sourceFile: ts.SourceFile): 
         kind: TypeScriptModuleEdgeKind.DynamicImport,
         sourceFile: sourceIdentity,
         specifier,
-        ...resolvedModuleField(project, sourceFile, specifier),
+        ...resolvedModuleField(project, node.arguments[0]!),
         importedNames: [],
         exportedNames: [],
         typeOnly: false,
@@ -1345,6 +1390,18 @@ function typeTargetsForResolution(project: SourceProject, resolution: ResolvedSo
   return entries
     .map((entry) => targetForEntry(project, entry, resolution.selector))
     .filter((target): target is ResolvedSourceTarget => target !== null);
+}
+
+function singleEditTarget<T>(
+  resolution: ResolvedSourceSelectorResolution,
+  candidates: readonly T[],
+): { resolution: ResolvedSourceSelectorResolution; target: T | undefined } {
+  if (candidates.length <= 1) return { resolution, target: candidates[0] };
+  const issue = {
+    code: "source.edit.ambiguous",
+    message: `The edit selector matches ${candidates.length} targets. Select the intended file, declaration occurrence or source range.`,
+  };
+  return { resolution: { ...resolution, diagnostics: [...resolution.diagnostics, issue] }, target: undefined };
 }
 
 function typeFactForTarget(checker: ts.TypeChecker, target: ResolvedSourceTarget, memberLimit: number): TypeScriptTypeFact {
@@ -2261,7 +2318,10 @@ function textForTarget(target: ResolvedSourceTarget): string | null {
 function exportSurfaceFiles(project: SourceProject, selector: ExportSourceSelector): readonly ts.SourceFile[] {
   if (selector.filePath !== undefined) {
     const sourceFile = project.readSourceFile(selector.filePath);
-    return sourceFile === null ? [] : [sourceFile];
+    if (sourceFile === null) return [];
+    if ((selector.packageId !== undefined || selector.packageName !== undefined)
+      && !packageMatches(project, sourceFile.fileName, selector.packageId, selector.packageName)) return [];
+    return [sourceFile];
   }
   const packageTargets = packageResolution(project, {
     scheme: SourceSelectorScheme.Package,
@@ -2547,38 +2607,10 @@ function exportNames(exportClause: ts.NamedExportBindings | undefined): readonly
 
 function resolvedModuleField(
   project: SourceProject,
-  sourceFile: ts.SourceFile,
-  specifier: string,
+  specifier: ts.StringLiteralLike,
 ): { readonly resolvedFile?: SourceFileIdentity } {
-  if (!specifier.startsWith(".")) {
-    return {};
-  }
-  const basePath = path.resolve(path.dirname(sourceFile.fileName), specifier);
-  const basePaths = specifier.endsWith(".js")
-    ? [basePath, basePath.slice(0, -".js".length)]
-    : [basePath];
-  const candidates = basePaths.flatMap((candidateBase) => [
-    candidateBase,
-    `${candidateBase}.ts`,
-    `${candidateBase}.tsx`,
-    `${candidateBase}.mts`,
-    `${candidateBase}.cts`,
-    `${candidateBase}.js`,
-    path.join(candidateBase, "index.ts"),
-    path.join(candidateBase, "index.tsx"),
-    path.join(candidateBase, "index.mts"),
-    path.join(candidateBase, "index.cts"),
-    path.join(candidateBase, "index.js"),
-  ]);
-  for (const candidate of candidates) {
-    const sourceFile = project.readSourceFile(candidate);
-    if (sourceFile === null) {
-      continue;
-    }
-    const identity = project.sourceFileIdentity(sourceFile);
-    return identity === null ? {} : { resolvedFile: identity };
-  }
-  return {};
+  const resolvedFile = project.resolvedModuleFile(specifier);
+  return resolvedFile === null ? {} : { resolvedFile };
 }
 
 function moduleEdgeId(sourceFile: SourceFileIdentity, node: ts.Node): string {
@@ -2613,23 +2645,26 @@ function normalizeProjectAbsolutePath(project: SourceProject, filePath: string):
 }
 
 function positionToOffset(sourceFile: ts.SourceFile, position: SourcePositionSelector): number | null {
-  if (position.line < 0 || position.character < 0 || position.line >= sourceFile.getLineStarts().length) {
-    return null;
-  }
-  const offset = sourceFile.getPositionOfLineAndCharacter(position.line, position.character);
-  return offset < 0 || offset > sourceFile.getFullText().length ? null : offset;
+  return checkedLineOffset(sourceFile.text, sourceFile.getLineStarts(), position);
 }
 
 function textPositionToOffset(text: string, position: SourcePositionSelector): number | null {
-  if (position.line < 0 || position.character < 0) {
+  return checkedLineOffset(text, textLineStarts(text), position);
+}
+
+function checkedLineOffset(text: string, starts: readonly number[], position: SourcePositionSelector): number | null {
+  if (!Number.isSafeInteger(position.line) || !Number.isSafeInteger(position.character) || position.character < 0) {
     return null;
   }
-  const lineStarts = textLineStarts(text);
-  const lineStart = lineStarts[position.line];
+  const lineStart = starts[position.line];
   if (lineStart === undefined) {
     return null;
   }
-  const lineEnd = textLineContentEnd(text, lineStart);
+  const nextLine = starts[position.line + 1];
+  let lineEnd = nextLine === undefined ? text.length : nextLine - 1;
+  if (nextLine !== undefined && text[lineEnd] === "\n" && text[lineEnd - 1] === "\r") {
+    lineEnd--;
+  }
   const offset = lineStart + position.character;
   return offset > lineEnd ? null : offset;
 }
@@ -2645,26 +2680,14 @@ function textLineStarts(text: string): readonly number[] {
       starts.push(index + 1);
       continue;
     }
-    if (char === 10) {
+    if (char === 10 || char === 0x2028 || char === 0x2029) {
       starts.push(index + 1);
     }
   }
   return starts;
 }
 
-function textLineContentEnd(text: string, lineStart: number): number {
-  let index = lineStart;
-  while (index < text.length) {
-    const char = text.charCodeAt(index);
-    if (char === 10 || char === 13) {
-      break;
-    }
-    index++;
-  }
-  return index;
-}
-
-function sourceSpanFromTextOffsets(text: string, start: number, end: number): SourceSpan {
+export function sourceSpanFromTextOffsets(text: string, start: number, end: number): SourceSpan {
   const startPosition = textLineAndCharacterOfOffset(text, start);
   const endPosition = textLineAndCharacterOfOffset(text, end);
   return {
@@ -2936,10 +2959,12 @@ function emptyResolution(selector: SourceSelector, code: string, message: string
   return { selector, targets: [], candidateCount: 0, diagnostics: [{ code, message }] };
 }
 
-function serializableResolution(resolution: ResolvedSourceSelectorResolution): SourceSelectorResolution {
+function serializableResolution(resolution: ResolvedSourceSelectorResolution, limit: number): SourceSelectorResolution {
+  const targets = resolution.targets.slice(0, Math.max(1, Math.trunc(limit))).map(rowForTarget);
   return {
     selector: resolution.selector,
-    targets: resolution.targets.map(rowForTarget),
+    targets,
+    omittedTargetCount: resolution.targets.length - targets.length,
     candidateCount: resolution.candidateCount,
     diagnostics: resolution.diagnostics,
   };

@@ -6,6 +6,7 @@ import {
   readTypeScriptCallSiteEntry,
   readTypeScriptExpressionFact,
   resolveSourceSelector,
+  SourceSelectorScheme,
   isAssignmentOperator,
   localFunctionDeclarationForCall,
   propertyNameText,
@@ -202,7 +203,7 @@ interface TraceContext {
   readonly sourceFile: ts.SourceFile;
   readonly root: EvaluationEffectRoot;
   readonly maxDepth: number;
-  readonly effects: EvaluationInvocationEffect[];
+  readonly recordEffect: (effect: EvaluationInvocationEffect) => void;
   readonly openSeams: EvaluationEffectOpenSeam[];
   readonly callStack: string[];
   nextSequence: number;
@@ -231,6 +232,12 @@ class EvaluationTraceScope {
   }
 }
 
+/** A whole workspace or an empty package selector supplies no executable root for a trace. */
+export function hasEvaluationRoot(selector: SourceSelector): boolean {
+  return selector.scheme !== SourceSelectorScheme.Workspace &&
+    (selector.scheme !== SourceSelectorScheme.Package || Boolean(selector.packageId || selector.packageName));
+}
+
 /** Read static invocation/effect rows for selected source roots. */
 export function readEvaluationEffectTrace(
   /** Hot source project that owns the current Program and TypeChecker. */
@@ -240,10 +247,24 @@ export function readEvaluationEffectTrace(
   /** Trace filters and budgets. */
   options: EvaluationEffectTraceOptions,
 ): EvaluationEffectTraceRead {
+  if (!hasEvaluationRoot(selector)) {
+    throw new RangeError("Select a source file, named package, declaration, or range before tracing effects.");
+  }
   const resolution = resolveSourceSelector(project, selector);
   const candidates = uniqueRootCandidates(resolution.targets.flatMap((target) => rootCandidatesForTarget(project, target, options.memberName)));
   const roots = candidates.map((candidate) => effectRootForCandidate(project, candidate));
   const effects: EvaluationInvocationEffect[] = [];
+  const offset = Math.max(0, Math.trunc(options.offset ?? 0));
+  const limit = Math.max(1, Math.trunc(options.limit));
+  let totalEffects = 0;
+  const recordEffect = (effect: EvaluationInvocationEffect) => {
+    if (options.calleeName !== undefined && effect.callSite.calleeName !== options.calleeName &&
+        effect.callSite.callee.symbolName !== options.calleeName) return;
+    if (options.receiverName !== undefined && effect.receiverBinding?.name !== options.receiverName &&
+        effect.receiver?.symbolName !== options.receiverName && effect.receiver?.text !== options.receiverName) return;
+    if (totalEffects >= offset && effects.length < limit) effects.push(effect);
+    totalEffects++;
+  };
   const openSeams: EvaluationEffectOpenSeam[] = [];
   let nextSequence = 0;
 
@@ -254,7 +275,7 @@ export function readEvaluationEffectTrace(
       sourceFile: candidate.sourceFile,
       root,
       maxDepth: Math.max(1, Math.trunc(options.maxDepth ?? 80)),
-      effects,
+      recordEffect,
       openSeams,
       callStack: [],
       nextSequence,
@@ -264,14 +285,7 @@ export function readEvaluationEffectTrace(
     nextSequence = context.nextSequence;
   }
 
-  const filtered = effects
-    .filter((effect) => options.calleeName === undefined || effect.callSite.calleeName === options.calleeName || effect.callSite.callee.symbolName === options.calleeName)
-    .filter((effect) => options.receiverName === undefined || effect.receiverBinding?.name === options.receiverName || effect.receiver?.symbolName === options.receiverName || effect.receiver?.text === options.receiverName)
-    .sort((left, right) => left.sequence - right.sequence);
-  const offset = Math.max(0, Math.trunc(options.offset ?? 0));
-  const limit = Math.max(1, Math.trunc(options.limit));
-  const page = filtered.slice(offset, offset + limit);
-  const nextOffset = offset + page.length < filtered.length ? offset + page.length : undefined;
+  const nextOffset = offset + effects.length < totalEffects ? offset + effects.length : undefined;
 
   return {
     resolution: {
@@ -287,8 +301,8 @@ export function readEvaluationEffectTrace(
       })),
     },
     roots,
-    totalEffects: filtered.length,
-    effects: page,
+    totalEffects,
+    effects,
     openSeams,
     offset,
     limit,
@@ -880,7 +894,7 @@ function recordInvocation(
       binding: argumentBinding(args[index], scope),
     })),
   };
-  context.effects.push(effect);
+  context.recordEffect(effect);
 }
 
 function callName(call: ts.CallExpression): string {

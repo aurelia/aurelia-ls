@@ -38,11 +38,14 @@ export function pageRows<TValue>(
 
 export function pageOffset(inquiry: Inquiry): number {
   const cursor = inquiry.page?.cursor;
-  if (cursor === undefined) {
-    return 0;
-  }
-  const parsed = Number.parseInt(cursor, 10);
-  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
+  return cursor === undefined ? 0 : parseOffsetCursor(cursor) ?? 0;
+}
+
+/** Read a complete decimal cursor component emitted by an offset-based row family. */
+export function parseOffsetCursor(cursor: string): number | undefined {
+  if (!/^\d+$/u.test(cursor)) return undefined;
+  const offset = Number(cursor);
+  return Number.isSafeInteger(offset) ? offset : undefined;
 }
 
 export function rowLimit(inquiry: Inquiry): number {

@@ -7,6 +7,23 @@ lenses stable source and declaration addresses without importing package runtime
 
 ## Responsibilities
 
+A `ts.source:text` page shares its character budget across the selected targets. Following the
+next-page continuation resumes at the first unread UTF-16 character, including inside a file.
+Program-backed text belongs to the checker's epoch. Filesystem-only source reads such as Markdown
+and Atlas memory JSON read the current file.
+
+The shared Program combines admitted roots under one compiler configuration.
+`ts.type:diagnostics` reports the number of files the LanguageService checked and counts by
+diagnostic category, including editor suggestions. Use the package's own tsconfig and build
+for judgments about its build diagnostics.
+
+For cross-package readers, admit the consumer's tsconfig into the analysis first.
+`ts.structure:module-graph` on its import site returns the file TypeScript selected for the
+specifier and resolution mode. If a package export points to an emitted declaration barrel, use
+that file and export name as the subject of `ts.type:references` to inspect consumers in the
+same Program. `product.architecture:modules.localImportInCount` counts static import declarations
+within semantic-runtime's `src` cohort. It cannot establish that a public export has no consumers.
+
 - Admit `packages/atlas`, `packages/semantic-runtime`, `packages/patterns`, `packages/mcp`, the `aurelia` framework submodule packages,
   selected `aurelia/packages-tooling` packages, and public
   `aurelia2-plugins` workspace packages when that submodule is present through their tsconfigs for TypeChecker-first
@@ -76,9 +93,9 @@ lenses stable source and declaration addresses without importing package runtime
   and AST walking primitives that multiple higher lenses can share without inventing local compatibility layers.
 - Expose package-scoped enum usage indexes: enum/member declarations, exact `Enum.Member` reference sites, raw literal
   value-space overlap, and exact enum-to-enum translation edges. This is source substrate, not `atlas.self`
-  diagnostics; higher lenses decide what the value-space pressure means. Exact unambiguous `Enum.Member` text is a
-  fast-path because the index already admits that syntactic fallback; aliases, ambiguous members, and raw enum-like
-  literals stay TypeChecker-backed. In `profile:self`, the remaining enum pressure should usually be read as
+  diagnostics; higher lenses decide what the value-space pressure means. The checker resolves candidate
+  member references to enum declarations and supplies constant values, including constant expressions.
+  Runtime-computed values remain open. In `profile:self`, the remaining enum pressure should usually be read as
   raw-literal contextual narrowing (`call-argument`, `comparison`, `object-value`, etc.), not member-reference symbol
   resolution.
 - Build source-index bases such as `auLink` anchors and framework discovery seeds on demand within the current

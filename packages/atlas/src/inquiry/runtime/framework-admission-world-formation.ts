@@ -144,7 +144,7 @@ function worldFormationRowForAppTaskExecution(
     admissionRelation: relationship.relation,
     associationKind: relationship.associationKind,
     formationKind: FrameworkAdmissionWorldFormationKind.AppTaskExecution,
-    status: FrameworkAdmissionWorldFormationStatus.Executed,
+    status: FrameworkAdmissionWorldFormationStatus.ExecutionSite,
     admittedTarget: relationship.to,
     formedTarget: {
       kind: FrameworkRelationshipEndpointKind.AppTask,
@@ -159,7 +159,7 @@ function worldFormationRowForAppTaskExecution(
     appTaskExecutionKind: execution.executionKind,
     slotName: execution.slotName ?? undefined,
     closure: FrameworkRelationshipClosure.Exact,
-    summary: `${relationship.exportName} admits AppTask ${relationship.to.name}; AppRoot executes ${execution.summary}`,
+    summary: `${relationship.exportName} admits ${relationship.to.name}; matching AppRoot source site: ${execution.summary}`,
   };
 }
 

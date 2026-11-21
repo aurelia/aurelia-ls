@@ -41,10 +41,12 @@ import {
 import {
   evidenceLimit,
   pageOffset,
+  parseOffsetCursor,
   rowLimit,
 } from "../paging.js";
 import type {
   SourceSelector,
+  SourceSelectorResolution,
   SourceTargetRow,
   SourceTextSlice,
   DocumentSymbolOptions,
@@ -110,7 +112,6 @@ import {
   readSourceText,
   readSymbolIndex,
   readTypeFacts,
-  rowForTarget,
   sourceRangeForFileSpanCarrier,
   sourceRangeFromFileSpan,
   sourceRangeForOptionalFileSpanCarrier,
@@ -118,7 +119,7 @@ import {
   type SourceProject,
 } from "../../source/index.js";
 import { stringFilter } from "./lens-filter-utils.js";
-import { sourceSelectorFromInquiry } from "./source-selector.js";
+import { sourceSelectorFromInquiry, unresolvedSourceSelectionAnswer } from "./source-selector.js";
 
 /** Value returned by the ts.source runtime lens. */
 export interface TsSourceValue {
@@ -260,18 +261,31 @@ export function answerTsSource(
   /** Hot source project owned by the daemon. */
   sourceProject: SourceProject,
 ): Answer<TsSourceValue> {
-  const selector = sourceSelectorFromInquiry(inquiry);
+  const selector = sourceSelectorFromInquiry(inquiry, sourceProject);
+  if (selector === null) return unresolvedSourceSelectionAnswer(inquiry);
   const projection = inquiry.projection ?? "summary";
   const maxTextChars =
     projection === "text"
       ? clampBudget(inquiry.budget?.textChars, 20_000, 200_000)
       : 0;
-  const read = readSourceText(sourceProject, selector, { maxTextChars });
-  const targets = read.resolution.targets.map(rowForTarget);
+  const parts = (inquiry.page?.cursor ?? "0").split(":");
+  const offset = parseOffsetCursor(parts[0]!);
+  const textOffset = parseOffsetCursor(parts[1] ?? "0");
+  if (parts.length > (projection === "text" ? 2 : 1) || offset === undefined || textOffset === undefined) {
+    return createAnswer(inquiry, OutcomeKind.Unsupported, "Invalid source page cursor. Use the cursor from the previous answer.");
+  }
+  const page = { limit: rowLimit(inquiry), offset, textOffset };
+  const read = readSourceText(sourceProject, selector, {
+    maxTextChars,
+    page,
+  });
+  const invalidCursor = read.resolution.diagnostics.find(row => row.code === "source.text.invalid-cursor");
+  if (invalidCursor !== undefined) return createAnswer(inquiry, OutcomeKind.Unsupported, invalidCursor.message);
+  const targets = read.resolution.targets;
   const slices = projection === "text" ? read.slices : [];
   const value: TsSourceValue = {
     selector,
-    targetCount: targets.length,
+    targetCount: read.targetCount,
     candidateCount: read.resolution.candidateCount,
     programTargetCount: read.programTargetCount,
     filesystemTargetCount: read.filesystemTargetCount,
@@ -284,14 +298,15 @@ export function answerTsSource(
   return createAnswer(
     inquiry,
     outcome,
-    sourceSummary(projection, targets.length, slices.length),
+    `Returned ${targets.length} of ${read.targetCount} source target(s)${projection === "text" ? ` with ${slices.length} text slice(s)` : ""}.`,
     {
       value,
       basis: sourceTextReadBasis(sourceProject, read.programTargetCount),
       evidence: targets
         .slice(0, evidenceLimit(inquiry))
         .map((target) => evidenceForTarget(target, EvidenceKind.SourceSpan)),
-      continuations: typeScriptSourceContinuations(inquiry, targets),
+      page: { size: page.limit, cursor: inquiry.page?.cursor, returned: targets.length, total: read.targetCount, nextCursor: read.nextCursor },
+      continuations: typeScriptSourceContinuations(inquiry, targets, read.nextCursor),
     },
   );
 }
@@ -303,7 +318,11 @@ export function answerTsStructure(
   /** Hot source project owned by the daemon. */
   sourceProject: SourceProject,
 ): Answer<TsStructureValue> {
-  const selector = sourceSelectorFromInquiry(inquiry);
+  if (inquiry.page?.cursor !== undefined && parseOffsetCursor(inquiry.page.cursor) === undefined) {
+    return createAnswer(inquiry, OutcomeKind.Unsupported, "Invalid TypeScript page cursor. Use the cursor from the previous answer.");
+  }
+  const selector = sourceSelectorFromInquiry(inquiry, sourceProject);
+  if (selector === null) return unresolvedSourceSelectionAnswer(inquiry);
   const projection = inquiry.projection ?? "summary";
   const pageOptions = typeScriptPageOptions(inquiry);
   switch (projection) {
@@ -329,8 +348,10 @@ function answerTsModuleGraph(
   const moduleGraph = readModuleGraph(sourceProject, selector, pageOptions);
   return createPagedTypeScriptAnswer(
     inquiry,
-    moduleGraph.totalEdges === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-    `Returned ${moduleGraph.edges.length} of ${moduleGraph.totalEdges} TypeScript module edge(s).`,
+    moduleGraph.fileCount === 0 ? OutcomeKind.NoClaim : moduleGraph.totalEdges === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+    moduleGraph.fileCount === 0
+      ? "The selected scope contains no files in the Atlas TypeScript Program."
+      : `Returned ${moduleGraph.edges.length} of ${moduleGraph.totalEdges} TypeScript module edge(s).`,
     { moduleGraph },
     [programBasis(sourceProject)],
     moduleGraph.edges,
@@ -454,12 +475,16 @@ export function answerTsType(
   /** Hot source project owned by the daemon. */
   sourceProject: SourceProject,
 ): Answer<TsTypeValue> {
+  if (inquiry.page?.cursor !== undefined && parseOffsetCursor(inquiry.page.cursor) === undefined) {
+    return createAnswer(inquiry, OutcomeKind.Unsupported, "Invalid TypeScript page cursor. Use the cursor from the previous answer.");
+  }
   const projection = inquiry.projection ?? "facts";
   if (projection === "guide") {
     return answerTsTypeGuide(inquiry, sourceProject);
   }
 
-  const selector = sourceSelectorFromInquiry(inquiry);
+  const selector = sourceSelectorFromInquiry(inquiry, sourceProject);
+  if (selector === null) return unresolvedSourceSelectionAnswer(inquiry);
   const pageOptions = typeScriptPageOptions(inquiry);
   switch (projection) {
     case "references":
@@ -631,10 +656,10 @@ function answerTsDiagnostics(
   const diagnostics = readDiagnostics(sourceProject, selector, pageOptions);
   return createPagedTypeScriptAnswer(
     inquiry,
-    OutcomeKind.Hit,
-    diagnostics.totalDiagnostics === 0
-      ? "TypeScript diagnostics closed cleanly for the selected scope."
-      : `Returned ${diagnostics.diagnostics.length} of ${diagnostics.totalDiagnostics} TypeScript diagnostic row(s).`,
+    diagnostics.checkedFileCount === 0 ? OutcomeKind.NoClaim : OutcomeKind.Hit,
+    diagnostics.checkedFileCount === 0
+      ? "No selected files were checked in the Atlas TypeScript Program."
+      : `Returned ${diagnostics.diagnostics.length} of ${diagnostics.totalDiagnostics} LanguageService diagnostic(s) across ${diagnostics.checkedFileCount} file(s), including editor suggestions.`,
     { diagnostics },
     [typeScriptCheckerBasis(sourceProject)],
     diagnostics.diagnostics,
@@ -721,7 +746,7 @@ function answerTsRename(
   const rename = readRename(sourceProject, selector, pageOptions);
   return createPagedTypeScriptAnswer(
     inquiry,
-    rename.canRename ? OutcomeKind.Hit : OutcomeKind.Miss,
+    editOutcome(rename.resolution, rename.canRename),
     rename.canRename
       ? `Returned ${rename.locations.length} of ${rename.totalLocations} TypeScript rename location(s).`
       : `TypeScript rename is unavailable: ${rename.error ?? "unknown reason"}.`,
@@ -794,7 +819,7 @@ function answerTsRefactorEdits(
   });
   return createAnswer(
     inquiry,
-    refactorEdits.applicable ? OutcomeKind.Hit : OutcomeKind.Miss,
+    editOutcome(refactorEdits.resolution, refactorEdits.applicable),
     refactorEdits.applicable
       ? `Returned TypeScript refactor edit plan with ${refactorEdits.changes.length} file edit group(s).`
       : `TypeScript refactor edits are unavailable: ${refactorEdits.notApplicableReason ?? "unknown reason"}.`,
@@ -842,7 +867,7 @@ function answerTsFileRenameEdits(
   });
   return createAnswer(
     inquiry,
-    fileRenameEdits.applicable ? OutcomeKind.Hit : OutcomeKind.Miss,
+    editOutcome(fileRenameEdits.resolution, fileRenameEdits.applicable),
     fileRenameEdits.applicable
       ? `Returned TypeScript file-rename edit plan with ${fileRenameEdits.changes.length} file edit group(s).`
       : `TypeScript file-rename edits are unavailable: ${fileRenameEdits.notApplicableReason ?? "unknown reason"}.`,
@@ -877,6 +902,12 @@ function answerTsFacts(
       continuations: typeContinuations(inquiry, typeFacts),
     },
   );
+}
+
+function editOutcome(resolution: SourceSelectorResolution, applicable: boolean): OutcomeKind {
+  if (applicable) return OutcomeKind.Hit;
+  return resolution.diagnostics.some(row => row.code === "source.edit.ambiguous")
+    ? OutcomeKind.Ambiguous : OutcomeKind.Miss;
 }
 
 function createPagedTypeScriptAnswer<TValue, TRow>(
@@ -1360,31 +1391,29 @@ function typeScriptGuideContinuations(
   ];
 }
 
-function sourceSummary(
-  projection: string,
-  targets: number,
-  slices: number,
-): string {
-  if (projection === "text") {
-    return `Returned ${slices} source text slice(s) from ${targets} target(s).`;
-  }
-  return `Resolved ${targets} source target(s).`;
-}
-
 function typeScriptSourceContinuations(
   inquiry: Inquiry,
   targets: readonly SourceTargetRow[],
+  nextCursor: string | undefined,
 ): readonly Continuation[] {
-  if ((inquiry.projection ?? "summary") !== "summary") {
-    return [];
+  const continuations: Continuation[] = [];
+  if (nextCursor !== undefined) {
+    continuations.push({
+      id: "ts.source:next-page",
+      kind: ContinuationKind.NextPage,
+      priority: ContinuationPriority.Primary,
+      rationale: "Continue from the next source target or unread character.",
+      inquiry: { ...inquiry, page: { size: rowLimit(inquiry), cursor: nextCursor } },
+      route: nextPageRouteClaim("Next source page."),
+    });
   }
-  return targets.slice(0, 3).flatMap((target, index) => {
+  if ((inquiry.projection ?? "summary") !== "summary") {
+    return continuations;
+  }
+  for (const [index, target] of targets.slice(0, 3).entries()) {
     const range = sourceRangeForTarget(target);
-    if (range === null) {
-      return [];
-    }
-    return [
-      {
+    if (range !== null) {
+      continuations.push({
         id: `ts.source:text:${index}`,
         kind: ContinuationKind.SwitchProjection,
         priority: ContinuationPriority.Primary,
@@ -1396,9 +1425,10 @@ function typeScriptSourceContinuations(
         },
         evidence: [evidenceForTarget(target, EvidenceKind.SourceSpan)],
         route: sourceInspectionRoute("Source text for a resolved source target."),
-      },
-    ];
-  });
+      });
+    }
+  }
+  return continuations;
 }
 
 function apiSurfaceContinuations(
@@ -2323,6 +2353,7 @@ function evidenceForReference(reference: TypeScriptReferenceEntry): Evidence {
   const handle: SourceHandle = {
     namespace: HandleNamespace.Source,
     kind: HandleKind.SourceRange,
+    range: source ?? undefined,
     id: reference.id,
     label: reference.text,
     summary: reference.definition
@@ -2351,6 +2382,7 @@ function evidenceForModuleEdge(edge: TypeScriptModuleEdge): Evidence {
   const handle: SourceHandle = {
     namespace: HandleNamespace.Source,
     kind: HandleKind.SourceRange,
+    range: source ?? undefined,
     id: edge.id,
     label: edge.specifier,
     summary: edge.kind,
@@ -2375,6 +2407,7 @@ function evidenceForDocumentSymbol(
   const handle: SourceHandle = {
     namespace: HandleNamespace.Source,
     kind: HandleKind.SourceRange,
+    range: source ?? undefined,
     id: symbol.id,
     label: symbol.name,
     summary: symbol.kind,
@@ -2424,6 +2457,7 @@ function evidenceForNavigation(entry: TypeScriptNavigationEntry): Evidence {
   const handle: SourceHandle = {
     namespace: HandleNamespace.Source,
     kind: HandleKind.SourceRange,
+    range: source ?? undefined,
     id: entry.id,
     label: entry.name ?? entry.display ?? entry.kind,
     summary: entry.kind,
@@ -2450,6 +2484,7 @@ function evidenceForCallHierarchyEdge(
   const handle: SourceHandle = {
     namespace: HandleNamespace.Source,
     kind: HandleKind.SourceRange,
+    range: source ?? undefined,
     id: edge.id,
     label: `${edge.from.name} -> ${edge.to.name}`,
     summary: edge.direction,
@@ -2472,6 +2507,7 @@ function typeScriptEvidenceForCallSite(callSite: TypeScriptCallSiteEntry): Evide
   const handle: SourceHandle = {
     namespace: HandleNamespace.Source,
     kind: HandleKind.SourceRange,
+    range: source ?? undefined,
     id: callSite.id,
     label: callSite.calleeName,
     summary: `${callSite.kind}(${callSite.argumentCount})`,
@@ -2498,6 +2534,7 @@ function evidenceForDiagnostic(
     : {
         namespace: HandleNamespace.Source,
         kind: HandleKind.SourceRange,
+        range: source ?? undefined,
         id: diagnostic.id,
         label: `${diagnostic.category} ${diagnostic.code}`,
         summary: diagnostic.message,
@@ -2568,6 +2605,7 @@ function evidenceForHighlight(highlight: TypeScriptHighlightEntry): Evidence {
   const handle: SourceHandle = {
     namespace: HandleNamespace.Source,
     kind: HandleKind.SourceRange,
+    range: source ?? undefined,
     id: highlight.id,
     label: highlight.kind,
     summary: "document-highlight",
@@ -2595,6 +2633,7 @@ function evidenceForRenameLocation(
   const handle: SourceHandle = {
     namespace: HandleNamespace.Source,
     kind: HandleKind.SourceRange,
+    range: source ?? undefined,
     id: location.id,
     label: location.text,
     summary: "rename-location",
@@ -2726,6 +2765,7 @@ function handleForTarget(
     label: target.label,
     summary: target.declarationKind,
     filePath: target.file.repoPath,
+    range: sourceRangeForTarget(target) ?? undefined,
   };
   return handle;
 }
@@ -2763,7 +2803,7 @@ function typeScriptCheckerBasis(sourceProject: SourceProject): Basis {
     authority: BasisAuthority.Checker,
     freshness: BasisFreshness.Live,
     summary:
-      "Answered from the current TypeScript TypeChecker held by the Atlas daemon.",
+      "Answered from the shared Atlas TypeChecker over admitted package roots. This Program uses the first nonempty admitted compiler configuration with project emit settings removed.",
     identity: sourceProject.snapshot().identity,
   };
 }

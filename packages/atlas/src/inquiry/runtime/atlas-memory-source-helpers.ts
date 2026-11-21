@@ -1,102 +1,97 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
+import { groupBy } from "../../collections.js";
 import {
-  SourceDeclarationKind,
+  memberName,
+  memberNodes,
   type SourceDeclarationRow,
   type SourceProject,
 } from "../../source/index.js";
 
-const trackedRepoPathsByRoot = new Map<string, ReadonlySet<string>>();
+/** Sources used together for a single memory read, including the current tracked paths. */
+export interface AtlasMemorySources {
+  /** Immutable TypeScript source epoch used to verify declarations. */
+  readonly project: SourceProject;
+  /** Git paths recaptured for this memory read. Undefined when Git is unavailable. */
+  readonly trackedPaths: ReadonlySet<string> | undefined;
+  /** Declarations grouped by their owning repository path for repeated anchor checks. */
+  readonly declarationsByFile: ReadonlyMap<string, readonly SourceDeclarationRow[]>;
+}
+
+export function readAtlasMemorySources(project: SourceProject): AtlasMemorySources {
+  return {
+    project,
+    trackedPaths: trackedRepoPaths(project.repoRoot),
+    declarationsByFile: groupBy(project.declarationRows(), row => row.file.repoPath),
+  };
+}
 
 /** Normalize a repository-relative path carried by Atlas memory records. */
 export function normalizeAtlasMemoryRepoPath(value: string): string {
   return value.replace(/\\/g, "/").replace(/^\.\//u, "");
 }
 
-/** True when a durable memory path is present in the recursive Git index. */
+/** Check the working file as well as durable Git membership (including exact path spelling). */
 export function atlasMemoryRepoPathExists(
-  sourceProject: SourceProject,
+  sources: AtlasMemorySources,
   filePath: string,
 ): boolean {
   const normalizedFilePath = normalizeAtlasMemoryRepoPath(filePath);
-  const trackedPaths = trackedRepoPaths(sourceProject.repoRoot);
-  if (trackedPaths !== undefined) {
-    return trackedPaths.has(normalizedFilePath) ||
-      trackedDirectoryExists(trackedPaths, normalizedFilePath);
-  }
-  return existsSync(path.join(sourceProject.repoRoot, normalizedFilePath));
+  return existsSync(path.join(sources.project.repoRoot, normalizedFilePath)) && (
+    sources.trackedPaths === undefined || sources.trackedPaths.has(normalizedFilePath) ||
+    trackedDirectoryExists(sources.trackedPaths, normalizedFilePath)
+  );
 }
 
 /** True when the admitted TypeScript source project exposes one declaration at a path. */
 export function atlasMemorySourceProjectHasDeclaration(
-  sourceProject: SourceProject,
+  sources: AtlasMemorySources,
   filePath: string,
   symbolName: string,
 ): boolean {
   const normalizedFilePath = normalizeAtlasMemoryRepoPath(filePath);
-  const rows = sourceProject.declarationRows().filter((row) =>
-    row.file.repoPath === normalizedFilePath
-  );
-  if (rows.some((row) =>
-    row.file.repoPath === normalizedFilePath && row.name === symbolName,
-  )) {
+  const rows = sources.declarationsByFile.get(normalizedFilePath) ?? [];
+  if (rows.some((row) => row.name === symbolName)) {
     return true;
   }
-  return dottedClassMemberExists(rows, symbolName);
+  const dot = symbolName.lastIndexOf(".");
+  if (dot <= 0 || dot >= symbolName.length - 1) return false;
+  const file = sources.project.readSourceFile(normalizedFilePath);
+  if (!file) return false;
+  return dottedClassMemberExists(file, symbolName.slice(0, dot), symbolName.slice(dot + 1));
 }
 
 function dottedClassMemberExists(
-  rows: readonly SourceDeclarationRow[],
-  symbolName: string,
+  file: ts.SourceFile,
+  owner: string,
+  member: string,
 ): boolean {
-  const dot = symbolName.lastIndexOf(".");
-  if (dot <= 0 || dot >= symbolName.length - 1) {
-    return false;
+  function visit(node: ts.Node): true | undefined {
+    if ((ts.isClassLike(node) || ts.isInterfaceDeclaration(node)) &&
+        node.name?.text === owner && memberNodes(node).some(child => memberName(child) === member)) {
+      return true;
+    }
+    return ts.forEachChild(node, visit);
   }
-  const ownerName = symbolName.slice(0, dot);
-  const memberName = symbolName.slice(dot + 1);
-  const owners = rows.filter((row) =>
-    (row.kind === SourceDeclarationKind.Class || row.kind === SourceDeclarationKind.Interface)
-    && row.name === ownerName
-  );
-  return owners.some((owner) =>
-    rows.some((row) =>
-      memberDeclarationKinds.has(row.kind)
-      && row.name === memberName
-      && row.span.start >= owner.span.start
-      && row.span.end <= owner.span.end
-    )
-  );
+  return visit(file) === true;
 }
 
-const memberDeclarationKinds = new Set<SourceDeclarationKind>([
-  SourceDeclarationKind.Method,
-  SourceDeclarationKind.Property,
-  SourceDeclarationKind.Accessor,
-  SourceDeclarationKind.Constructor,
-]);
-
 function trackedRepoPaths(repoRoot: string): ReadonlySet<string> | undefined {
-  const cached = trackedRepoPathsByRoot.get(repoRoot);
-  if (cached !== undefined) {
-    return cached;
-  }
   try {
     const output = execFileSync(
       "git",
-      ["-C", repoRoot, "ls-files", "--recurse-submodules"],
-      { encoding: "utf8" },
+      ["-C", repoRoot, "ls-files", "-z", "--recurse-submodules"],
+      { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 },
     );
-    const paths = new Set(
+    return new Set(
       output
-        .split(/\r?\n/u)
+        .split("\0")
         .map((entry) => normalizeAtlasMemoryRepoPath(entry))
         .filter((entry) => entry.length > 0),
     );
-    trackedRepoPathsByRoot.set(repoRoot, paths);
-    return paths;
   } catch {
     return undefined;
   }

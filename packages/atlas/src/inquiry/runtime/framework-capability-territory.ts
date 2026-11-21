@@ -70,7 +70,8 @@ interface TerritoryFamily {
   readonly facetFields?: readonly string[];
 }
 
-const TERRITORY_FAMILIES: readonly TerritoryFamily[] = [
+/** Source-lens projections used by both the normalized inventory and the CLI census. */
+export const FRAMEWORK_TERRITORY_FAMILIES: readonly TerritoryFamily[] = [
   { id: "resources", lens: LensId.FrameworkResources, projection: "definitions", arrayField: "convergenceRows", shape: FrameworkFamilyShape.Catalog, symbolOf: (row) => stringField(row, "targetName"), kindOf: (row) => stringField(row, "resourceKind"), packageOf: (row) => stringField(row, "packageId") },
   { id: "expression", lens: LensId.FrameworkDiscovery, projection: "expression-entities", arrayField: "expressionEntities", shape: FrameworkFamilyShape.Catalog, symbolOf: symbolFromExportRow, shapeOf: (row) => stringField(row, "exportShape"), packageOf: (row) => stringField(row, "packageId") },
   { id: "observation", lens: LensId.FrameworkObservation, projection: "entities", arrayField: "observers", shape: FrameworkFamilyShape.Catalog, symbolOf: symbolFromExportRow, shapeOf: (row) => stringField(row, "exportShape"), packageOf: (row) => stringField(row, "packageId") },
@@ -82,33 +83,61 @@ const TERRITORY_FAMILIES: readonly TerritoryFamily[] = [
 ];
 
 /** The catalog-shaped families, in declared order, for symbol-joined reverse coverage. */
-export const FRAMEWORK_CATALOG_FAMILY_IDS: readonly string[] = TERRITORY_FAMILIES
+export const FRAMEWORK_CATALOG_FAMILY_IDS: readonly string[] = FRAMEWORK_TERRITORY_FAMILIES
   .filter((family) => family.shape === FrameworkFamilyShape.Catalog)
   .map((family) => family.id);
 
-/** Enumerate the full concrete territory as one normalized construct stream. */
+/** Sample constructs up to the input-row budget per family. Read inventory.inputPages via readFrameworkTerritoryInventory to establish completeness. */
 export function enumerateFrameworkTerritoryConstructs(
   sourceProject: SourceProject,
   budgetRows: number = DEFAULT_TERRITORY_ROWS,
 ): readonly FrameworkTerritoryConstruct[] {
-  return readFrameworkTerritoryFamilies(sourceProject, budgetRows)
-    .flatMap((family) => family.constructs);
+  return readFrameworkTerritoryInventory(sourceProject, budgetRows).rows;
+}
+
+/** Owner-page facts before constructs are deduplicated or grouped. */
+export interface FrameworkTerritoryInput {
+  readonly family: string;
+  readonly lens: LensId;
+  readonly projection: string;
+  readonly closure: FrameworkCoverageBasisClosure;
+  readonly outcome?: OutcomeKind;
+  readonly returned: number;
+  readonly total: number | null;
+  /** Direct request to the first unexamined page of the owning lens. */
+  readonly next?: Inquiry;
+}
+
+/** Derived rows and the bounded inputs on which their enumeration depends. */
+export interface FrameworkTerritoryRead<TRow> {
+  readonly rows: readonly TRow[];
+  readonly inputPages: readonly FrameworkTerritoryInput[];
+}
+
+export function readFrameworkTerritoryInventory(
+  sourceProject: SourceProject,
+  budgetRows: number = DEFAULT_TERRITORY_ROWS,
+): FrameworkTerritoryRead<FrameworkTerritoryConstruct> {
+  const families = readFrameworkTerritoryFamilies(sourceProject, budgetRows);
+  return {
+    rows: families.flatMap((read) => read.constructs),
+    inputPages: families.map((read) => read.input),
+  };
 }
 
 interface FrameworkTerritoryFamilyRead {
   readonly family: TerritoryFamily;
   readonly constructs: readonly FrameworkTerritoryConstruct[];
-  readonly basisClosure: FrameworkCoverageBasisClosure;
-  readonly basisRowCount: number;
-  readonly basisTotalRows: number | null;
+  readonly input: FrameworkTerritoryInput;
   readonly basisContinuationCount: number;
 }
 
 function readFrameworkTerritoryFamilies(
   sourceProject: SourceProject,
   budgetRows: number,
+  families: readonly TerritoryFamily[] = FRAMEWORK_TERRITORY_FAMILIES,
 ): readonly FrameworkTerritoryFamilyRead[] {
-  return TERRITORY_FAMILIES.map((family) =>
+  return families.map((family) =>
     readFrameworkTerritoryFamily(sourceProject, family, budgetRows),
   );
 }
@@ -164,17 +193,32 @@ function readFrameworkTerritoryFamily(
       }
     }
   }
-  const basisClosure = frameworkTerritoryAnswerIsComplete(answer)
-    ? FrameworkCoverageBasisClosure.Complete
-    : FrameworkCoverageBasisClosure.Partial;
   return {
     family,
     constructs,
-    basisClosure,
-    basisRowCount: rows.length,
-    basisTotalRows: answer?.page?.total
-      ?? (basisClosure === FrameworkCoverageBasisClosure.Complete ? rows.length : null),
+    input: territoryInput(family, answer, rows.length),
     basisContinuationCount: answer?.continuations.length ?? 0,
+  };
+}
+
+function territoryInput(family: TerritoryFamily, answer: Answer | undefined, returned: number): FrameworkTerritoryInput {
+  const page = answer?.page;
+  const payload = answer?.value as Record<string, unknown> | undefined;
+  const complete = frameworkTerritoryAnswerIsComplete(answer)
+    && Array.isArray(payload?.[family.arrayField])
+    && page?.returned === returned
+    && page.total === returned;
+  return {
+    family: family.id,
+    lens: family.lens,
+    projection: family.projection,
+    closure: complete ? FrameworkCoverageBasisClosure.Complete : FrameworkCoverageBasisClosure.Partial,
+    outcome: answer?.outcome,
+    returned,
+    total: page?.total ?? null,
+    next: answer && page?.nextCursor !== undefined
+      ? { ...answer.inquiry, page: { size: page.size, cursor: page.nextCursor } }
+      : undefined,
   };
 }
 
@@ -273,8 +317,8 @@ export function frameworkReverseCoverage(
     }
   }
 
-  const territoryFamilies = readFrameworkTerritoryFamilies(sourceProject, budgetRows)
-    .filter((read) => read.family.shape === FrameworkFamilyShape.Catalog);
+  const territoryFamilies = readFrameworkTerritoryFamilies(sourceProject, budgetRows,
+    FRAMEWORK_TERRITORY_FAMILIES.filter((family) => family.shape === FrameworkFamilyShape.Catalog));
   const families: FrameworkReverseCoverageFamily[] = [];
   for (const familyRead of territoryFamilies) {
     const familyId = familyRead.family.id;
@@ -333,9 +377,9 @@ export function frameworkReverseCoverage(
     );
     families.push({
       family: familyId,
-      basisClosure: familyRead.basisClosure,
-      basisRowCount: familyRead.basisRowCount,
-      basisTotalRows: familyRead.basisTotalRows,
+      basisClosure: familyRead.input.closure,
+      basisRowCount: familyRead.input.returned,
+      basisTotalRows: familyRead.input.total,
       basisContinuationCount: familyRead.basisContinuationCount,
       mappingBasisClosure,
       mappingBasisRowCount: mirrorRows.length,
@@ -399,6 +443,10 @@ function groupCoverageByShape(
 
 export interface FrameworkForwardCoverageFamily {
   readonly family: string;
+  /** Completeness and row counts from the owning source lens, before grouping. */
+  readonly basisClosure: FrameworkCoverageBasisClosure;
+  readonly basisRowCount: number;
+  readonly basisTotalRows: number | null;
   readonly total: number;
   readonly accounted: number;
   readonly instantiableTotal: number;
@@ -413,21 +461,21 @@ export function frameworkForwardCoverage(
   budgetRows: number = DEFAULT_TERRITORY_ROWS,
 ): readonly FrameworkForwardCoverageFamily[] {
   const families: FrameworkForwardCoverageFamily[] = [];
-  for (const family of TERRITORY_FAMILIES) {
+  for (const family of FRAMEWORK_TERRITORY_FAMILIES) {
     if (family.shape !== FrameworkFamilyShape.Catalog) {
       continue;
     }
-    const answer = answerFrameworkFamily(family.lens, family.projection, sourceProject, budgetRows);
+    const read = readFrameworkTerritoryFamily(sourceProject, family, budgetRows);
     const bySymbol = new Map<string, { shape: string; accounted: boolean }>();
-    for (const row of readArrayField(answer?.value, family.arrayField)) {
-      const symbol = family.symbolOf === undefined ? null : family.symbolOf(row);
-      if (symbol === null || symbol.length === 0) {
+    for (const construct of read.constructs) {
+      if (construct.symbol === null) {
         continue;
       }
-      const shape = (family.shapeOf === undefined ? null : family.shapeOf(row)) ?? UNSHAPED;
-      const existing = bySymbol.get(symbol);
+      const key = `${construct.packageId ?? "unknown-package"}:${construct.symbol}`;
+      const shape = construct.exportShape ?? UNSHAPED;
+      const existing = bySymbol.get(key);
       if (existing === undefined) {
-        bySymbol.set(symbol, { shape, accounted: corpusHasTerm(categoryCorpus, symbol) });
+        bySymbol.set(key, { shape, accounted: capabilityCorpusMentions(categoryCorpus, construct.symbol) });
       } else if (!INSTANTIABLE_SHAPES.has(existing.shape) && INSTANTIABLE_SHAPES.has(shape)) {
         existing.shape = shape;
       }
@@ -445,6 +493,9 @@ export function frameworkForwardCoverage(
     }
     families.push({
       family: family.id,
+      basisClosure: read.input.closure,
+      basisRowCount: read.input.returned,
+      basisTotalRows: read.input.total,
       total: constructs.length,
       accounted: constructs.filter((entry) => entry.accounted).length,
       instantiableTotal: instantiable.length,
@@ -467,7 +518,8 @@ export function frameworkForwardCoverage(
   return families;
 }
 
-function corpusHasTerm(corpus: string, term: string): boolean {
+/** Whether lowercased capability text names this term, respecting hyphenated authoring forms. */
+export function capabilityCorpusMentions(corpus: string, term: string): boolean {
   const normalized = term.trim().toLowerCase();
   if (normalized.length < 2) {
     return false;
@@ -487,19 +539,30 @@ export interface FrameworkCapabilityCluster {
 
 /**
  * Candidate capability clusters grouped by source-file co-location and binding-command instruction target.
- * Clusters are evidence handles for reviewing curated capability rows, not capability identities by themselves.
+ * This array contains clusters of the sampled inputs. readFrameworkCapabilityClusters also returns
+ * the owner-page closure required to interpret missing clusters or membership.
  */
 export function frameworkCapabilityClusters(
   sourceProject: SourceProject,
   budgetRows: number = DEFAULT_TERRITORY_ROWS,
 ): readonly FrameworkCapabilityCluster[] {
+  return readFrameworkCapabilityClusters(sourceProject, budgetRows).rows;
+}
+
+export function readFrameworkCapabilityClusters(
+  sourceProject: SourceProject,
+  budgetRows: number = DEFAULT_TERRITORY_ROWS,
+): FrameworkTerritoryRead<FrameworkCapabilityCluster> {
   const clusters = new Map<string, { family: string; members: Set<string>; kinds: Set<string> }>();
-  for (const family of TERRITORY_FAMILIES) {
+  const inputPages: FrameworkTerritoryInput[] = [];
+  for (const family of FRAMEWORK_TERRITORY_FAMILIES) {
     if (family.shape !== FrameworkFamilyShape.Catalog) {
       continue;
     }
     const answer = answerFrameworkFamily(family.lens, family.projection, sourceProject, budgetRows);
-    for (const row of readArrayField(answer?.value, family.arrayField)) {
+    const rows = readArrayField(answer?.value, family.arrayField);
+    inputPages.push(territoryInput(family, answer, rows.length));
+    for (const row of rows) {
       const symbol = family.symbolOf === undefined ? null : family.symbolOf(row);
       if (symbol === null || symbol.length === 0) {
         continue;
@@ -514,7 +577,7 @@ export function frameworkCapabilityClusters(
       clusters.set(key, entry);
     }
   }
-  return [...clusters.entries()]
+  const rows = [...clusters.entries()]
     .map(([key, entry]) => ({
       key,
       family: entry.family,
@@ -523,6 +586,7 @@ export function frameworkCapabilityClusters(
       kinds: [...entry.kinds].sort((left, right) => left.localeCompare(right)),
     }))
     .sort((left, right) => right.memberCount - left.memberCount || left.key.localeCompare(right.key));
+  return { rows, inputPages };
 }
 
 function clusterKeyForRow(row: Record<string, unknown>): string {
@@ -531,17 +595,17 @@ function clusterKeyForRow(row: Record<string, unknown>): string {
   if (kind === "binding-command" && instructions.length > 0) {
     return `instr:${instructions[0]}`;
   }
-  const file = sourceFileBasename(row);
+  const file = sourceFilePath(row);
   return file === null ? "unfiled" : `file:${file}`;
 }
 
-function sourceFileBasename(row: Record<string, unknown>): string | null {
+function sourceFilePath(row: Record<string, unknown>): string | null {
   for (const field of ["definitionSource", "source", "declarationSource"]) {
     const candidate = row[field];
     if (candidate !== null && typeof candidate === "object") {
       const filePath = (candidate as Record<string, unknown>).filePath;
       if (typeof filePath === "string" && filePath.length > 0) {
-        return filePath.split("/").at(-1) ?? null;
+        return filePath;
       }
     }
   }

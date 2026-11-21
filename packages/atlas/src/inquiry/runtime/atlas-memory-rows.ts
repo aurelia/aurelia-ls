@@ -72,6 +72,7 @@ export function filterMemoryRows(
   rows: readonly AtlasMemoryRecordRow[],
   inquiry: Inquiry,
 ): readonly AtlasMemoryRecordRow[] {
+  if (inquiryStringFilter(inquiry, "surfaceRole") !== undefined) return [];
   const kind = inquiryStringFilter(inquiry, "kind");
   const status = inquiryStringFilter(inquiry, "status");
   const domains = inquiryStringListFilter(inquiry, "domain");
@@ -122,29 +123,8 @@ export function filterUntrackedFrontiers(
   rows: readonly AtlasMemoryUntrackedProductClassFrontier[],
   inquiry: Inquiry,
 ): readonly AtlasMemoryUntrackedProductClassFrontier[] {
-  const domains = inquiryStringListFilter(inquiry, "domain");
-  const domainMode = memoryDomainFilterMode(inquiry);
-  const path = inquiryStringFilter(inquiry, "path");
-  const surfaceRole = inquiryStringFilter(inquiry, "surfaceRole");
-  const query = inquiryStringFilter(inquiry, "query");
-  const structurallyFiltered = rows.filter((row) =>
-    memoryDomainsMatch(row.domains, domains, domainMode) &&
-    (path === undefined || atlasMemoryRepoPathMatches(row.filePath, path)) &&
-    matchesFilterValue(row.surfaceRole, surfaceRole),
-  );
-  const exactQueryFiltered = query === undefined
-    ? structurallyFiltered
-    : structurallyFiltered.filter((row) => queryMatches(query, untrackedFrontierSearchText(row)));
-  const filtered = query === undefined
-    ? exactQueryFiltered
-    : memoryQueryExpandedRows(
-      structurallyFiltered,
-      exactQueryFiltered,
-      query,
-      untrackedFrontierSearchText,
-      untrackedFrontierQueryRelevance,
-    );
-  return rankUntrackedFrontiersForInquiry(filtered, inquiry);
+  return filterFrontiers(rows.map(untrackedFrontierRow), inquiry)
+    .flatMap(row => row.kind === "untracked-product-class" ? [row.frontier] : []);
 }
 
 export function filterFrontiers(
@@ -301,14 +281,18 @@ export function frontierRows(
       record: row,
       summary: row.summary,
     })),
-    ...analysis.untrackedProductClassFrontiers.map((frontier) => ({
-      kind: "untracked-product-class" as const,
-      id: frontier.id,
-      status: "untracked" as const,
-      frontier,
-      summary: frontier.summary,
-    })),
+    ...analysis.untrackedProductClassFrontiers.map(untrackedFrontierRow),
   ];
+}
+
+function untrackedFrontierRow(frontier: AtlasMemoryUntrackedProductClassFrontier): AtlasMemoryUntrackedFrontierRow {
+  return {
+    kind: "untracked-product-class",
+    id: frontier.id,
+    status: "untracked",
+    frontier,
+    summary: frontier.summary,
+  };
 }
 
 function liveRows(
@@ -366,29 +350,6 @@ function rankMemoryRowsForInquiry(
       Number(right.exact) - Number(left.exact) ||
       right.score - left.score ||
       statusRank(right.row.status) - statusRank(left.row.status) ||
-      left.index - right.index,
-    )
-    .map((entry) => entry.row);
-}
-
-function rankUntrackedFrontiersForInquiry(
-  rows: readonly AtlasMemoryUntrackedProductClassFrontier[],
-  inquiry: Inquiry,
-): readonly AtlasMemoryUntrackedProductClassFrontier[] {
-  const query = inquiryStringFilter(inquiry, "query");
-  if (query === undefined) {
-    return rows;
-  }
-  return rows
-    .map((row, index) => ({
-      row,
-      index,
-      score: untrackedFrontierQueryRelevance(row, query),
-      exact: queryMatches(query, untrackedFrontierSearchText(row)),
-    }))
-    .sort((left, right) =>
-      Number(right.exact) - Number(left.exact) ||
-      right.score - left.score ||
       left.index - right.index,
     )
     .map((entry) => entry.row);

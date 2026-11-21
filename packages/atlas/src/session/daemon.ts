@@ -11,6 +11,7 @@ import {
   type InquiryRuntimeRequest,
 } from "../inquiry/runtime/index.js";
 import { createSourceProject } from "../source/index.js";
+import { computeSessionCompatibilityHash } from "./hash.js";
 import {
   readInquirySessionManifest,
   removeInquirySessionManifest,
@@ -48,6 +49,10 @@ const heartbeatIntervalMs = readPositiveInteger(
   2_000,
 );
 const sourceProject = createSourceProject({ repoRoot: paths.repoRoot });
+if (computeSessionCompatibilityHash(paths) !== buildHash || !sourceProject.inputsAreCurrent()) {
+  sourceProject.dispose();
+  throw new Error("Atlas inputs changed during startup or the supplied compatibility hash is stale. Start a new inquiry.");
+}
 const api = createInMemoryApi({ sourceProject });
 const startedAtMs = Date.now();
 let lastRequestAtMs = startedAtMs;
@@ -56,6 +61,8 @@ let endpoint: InquirySessionEndpoint | undefined;
 let server: Server | undefined;
 let shuttingDown = false;
 let manifestEstablished = false;
+let deferredHeartbeats = 0;
+let lastHeartbeatErrorLogMs = 0;
 let deferredShutdownReason: string | null = null;
 
 server = createServer((socket) => {
@@ -80,7 +87,22 @@ const heartbeat = setInterval(() => {
     shutdown("idle timeout");
     return;
   }
-  refreshManifest();
+  try {
+    refreshManifest();
+  } catch (error) {
+    // A Windows reader can briefly deny replacement of the already-published
+    // manifest. The next tick checks its owner again before attempting a write.
+    const sharingError = error instanceof Error && "code" in error
+      && (error.code === "EPERM" || error.code === "EACCES" || error.code === "EBUSY");
+    if (!manifestEstablished || !sharingError) {
+      throw error;
+    }
+    deferredHeartbeats++;
+    if (deferredHeartbeats === 1 || Date.now() - lastHeartbeatErrorLogMs >= 60_000) {
+      lastHeartbeatErrorLogMs = Date.now();
+      console.error(`Atlas session ${process.pid} deferred ${deferredHeartbeats} heartbeat(s) at ${manifestPath} (${error.code}): ${error.message}`);
+    }
+  }
 }, heartbeatIntervalMs);
 heartbeat.unref();
 
@@ -150,7 +172,7 @@ async function handleLine(
     lastRequestAtMs = Date.now();
     if (activeRequestCount === 0 && deferredShutdownReason !== null) {
       const reason = deferredShutdownReason;
-      setTimeout(() => shutdown(reason), 0).unref();
+      setTimeout(() => shutdownWhenIdle(reason), 0).unref();
     }
   }
 }
@@ -160,9 +182,12 @@ async function handleRequest(
   /** Parsed request envelope. */
   request: InquirySessionRequest,
 ): Promise<unknown> {
+  if (request.sessionStartedAt !== undefined && request.sessionStartedAt !== new Date(startedAtMs).toISOString()) {
+    throw new Error("The requested Atlas session ended. Restart the inquiry with a new API.");
+  }
   switch (request.method) {
     case InquirySessionMethod.Status:
-      return createStatus();
+      return createStatus((request.params as { checkSourceInputs?: boolean } | undefined)?.checkSourceInputs === true);
     case InquirySessionMethod.Map:
       return api.map(readMapParams(request.params).focus);
     case InquirySessionMethod.Ask:
@@ -177,7 +202,7 @@ async function handleRequest(
       const reason =
         readShutdownParams(request.params).reason ?? "protocol shutdown";
       const result: InquirySessionShutdownResult = { accepted: true, reason };
-      setTimeout(() => shutdown(reason), 0).unref();
+      setTimeout(() => shutdownWhenIdle(reason), 0).unref();
       return result;
     }
     default:
@@ -234,7 +259,7 @@ async function runSelfCheck(): Promise<InquirySessionSelfCheckResult> {
 }
 
 /** Create the current daemon status payload. */
-function createStatus(): InquirySessionStatus {
+function createStatus(checkSourceInputs = false): InquirySessionStatus {
   if (endpoint === undefined) {
     throw new Error("Session endpoint is not ready yet.");
   }
@@ -246,6 +271,7 @@ function createStatus(): InquirySessionStatus {
     uptimeMs: Date.now() - startedAtMs,
     idleMs: Date.now() - lastRequestAtMs,
     activeRequestCount,
+    ...(checkSourceInputs ? { sourceInputsCurrent: sourceProject.inputsAreCurrent() } : {}),
     world: createWorldSummary(),
     implementedLensIds: api.implementedLensIds,
   };
@@ -310,6 +336,10 @@ function refreshManifest(): void {
   };
   writeInquirySessionManifest(manifestPath, manifest);
   manifestEstablished = true;
+  if (deferredHeartbeats > 0) {
+    console.error(`Atlas session ${process.pid} published its heartbeat after ${deferredHeartbeats} deferred update(s).`);
+    deferredHeartbeats = 0;
+  }
 }
 
 /** Shut down immediately when idle, or defer lease-loss shutdown until active work drains. */
@@ -334,7 +364,11 @@ function shutdown(
   }
   shuttingDown = true;
   clearInterval(heartbeat);
-  removeInquirySessionManifest(manifestPath, process.pid);
+  try {
+    removeInquirySessionManifest(manifestPath, process.pid);
+  } catch (error) {
+    console.error(`Atlas session ${process.pid} could not release ${manifestPath}: ${errorMessage(error)}`);
+  }
   try {
     sourceProject.dispose();
   } catch (error) {

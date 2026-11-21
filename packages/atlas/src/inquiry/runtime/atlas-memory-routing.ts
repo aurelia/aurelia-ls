@@ -47,10 +47,10 @@ export function memoryRowEvidence(row: AtlasMemoryRecordRow): Evidence {
     id: row.id,
     kind: EvidenceKind.MaintenanceSignal,
     role: memoryEvidenceRole(row.status),
-    confidence: row.liveChecks.length > 0
+    confidence: row.storageSource !== undefined
       ? EvidenceConfidence.Exact
       : EvidenceConfidence.Strong,
-    summary: row.summary,
+    summary: `Recorded ${row.kind} ${row.id}: ${row.summary}`,
     source: storageSourceForMemoryRow(row) ?? sourceForMemoryRow(row),
     data: row,
   };
@@ -102,36 +102,13 @@ export function sourceForMemoryRow(row: AtlasMemoryRecordRow): SourceRange | und
     .find((source): source is ProductArchitectureSourceReference =>
       source !== undefined,
     );
-  if (liveSource !== undefined) {
-    return sourceRangeFromOneBasedReference(liveSource);
-  }
-  const sourceAnchor = (row.record.anchors ?? [])
-    .find((anchor): anchor is Extract<AtlasMemoryAnchor, { readonly kind: "source" }> =>
-      anchor.kind === "source" && anchor.line !== undefined,
-    );
-  if (sourceAnchor === undefined || sourceAnchor.line === undefined) {
-    return undefined;
-  }
-  const line = Math.max(0, sourceAnchor.line - 1);
-  return {
-    filePath: sourceAnchor.filePath,
-    start: { line, character: 0 },
-    end: { line, character: 1 },
-  };
+  return liveSource === undefined ? undefined : sourceRangeFromOneBasedReference(liveSource);
 }
 
 export function storageSourceForMemoryRow(
   row: AtlasMemoryRecordRow,
 ): SourceRange | undefined {
-  if (row.shardLine === undefined) {
-    return undefined;
-  }
-  const line = Math.max(0, row.shardLine - 1);
-  return {
-    filePath: row.shardPath,
-    start: { line, character: 0 },
-    end: { line, character: 1 },
-  };
+  return row.storageSource;
 }
 
 export function memoryRowContinuations(row: AtlasMemoryRecordRow): readonly Continuation[] {
@@ -311,7 +288,9 @@ function continuationForAnchor(
           rationale: anchor.summary ?? `Inspect ${anchor.filePath}.`,
           inquiry: {
             lens: LensId.TsSource,
-            locus: { kind: LocusKind.SourceFile, filePath: anchor.filePath },
+            locus: anchor.symbolName !== undefined && !anchor.symbolName.includes(".")
+              ? { kind: LocusKind.Symbol, name: anchor.symbolName, filePath: anchor.filePath }
+              : { kind: LocusKind.SourceFile, filePath: anchor.filePath },
             projection: "text",
           },
           route: {

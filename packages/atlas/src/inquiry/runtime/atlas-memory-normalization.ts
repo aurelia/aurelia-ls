@@ -10,7 +10,6 @@ import {
   type AtlasMemoryManifest,
   type AtlasMemoryRecord,
   type AtlasMemoryRecordKind,
-  type AtlasMemoryShard,
   type AtlasMemoryShardReference,
   type AtlasMemoryStorageIssue,
 } from "./atlas-memory-contracts.js";
@@ -43,6 +42,7 @@ export function normalizeAtlasMemoryManifest(
     return null;
   }
   const shards: AtlasMemoryShardReference[] = [];
+  const seenPaths = new Set<string>();
   for (const [index, entry] of value.shards.entries()) {
     const shard = normalizeShardReference(entry);
     if (shard === null) {
@@ -50,7 +50,13 @@ export function normalizeAtlasMemoryManifest(
         id: `atlas.memory:manifest-shard:${index}`,
         summary: `Atlas memory manifest shard ${index} is not valid.`,
       });
+    } else if (seenPaths.has(shard.path)) {
+      issues.push({
+        id: `atlas.memory:manifest-shard:${index}:duplicate-path`,
+        summary: `Atlas memory manifest lists ${shard.path} more than once.`,
+      });
     } else {
+      seenPaths.add(shard.path);
       shards.push(shard);
     }
   }
@@ -60,18 +66,18 @@ export function normalizeAtlasMemoryManifest(
   };
 }
 
-/** Normalize one Atlas memory shard payload into durable records plus issues. */
-export function normalizeAtlasMemoryShard(
+/** Validate the shard envelope before reading records by their authored array index. */
+export function atlasMemoryShardEntries(
   shardPath: string,
   value: unknown,
   issues: AtlasMemoryStorageIssue[],
-): AtlasMemoryShard {
+): readonly unknown[] {
   if (!isRecord(value)) {
     issues.push({
       id: `atlas.memory:shard:${shardPath}:invalid`,
       summary: `Atlas memory shard ${shardPath} root must be an object.`,
     });
-    return { schemaVersion: ATLAS_MEMORY_SCHEMA_VERSION, records: [] };
+    return [];
   }
   if (value.schemaVersion !== ATLAS_MEMORY_SCHEMA_VERSION) {
     issues.push({
@@ -84,18 +90,10 @@ export function normalizeAtlasMemoryShard(
       id: `atlas.memory:shard:${shardPath}:records`,
       summary: `Atlas memory shard ${shardPath} records must be an array.`,
     });
-    return { schemaVersion: ATLAS_MEMORY_SCHEMA_VERSION, records: [] };
+    return [];
   }
 
-  const records: AtlasMemoryRecord[] = [];
-  for (const [index, entry] of value.records.entries()) {
-    const record = normalizeMemoryRecord(`${shardPath}:${index}`, entry, issues);
-    if (record !== null) {
-      records.push(record);
-    }
-  }
-
-  return { schemaVersion: ATLAS_MEMORY_SCHEMA_VERSION, records };
+  return value.records;
 }
 
 function normalizeShardReference(
@@ -113,7 +111,7 @@ function normalizeShardReference(
     };
 }
 
-function normalizeMemoryRecord(
+export function normalizeAtlasMemoryRecord(
   index: number | string,
   value: unknown,
   issues: AtlasMemoryStorageIssue[],
@@ -131,6 +129,18 @@ function normalizeMemoryRecord(
     );
     return null;
   }
+  const nextActionPolicy = atlasMemoryNextActionPolicyValue(value.nextActionPolicy);
+  if (value.nextActionPolicy !== undefined && nextActionPolicy === undefined) {
+    issues.push(recordIssue(id, "Unknown nextActionPolicy."));
+    return null;
+  }
+  const liveChecks = normalizeLiveChecks(value.liveChecks, id, issues);
+  if ((kind === "pressure-frontier" || kind === "intentional-shape") && liveChecks.length === 0) {
+    issues.push({
+      id: `atlas.memory:record:${id}:missing-live-check`,
+      summary: `${kind} record ${id} needs at least one liveCheck to compute its status.`,
+    });
+  }
 
   return {
     id,
@@ -139,9 +149,9 @@ function normalizeMemoryRecord(
     summary,
     rationale: stringFieldValue(value, "rationale"),
     guidance: optionalStringArrayValue(value.guidance),
-    nextActionPolicy: atlasMemoryNextActionPolicyValue(value.nextActionPolicy),
+    nextActionPolicy,
     anchors: normalizeAnchors(value.anchors, id, issues),
-    liveChecks: normalizeLiveChecks(value.liveChecks, id, issues),
+    liveChecks,
     createdAt: stringFieldValue(value, "createdAt"),
     updatedAt: stringFieldValue(value, "updatedAt"),
   };
@@ -161,6 +171,14 @@ function normalizeAnchors(
   }
   const anchors: AtlasMemoryAnchor[] = [];
   for (const [index, entry] of value.entries()) {
+    if (isRecord(entry) && entry.kind === "lens") {
+      const unknown = Object.keys(entry).filter(key => !lensAnchorFields.has(key));
+      if (unknown.length > 0 || (entry.filters !== undefined && !isRecord(entry.filters))) {
+        issues.push(recordIssue(recordId,
+          `anchors[${index}] has an invalid lens selection (${unknown.join(", ") || "filters"}). Use projection and a filters object.`));
+        continue;
+      }
+    }
     const anchor = normalizeAnchor(entry);
     if (anchor === null) {
       issues.push(recordIssue(recordId, `anchors[${index}] is not valid.`));
@@ -170,6 +188,8 @@ function normalizeAnchors(
   }
   return anchors;
 }
+
+const lensAnchorFields = new Set(["kind", "lensId", "projection", "filters", "summary"]);
 
 function normalizeAnchor(value: unknown): AtlasMemoryAnchor | null {
   if (!isRecord(value)) {
@@ -412,7 +432,7 @@ function atlasSelfSourceFileCheck(
   };
 }
 
-function recordKindValue(value: unknown): AtlasMemoryRecordKind | undefined {
+export function recordKindValue(value: unknown): AtlasMemoryRecordKind | undefined {
   switch (value) {
     case "pressure-frontier":
     case "intentional-shape":

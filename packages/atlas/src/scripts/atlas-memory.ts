@@ -1,3 +1,5 @@
+import type { AtlasMemoryValue } from "../inquiry/runtime/atlas-memory-lenses.js";
+import type { AtlasMemoryAnchor, AtlasMemoryRecordRow } from "../inquiry/runtime/atlas-memory-contracts.js";
 import { LensId } from "../inquiry/lens.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
 import { createApi } from "../session/index.js";
@@ -13,161 +15,7 @@ import {
   scriptFilterSummary,
   scriptNumberArgumentValue,
   sourceLabel,
-  type ScriptSourceRef,
 } from "./script-output.js";
-
-interface AtlasMemoryScriptValue {
-  readonly rollup?: {
-    readonly recordCount: number;
-    readonly byKind: Readonly<Record<string, number>>;
-    readonly byStatus: Readonly<Record<string, number>>;
-    readonly untrackedProductClassFrontierCount: number;
-    readonly untrackedProductClassFrontiersByArea?: Readonly<Record<string, number>>;
-    readonly untrackedProductClassFrontiersBySurfaceRole?: Readonly<Record<string, number>>;
-    readonly storageIssueCount: number;
-  };
-  readonly records?: readonly AtlasMemoryScriptRecordRow[];
-  readonly untrackedProductClassFrontiers?: readonly {
-    readonly id: string;
-    readonly className: string;
-    readonly filePath: string;
-    readonly area?: string;
-    readonly methodCount: number;
-    readonly propertyCount: number;
-    readonly lineCount: number;
-    readonly surfaceRole?: string;
-    readonly surfaceRoleReason?: string;
-    readonly source?: ScriptSourceRef;
-    readonly summary: string;
-  }[];
-  readonly frontiers?: readonly {
-    readonly kind: string;
-    readonly id: string;
-    readonly status: string;
-    readonly summary: string;
-    readonly record?: AtlasMemoryScriptRecordRow;
-    readonly frontier?: {
-      readonly id: string;
-      readonly className: string;
-      readonly filePath: string;
-      readonly area?: string;
-      readonly methodCount: number;
-      readonly propertyCount: number;
-      readonly lineCount: number;
-      readonly surfaceRole?: string;
-      readonly surfaceRoleReason?: string;
-      readonly source?: ScriptSourceRef;
-      readonly summary: string;
-    };
-  }[];
-  readonly nextActions?: readonly {
-    readonly kind: string;
-    readonly id: string;
-    readonly rank: number;
-    readonly status: string;
-    readonly domains: readonly string[];
-    readonly summary: string;
-    readonly rationale: string;
-    readonly area?: string;
-    readonly untrackedCount?: number;
-    readonly record?: AtlasMemoryScriptRecordRow;
-    readonly frontier?: {
-      readonly id: string;
-      readonly className: string;
-      readonly filePath: string;
-      readonly area?: string;
-      readonly methodCount: number;
-      readonly propertyCount: number;
-      readonly lineCount: number;
-      readonly surfaceRole?: string;
-      readonly surfaceRoleReason?: string;
-      readonly source?: ScriptSourceRef;
-      readonly summary: string;
-    };
-    readonly sampleFrontier?: {
-      readonly id: string;
-      readonly className: string;
-      readonly filePath: string;
-      readonly area?: string;
-      readonly methodCount: number;
-      readonly propertyCount: number;
-      readonly lineCount: number;
-      readonly surfaceRole?: string;
-      readonly surfaceRoleReason?: string;
-      readonly source?: ScriptSourceRef;
-      readonly summary: string;
-    };
-    readonly issue?: {
-      readonly id: string;
-      readonly summary: string;
-    };
-  }[];
-  readonly issues?: readonly {
-    readonly id: string;
-    readonly summary: string;
-  }[];
-}
-
-interface AtlasMemoryScriptRecordRow {
-  readonly id: string;
-  readonly kind: string;
-  readonly status: string;
-  readonly domains: readonly string[];
-  readonly nextActionPolicy?: string;
-  readonly shardPath?: string;
-  readonly shardIndex?: number;
-  readonly shardLine?: number;
-  readonly summary: string;
-  readonly liveChecks?: readonly AtlasMemoryScriptLiveCheckResult[];
-  readonly record: {
-    readonly guidance?: readonly string[];
-    readonly anchors?: readonly AtlasMemoryScriptAnchor[];
-  };
-}
-
-interface AtlasMemoryScriptLiveCheckResult {
-  readonly status: string;
-  readonly summary: string;
-  readonly source?: ScriptSourceRef;
-}
-
-type AtlasMemoryScriptAnchor =
-  | {
-      readonly kind: "source";
-      readonly filePath: string;
-      readonly symbolName?: string;
-      readonly line?: number;
-      readonly summary?: string;
-    }
-  | {
-      readonly kind: "doc" | "fixture";
-      readonly path: string;
-      readonly heading?: string;
-      readonly scenario?: string;
-      readonly summary?: string;
-    }
-  | {
-      readonly kind: "script";
-      readonly command: string;
-      readonly summary?: string;
-    }
-  | {
-      readonly kind: "lens";
-      readonly lensId: string;
-      readonly projection?: string;
-      readonly summary?: string;
-    }
-  | {
-      readonly kind: "auLink";
-      readonly linkId: string;
-      readonly symbolName?: string;
-      readonly summary?: string;
-    }
-  | {
-      readonly kind: "external";
-      readonly url: string;
-      readonly summary?: string;
-    };
 
 assertKnownScriptArguments("atlas.memory", [
   "--detail",
@@ -257,7 +105,7 @@ const answer = await api.ask({
 });
 
 assertHitOrMissAnswer("atlas.memory", answer);
-const value = answerValue<AtlasMemoryScriptValue>(answer);
+const value = answerValue<AtlasMemoryValue>(answer);
 
 if (json) {
   console.log(JSON.stringify({
@@ -280,7 +128,7 @@ if (filterSummary !== undefined) {
 console.log(answer.summary);
 printDomainFilterHint(value);
 
-if (value?.rollup !== undefined) {
+if (value?.rollup !== undefined && (filterSummary === undefined || detail)) {
   printCounts("records by kind", value.rollup.byKind);
   printCounts("records by status", value.rollup.byStatus);
   console.log("");
@@ -303,10 +151,10 @@ if (value?.rollup !== undefined) {
 const frontiers = value?.frontiers ?? [];
 const nextActions = value?.nextActions ?? [];
 const frontierRecords = frontiers.flatMap((row) =>
-  row.kind === "memory-record" && row.record !== undefined ? [row.record] : [],
+  row.kind === "memory-record" ? [row.record] : [],
 );
 const frontierUntracked = frontiers.flatMap((row) =>
-  row.kind === "untracked-product-class" && row.frontier !== undefined
+  row.kind === "untracked-product-class"
     ? [row.frontier]
     : [],
 );
@@ -322,7 +170,7 @@ if (nextActions.length > 0) {
     const domains = row.domains.length === 0 ? "" : `; domains ${row.domains.join(", ")}`;
     const shard = row.record === undefined
       ? ""
-      : `; shard ${row.record.shardPath ?? "unknown"}:${row.record.shardLine ?? "?"}`;
+      : `; shard ${row.record.shardPath}:${row.record.shardLine ?? "?"}`;
     const policy = row.record?.nextActionPolicy === undefined
       ? ""
       : `; nextActionPolicy=${row.record.nextActionPolicy}`;
@@ -353,7 +201,7 @@ for (const row of records.slice(0, displayRowLimit)) {
     ? ""
     : `; nextActionPolicy=${row.nextActionPolicy}`;
   console.log(
-    `- ${row.id}: ${row.kind}/${row.status}; domains ${row.domains.join(", ")}; shard ${row.shardPath ?? "unknown"}:${row.shardLine ?? "?"}${policy}; ${row.summary}`,
+    `- ${row.id}: ${row.kind}/${row.status}; domains ${row.domains.join(", ")}; shard ${row.shardPath}:${row.shardLine ?? "?"}${policy}; ${row.summary}`,
   );
   if (detail) {
     if (projection === "next" && nextActionRecordIds.has(row.id)) {
@@ -366,24 +214,13 @@ for (const row of records.slice(0, displayRowLimit)) {
   }
 }
 
-const genericFrontiers = frontiers.filter((row) =>
-  (row.kind !== "memory-record" || row.record === undefined) &&
-  (row.kind !== "untracked-product-class" || row.frontier === undefined),
-);
-if (genericFrontiers.length > 0) {
-  printRowSectionHeader("frontiers", genericFrontiers, displayRowLimit);
-  for (const row of genericFrontiers.slice(0, displayRowLimit)) {
-    console.log(`- ${row.id}: ${row.kind}/${row.status}; ${row.summary}`);
-  }
-}
-
 const untracked = projection === "frontiers"
   ? frontierUntracked
   : value?.untrackedProductClassFrontiers ?? [];
 if (untracked.length > 0) {
   printRowSectionHeader("untracked product class frontiers", untracked, displayRowLimit);
   for (const row of untracked.slice(0, displayRowLimit)) {
-    const area = row.area === undefined ? "" : ` [${row.area}]`;
+    const area = ` [${row.area}]`;
     const role = row.surfaceRole === undefined ? "" : ` {${row.surfaceRole}}`;
     console.log(
       `- ${row.className}${area}${role}: ${row.methodCount} method(s), ${row.propertyCount} property/accessor(s), ${row.lineCount} line(s) at ${sourceLabel(row)}`,
@@ -403,7 +240,7 @@ if (issues.length > 0) {
   }
 }
 
-function printDomainFilterHint(value: AtlasMemoryScriptValue | undefined): void {
+function printDomainFilterHint(value: AtlasMemoryValue | undefined): void {
   if (
     domains.length <= 1 ||
     domainMode === "any" ||
@@ -416,7 +253,7 @@ function printDomainFilterHint(value: AtlasMemoryScriptValue | undefined): void 
   );
 }
 
-function atlasMemoryScriptValueHasRows(value: AtlasMemoryScriptValue | undefined): boolean {
+function atlasMemoryScriptValueHasRows(value: AtlasMemoryValue | undefined): boolean {
   return (
     (value?.records?.length ?? 0) > 0 ||
     (value?.frontiers?.length ?? 0) > 0 ||
@@ -427,10 +264,10 @@ function atlasMemoryScriptValueHasRows(value: AtlasMemoryScriptValue | undefined
 }
 
 function printRecordLiveChecks(
-  row: AtlasMemoryScriptRecordRow,
+  row: AtlasMemoryRecordRow,
   indent: string,
 ): void {
-  const checks = row.liveChecks ?? [];
+  const checks = row.liveChecks;
   for (const check of checks.slice(0, liveCheckRows)) {
     const source = check.source === undefined
       ? ""
@@ -443,7 +280,7 @@ function printRecordLiveChecks(
 }
 
 function printRecordAnchors(
-  row: AtlasMemoryScriptRecordRow,
+  row: AtlasMemoryRecordRow,
   indent: string,
 ): void {
   const anchors = row.record.anchors ?? [];
@@ -456,7 +293,7 @@ function printRecordAnchors(
 }
 
 function printRecordGuidance(
-  row: AtlasMemoryScriptRecordRow,
+  row: AtlasMemoryRecordRow,
   indent: string,
 ): void {
   const guidance = row.record.guidance ?? [];
@@ -468,7 +305,7 @@ function printRecordGuidance(
   }
 }
 
-function anchorLabel(anchor: AtlasMemoryScriptAnchor): string {
+function anchorLabel(anchor: AtlasMemoryAnchor): string {
   switch (anchor.kind) {
     case "source": {
       const line = anchor.line === undefined ? "" : `:${anchor.line}`;

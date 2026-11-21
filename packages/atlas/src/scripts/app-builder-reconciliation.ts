@@ -34,6 +34,7 @@ function printReport(report: AppBuilderCapabilityReconciliation, includeDetail: 
   );
 
   console.log("");
+  console.log(`Source-declared lowering choices: ${totals.declaredLoweringChoiceCount ?? "unknown"}; missing from the Atlas map: ${report.unmappedLoweringChoiceIds?.join(", ") ?? "unknown"}`);
   console.log("axes");
   const axes = report.axes.slice(0, rowLimit);
   for (const axis of axes) {
@@ -138,7 +139,8 @@ function printAxis(axis: ReconciledLoweringAxis, includeDetail: boolean): void {
   }
   for (const value of axis.values) {
     const capabilities = value.capabilityIds.length === 0 ? "<none>" : value.capabilityIds.join(", ");
-    const described = value.describedChoice ? "; described-choice" : "";
+    const described = value.describedChoice === null ? "; source unavailable" :
+      value.describedChoice ? "; source-declared" : "; missing from source union";
     console.log(`    ${value.valueId} [${value.sourceRole}] -> ${capabilities}; loc=${value.localities.join(",") || "<none>"}${described}`);
     if (value.missingCapabilityIds.length > 0) {
       console.log(`      missing: ${value.missingCapabilityIds.join(", ")}`);

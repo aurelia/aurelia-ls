@@ -14,7 +14,8 @@ import {
   type BasisTransition,
   type Basis,
 } from "../basis.js";
-import type { Answer } from "../answer.js";
+import { OutcomeKind, type Answer } from "../answer.js";
+import type { OpenSeam } from "../evidence.js";
 import type { Inquiry } from "../inquiry.js";
 import type { SourceRange } from "../locus.js";
 import {
@@ -32,6 +33,12 @@ export {
   sourceRangeFromFileSpan,
   sourceSpanForNode as sourceSpan,
 } from "../../source/index.js";
+
+/** Select an exact vendored source landmark inside its declared, admitted framework package. */
+export function admittedFrameworkSourceFile(sourceProject: SourceProject, packageId: string, repoPath: string) {
+  const file = sourceProject.readSourceFile(repoPath);
+  return file !== null && sourceProject.requiredSourceFileIdentity(file).packageId === packageId ? file : null;
+}
 
 export function concreteExportTarget(
   targets: readonly SourceTargetRow[],
@@ -113,6 +120,22 @@ export function route(
   basisTransition?: BasisTransition,
 ): NavigationRouteClaim {
   return navigationRoute(plane, relation, basis, summary, basisTransition);
+}
+
+/** Outcome for a set of source landmarks after unavailable witnesses have been removed. */
+export function frameworkLandmarkOutcome(hasRows: boolean, seams: readonly OpenSeam[]): OutcomeKind {
+  if (seams.length > 0) {
+    return hasRows ? OutcomeKind.Partial : OutcomeKind.Open;
+  }
+  return hasRows ? OutcomeKind.Hit : OutcomeKind.Miss;
+}
+
+/** Carry source drift through a landmark projection's normal paging envelope. */
+export function frameworkLandmarkPageStatus(seams: readonly OpenSeam[]) {
+  return {
+    openSeams: () => seams,
+    outcome: (page: { readonly rows: readonly unknown[] }) => frameworkLandmarkOutcome(page.rows.length > 0, seams),
+  };
 }
 
 export function frameworkPagedAnswer<

@@ -1,3 +1,5 @@
+import type { SourceRange } from "./locus.js";
+
 /** Top-level namespace that owns one family of inquiry handles. */
 export const enum HandleNamespace {
   /** Handles that name repository-wide areas or contracts. */
@@ -98,6 +100,8 @@ export interface SourceHandle extends InquiryHandle {
   readonly kind: HandleKind.SourceFile | HandleKind.SourceRange;
   /** Source path in the active basis. */
   readonly filePath: string;
+  /** Exact coordinates for range handles issued by a source-backed answer. */
+  readonly range?: SourceRange;
 }
 
 /** Handle that points at a TypeScript symbol or checker fact. */

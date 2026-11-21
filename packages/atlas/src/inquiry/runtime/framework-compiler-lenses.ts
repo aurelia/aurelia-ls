@@ -4,7 +4,8 @@ import {
   FrameworkRelationshipRelation,
 } from "../../framework/index.js";
 import type { SourceProject } from "../../source/index.js";
-import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
+import { uniqueFirstByKey } from "../../collections.js";
+import { createAnswer, type Answer } from "../answer.js";
 import { BasisKind } from "../basis.js";
 import {
   ContinuationPriority,
@@ -15,6 +16,7 @@ import {
   EvidenceKind,
   EvidenceRole,
   type Evidence,
+  type OpenSeam,
 } from "../evidence.js";
 import type { Inquiry } from "../inquiry.js";
 import type { SourceRange } from "../locus.js";
@@ -53,6 +55,8 @@ import {
 import {
   checkerBasis,
   countBy,
+  frameworkLandmarkOutcome,
+  frameworkLandmarkPageStatus,
   sourceIndexBasis,
 } from "./framework-support.js";
 import { FrameworkSemanticRoutes } from "./framework-route-catalog.js";
@@ -133,11 +137,15 @@ export function answerFrameworkCompiler(
     filters,
   );
   const relationships = readFrameworkCompilerRelationships(sourceProject, filters);
-  const compileFlow = readFrameworkCompileFlowRows(sourceProject, filters);
+  const flowSeams: OpenSeam[] = [];
+  const branchSeams: OpenSeam[] = [];
+  const compileFlow = readFrameworkCompileFlowRows(sourceProject, filters, flowSeams);
   const attributeClassification = readFrameworkAttributeClassificationRows(
     sourceProject,
     filters,
+    branchSeams,
   );
+  const landmarkSeams = uniqueFirstByKey([...flowSeams, ...branchSeams], (seam) => seam.id ?? seam.summary);
   const rollup = compilerValue(
     instructionProducts,
     relationships,
@@ -158,6 +166,7 @@ export function answerFrameworkCompiler(
 
   if (projection === "relationships") {
     return COMPILER_RELATIONSHIP_ROW_FAMILY.answer({
+      ...frameworkLandmarkPageStatus(landmarkSeams),
       inquiry,
       rows: relationships,
       limit,
@@ -169,6 +178,7 @@ export function answerFrameworkCompiler(
 
   if (projection === "compile-flow") {
     return COMPILER_COMPILE_FLOW_ROW_FAMILY.answer({
+      ...frameworkLandmarkPageStatus(flowSeams),
       inquiry,
       rows: compileFlow,
       limit,
@@ -182,6 +192,7 @@ export function answerFrameworkCompiler(
 
   if (projection === "attribute-classification") {
     return COMPILER_ATTRIBUTE_CLASSIFICATION_ROW_FAMILY.answer({
+      ...frameworkLandmarkPageStatus(branchSeams),
       inquiry,
       rows: attributeClassification,
       limit,
@@ -193,12 +204,14 @@ export function answerFrameworkCompiler(
     });
   }
 
+  const hasRows = instructionProducts.length + relationships.length + compileFlow.length + attributeClassification.length > 0;
   return createAnswer(
     inquiry,
-    instructionProducts.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+    frameworkLandmarkOutcome(hasRows, landmarkSeams),
     `Compiler has ${compileFlow.length} compile-flow stage row(s), ${attributeClassification.length} attribute-classification branch row(s), ${instructionProducts.length} instruction product row(s), and ${relationships.length} relationship atom(s).`,
     {
       value: rollup,
+      openSeams: landmarkSeams,
       basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
       evidence: compileFlow
         .slice(0, evidenceLimit(inquiry))
@@ -393,6 +406,11 @@ function compilerRelationshipContinuations(
         "Inspect source behind this compiler instruction production.",
         "Source behind a compiler relationship.",
       ),
+    );
+    if (row.relation !== FrameworkRelationshipRelation.ProducesInstruction) {
+      continue;
+    }
+    continuations.push(
       route.continuation(
         FrameworkSemanticRoutes.CompilerToRenderingInstructionDispatches,
         "rendering-dispatch",

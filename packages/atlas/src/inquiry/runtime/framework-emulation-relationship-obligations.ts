@@ -519,6 +519,7 @@ function obligationForCompilerRelation(
       return "admit-built-in-resource";
     case FrameworkRelationshipRelation.LooksUpResource:
     case FrameworkRelationshipRelation.CollectsDependency:
+    case FrameworkRelationshipRelation.ParsesAttribute:
       return "classify-template-attribute";
     default:
       return "compile-template";

@@ -5,7 +5,10 @@ import {
   requiredSourceRangeForNode,
   type SourceProject,
 } from "../../source/index.js";
+import { EvidenceKind, EvidenceRole, OpenSeamKind, type OpenSeam } from "../evidence.js";
 import type { SourceRange } from "../locus.js";
+import { FRAMEWORK_JIT_COMPILER_PACKAGE_ID } from "./framework-jit-compiler-corridor.js";
+import { admittedFrameworkSourceFile } from "./framework-support.js";
 import { propertyNameText } from "./framework-ts-utils.js";
 import type {
   FrameworkAttributeClassificationBranchKind,
@@ -63,8 +66,9 @@ const ATTRIBUTE_CLASSIFICATION_METHOD = "_classifyAttributes" as const;
 export function readFrameworkCompileFlowRows(
   sourceProject: SourceProject,
   filters: FrameworkCompilerFilters,
+  missing?: OpenSeam[],
 ): readonly FrameworkCompileFlowRow[] {
-  const rows = readAllFrameworkCompileFlowRows(sourceProject, filters);
+  const rows = readAllFrameworkCompileFlowRows(sourceProject, filters, missing);
   const visibleRows = shouldUseCompileFlowOverview(filters)
     ? rows.filter(isCompileFlowOverviewRow)
     : rows;
@@ -75,8 +79,9 @@ export function readFrameworkCompileFlowRows(
 export function readAllFrameworkCompileFlowRows(
   sourceProject: SourceProject,
   filters: FrameworkCompilerFilters,
+  missing?: OpenSeam[],
 ): readonly FrameworkCompileFlowRow[] {
-  const basis = templateCompilerBasis(sourceProject);
+  const basis = templateCompilerBasis(sourceProject, filters, missing);
   if (basis === null) {
     return [];
   }
@@ -91,38 +96,47 @@ export function readAllFrameworkCompileFlowRows(
     ...compileProjectionRows(basis),
     ...compileLocalElementRows(basis),
     ...compileAttributeReorderRows(basis),
-  ].filter((row) => compileFlowRowMatches(row, filters));
+  ].filter((row): row is FrameworkCompileFlowRow => row !== null && compileFlowRowMatches(row, filters));
 }
 
 /** Read detailed TemplateCompiler._classifyAttributes branch rows. */
 export function readFrameworkAttributeClassificationRows(
   sourceProject: SourceProject,
   filters: FrameworkCompilerFilters,
+  missing?: OpenSeam[],
 ): readonly FrameworkAttributeClassificationRow[] {
-  const basis = templateCompilerBasis(sourceProject);
+  const basis = templateCompilerBasis(sourceProject, filters, missing);
   if (basis === null) {
     return [];
   }
-  const method = methodDeclaration(basis.classDeclaration, ATTRIBUTE_CLASSIFICATION_METHOD);
+  const method = methodDeclaration(basis, ATTRIBUTE_CLASSIFICATION_METHOD);
   if (method?.body === undefined) {
     return [];
   }
-  return attributeClassificationRows(basis, method).filter((row) =>
-    attributeClassificationRowMatches(row, filters),
+  return attributeClassificationRows(basis, method).filter((row): row is FrameworkAttributeClassificationRow =>
+    row !== null && attributeClassificationRowMatches(row, filters),
   );
 }
 
 interface TemplateCompilerBasis {
+  readonly filters: FrameworkCompilerFilters;
+  readonly missing?: OpenSeam[];
   readonly sourceProject: SourceProject;
   readonly sourceFile: ts.SourceFile;
   readonly classDeclaration: ts.ClassDeclaration;
 }
 
-function templateCompilerBasis(sourceProject: SourceProject): TemplateCompilerBasis | null {
-  const sourceFile = sourceProject
-    .ownedSourceFiles()
-    .find((file) => file.fileName.replace(/\\/gu, "/").endsWith(TEMPLATE_COMPILER_FILE));
-  if (sourceFile === undefined) {
+function templateCompilerBasis(
+  sourceProject: SourceProject,
+  filters: FrameworkCompilerFilters,
+  missing?: OpenSeam[],
+): TemplateCompilerBasis | null {
+  if (filters.packageId !== undefined && filters.packageId !== FRAMEWORK_JIT_COMPILER_PACKAGE_ID) {
+    return null;
+  }
+  const sourceFile = admittedFrameworkSourceFile(sourceProject, FRAMEWORK_JIT_COMPILER_PACKAGE_ID, TEMPLATE_COMPILER_FILE);
+  if (sourceFile === null) {
+    missing?.push({ kind: OpenSeamKind.InsufficientBasis, summary: `Missing compiler landmark source ${TEMPLATE_COMPILER_FILE}.` });
     return null;
   }
   const classDeclaration = sourceFile.statements.find(
@@ -131,53 +145,54 @@ function templateCompilerBasis(sourceProject: SourceProject): TemplateCompilerBa
       statement.name?.text === TEMPLATE_COMPILER_OWNER,
   );
   if (classDeclaration === undefined) {
+    missing?.push({ kind: OpenSeamKind.InsufficientBasis, summary: `Missing class TemplateCompiler in ${TEMPLATE_COMPILER_FILE}.` });
     return null;
   }
-  return { sourceProject, sourceFile, classDeclaration };
+  return { sourceProject, sourceFile, classDeclaration, filters, missing };
 }
 
 function compileMethodRows(
   basis: TemplateCompilerBasis,
-): readonly FrameworkCompileFlowRow[] {
-  const method = methodDeclaration(basis.classDeclaration, "compile");
+): readonly (FrameworkCompileFlowRow | null)[] {
+  const method = methodDeclaration(basis, "compile");
   if (method?.body === undefined) {
     return [];
   }
   return [
-    compileFlowRow(basis, method, "compile-entry", "compile", compilerFlowNodeContaining(method.body, "needsCompile === false") ?? method, "Reject already-compiled or template-less definitions before building a compilation context."),
-    compileFlowRow(basis, method, "compile-context", "compile", compilerFlowNodeContaining(method.body, "new CompilationContext") ?? method, "Create the CompilationContext that owns resource lookup, template factory, dependency collection, and instruction rows.", "CompilationContext"),
-    compileFlowRow(basis, method, "template-materialization", "compile", compilerFlowNodeContaining(method.body, "_templateFactory.createTemplate") ?? method, "Materialize string or HTMLElement templates into a compileable template/content root.", "ITemplateElementFactory"),
-    compileFlowRow(basis, method, "compile-hooks", "compile", compilerFlowNodeContaining(method.body, "TemplateCompilerHooks.findAll") ?? method, "Run TemplateCompilerHooks.compiling before local element and node compilation.", "TemplateCompilerHooks"),
-    compileFlowRow(basis, method, "local-elements", "compile", compilerFlowNodeContaining(method.body, "_compileLocalElement") ?? method, "Extract and register local template elements before walking the root content.", "_compileLocalElement"),
-    compileFlowRow(basis, method, "node-dispatch", "compile", compilerFlowNodeContaining(method.body, "_compileNode(content") ?? method, "Dispatch the root content through the node compiler.", "_compileNode"),
-    compileFlowRow(basis, method, "compiled-definition", "compile", compilerFlowNodeContaining(method.body, "const compiledDef") ?? method, "Assemble the compiled definition from context rows, collected dependencies, surrogates, and template metadata.", "ICompiledElementComponentDefinition"),
+    compileFlowRow(basis, method, "compile-entry", "compile", compilerFlowNodeContaining(method.body, "needsCompile === false"), "Return the input definition unchanged when it has no template or no longer needs compilation."),
+    compileFlowRow(basis, method, "compile-context", "compile", compilerFlowNodeContaining(method.body, "new CompilationContext"), "Create the CompilationContext that owns resource lookup, template factory, dependency collection, and instruction rows.", "CompilationContext"),
+    compileFlowRow(basis, method, "template-materialization", "compile", compilerFlowNodeContaining(method.body, "_templateFactory.createTemplate"), "Materialize string or HTMLElement templates into a compileable template/content root.", "ITemplateElementFactory"),
+    compileFlowRow(basis, method, "compile-hooks", "compile", compilerFlowNodeContaining(method.body, "TemplateCompilerHooks.findAll"), "Run TemplateCompilerHooks.compiling before local element and node compilation.", "TemplateCompilerHooks"),
+    compileFlowRow(basis, method, "local-elements", "compile", compilerFlowNodeContaining(method.body, "_compileLocalElement"), "Extract and register local template elements before walking the root content.", "_compileLocalElement"),
+    compileFlowRow(basis, method, "node-dispatch", "compile", compilerFlowNodeContaining(method.body, "_compileNode(content"), "Dispatch the root content through the node compiler.", "_compileNode"),
+    compileFlowRow(basis, method, "compiled-definition", "compile", compilerFlowNodeContaining(method.body, "const compiledDef"), "Assemble the compiled definition from context rows, collected dependencies, surrogates, and template metadata.", "ICompiledElementComponentDefinition"),
   ];
 }
 
 function compileSpreadRows(
   basis: TemplateCompilerBasis,
-): readonly FrameworkCompileFlowRow[] {
-  const method = methodDeclaration(basis.classDeclaration, "compileSpread");
+): readonly (FrameworkCompileFlowRow | null)[] {
+  const method = methodDeclaration(basis, "compileSpread");
   if (method?.body === undefined) {
     return [];
   }
   return [
     compileFlowRow(basis, method, "compile-spread", "compileSpread", method, "Compile spread attributes for an existing target element without walking child content."),
-    compileFlowRow(basis, method, "compile-context", "compileSpread", compilerFlowNodeContaining(method.body, "new CompilationContext") ?? method, "Create a CompilationContext for spread attribute compilation.", "CompilationContext"),
-    compileFlowRow(basis, method, "spread-element-definition-lookup", "compileSpread", compilerFlowNodeContaining(method.body, "context._findElement") ?? method, "Resolve the target custom element definition when no target definition was supplied.", "CustomElementDefinition"),
-    compileFlowRow(basis, method, "spread-attribute-compilation", "compileSpread", compilerFlowNodeContaining(method.body, "for (; ii > i; ++i)") ?? method, "Classify spread attributes into element bindables, custom attributes, template-controller errors, plain attributes, and binding-command products.", "_compileCustomAttributeBindables"),
-    compileFlowRow(basis, method, "instruction-merge", "compileSpread", compilerFlowNodeContaining(method.body, "attrInstructions != null") ?? method, "Merge custom-attribute spread instructions before plain spread instructions."),
+    compileFlowRow(basis, method, "compile-context", "compileSpread", compilerFlowNodeContaining(method.body, "new CompilationContext"), "Create a CompilationContext for spread attribute compilation.", "CompilationContext"),
+    compileFlowRow(basis, method, "spread-element-definition-lookup", "compileSpread", compilerFlowNodeContaining(method.body, "context._findElement"), "Resolve the target custom element definition when no target definition was supplied.", "CustomElementDefinition"),
+    compileFlowRow(basis, method, "spread-attribute-compilation", "compileSpread", compilerFlowNodeContaining(method.body, "for (; ii > i; ++i)"), "Classify spread attributes into element bindables, custom attributes, template-controller errors, plain attributes, and binding-command products.", "_compileCustomAttributeBindables"),
+    compileFlowRow(basis, method, "instruction-merge", "compileSpread", compilerFlowNodeContaining(method.body, "attrInstructions != null"), "Merge custom-attribute spread instructions before plain spread instructions."),
   ];
 }
 
 function compileNodeRows(
   basis: TemplateCompilerBasis,
-): readonly FrameworkCompileFlowRow[] {
-  const method = methodDeclaration(basis.classDeclaration, "_compileNode");
+): readonly (FrameworkCompileFlowRow | null)[] {
+  const method = methodDeclaration(basis, "_compileNode");
   if (method?.body === undefined) {
     return [];
   }
-  const switchStatement = nodeKindIn(method.body, ts.SyntaxKind.SwitchStatement) ?? method;
+  const switchStatement = nodeKindIn(method.body, ts.SyntaxKind.SwitchStatement);
   return [
     compileFlowRow(basis, method, "node-dispatch", "_compileNode", switchStatement, "Route DOM node kinds to let-element, element, text, or fragment compilation.", "_compileElement/_compileLet/_compileText"),
   ];
@@ -185,29 +200,29 @@ function compileNodeRows(
 
 function compileElementRows(
   basis: TemplateCompilerBasis,
-): readonly FrameworkCompileFlowRow[] {
-  const method = methodDeclaration(basis.classDeclaration, "_compileElement");
+): readonly (FrameworkCompileFlowRow | null)[] {
+  const method = methodDeclaration(basis, "_compileElement");
   if (method?.body === undefined) {
     return [];
   }
   return [
     compileFlowRow(basis, method, "element-compilation", "_compileElement", method, "Compile one element by resolving its element definition, classifying attributes, creating instructions, and compiling children."),
-    compileFlowRow(basis, method, "element-definition-lookup", "_compileElement", compilerFlowNodeContaining(method.body, "context._findElement") ?? method, "Resolve a custom element definition for the element name or as-element alias.", "CustomElementDefinition"),
-    compileFlowRow(basis, method, "content-processing", "_compileElement", compilerFlowNodeContaining(method.body, "processContent") ?? method, "Allow a custom element definition to preprocess content before child compilation.", "processContent"),
-    compileFlowRow(basis, method, "attribute-classification", "_compileElement", compilerFlowNodeContaining(method.body, "this._classifyAttributes") ?? method, "Classify attributes into template-controller, custom-attribute, element-bindable, and plain-attribute instruction groups.", ATTRIBUTE_CLASSIFICATION_METHOD),
-    compileFlowRow(basis, method, "attribute-reordering", "_compileElement", compilerFlowNodeContaining(method.body, "this._shouldReorderAttrs") ?? method, "Reorder order-sensitive input/select attribute instructions after classification.", "_shouldReorderAttrs/_reorder"),
-    compileFlowRow(basis, method, "element-instruction", "_compileElement", compilerFlowNodeContaining(method.body, "elementInstruction =") ?? method, "Create HydrateElementInstruction when the element resolved to a custom element.", "HydrateElementInstruction"),
-    compileFlowRow(basis, method, "instruction-merge", "_compileElement", compilerFlowNodeContaining(method.body, "emptyArray.concat") ?? method, "Merge element, custom-attribute, and plain-attribute instructions into the row attached to the hydration target."),
-    compileFlowRow(basis, method, "template-controller-wrapping", "_compileElement", compilerFlowNodeContaining(method.body, "if (tcInstructions != null)") ?? method, "Wrap the element and nested controllers into generated templates when template controllers are present.", "HydrateTemplateController"),
-    compileFlowRow(basis, method, "direct-child-compilation", "_compileElement", compilerFlowNodeContaining(method.body, "No template controllers") ?? method, "Without template controllers, push element instructions to the current context and recursively compile child nodes.", "_compileNode"),
-    compileFlowRow(basis, method, "slot-projection-extraction", "_compileElement", compilerFlowNodeContaining(method.body, "this._extractProjections") ?? method, "Extract and attach au-slot projection definitions around child compilation.", "_extractProjections"),
+    compileFlowRow(basis, method, "element-definition-lookup", "_compileElement", compilerFlowNodeContaining(method.body, "context._findElement"), "Resolve a custom element definition for the element name or as-element alias.", "CustomElementDefinition"),
+    compileFlowRow(basis, method, "content-processing", "_compileElement", compilerFlowNodeContaining(method.body, "processContent"), "Allow a custom element definition to preprocess content before child compilation.", "processContent"),
+    compileFlowRow(basis, method, "attribute-classification", "_compileElement", compilerFlowNodeContaining(method.body, "this._classifyAttributes"), "Classify attributes into template-controller, custom-attribute, element-bindable, and plain-attribute instruction groups.", ATTRIBUTE_CLASSIFICATION_METHOD),
+    compileFlowRow(basis, method, "attribute-reordering", "_compileElement", compilerFlowNodeContaining(method.body, "this._shouldReorderAttrs"), "Reorder order-sensitive input/select attribute instructions after classification.", "_shouldReorderAttrs/_reorder"),
+    compileFlowRow(basis, method, "element-instruction", "_compileElement", compilerFlowNodeContaining(method.body, "elementInstruction ="), "Create HydrateElementInstruction when the element resolved to a custom element.", "HydrateElementInstruction"),
+    compileFlowRow(basis, method, "instruction-merge", "_compileElement", compilerFlowNodeContaining(method.body, "emptyArray.concat"), "Merge element, custom-attribute, and plain-attribute instructions into the row attached to the hydration target."),
+    compileFlowRow(basis, method, "template-controller-wrapping", "_compileElement", compilerFlowNodeContaining(method.body, "if (tcInstructions != null)"), "Wrap the element and nested controllers into generated templates when template controllers are present.", "HydrateTemplateController"),
+    compileFlowRow(basis, method, "direct-child-compilation", "_compileElement", compilerFlowNodeContaining(method.body, "this._compileNode(child, context)"), "Without template controllers, push element instructions to the current context and recursively compile child nodes.", "_compileNode"),
+    compileFlowRow(basis, method, "slot-projection-extraction", "_compileElement", compilerFlowNodeContaining(method.body, "this._extractProjections"), "Extract and attach au-slot projection definitions around child compilation.", "_extractProjections"),
   ];
 }
 
 function compileSurrogateRows(
   basis: TemplateCompilerBasis,
-): readonly FrameworkCompileFlowRow[] {
-  const method = methodDeclaration(basis.classDeclaration, "_compileSurrogate");
+): readonly (FrameworkCompileFlowRow | null)[] {
+  const method = methodDeclaration(basis, "_compileSurrogate");
   if (method?.body === undefined) {
     return [];
   }
@@ -218,18 +233,18 @@ function compileSurrogateRows(
 
 function compileLeafRows(
   basis: TemplateCompilerBasis,
-): readonly FrameworkCompileFlowRow[] {
-  const rows: FrameworkCompileFlowRow[] = [];
-  const letMethod = methodDeclaration(basis.classDeclaration, "_compileLet");
+): readonly (FrameworkCompileFlowRow | null)[] {
+  const rows: (FrameworkCompileFlowRow | null)[] = [];
+  const letMethod = methodDeclaration(basis, "_compileLet");
   if (letMethod?.body !== undefined) {
     rows.push(
-      compileFlowRow(basis, letMethod, "let-element", "_compileLet", compilerFlowNodeContaining(letMethod.body, "itHydrateLetElement") ?? letMethod, "Compile <let> attributes into HydrateLetElementInstruction rows.", "HydrateLetElementInstruction"),
+      compileFlowRow(basis, letMethod, "let-element", "_compileLet", compilerFlowNodeContaining(letMethod.body, "itHydrateLetElement"), "Compile <let> attributes into HydrateLetElementInstruction rows.", "HydrateLetElementInstruction"),
     );
   }
-  const textMethod = methodDeclaration(basis.classDeclaration, "_compileText");
+  const textMethod = methodDeclaration(basis, "_compileText");
   if (textMethod?.body !== undefined) {
     rows.push(
-      compileFlowRow(basis, textMethod, "text-binding", "_compileText", compilerFlowNodeContaining(textMethod.body, "itTextBinding") ?? textMethod, "Compile text interpolation into TextBindingInstruction rows.", "TextBindingInstruction"),
+      compileFlowRow(basis, textMethod, "text-binding", "_compileText", compilerFlowNodeContaining(textMethod.body, "itTextBinding"), "Compile text interpolation into TextBindingInstruction rows.", "TextBindingInstruction"),
     );
   }
   return rows;
@@ -237,18 +252,18 @@ function compileLeafRows(
 
 function compileCustomAttributeBindablesRows(
   basis: TemplateCompilerBasis,
-): readonly FrameworkCompileFlowRow[] {
-  const method = methodDeclaration(basis.classDeclaration, "_compileCustomAttributeBindables");
+): readonly (FrameworkCompileFlowRow | null)[] {
+  const method = methodDeclaration(basis, "_compileCustomAttributeBindables");
   if (method?.body === undefined) {
     return [];
   }
-  const multiBindingsMethod = methodDeclaration(basis.classDeclaration, "_compileMultiBindings");
+  const multiBindingsMethod = methodDeclaration(basis, "_compileMultiBindings");
   const rows = [
     compileFlowRow(basis, method, "custom-attribute-bindables", "_compileCustomAttributeBindables", method, "Compile bindable instructions for custom attributes and template controllers from literal, interpolation, command, or multi-binding syntax."),
-    compileFlowRow(basis, method, "multi-binding", "_compileCustomAttributeBindables", compilerFlowNodeContaining(method.body, "_compileMultiBindings") ?? method, "Delegate inline multi-binding syntax to the multi-binding compiler.", "_compileMultiBindings"),
-    compileFlowRow(basis, method, "element-instruction", "_compileCustomAttributeBindables", compilerFlowNodeContaining(method.body, "itSetProperty") ?? method, "Emit SetPropertyInstruction for literal primary-bindable custom attribute values.", "SetPropertyInstruction"),
-    compileFlowRow(basis, method, "element-instruction", "_compileCustomAttributeBindables", compilerFlowNodeContaining(method.body, "itInterpolation") ?? method, "Emit InterpolationInstruction for interpolated primary-bindable custom attribute values.", "InterpolationInstruction"),
-    compileFlowRow(basis, method, "spread-attribute-compilation", "_compileCustomAttributeBindables", lastNodeContaining(method.body, "bindingCommand.build") ?? method, "Let binding commands build custom-attribute primary-bindable instructions."),
+    compileFlowRow(basis, method, "multi-binding", "_compileCustomAttributeBindables", compilerFlowNodeContaining(method.body, "_compileMultiBindings"), "Delegate inline multi-binding syntax to the multi-binding compiler.", "_compileMultiBindings"),
+    compileFlowRow(basis, method, "element-instruction", "_compileCustomAttributeBindables", compilerFlowNodeContaining(method.body, "itSetProperty"), "Emit SetPropertyInstruction for literal primary-bindable custom attribute values.", "SetPropertyInstruction"),
+    compileFlowRow(basis, method, "element-instruction", "_compileCustomAttributeBindables", compilerFlowNodeContaining(method.body, "itInterpolation"), "Emit InterpolationInstruction for interpolated primary-bindable custom attribute values.", "InterpolationInstruction"),
+    compileFlowRow(basis, method, "spread-attribute-compilation", "_compileCustomAttributeBindables", lastNodeContaining(method.body, "bindingCommand.build"), "Let binding commands build custom-attribute primary-bindable instructions."),
   ];
   if (multiBindingsMethod?.body === undefined) {
     return rows;
@@ -256,46 +271,46 @@ function compileCustomAttributeBindablesRows(
   return [
     ...rows,
     compileFlowRow(basis, multiBindingsMethod, "multi-binding", "_compileMultiBindings", multiBindingsMethod, "Parse semicolon-delimited custom-attribute multi-binding syntax into per-bindable instructions."),
-    compileFlowRow(basis, multiBindingsMethod, "element-instruction", "_compileMultiBindings", compilerFlowNodeContaining(multiBindingsMethod.body, "itSetProperty") ?? multiBindingsMethod, "Emit SetPropertyInstruction for literal multi-binding values.", "SetPropertyInstruction"),
-    compileFlowRow(basis, multiBindingsMethod, "element-instruction", "_compileMultiBindings", compilerFlowNodeContaining(multiBindingsMethod.body, "itInterpolation") ?? multiBindingsMethod, "Emit InterpolationInstruction for interpolated multi-binding values.", "InterpolationInstruction"),
-    compileFlowRow(basis, multiBindingsMethod, "spread-attribute-compilation", "_compileMultiBindings", compilerFlowNodeContaining(multiBindingsMethod.body, "command.build") ?? multiBindingsMethod, "Let binding commands build per-bindable multi-binding instructions."),
+    compileFlowRow(basis, multiBindingsMethod, "element-instruction", "_compileMultiBindings", compilerFlowNodeContaining(multiBindingsMethod.body, "itSetProperty"), "Emit SetPropertyInstruction for literal multi-binding values.", "SetPropertyInstruction"),
+    compileFlowRow(basis, multiBindingsMethod, "element-instruction", "_compileMultiBindings", compilerFlowNodeContaining(multiBindingsMethod.body, "itInterpolation"), "Emit InterpolationInstruction for interpolated multi-binding values.", "InterpolationInstruction"),
+    compileFlowRow(basis, multiBindingsMethod, "spread-attribute-compilation", "_compileMultiBindings", compilerFlowNodeContaining(multiBindingsMethod.body, "command.build"), "Let binding commands build per-bindable multi-binding instructions."),
   ];
 }
 
 function compileProjectionRows(
   basis: TemplateCompilerBasis,
-): readonly FrameworkCompileFlowRow[] {
-  const method = methodDeclaration(basis.classDeclaration, "_extractProjections");
+): readonly (FrameworkCompileFlowRow | null)[] {
+  const method = methodDeclaration(basis, "_extractProjections");
   if (method?.body === undefined) {
     return [];
   }
   return [
     compileFlowRow(basis, method, "slot-projection-extraction", "_extractProjections", method, "Extract au-slot children into per-slot templates and compile each projection definition."),
-    compileFlowRow(basis, method, "node-dispatch", "_extractProjections", compilerFlowNodeContaining(method.body, "this._compileNode(template.content") ?? method, "Compile each projection template content through the normal node compiler.", "_compileNode"),
-    compileFlowRow(basis, method, "compiled-definition", "_extractProjections", compilerFlowNodeContaining(method.body, "projections[targetSlot]") ?? method, "Store each compiled projection as an element definition keyed by slot name.", "IElementComponentDefinition"),
+    compileFlowRow(basis, method, "node-dispatch", "_extractProjections", compilerFlowNodeContaining(method.body, "this._compileNode(template.content"), "Compile each projection template content through the normal node compiler.", "_compileNode"),
+    compileFlowRow(basis, method, "compiled-definition", "_extractProjections", compilerFlowNodeContaining(method.body, "projections[targetSlot]"), "Store each compiled projection as an element definition keyed by slot name.", "IElementComponentDefinition"),
   ];
 }
 
 function compileLocalElementRows(
   basis: TemplateCompilerBasis,
-): readonly FrameworkCompileFlowRow[] {
-  const method = methodDeclaration(basis.classDeclaration, "_compileLocalElement");
+): readonly (FrameworkCompileFlowRow | null)[] {
+  const method = methodDeclaration(basis, "_compileLocalElement");
   if (method?.body === undefined) {
     return [];
   }
   return [
     compileFlowRow(basis, method, "local-elements", "_compileLocalElement", method, "Extract local custom-element templates and add them as local compilation dependencies."),
-    compileFlowRow(basis, method, "local-element-registration", "_compileLocalElement", compilerFlowNodeContaining(method.body, "class LocalDepType") ?? method, "Create a local custom-element definition carrier for each local template.", "LocalDepType"),
-    compileFlowRow(basis, method, "local-element-registration", "_compileLocalElement", compilerFlowNodeContaining(method.body, "context._addLocalDep") ?? method, "Register each local template dependency with the compilation context.", "CompilationContext._addLocalDep"),
+    compileFlowRow(basis, method, "local-element-registration", "_compileLocalElement", compilerFlowNodeContaining(method.body, "class LocalDepType"), "Create a local custom-element definition carrier for each local template.", "LocalDepType"),
+    compileFlowRow(basis, method, "local-element-registration", "_compileLocalElement", compilerFlowNodeContaining(method.body, "context._addLocalDep"), "Register each local template dependency with the compilation context.", "CompilationContext._addLocalDep"),
   ];
 }
 
 function compileAttributeReorderRows(
   basis: TemplateCompilerBasis,
-): readonly FrameworkCompileFlowRow[] {
-  const shouldReorderMethod = methodDeclaration(basis.classDeclaration, "_shouldReorderAttrs");
-  const reorderMethod = methodDeclaration(basis.classDeclaration, "_reorder");
-  const rows: FrameworkCompileFlowRow[] = [];
+): readonly (FrameworkCompileFlowRow | null)[] {
+  const shouldReorderMethod = methodDeclaration(basis, "_shouldReorderAttrs");
+  const reorderMethod = methodDeclaration(basis, "_reorder");
+  const rows: (FrameworkCompileFlowRow | null)[] = [];
   if (shouldReorderMethod?.body !== undefined) {
     rows.push(
       compileFlowRow(basis, shouldReorderMethod, "attribute-reordering", "_shouldReorderAttrs", shouldReorderMethod, "Detect INPUT/SELECT attribute instruction orders that must be stabilized before runtime hydration."),
@@ -312,76 +327,76 @@ function compileAttributeReorderRows(
 function attributeClassificationRows(
   basis: TemplateCompilerBasis,
   method: ts.MethodDeclaration,
-): readonly FrameworkAttributeClassificationRow[] {
+): readonly (FrameworkAttributeClassificationRow | null)[] {
   const body = method.body!;
   return [
-    attributeRow(basis, method, 1, "special-attribute", compilerFlowNodeContaining(body, "case 'as-element'") ?? method, "Remove as-element/containerless from the DOM-facing attribute list and remember containerless state.", {
+    attributeRow(basis, method, 1, "special-attribute", compilerFlowNodeContaining(body, "case 'as-element'"), "Remove as-element/containerless from the DOM-facing attribute list and remember containerless state.", {
       operation: "emit",
       targetKind: "compiler-control",
     }),
-    attributeRow(basis, method, 2, "parse-attribute", compilerFlowNodeContaining(body, "context._attrParser.parse") ?? method, "Parse raw attribute name/value into AttrSyntax.", {
+    attributeRow(basis, method, 2, "parse-attribute", compilerFlowNodeContaining(body, "context._attrParser.parse"), "Parse raw attribute name/value into AttrSyntax.", {
       operation: "parse",
       targetKind: "AttrSyntax",
     }),
-    attributeRow(basis, method, 3, "binding-command-resolution", compilerFlowNodeContaining(body, "context._getCommand") ?? method, "Resolve a binding command instance for the parsed attribute syntax.", {
+    attributeRow(basis, method, 3, "binding-command-resolution", compilerFlowNodeContaining(body, "context._getCommand"), "Resolve a binding command instance for the parsed attribute syntax.", {
       operation: "get",
       targetKind: "BindingCommand",
     }),
-    attributeRow(basis, method, 4, "capture-forwarding", compilerFlowNodeContaining(body, "capture &&") ?? method, "Forward capturable attributes to custom element captures unless they are bindables or template controllers.", {
+    attributeRow(basis, method, 4, "capture-forwarding", compilerFlowNodeContaining(body, "capture &&"), "Forward capturable attributes to custom element captures unless they are bindables or template controllers.", {
       operation: "find",
       targetKind: "custom-element-capture",
     }),
-    attributeRow(basis, method, 5, "spread-transferred-attrs", compilerFlowNodeContaining(body, "itSpreadTransferedBinding") ?? method, "Emit SpreadTransferedBindingInstruction for ...$attrs.", {
+    attributeRow(basis, method, 5, "spread-transferred-attrs", compilerFlowNodeContaining(body, "itSpreadTransferedBinding"), "Emit SpreadTransferedBindingInstruction for ...$attrs.", {
       operation: "emit",
       targetKind: "plain-attribute",
       instructionNames: ["SpreadTransferedBindingInstruction"],
     }),
-    attributeRow(basis, method, 6, "ignored-binding-command", compilerFlowNodeContaining(body, "bindingCommand?.ignoreAttr") ?? method, "Let ignoreAttr binding commands such as class/style/attr build the complete plain-attribute instruction.", {
+    attributeRow(basis, method, 6, "ignored-binding-command", compilerFlowNodeContaining(body, "bindingCommand?.ignoreAttr"), "Let ignoreAttr binding commands such as class/style/attr build the complete plain-attribute instruction.", {
       operation: "build",
       targetKind: "BindingCommand",
     }),
-    attributeRow(basis, method, 7, "spread-bindables", compilerFlowNodeContaining(body, "itSpreadValueBinding") ?? method, "Emit SpreadValueBindingInstruction for custom-element bindable spread syntax.", {
+    attributeRow(basis, method, 7, "spread-bindables", compilerFlowNodeContaining(body, "itSpreadValueBinding"), "Emit SpreadValueBindingInstruction for custom-element bindable spread syntax.", {
       operation: "emit",
       targetKind: "custom-element-bindables",
       instructionNames: ["SpreadValueBindingInstruction"],
     }),
-    attributeRow(basis, method, 8, "element-bindable", compilerFlowNodeContaining(body, "bindable !== void 0") ?? method, "Bind a matched custom-element bindable before considering custom attributes.", {
+    attributeRow(basis, method, 8, "element-bindable", compilerFlowNodeContaining(body, "bindable !== void 0"), "Bind a matched custom-element bindable before considering custom attributes.", {
       operation: "emit",
       targetKind: "custom-element-bindable",
       instructionNames: ["SetPropertyInstruction", "InterpolationInstruction"],
     }),
-    attributeRow(basis, method, 9, "element-bindables-command", compilerFlowNodeContaining(body, "const instruction = bindingCommand.build") ?? method, "Allow binding commands to build custom-element $bindables instructions.", {
+    attributeRow(basis, method, 9, "element-bindables-command", compilerFlowNodeContaining(body, "const instruction = bindingCommand.build"), "Allow binding commands to build custom-element $bindables instructions.", {
       operation: "build",
       targetKind: "custom-element-bindables",
     }),
-    attributeRow(basis, method, 10, "reserved-bindables-error", compilerFlowNodeContaining(body, "compiler_no_reserved_$bindable") ?? method, "Reject $bindables on non-custom elements.", {
+    attributeRow(basis, method, 10, "reserved-bindables-error", compilerFlowNodeContaining(body, "compiler_no_reserved_$bindable"), "Reject $bindables on non-custom elements.", {
       operation: "error",
       targetKind: "reserved-syntax",
     }),
-    attributeRow(basis, method, 11, "attribute-resource-lookup", lastNodeContaining(body, "attrDef = context._findAttr(realAttrTarget)") ?? method, "Find a custom attribute or template controller definition by target name.", {
+    attributeRow(basis, method, 11, "attribute-resource-lookup", lastNodeContaining(body, "attrDef = context._findAttr(realAttrTarget)"), "Find a custom attribute or template controller definition by target name.", {
       operation: "find",
       targetKind: "custom-attribute-or-template-controller",
     }),
-    attributeRow(basis, method, 12, "attribute-bindables", compilerFlowNodeContaining(body, "_compileCustomAttributeBindables") ?? method, "Compile bindable instructions for a matched custom attribute or template controller.", {
+    attributeRow(basis, method, 12, "attribute-bindables", compilerFlowNodeContaining(body, "_compileCustomAttributeBindables"), "Compile bindable instructions for a matched custom attribute or template controller.", {
       operation: "build",
       targetKind: "attribute-bindables",
     }),
-    attributeRow(basis, method, 13, "template-controller-instruction", compilerFlowNodeContaining(body, "itHydrateTemplateController") ?? method, "Emit HydrateTemplateController and defer nested template definition construction to _compileElement.", {
+    attributeRow(basis, method, 13, "template-controller-instruction", compilerFlowNodeContaining(body, "itHydrateTemplateController"), "Emit HydrateTemplateController and defer nested template definition construction to _compileElement.", {
       operation: "emit",
       targetKind: "template-controller",
       instructionNames: ["HydrateTemplateController"],
     }),
-    attributeRow(basis, method, 14, "custom-attribute-instruction", compilerFlowNodeContaining(body, "itHydrateAttribute") ?? method, "Emit HydrateAttributeInstruction for non-template-controller custom attributes.", {
+    attributeRow(basis, method, 14, "custom-attribute-instruction", compilerFlowNodeContaining(body, "itHydrateAttribute"), "Emit HydrateAttributeInstruction for non-template-controller custom attributes.", {
       operation: "emit",
       targetKind: "custom-attribute",
       instructionNames: ["HydrateAttributeInstruction"],
     }),
-    attributeRow(basis, method, 15, "plain-interpolation", compilerFlowNodeContaining(body, "context._attrMapper.map(el, realAttrTarget)") ?? method, "Compile plain attribute interpolation through the attribute mapper into InterpolationInstruction.", {
+    attributeRow(basis, method, 15, "plain-interpolation", compilerFlowNodeContaining(body, "context._attrMapper.map(el, realAttrTarget)"), "Compile plain attribute interpolation through the attribute mapper into InterpolationInstruction.", {
       operation: "emit",
       targetKind: "plain-attribute",
       instructionNames: ["InterpolationInstruction"],
     }),
-    attributeRow(basis, method, 16, "plain-static-attribute", compilerFlowNodeContaining(body, "generateStaticAttrInstructions") ?? method, "For surrogates, turn static class/style/attribute values into Set*AttributeInstruction rows.", {
+    attributeRow(basis, method, 16, "plain-static-attribute", compilerFlowNodeContaining(body, "generateStaticAttrInstructions"), "For surrogates, turn static class/style/attribute values into Set*AttributeInstruction rows.", {
       operation: "emit",
       targetKind: "surrogate-attribute",
       instructionNames: [
@@ -390,7 +405,7 @@ function attributeClassificationRows(
         "SetAttributeInstruction",
       ],
     }),
-    attributeRow(basis, method, 17, "plain-binding-command", lastNodeContaining(body, "bindingCommand.build") ?? method, "Let ordinary binding commands build plain DOM attribute/property instructions.", {
+    attributeRow(basis, method, 17, "plain-binding-command", lastNodeContaining(body, "bindingCommand.build"), "Let ordinary binding commands build plain DOM attribute/property instructions.", {
       operation: "build",
       targetKind: "plain-attribute",
     }),
@@ -402,19 +417,24 @@ function compileFlowRow(
   method: ts.MethodDeclaration,
   stage: FrameworkCompileFlowStage,
   methodName: string,
-  sourceNode: ts.Node,
+  sourceNode: ts.Node | null,
   summary: string,
   targetName?: string,
-): FrameworkCompileFlowRow {
-  return {
-    id: `framework-compile-flow:${methodName}:${stage}:${sourceNode.getStart(basis.sourceFile)}`,
+): FrameworkCompileFlowRow | null {
+  const anchor = sourceNode ?? method.name;
+  const row: FrameworkCompileFlowRow = {
+    id: `framework-compile-flow:${methodName}:${stage}:${anchor.getStart(basis.sourceFile)}`,
     stage,
     ownerName: TEMPLATE_COMPILER_OWNER,
     methodName,
     targetName,
-    source: requiredSourceRangeForNode(basis.sourceProject, sourceNode),
+    source: requiredSourceRangeForNode(basis.sourceProject, anchor),
     summary,
   };
+  if (sourceNode === null && compileFlowRowMatches(row, basis.filters)) {
+    missingCompilerLandmark(basis, `${row.id}:${targetName ?? ""}`, methodName, stage, row.source);
+  }
+  return sourceNode === null ? null : row;
 }
 
 function attributeRow(
@@ -422,16 +442,17 @@ function attributeRow(
   method: ts.MethodDeclaration,
   order: number,
   branchKind: FrameworkAttributeClassificationBranchKind,
-  sourceNode: ts.Node,
+  sourceNode: ts.Node | null,
   summary: string,
   extras: {
     readonly operation?: FrameworkAttributeClassificationRow["operation"];
     readonly targetKind?: string;
     readonly instructionNames?: readonly string[];
   } = {},
-): FrameworkAttributeClassificationRow {
-  return {
-    id: `framework-attribute-classification:${order}:${branchKind}:${sourceNode.getStart(basis.sourceFile)}`,
+): FrameworkAttributeClassificationRow | null {
+  const anchor = sourceNode ?? method.name;
+  const row: FrameworkAttributeClassificationRow = {
+    id: `framework-attribute-classification:${order}:${branchKind}:${anchor.getStart(basis.sourceFile)}`,
     branchKind,
     order,
     ownerName: TEMPLATE_COMPILER_OWNER,
@@ -439,19 +460,52 @@ function attributeRow(
     operation: extras.operation,
     targetKind: extras.targetKind,
     instructionNames: extras.instructionNames ?? [],
-    source: requiredSourceRangeForNode(basis.sourceProject, sourceNode),
+    source: requiredSourceRangeForNode(basis.sourceProject, anchor),
     summary,
   };
+  if (sourceNode === null && attributeClassificationRowMatches(row, basis.filters)) {
+    missingCompilerLandmark(basis, row.id, row.methodName, branchKind, row.source);
+  }
+  return sourceNode === null ? null : row;
+}
+
+function missingCompilerLandmark(
+  basis: TemplateCompilerBasis,
+  id: string,
+  methodName: string,
+  landmark: string,
+  source: SourceRange,
+): void {
+  basis.missing?.push({
+    id,
+    kind: OpenSeamKind.InsufficientBasis,
+    summary: `Atlas could not locate the ${landmark} source landmark in TemplateCompiler.${methodName}.`,
+    evidence: {
+      kind: EvidenceKind.SourceSpan,
+      role: EvidenceRole.Boundary,
+      source,
+      summary: `Containing method TemplateCompiler.${methodName}.`,
+    },
+  });
 }
 
 function methodDeclaration(
-  classDeclaration: ts.ClassDeclaration,
+  basis: TemplateCompilerBasis,
   methodName: string,
 ): ts.MethodDeclaration | undefined {
-  return classDeclaration.members.find(
+  const method = basis.classDeclaration.members.find(
     (member): member is ts.MethodDeclaration =>
       ts.isMethodDeclaration(member) && propertyNameText(member.name) === methodName,
   );
+  if (method?.body === undefined && basis.missing !== undefined &&
+      (basis.filters.methodName === undefined || basis.filters.methodName === methodName)) {
+    basis.missing.push({
+      id: `framework-compiler:missing-method:${methodName}`,
+      kind: OpenSeamKind.InsufficientBasis,
+      summary: `Missing TemplateCompiler.${methodName} implementation in ${TEMPLATE_COMPILER_FILE}.`,
+    });
+  }
+  return method;
 }
 
 function compilerFlowNodeContaining(root: ts.Node, text: string): ts.Node | null {

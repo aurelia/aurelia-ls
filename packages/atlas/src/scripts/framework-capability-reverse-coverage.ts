@@ -1,4 +1,5 @@
 import { LensId } from "../inquiry/lens.js";
+import { OutcomeKind } from "../inquiry/answer.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
 import type { FrameworkCapabilitiesValue } from "../inquiry/runtime/framework-capability-lenses.js";
 import type { FrameworkReverseCoverageFamily } from "../inquiry/runtime/framework-capability-territory.js";
@@ -29,13 +30,15 @@ const answer = await api.ask({
   projection: "reverse-coverage",
   budget: { rows: rowBudget, evidencePerSubject: 0 },
 });
-assertHitOrMissAnswer("framework.capabilities:reverse-coverage", answer);
+if (answer.outcome !== OutcomeKind.Partial) {
+  assertHitOrMissAnswer("framework.capabilities:reverse-coverage", answer);
+}
 const families =
   answerValue<FrameworkCapabilitiesValue>(answer)?.reverseCoverageRows ?? [];
 
 if (json) {
   console.log(JSON.stringify(
-    { tool: "framework.capability-reverse-coverage", families },
+    { tool: "framework.capability-reverse-coverage", outcome: answer.outcome, page: answer.page, families },
     null,
     2,
   ));
@@ -43,6 +46,7 @@ if (json) {
 }
 
 console.log("framework.capability-reverse-coverage");
+console.log(answer.summary);
 for (const coverage of families) {
   printCoverage(coverage);
 }

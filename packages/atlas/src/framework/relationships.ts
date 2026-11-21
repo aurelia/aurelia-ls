@@ -71,6 +71,8 @@ export const enum FrameworkRelationshipRelation {
   ConfiguresObservation = "configures-observation",
   StoresWatchDefinition = "stores-watch-definition",
   ReadsWatchDefinition = "reads-watch-definition",
+  /** AttributeParser turns an authored name/value pair into AttrSyntax before expression parsing. */
+  ParsesAttribute = "parses-attribute",
   ParsesExpression = "parses-expression",
   EvaluatesExpression = "evaluates-expression",
   DefinesExpression = "defines-expression",

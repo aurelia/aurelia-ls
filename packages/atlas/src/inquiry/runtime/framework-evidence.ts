@@ -10,6 +10,7 @@ import {
   type FrameworkFlowDefinition,
   type FrameworkFlowSeedRow,
   FrameworkRelationshipRelation,
+  FrameworkSyntaxProductKind,
   type FrameworkRelationshipAtom,
 } from "../../framework/index.js";
 import { FrameworkBundleAssociationKind } from "../../framework/admission.js";
@@ -354,11 +355,9 @@ export function evidenceForSyntaxProduct(
   row: FrameworkSyntaxProductRow,
 ): Evidence {
   const data = syntaxProductSummaryRow(row);
-  const product =
-    row.instructionName ??
-    row.bindingName ??
-    row.instructionTarget ??
-    row.expression.text;
+  const product = row.productKind === FrameworkSyntaxProductKind.CreatesBinding
+    ? row.bindingName ?? row.expression.text
+    : row.instructionName ?? row.instructionTarget ?? row.expression.text;
   return {
     id: row.id,
     kind: EvidenceKind.TypeFact,

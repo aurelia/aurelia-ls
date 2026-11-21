@@ -1,4 +1,6 @@
 import {
+  aureliaApiUsageConsumerId,
+  aureliaApiUsageRollup,
   readAureliaApiUsageIndex,
   type AureliaApiFacetRow,
   type AureliaApiImplementationShapeRow,
@@ -60,12 +62,16 @@ import {
 /** Filters accepted by the framework.api lens. */
 export interface FrameworkApiFilters {
   readonly packageId?: string;
+  /** Exact merged API subject selected by a subject-row continuation. */
+  readonly subjectId?: string;
   readonly subjectName?: string;
   readonly implementationName?: string;
   readonly exportName?: string;
   readonly memberName?: string;
   readonly consumerPackageId?: string;
   readonly role?: string;
+  /** Exact usage-consumer row, including the consumed subject/member and the consuming declaration. */
+  readonly consumerId?: string;
   readonly ownerName?: string;
   readonly ownerKind?: string;
   readonly ownerMemberName?: string;
@@ -151,6 +157,7 @@ interface FrameworkApiMemberDeclarationGroup {
 /** Value returned by the framework.api runtime lens. */
 export interface FrameworkApiValue {
   readonly filters: FrameworkApiFilters;
+  /** Pre-pagination counts for each API projection after its applicable filters. */
   readonly rollup: AureliaApiUsageRollup;
   readonly subjects?: readonly AureliaApiSubjectRow[];
   readonly facets?: readonly AureliaApiFacetRow[];
@@ -236,16 +243,12 @@ export function answerFrameworkApi(
 ): Answer<FrameworkApiValue> {
   const projection = inquiry.projection ?? "summary";
   const filters = readInquiryFilters(inquiry, frameworkApiFiltersFromRecord);
-  const index = readAureliaApiUsageIndex(sourceProject);
+  const index = filteredApiUsageIndex(readAureliaApiUsageIndex(sourceProject), filters);
   const basis = apiBasis(sourceProject);
   const limit = rowLimit(inquiry);
   const offset = pageOffset(inquiry);
-  const implementationSubjectIds = implementationSubjectIdsForFilters(index, filters);
-
   if (projection === "subjects") {
-    const rows = index.subjects.filter((row) =>
-      subjectMatches(row, filters, implementationSubjectIds),
-    );
+    const rows = index.subjects;
     return SUBJECT_ROW_FAMILY.answer({
       inquiry,
       rows,
@@ -259,9 +262,7 @@ export function answerFrameworkApi(
   }
 
   if (projection === "facets") {
-    const rows = index.facets.filter((row) =>
-      facetMatches(row, filters, implementationSubjectIds),
-    );
+    const rows = index.facets;
     return FACET_ROW_FAMILY.answer({
       inquiry,
       rows,
@@ -275,7 +276,7 @@ export function answerFrameworkApi(
   }
 
   if (projection === "merge-edges") {
-    const rows = index.mergeEdges.filter((row) => apiEdgeMatches(row, filters));
+    const rows = index.mergeEdges;
     return MERGE_EDGE_ROW_FAMILY.answer({
       inquiry,
       rows,
@@ -289,7 +290,7 @@ export function answerFrameworkApi(
   }
 
   if (projection === "shape-edges") {
-    const rows = index.shapeEdges.filter((row) => apiEdgeMatches(row, filters));
+    const rows = index.shapeEdges;
     return SHAPE_EDGE_ROW_FAMILY.answer({
       inquiry,
       rows,
@@ -303,9 +304,7 @@ export function answerFrameworkApi(
   }
 
   if (projection === "implementation-shapes") {
-    const rows = index.implementationShapes.filter((row) =>
-      implementationShapeMatches(row, filters),
-    );
+    const rows = index.implementationShapes;
     return IMPLEMENTATION_SHAPE_ROW_FAMILY.answer({
       inquiry,
       rows,
@@ -323,9 +322,7 @@ export function answerFrameworkApi(
   }
 
   if (projection === "member-slots") {
-    const rows = index.memberSlots.filter((row) =>
-      memberSlotMatches(row, filters, implementationSubjectIds),
-    );
+    const rows = index.memberSlots;
     return MEMBER_SLOT_ROW_FAMILY.answer({
       inquiry,
       rows,
@@ -343,9 +340,7 @@ export function answerFrameworkApi(
   }
 
   if (projection === "member-declarations") {
-    const slots = index.memberSlots.filter((row) =>
-      memberSlotMatches(row, filters, implementationSubjectIds),
-    );
+    const slots = index.memberSlots;
     const rows = slots.flatMap(memberDeclarationRowsForSlot);
     return MEMBER_DECLARATION_ROW_FAMILY.answer({
       inquiry,
@@ -364,9 +359,7 @@ export function answerFrameworkApi(
   }
 
   if (projection === "usages") {
-    const rows = index.usages.filter((row) =>
-      usageMatches(row, filters, implementationSubjectIds),
-    );
+    const rows = index.usages;
     return USAGE_ROW_FAMILY.answer({
       inquiry,
       rows,
@@ -380,11 +373,8 @@ export function answerFrameworkApi(
   }
 
   if (projection === "usage-consumers") {
-    const matchingUsages = index.usages.filter((row) =>
-      usageMatches(row, filters, implementationSubjectIds),
-    );
-    const rows = apiUsageConsumerRows(matchingUsages)
-      .filter((row) => usageConsumerMatches(row, filters, implementationSubjectIds));
+    const rows = apiUsageConsumerRows(index.usages)
+      .filter((row) => usageConsumerMatches(row, filters));
     return USAGE_CONSUMER_ROW_FAMILY.answer({
       inquiry,
       rows,
@@ -401,10 +391,14 @@ export function answerFrameworkApi(
     });
   }
 
+  const hasRows = [
+    index.subjects, index.facets, index.mergeEdges, index.shapeEdges,
+    index.implementationShapes, index.memberSlots, index.usages,
+  ].some((rows) => rows.length > 0);
   return createAnswer(
     inquiry,
-    OutcomeKind.Hit,
-    `Aurelia API usage index has ${index.rollup.subjectCount} subject(s), ${index.rollup.implementationShapeCount} implementation shape(s), ${index.rollup.memberSlotCount} member slot(s), and ${index.rollup.usageCount} repo usage(s).`,
+    hasRows ? OutcomeKind.Hit : OutcomeKind.Miss,
+    `Aurelia API usage index has ${index.rollup.subjectCount} subject(s), ${index.rollup.implementationShapeCount} implementation shape(s), ${index.rollup.memberSlotCount} member slot(s), and ${index.rollup.usageCount} usage(s) in the admitted TypeScript source.`,
     {
       value: { filters, rollup: index.rollup },
       basis,
@@ -420,12 +414,14 @@ function apiBasis(sourceProject: SourceProject): readonly Basis[] {
 
 const frameworkApiFilterKeys = [
   "packageId",
+  "subjectId",
   "subjectName",
   "implementationName",
   "exportName",
   "memberName",
   "consumerPackageId",
   "role",
+  "consumerId",
   "ownerName",
   "ownerKind",
   "ownerMemberName",
@@ -445,6 +441,32 @@ function frameworkApiFiltersFromRecord(value: unknown): FrameworkApiFilters {
   );
 }
 
+/** Apply each projection's filters before computing either the summary or its paged rows. */
+function filteredApiUsageIndex(index: AureliaApiUsageIndex, filters: FrameworkApiFilters): AureliaApiUsageIndex {
+  if (Object.keys(filters).length === 0) return index;
+
+  const implementationIds = implementationSubjectIdsForFilters(index, filters);
+  const subjects = index.subjects.filter((row) => subjectMatches(row, filters, implementationIds));
+  const usageSubjectIds = implementationIds ?? (filters.packageId === undefined
+    ? undefined
+    : new Set(index.subjects.filter((row) => row.packageId === filters.packageId).map((row) => row.id)));
+  const facets = index.facets.filter((row) => facetMatches(row, filters, implementationIds));
+  const endpointScope = { subjectId: filters.subjectId, packageId: filters.packageId, subjectName: filters.subjectName };
+  const edgeFacets = filters.subjectId !== undefined || filters.packageId !== undefined || implementationIds !== undefined
+    ? new Set(index.facets.filter((row) => facetMatches(row, endpointScope, implementationIds)).map((row) => row.id))
+    : undefined;
+  const rows = {
+    subjects,
+    facets,
+    mergeEdges: index.mergeEdges.filter((row) => apiEdgeMatches(row, filters, edgeFacets)),
+    shapeEdges: index.shapeEdges.filter((row) => apiEdgeMatches(row, filters, edgeFacets)),
+    implementationShapes: index.implementationShapes.filter((row) => implementationShapeMatches(row, filters)),
+    memberSlots: index.memberSlots.filter((row) => memberSlotMatches(row, filters, usageSubjectIds)),
+    usages: index.usages.filter((row) => usageMatches(row, filters, usageSubjectIds)),
+  };
+  return { rollup: aureliaApiUsageRollup(rows), ...rows };
+}
+
 function implementationSubjectIdsForFilters(
   index: AureliaApiUsageIndex,
   filters: FrameworkApiFilters,
@@ -453,7 +475,8 @@ function implementationSubjectIdsForFilters(
     return undefined;
   }
   const ids = index.implementationShapes
-    .filter((row) => row.implementationName === filters.implementationName)
+    .filter((row) => row.implementationName === filters.implementationName
+      && (filters.packageId === undefined || row.packageId === filters.packageId))
     .flatMap((row) => row.shapeSubjectIds);
   return new Set(ids);
 }
@@ -464,6 +487,7 @@ function subjectMatches(
   implementationSubjectIds: ReadonlySet<string> | undefined,
 ): boolean {
   return (
+    (filters.subjectId === undefined || filters.subjectId === row.id) &&
     (implementationSubjectIds === undefined || implementationSubjectIds.has(row.id)) &&
     (filters.packageId === undefined || row.packageId === filters.packageId) &&
     (filters.subjectName === undefined || row.name === filters.subjectName) &&
@@ -477,6 +501,7 @@ function facetMatches(
   implementationSubjectIds: ReadonlySet<string> | undefined,
 ): boolean {
   return (
+    (filters.subjectId === undefined || filters.subjectId === row.subjectId) &&
     (implementationSubjectIds === undefined || implementationSubjectIds.has(row.subjectId)) &&
     (filters.packageId === undefined || row.packageId === filters.packageId) &&
     (filters.subjectName === undefined || row.localName === filters.subjectName) &&
@@ -495,8 +520,10 @@ function facetMatches(
 function apiEdgeMatches(
   row: AureliaApiMergeEdgeRow | AureliaApiShapeEdgeRow,
   filters: FrameworkApiFilters,
+  facets: ReadonlySet<string> | undefined,
 ): boolean {
   return (
+    (facets === undefined || facets.has(row.fromFacetId) || facets.has(row.toFacetId)) &&
     (filters.relation === undefined || row.relation === filters.relation) &&
     (filters.subjectName === undefined ||
       row.fromName === filters.subjectName ||
@@ -537,6 +564,7 @@ function memberSlotMatches(
   implementationSubjectIds: ReadonlySet<string> | undefined,
 ): boolean {
   return (
+    (filters.subjectId === undefined || filters.subjectId === row.subjectId) &&
     (implementationSubjectIds === undefined || implementationSubjectIds.has(row.subjectId)) &&
     (filters.subjectName === undefined || row.subjectName === filters.subjectName) &&
     (filters.memberName === undefined || row.name === filters.memberName) &&
@@ -556,12 +584,14 @@ function usageMatches(
   implementationSubjectIds: ReadonlySet<string> | undefined,
 ): boolean {
   return (
+    (filters.subjectId === undefined || filters.subjectId === row.subjectId) &&
     (implementationSubjectIds === undefined || implementationSubjectIds.has(row.subjectId)) &&
     (filters.subjectName === undefined || row.subjectName === filters.subjectName) &&
     (filters.memberName === undefined || row.memberName === filters.memberName) &&
     (filters.consumerPackageId === undefined ||
       row.consumerPackageId === filters.consumerPackageId) &&
     (filters.role === undefined || row.role === filters.role) &&
+    (filters.consumerId === undefined || aureliaApiUsageConsumerId(row) === filters.consumerId) &&
     (filters.ownerName === undefined || row.owner.ownerName === filters.ownerName) &&
     (filters.ownerKind === undefined || row.owner.ownerKind === filters.ownerKind) &&
     (filters.ownerMemberName === undefined ||
@@ -594,7 +624,7 @@ function usageMatches(
 function apiUsageConsumerRows(
   usages: readonly AureliaApiUsageRow[],
 ): readonly FrameworkApiUsageConsumerRow[] {
-  return [...groupBy(usages, apiUsageConsumerGroupKey).values()]
+  return [...groupBy(usages, aureliaApiUsageConsumerId).values()]
     .flatMap(apiUsageConsumerRow)
     .sort(compareUsageConsumers);
 }
@@ -608,15 +638,7 @@ function apiUsageConsumerRow(
   }
   const owner = first.owner;
   return [{
-    id: [
-      "framework-api-usage-consumer",
-      first.subjectId,
-      first.memberName ?? "<subject>",
-      owner.ownerKind,
-      owner.ownerName,
-      owner.ownerMemberName ?? "<owner>",
-      first.consumerPackageId ?? "<external>",
-    ].join(":"),
+    id: aureliaApiUsageConsumerId(first),
     subjectId: first.subjectId,
     subjectName: first.subjectName,
     memberName: first.memberName,
@@ -636,24 +658,12 @@ function apiUsageConsumerRow(
   }];
 }
 
-function apiUsageConsumerGroupKey(row: AureliaApiUsageRow): string {
-  return [
-    row.subjectId,
-    row.memberName ?? "<subject>",
-    row.owner.ownerKind,
-    row.owner.ownerName,
-    row.owner.ownerMemberName ?? "<owner>",
-    row.consumerPackageId ?? "<external>",
-  ].join("\0");
-}
-
 function usageConsumerMatches(
   row: FrameworkApiUsageConsumerRow,
   filters: FrameworkApiFilters,
-  implementationSubjectIds: ReadonlySet<string> | undefined,
 ): boolean {
   return (
-    (implementationSubjectIds === undefined || implementationSubjectIds.has(row.subjectId)) &&
+    (filters.subjectId === undefined || filters.subjectId === row.subjectId) &&
     (filters.subjectName === undefined || row.subjectName === filters.subjectName) &&
     (filters.memberName === undefined || row.memberName === filters.memberName) &&
     (filters.consumerPackageId === undefined ||
@@ -926,7 +936,7 @@ function apiSummaryContinuations(inquiry: Inquiry): readonly Continuation[] {
       inquiry,
       "framework.api:usages",
       "usages",
-      "Inspect repo-wide TypeChecker-resolved API usage rows.",
+      "Inspect TypeChecker-resolved API usage rows in the admitted source project.",
     ),
     projectionContinuation(
       inquiry,
@@ -983,10 +993,10 @@ function subjectContinuations(
     ...nextPage(inquiry, "framework.api:subjects", nextOffset, limit),
     ...rows.slice(0, 4).flatMap((row, index) => [
       ...sourceAndTypeContinuations(inquiry, "framework.api:subjects", index, row.firstSource, evidenceForSubject(row)),
-      projectionForSubject(inquiry, row.name, "member-slots", index),
-      projectionForSubject(inquiry, row.name, "usages", index),
-      projectionForSubject(inquiry, row.name, "usage-consumers", index),
-      projectionForSubject(inquiry, row.name, "shape-edges", index),
+      projectionForSubject(inquiry, row.id, row.name, "member-slots", index),
+      projectionForSubject(inquiry, row.id, row.name, "usages", index),
+      projectionForSubject(inquiry, row.id, row.name, "usage-consumers", index),
+      projectionForSubject(inquiry, row.id, row.name, "shape-edges", index),
     ]),
   ];
 }
@@ -1051,9 +1061,9 @@ function memberSlotContinuations(
     ...nextPage(inquiry, "framework.api:member-slots", nextOffset, limit),
     ...rows.slice(0, 4).flatMap((row, index) => [
       ...sourceAndTypeContinuations(inquiry, "framework.api:member-slots", index, row.firstSource, evidenceForMemberSlot(row)),
-      projectionForSubject(inquiry, row.subjectName, "member-declarations", index, { memberName: row.name }),
-      projectionForSubject(inquiry, row.subjectName, "usages", index, { memberName: row.name }),
-      projectionForSubject(inquiry, row.subjectName, "usage-consumers", index, { memberName: row.name }),
+      projectionForSubject(inquiry, row.subjectId, row.subjectName, "member-declarations", index, { memberName: row.name }),
+      projectionForSubject(inquiry, row.subjectId, row.subjectName, "usages", index, { memberName: row.name }),
+      projectionForSubject(inquiry, row.subjectId, row.subjectName, "usage-consumers", index, { memberName: row.name }),
     ]),
   ];
 }
@@ -1088,8 +1098,9 @@ function usageContinuations(
     ...nextPage(inquiry, "framework.api:usages", nextOffset, limit),
     ...rows.slice(0, 4).flatMap((row, index) => [
       ...sourceAndTypeContinuations(inquiry, "framework.api:usages", index, row.source, evidenceForTypeFactSourceRow(row)),
-      projectionForSubject(inquiry, row.subjectName, "usage-consumers", index, {
+      projectionForSubject(inquiry, row.subjectId, row.subjectName, "usage-consumers", index, {
         memberName: row.memberName,
+        consumerId: aureliaApiUsageConsumerId(row),
         ownerName: row.owner.ownerName,
         ownerMemberName: row.owner.ownerMemberName,
       }),
@@ -1115,8 +1126,9 @@ function apiUsageConsumerContinuations(
           row.firstSource,
           evidence,
         ),
-        projectionForSubject(inquiry, row.subjectName, "usages", index, {
+        projectionForSubject(inquiry, row.subjectId, row.subjectName, "usages", index, {
           memberName: row.memberName,
+          consumerId: row.id,
           ownerName: row.ownerName,
           ownerMemberName: row.ownerMemberName,
         }),
@@ -1251,6 +1263,7 @@ function callSitesContinuation(
 
 function projectionForSubject(
   inquiry: Inquiry,
+  subjectId: string,
   subjectName: string,
   projection: string,
   index: number,
@@ -1267,6 +1280,8 @@ function projectionForSubject(
       projection,
       filters: {
         ...inquiry.filters,
+        query: undefined,
+        subjectId,
         subjectName,
         ...extraFilters,
       },

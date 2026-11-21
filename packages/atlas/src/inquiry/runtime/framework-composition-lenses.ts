@@ -79,7 +79,7 @@ import {
   type FrameworkObservationFilters,
 } from "./framework-observation-lenses.js";
 import { readFrameworkRouterAnalysis } from "./framework-router-analysis.js";
-import { routerRelationshipsFromFlowRows } from "./framework-router-relationships.js";
+import { routerRelationshipsFromRows } from "./framework-router-relationships.js";
 import {
   readFrameworkRenderingRelationships,
   type FrameworkRenderingRelationshipFilters,
@@ -280,6 +280,7 @@ function readFrameworkCompositionClaims(
   auLinkAnchors: readonly AuLinkAnchorRow[],
 ): readonly SemanticClaim[] {
   const readerFilters = readerFiltersForComposition(filters, queryTerms);
+  const router = readFrameworkRouterAnalysis(sourceProject);
   const claims = uniqueClaims([
     ...auLinkAnchors
       .filter((row) => row.facetState !== AuLinkFacetState.Unresolved)
@@ -327,8 +328,9 @@ function readFrameworkCompositionClaims(
           [BasisKind.TypeScriptChecker],
         ),
     ),
-    ...routerRelationshipsFromFlowRows(
-      readFrameworkRouterAnalysis(sourceProject).flows,
+    ...routerRelationshipsFromRows(
+      router.flows,
+      router.routeRecognizerMechanics,
       readerFilters,
     ).map((row) =>
       claimFromRelationship(

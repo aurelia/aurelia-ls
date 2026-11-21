@@ -1,6 +1,10 @@
+import path from "node:path";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
 import {
   atlasContractBasis as contractBasis,
+  BasisAuthority,
+  BasisClosure,
+  BasisFreshness,
   BasisKind,
 } from "../basis.js";
 import {
@@ -9,11 +13,11 @@ import {
   type Continuation,
 } from "../continuation.js";
 import { OpenSeamKind } from "../evidence.js";
-import type { Budget } from "../budget.js";
+import { mergeBudget, type Budget } from "../budget.js";
 import type { Inquiry, InquirySubject } from "../inquiry.js";
-import { LensId, LensStage, type LensSpec } from "../lens.js";
+import { LensId, LensRegistry, LensStage, type LensSpec } from "../lens.js";
 import { LocusKind, RepoRootLocus, type Locus } from "../locus.js";
-import type { SourceProject } from "../../source/index.js";
+import { normalizeFileKey, type SourceProject } from "../../source/index.js";
 import {
   answerSelf,
   answerRepoMap,
@@ -62,7 +66,7 @@ export interface InquiryRuntimeSubstrates {
 export interface InquiryRuntimeRequest {
   /** Lens id requested by the caller; unknown strings become structured unsupported answers. */
   readonly lens: LensId | string;
-  /** Optional locus; omitted or invalid loci normalize to the repo root. */
+  /** Omission selects the repository root. An invalid explicit locus yields a reroute. */
   readonly locus?: unknown;
   /** Optional subject payload. */
   readonly subject?: unknown;
@@ -78,208 +82,73 @@ export interface InquiryRuntimeRequest {
 
 /** Deterministic in-memory inquiry engine over one inquiry world. */
 export class InquiryEngine {
-  /** Runtime lens ids that have in-memory implementations. */
-  readonly #implementedLensIds = new Set<LensId>([
-    LensId.RepoMap,
-    LensId.RepoTerrain,
-    LensId.AtlasSelf,
-    LensId.AtlasMemory,
-    LensId.AtlasWorkRouter,
-    LensId.TsSource,
-    LensId.TsStructure,
-    LensId.TsType,
-    LensId.ProductVocabulary,
-    LensId.ProductArchitecture,
-    LensId.WorkspaceArchitecture,
-    LensId.PluginArchitecture,
-    LensId.BridgeAuLink,
-    LensId.FrameworkDiscovery,
-    LensId.FrameworkApi,
-    LensId.FrameworkRendering,
-    LensId.FrameworkResources,
-    LensId.FrameworkCompiler,
-    LensId.FrameworkDi,
-    LensId.FrameworkEvaluator,
-    LensId.FrameworkMaterialization,
-    LensId.FrameworkLifecycle,
-    LensId.FrameworkObservation,
-    LensId.FrameworkRouter,
-    LensId.FrameworkErrors,
-    LensId.FrameworkAdmission,
-    LensId.FrameworkComposition,
-    LensId.FrameworkCapabilities,
-    LensId.FrameworkCorpus,
-  ]);
+  readonly #registry = new LensRegistry();
 
   constructor(
     /** Contract world queried by the engine. */
     readonly world: InquiryWorld,
     /** Hot source and analysis substrates shared across lenses. */
     readonly substrates: InquiryRuntimeSubstrates,
-  ) {}
+  ) {
+    const runtimeLensAnswerers: Partial<Record<LensId, (inquiry: Inquiry, project: SourceProject) => Answer>> = {
+      [LensId.RepoMap]: inquiry => answerRepoMap(world, inquiry),
+      [LensId.RepoTerrain]: inquiry => answerRepoTerrain(world, inquiry),
+      [LensId.AtlasSelf]: (inquiry, project) => answerSelf(world, inquiry, new Set(this.implementedLensIds()), project),
+      [LensId.AtlasMemory]: answerAtlasMemory,
+      [LensId.AtlasWorkRouter]: answerAtlasWorkRouter,
+      [LensId.TsSource]: answerTsSource,
+      [LensId.TsStructure]: answerTsStructure,
+      [LensId.TsType]: answerTsType,
+      [LensId.ProductVocabulary]: answerProductVocabulary,
+      [LensId.ProductArchitecture]: answerProductArchitecture,
+      [LensId.WorkspaceArchitecture]: answerWorkspaceArchitecture,
+      [LensId.PluginArchitecture]: answerPluginArchitecture,
+      [LensId.BridgeAuLink]: answerBridgeAuLink,
+      [LensId.FrameworkDiscovery]: answerFrameworkDiscovery,
+      [LensId.FrameworkApi]: answerFrameworkApi,
+      [LensId.FrameworkRendering]: answerFrameworkRendering,
+      [LensId.FrameworkResources]: answerFrameworkResources,
+      [LensId.FrameworkCompiler]: answerFrameworkCompiler,
+      [LensId.FrameworkDi]: answerFrameworkDi,
+      [LensId.FrameworkEvaluator]: answerFrameworkEvaluator,
+      [LensId.FrameworkMaterialization]: answerFrameworkMaterialization,
+      [LensId.FrameworkLifecycle]: answerFrameworkLifecycle,
+      [LensId.FrameworkObservation]: answerFrameworkObservation,
+      [LensId.FrameworkRouter]: answerFrameworkRouter,
+      [LensId.FrameworkErrors]: answerFrameworkErrors,
+      [LensId.FrameworkAdmission]: answerFrameworkAdmission,
+      [LensId.FrameworkComposition]: answerFrameworkComposition,
+      [LensId.FrameworkCapabilities]: answerFrameworkCapabilities,
+      [LensId.FrameworkCorpus]: answerFrameworkCorpus,
+    };
+    for (const spec of world.lenses) {
+      const answer = runtimeLensAnswerers[spec.id];
+      if (answer !== undefined) {
+        this.#registry.register({ spec, answer: inquiry => answer(inquiry, substrates.sourceProject) });
+      }
+    }
+  }
 
   /** Ask one inquiry or transport-shaped request. */
   async ask(input: Inquiry | InquiryRuntimeRequest): Promise<Answer> {
-    const normalized = this.normalize(input);
-    if (normalized.unknownLens !== undefined) {
-      return this.unknownLensAnswer(normalized.inquiry, normalized.unknownLens);
-    }
-
-    const spec = this.findLens(normalized.inquiry.lens);
+    const spec = this.world.lenses.find(lens => lens.id === input.lens);
+    const inquiry = this.normalize(input, spec);
     if (spec === undefined) {
-      return this.unknownLensAnswer(
-        normalized.inquiry,
-        normalized.inquiry.lens,
-      );
+      return this.unknownLensAnswer(inquiry, String(input.lens));
     }
-
-    const validation = this.validate(normalized.inquiry, spec);
+    if (input.locus !== undefined && !isLocus(input.locus)) {
+      return invalidSelection(inquiry, "The supplied locus is incomplete or has an unrecognized kind.");
+    }
+    const validation = this.validate(inquiry, spec);
     if (validation !== undefined) {
       return validation;
     }
-
-    switch (normalized.inquiry.lens) {
-      case LensId.RepoMap:
-        return answerRepoMap(this.world, normalized.inquiry);
-      case LensId.RepoTerrain:
-        return answerRepoTerrain(this.world, normalized.inquiry);
-      case LensId.AtlasSelf:
-        return answerSelf(
-          this.world,
-          normalized.inquiry,
-          this.#implementedLensIds,
-          this.substrates.sourceProject,
-        );
-      case LensId.AtlasMemory:
-        return answerAtlasMemory(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.TsSource:
-        return answerTsSource(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.TsStructure:
-        return answerTsStructure(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.TsType:
-        return answerTsType(normalized.inquiry, this.substrates.sourceProject);
-      case LensId.ProductVocabulary:
-        return answerProductVocabulary(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.ProductArchitecture:
-        return answerProductArchitecture(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.WorkspaceArchitecture:
-        return answerWorkspaceArchitecture(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.PluginArchitecture:
-        return answerPluginArchitecture(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.BridgeAuLink:
-        return answerBridgeAuLink(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.FrameworkDiscovery:
-        return answerFrameworkDiscovery(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.FrameworkApi:
-        return answerFrameworkApi(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.FrameworkRendering:
-        return answerFrameworkRendering(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.FrameworkResources:
-        return answerFrameworkResources(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.FrameworkCompiler:
-        return answerFrameworkCompiler(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.FrameworkDi:
-        return answerFrameworkDi(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.FrameworkEvaluator:
-        return answerFrameworkEvaluator(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.FrameworkMaterialization:
-        return answerFrameworkMaterialization(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.FrameworkLifecycle:
-        return answerFrameworkLifecycle(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.FrameworkObservation:
-        return answerFrameworkObservation(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.FrameworkRouter:
-        return answerFrameworkRouter(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.FrameworkErrors:
-        return answerFrameworkErrors(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.FrameworkAdmission:
-        return answerFrameworkAdmission(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.FrameworkComposition:
-        return answerFrameworkComposition(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.FrameworkCapabilities:
-        return answerFrameworkCapabilities(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.FrameworkCorpus:
-        return answerFrameworkCorpus(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      case LensId.AtlasWorkRouter:
-        return answerAtlasWorkRouter(
-          normalized.inquiry,
-          this.substrates.sourceProject,
-        );
-      default:
-        return answerUnimplementedLens(this.world, normalized.inquiry);
-    }
+    const selected = this.resolveScope(inquiry, spec);
+    if ("outcome" in selected) return selected;
+    const implementation = this.#registry.find(spec.id);
+    return implementation === undefined
+      ? answerUnimplementedLens(this.world, selected)
+      : implementation.answer(selected);
   }
 
   /** Follow a returned continuation by asking its embedded inquiry. */
@@ -289,51 +158,69 @@ export class InquiryEngine {
 
   /** True when a lens id has a runtime implementation. */
   isImplemented(lens: LensId): boolean {
-    return this.#implementedLensIds.has(lens);
+    return this.#registry.find(lens) !== undefined;
   }
 
   /** Lens ids with runtime implementations in this engine. */
   implementedLensIds(): readonly LensId[] {
-    return [...this.#implementedLensIds];
+    return this.#registry.implementedSpecs.map(spec => spec.id);
   }
 
-  /** Normalize raw input into an inquiry plus any unknown lens marker. */
-  private normalize(input: Inquiry | InquiryRuntimeRequest): {
-    readonly inquiry: Inquiry;
-    readonly unknownLens?: string;
-  } {
-    const inputLens = String(input.lens);
-    const requestedLens = this.parseLensId(inputLens);
-    const unknownLens = requestedLens === undefined ? inputLens : undefined;
-    const subject =
-      unknownLens === undefined
-        ? normalizeSubject(input.subject)
-        : { requestedLens: unknownLens };
-
+  /** Normalize a request using the defaults advertised by the selected lens and projection. */
+  private normalize(input: InquiryRuntimeRequest, spec: LensSpec | undefined): Inquiry {
+    const projection = spec?.projections.find(entry => entry.id === input.projection);
     return {
-      inquiry: {
-        lens: requestedLens ?? LensId.RepoMap,
-        locus: normalizeLocus(input.locus),
-        subject,
-        projection: input.projection,
-        filters: input.filters,
-        budget: input.budget === undefined ? undefined : normalizeBudget(input.budget),
-        page: input.page === undefined ? undefined : normalizePage(input.page),
-      },
-      unknownLens,
+      lens: spec?.id ?? LensId.RepoMap,
+      locus: normalizeLocus(input.locus),
+      subject: spec === undefined ? { requestedLens: String(input.lens) } : normalizeSubject(input.subject),
+      projection: input.projection,
+      filters: input.filters,
+      budget: mergeBudget(mergeBudget(spec?.defaultBudget, projection?.defaultBudget), normalizeBudget(input.budget)),
+      page: normalizePage(input.page),
     };
   }
 
-  /** Parse one lens id against the static world. */
-  private parseLensId(lens: string): LensId | undefined {
-    return this.world.lenses.some((entry) => entry.id === lens)
-      ? (lens as LensId)
-      : undefined;
-  }
-
-  /** Find one lens spec by id. */
-  private findLens(lens: LensId): LensSpec | undefined {
-    return this.world.lenses.find((entry) => entry.id === lens);
+  private resolveScope(inquiry: Inquiry, spec: LensSpec): Inquiry | Answer {
+    const locus = inquiry.locus;
+    const project = this.substrates.sourceProject;
+    if (locus.kind === LocusKind.Repo && locus.root !== undefined &&
+        normalizeFileKey(path.resolve(project.repoRoot, locus.root)) !== normalizeFileKey(project.repoRoot)) {
+      return invalidSelection(inquiry, "The requested repository root differs from the active source project.");
+    }
+    if (locus.kind !== LocusKind.Package) return inquiry;
+    const rootKey = locus.relativePath === undefined
+      ? undefined : normalizeFileKey(path.resolve(project.repoRoot, locus.relativePath));
+    const packages = project.summary().packages.filter(pkg =>
+      (locus.packageId === undefined || pkg.id === locus.packageId) &&
+      (locus.packageName === undefined || pkg.packageName === locus.packageName) &&
+      (rootKey === undefined || normalizeFileKey(path.resolve(project.repoRoot, pkg.rootPath)) === rootKey),
+    );
+    if (packages.length !== 1) {
+      const summary = packages.length === 0
+        ? "No admitted package matches all supplied package selectors."
+        : "Multiple admitted packages match this selector. Supply the package ID or root path.";
+      return createAnswer(inquiry, packages.length === 0 ? OutcomeKind.NoClaim : OutcomeKind.Ambiguous, summary, {
+        basis: [{ kind: BasisKind.TypeScriptProgram, closure: BasisClosure.Exact, authority: BasisAuthority.Checker,
+          freshness: BasisFreshness.Live, summary: "Compared selectors with the active source project's admitted packages." }],
+        openSeams: [{ kind: OpenSeamKind.InsufficientBasis, summary }],
+        continuations: [{
+          kind: ContinuationKind.SwitchLens,
+          priority: ContinuationPriority.Primary,
+          rationale: "Inspect the admitted package roots and IDs.",
+          inquiry: { lens: LensId.WorkspaceArchitecture, locus: RepoRootLocus, projection: "packages" },
+        }],
+      });
+    }
+    const { id: packageId, packageName, rootPath } = packages[0]!;
+    const acceptsPackageFilter = spec.parameters?.some(parameter => parameter.id === "packageId");
+    if (acceptsPackageFilter && inquiry.filters?.packageId !== undefined && inquiry.filters.packageId !== packageId) {
+      return invalidSelection(inquiry, "The package locus and packageId filter select different packages.");
+    }
+    return {
+      ...inquiry,
+      locus: { kind: LocusKind.Package, packageId, packageName, relativePath: rootPath },
+      filters: acceptsPackageFilter ? { ...inquiry.filters, packageId } : inquiry.filters,
+    };
   }
 
   /** Validate lens/locus/projection/substrate coherence before running a lens. */
@@ -486,25 +373,60 @@ export function normalizeLocus(value: unknown): Locus {
   return RepoRootLocus;
 }
 
-/** True when a value has a recognized locus discriminator. */
+/** Validate the address before a lens dereferences it or starts a source scan. */
 export function isLocus(value: unknown): value is Locus {
   if (value === null || typeof value !== "object") {
     return false;
   }
-  const kind = (value as { readonly kind?: unknown }).kind;
-  switch (kind) {
+  const fields = value as Record<string, unknown>;
+  switch (fields.kind) {
     case LocusKind.Repo:
+      return fields.root === undefined || nonEmptyString(fields.root);
     case LocusKind.RepoArea:
+      return nonEmptyString(fields.areaId);
     case LocusKind.Package:
+      return [fields.packageId, fields.packageName, fields.relativePath].some(nonEmptyString) &&
+        [fields.packageId, fields.packageName, fields.relativePath].every(v => v === undefined || nonEmptyString(v));
     case LocusKind.SourceFile:
+      return nonEmptyString(fields.filePath);
     case LocusKind.SourceRange:
+      return isSourceRange(fields.range);
     case LocusKind.Symbol:
+      return nonEmptyString(fields.name) && (fields.filePath === undefined || nonEmptyString(fields.filePath)) &&
+        (fields.packageName === undefined || nonEmptyString(fields.packageName));
     case LocusKind.Handle:
+      return typeof fields.handle === "object" && fields.handle !== null &&
+        ["namespace", "kind", "id"].every(key => nonEmptyString((fields.handle as Record<string, unknown>)[key]));
     case LocusKind.GitTree:
-      return true;
+      return nonEmptyString(fields.treeish) && (fields.inner === undefined || isLocus(fields.inner));
     default:
       return false;
   }
+}
+
+function nonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isSourceRange(value: unknown): boolean {
+  if (value === null || typeof value !== "object") return false;
+  const { filePath, start, end } = value as Record<string, unknown>;
+  function isPosition(position: unknown): position is { line: number; character: number } {
+    if (position === null || typeof position !== "object") return false;
+    const { line, character } = position as Record<string, unknown>;
+    return typeof line === "number" && Number.isSafeInteger(line) && line >= 0 &&
+      typeof character === "number" && Number.isSafeInteger(character) && character >= 0;
+  }
+  return nonEmptyString(filePath) && isPosition(start) && isPosition(end) &&
+    (start.line < end.line || (start.line === end.line && start.character <= end.character));
+}
+
+function invalidSelection(inquiry: Inquiry, summary: string): Answer {
+  return createAnswer(inquiry, OutcomeKind.Reroute, summary, {
+    basis: [contractBasis("Validated the requested address before dispatch.")],
+    openSeams: [{ kind: OpenSeamKind.UnsupportedLocus, summary }],
+    continuations: [surfaceMapContinuation("Inspect supported loci and select the intended owner.")],
+  });
 }
 
 /** Normalize a transport subject into a value the inquiry envelope can carry. */

@@ -1,7 +1,7 @@
-import { spawn } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawn, type ChildProcess } from "node:child_process";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createConnection } from "node:net";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 
 import type { Answer } from "../inquiry/answer.js";
 import type { Continuation } from "../inquiry/continuation.js";
@@ -45,7 +45,6 @@ export const DEFAULT_SESSION_STARTUP_TIMEOUT_MS = 180_000;
 const STARTUP_LOCK_SCHEMA_VERSION = "atlas-session-startup-lock-v1" as const;
 
 const pendingEnsures = new Map<string, Promise<InquirySessionClient>>();
-const compatibilityHashCache = new Map<string, string>();
 
 /** Options shared by session connection and startup helpers. */
 export interface InquirySessionOptions {
@@ -90,6 +89,7 @@ interface InquirySessionStartupLock {
   readonly manifestPath: string;
   readonly packageRoot: string;
   readonly createdAt: string;
+  readonly startupTimeoutMs?: number;
 }
 
 interface StartupLockHandle {
@@ -107,8 +107,8 @@ export class InquirySessionClient {
   ) {}
 
   /** Return daemon identity and cheap world summary. */
-  status(): Promise<InquirySessionStatus> {
-    return sendProtocolRequest(this.manifest, InquirySessionMethod.Status, undefined, this.requestTimeoutMs);
+  status(checkSourceInputs = false): Promise<InquirySessionStatus> {
+    return sendProtocolRequest(this.manifest, InquirySessionMethod.Status, checkSourceInputs ? { checkSourceInputs } : undefined, this.requestTimeoutMs);
   }
 
   /** Return the surface map through the daemon-held runtime API. */
@@ -158,9 +158,9 @@ export function ensureInquirySession(
 ): Promise<InquirySessionClient> {
   const paths = resolveInquirySessionPaths(options.packageRoot);
   const requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_SESSION_REQUEST_TIMEOUT_MS;
-  const buildHash = options.buildHash ?? cachedSessionCompatibilityHash(paths);
+  const buildHash = options.buildHash ?? computeSessionCompatibilityHash(paths);
   const profilePaths = resolveInquirySessionProfilePaths(paths, buildHash);
-  const manifestPath = options.manifestPath ?? profilePaths.manifestPath;
+  const manifestPath = resolve(options.manifestPath ?? profilePaths.manifestPath);
   const startupLockPath = options.manifestPath === undefined
     ? profilePaths.startupLockPath
     : `${manifestPath}.startup.lock.json`;
@@ -212,43 +212,15 @@ export function ensureInquirySession(
   return promise;
 }
 
-/** Return the process-local compatibility hash for this package root and source-admission environment. */
-function cachedSessionCompatibilityHash(
-  /** Resolved session paths. */
-  paths: InquirySessionPaths,
-): string {
-  const cacheKey = sessionCompatibilityCacheKey(paths);
-  const cached = compatibilityHashCache.get(cacheKey);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const hash = computeSessionCompatibilityHash({ packageRoot: paths.packageRoot });
-  compatibilityHashCache.set(cacheKey, hash);
-  return hash;
-}
-
-/** Build the cache key for environment-sensitive source package admission. */
-function sessionCompatibilityCacheKey(
-  /** Resolved session paths. */
-  paths: InquirySessionPaths,
-): string {
-  return [
-    paths.packageRoot,
-    process.env.ATLAS_AURELIA_FRAMEWORK_ROOT ?? "",
-    process.env.ATLAS_AURELIA_PLUGIN_ROOT ?? "",
-    process.env.ATLAS_EXTERNAL_SOURCE_ROOTS ?? "",
-  ].join("\0");
-}
-
 async function ensureInquirySessionOnce(
   /** Fully resolved session startup options. */
   options: ResolvedEnsureInquirySessionOptions,
 ): Promise<InquirySessionClient> {
   const { manifestPath, requestTimeoutMs, buildHash } = options;
-  const existing = await probeManifestPath(manifestPath, requestTimeoutMs);
+  const existing = await probeManifestPath(manifestPath, requestTimeoutMs, true);
 
   if (existing !== undefined) {
-    if (existing.status.buildHash === buildHash) {
+    if (existing.status.buildHash === buildHash && existing.status.sourceInputsCurrent === true) {
       return existing.client;
     }
   }
@@ -261,15 +233,19 @@ export async function connectExistingInquirySession(
   /** Session probing options. */
   options: InquirySessionOptions = {},
 ): Promise<InquirySessionClient | undefined> {
+  return existingSession(options, true);
+}
+
+async function existingSession(options: InquirySessionOptions, checkSourceInputs: boolean): Promise<InquirySessionClient | undefined> {
   const paths = resolveInquirySessionPaths(options.packageRoot);
-  const buildHash = options.buildHash ?? cachedSessionCompatibilityHash(paths);
+  const buildHash = options.buildHash ?? computeSessionCompatibilityHash(paths);
   const profilePaths = resolveInquirySessionProfilePaths(paths, buildHash);
-  const manifestPath = options.manifestPath ?? profilePaths.manifestPath;
-  const probed = await probeManifestPath(manifestPath, options.requestTimeoutMs ?? DEFAULT_SESSION_REQUEST_TIMEOUT_MS);
+  const manifestPath = resolve(options.manifestPath ?? profilePaths.manifestPath);
+  const probed = await probeManifestPath(manifestPath, options.requestTimeoutMs ?? DEFAULT_SESSION_REQUEST_TIMEOUT_MS, checkSourceInputs);
   if (probed === undefined) {
     return undefined;
   }
-  if (probed.status.buildHash !== buildHash) {
+  if (probed.status.buildHash !== buildHash || (checkSourceInputs && probed.status.sourceInputsCurrent !== true)) {
     return undefined;
   }
   return probed.client;
@@ -280,7 +256,7 @@ export async function shutdownExistingInquirySession(
   /** Session probing options. */
   options: InquirySessionOptions & { readonly reason?: string } = {},
 ): Promise<boolean> {
-  const client = await connectExistingInquirySession(options);
+  const client = await existingSession(options, false);
   if (client === undefined) {
     return false;
   }
@@ -297,11 +273,11 @@ async function waitForOrStartCompatibleSession(
   let lastError: unknown;
 
   while (Date.now() < deadline) {
-    const probed = await probeManifestPath(options.manifestPath, options.requestTimeoutMs).catch((error: unknown) => {
+    const probed = await probeManifestPath(options.manifestPath, options.requestTimeoutMs, true).catch((error: unknown) => {
       lastError = error;
       return undefined;
     });
-    if (probed?.status.buildHash === options.buildHash) {
+    if (probed?.status.buildHash === options.buildHash && probed.status.sourceInputsCurrent === true) {
       return probed.client;
     }
 
@@ -326,12 +302,12 @@ async function startCompatibleSessionUnderLock(
   /** Fully resolved session startup options. */
   options: ResolvedEnsureInquirySessionOptions,
 ): Promise<InquirySessionClient> {
-  const existing = await probeManifestPath(options.manifestPath, options.requestTimeoutMs);
+  const existing = await probeManifestPath(options.manifestPath, options.requestTimeoutMs, true);
   if (existing !== undefined) {
-    if (existing.status.buildHash === options.buildHash) {
+    if (existing.status.buildHash === options.buildHash && existing.status.sourceInputsCurrent === true) {
       return existing.client;
     }
-    await existing.client.shutdown(`build hash changed from ${existing.status.buildHash} to ${options.buildHash}`).catch(() => undefined);
+    await existing.client.shutdown("Atlas build or source inputs changed");
     await sleep(250);
   } else {
     const staleManifest = readInquirySessionManifest(options.manifestPath);
@@ -341,7 +317,7 @@ async function startCompatibleSessionUnderLock(
     }
   }
 
-  startInquirySessionDaemon(options.paths, {
+  const child = await startInquirySessionDaemon(options.paths, {
     manifestPath: options.manifestPath,
     buildHash: options.buildHash,
     idleTtlMs: options.idleTtlMs,
@@ -353,11 +329,13 @@ async function startCompatibleSessionUnderLock(
   return waitForCompatibleSession(options.manifestPath, options.buildHash, {
     requestTimeoutMs: options.requestTimeoutMs,
     startupTimeoutMs: options.startupTimeoutMs,
+    child,
+    stderrPath: options.stderrPath,
   });
 }
 
 /** Start a detached daemon process from compiled build output. */
-function startInquirySessionDaemon(
+async function startInquirySessionDaemon(
   /** Resolved package and log paths. */
   paths: InquirySessionPaths,
   /** Startup identity supplied to the daemon. */
@@ -375,7 +353,7 @@ function startInquirySessionDaemon(
     /** Log file receiving daemon stderr. */
     readonly stderrPath: string;
   },
-): void {
+): Promise<ChildProcess> {
   if (!existsSync(paths.daemonEntry)) {
     throw new Error(`Cannot start Atlas session because ${paths.daemonEntry} does not exist. Build the package first.`);
   }
@@ -383,24 +361,32 @@ function startInquirySessionDaemon(
   mkdirSync(dirname(options.stdoutPath), { recursive: true });
   mkdirSync(dirname(options.stderrPath), { recursive: true });
   const stdout = openSync(options.stdoutPath, "a");
-  const stderr = openSync(options.stderrPath, "a");
-  const child = spawn(process.execPath, [
-    paths.daemonEntry,
-    "--manifest", options.manifestPath,
-    "--build-hash", options.buildHash,
-    "--package-root", paths.packageRoot,
-    "--idle-ttl-ms", String(options.idleTtlMs),
-    "--heartbeat-interval-ms", String(options.heartbeatIntervalMs),
-  ], {
-    cwd: paths.packageRoot,
-    detached: true,
-    stdio: ["ignore", stdout, stderr],
-    windowsHide: true,
-  });
-
-  child.unref();
-  closeSync(stdout);
-  closeSync(stderr);
+  let stderr: number | undefined;
+  try {
+    stderr = openSync(options.stderrPath, "a");
+    const child = spawn(process.execPath, [
+      paths.daemonEntry,
+      "--manifest", options.manifestPath,
+      "--build-hash", options.buildHash,
+      "--package-root", paths.packageRoot,
+      "--idle-ttl-ms", String(options.idleTtlMs),
+      "--heartbeat-interval-ms", String(options.heartbeatIntervalMs),
+    ], {
+      cwd: paths.packageRoot,
+      detached: true,
+      stdio: ["ignore", stdout, stderr],
+      windowsHide: true,
+    });
+    await new Promise<void>((resolve, reject) => {
+      child.once("spawn", resolve);
+      child.once("error", reject);
+    });
+    child.unref();
+    return child;
+  } finally {
+    closeSync(stdout);
+    if (stderr !== undefined) closeSync(stderr);
+  }
 }
 
 /** Try to claim the cross-process startup lock through atomic file creation. */
@@ -427,6 +413,7 @@ function tryAcquireStartupLock(
     manifestPath: options.manifestPath,
     packageRoot: options.paths.packageRoot,
     createdAt: new Date().toISOString(),
+    startupTimeoutMs: options.startupTimeoutMs,
   };
 
   try {
@@ -457,15 +444,17 @@ function removeStaleStartupLock(
 ): void {
   const current = readStartupLock(lockPath);
   if (current === undefined) {
-    if (existsSync(lockPath)) {
+    // The owner creates the file exclusively before writing its JSON. Give that
+    // short interval the same startup deadline as an unreadable abandoned lock.
+    const stat = statSync(lockPath, { throwIfNoEntry: false });
+    if (stat !== undefined && Date.now() - stat.mtimeMs > startupTimeoutMs) {
       rmSync(lockPath, { force: true });
     }
     return;
   }
 
-  const createdAtMs = Date.parse(current.createdAt);
-  const expired = Number.isNaN(createdAtMs) || Date.now() - createdAtMs > startupTimeoutMs;
-  if (!isProcessAlive(current.pid) || expired) {
+  const lockDeadline = Date.parse(current.createdAt) + (current.startupTimeoutMs ?? DEFAULT_SESSION_STARTUP_TIMEOUT_MS);
+  if (!isProcessAlive(current.pid) || Date.now() > lockDeadline) {
     rmSync(lockPath, { force: true });
   }
 }
@@ -489,6 +478,8 @@ function readStartupLock(
       || typeof parsed.manifestPath !== "string"
       || typeof parsed.packageRoot !== "string"
       || typeof parsed.createdAt !== "string"
+      || !Number.isFinite(Date.parse(parsed.createdAt))
+      || (parsed.startupTimeoutMs !== undefined && !(Number.isFinite(parsed.startupTimeoutMs) && parsed.startupTimeoutMs > 0))
     ) {
       return undefined;
     }
@@ -510,23 +501,29 @@ async function waitForCompatibleSession(
     readonly requestTimeoutMs: number;
     /** Overall startup timeout. */
     readonly startupTimeoutMs: number;
+    /** Started process and its stderr log for an actionable early boot failure. */
+    readonly child: ChildProcess;
+    readonly stderrPath: string;
   },
 ): Promise<InquirySessionClient> {
   const deadline = Date.now() + options.startupTimeoutMs;
   let lastError: unknown;
 
   while (Date.now() < deadline) {
+    if (options.child.exitCode !== null || options.child.signalCode !== null) {
+      throw new Error(`Atlas session exited during startup (${options.child.exitCode ?? options.child.signalCode}). See ${options.stderrPath}.`);
+    }
     const probed = await probeManifestPath(manifestPath, options.requestTimeoutMs).catch((error: unknown) => {
       lastError = error;
       return undefined;
     });
-    if (probed?.status.buildHash === buildHash) {
+    if (probed?.status.buildHash === buildHash && probed.status.pid === options.child.pid) {
       return probed.client;
     }
     await sleep(100);
   }
 
-  throw new Error(`Timed out waiting for Atlas session to start.${lastError instanceof Error ? ` Last error: ${lastError.message}` : ""}`);
+  throw new Error(`Timed out waiting for Atlas session to start. See ${options.stderrPath}.${lastError instanceof Error ? ` Last error: ${lastError.message}` : ""}`);
 }
 
 /** Probe the manifest path and return a live client plus status when possible. */
@@ -535,6 +532,7 @@ async function probeManifestPath(
   manifestPath: string,
   /** Request timeout for the status probe. */
   requestTimeoutMs: number,
+  checkSourceInputs = false,
 ): Promise<{ readonly client: InquirySessionClient; readonly status: InquirySessionStatus } | undefined> {
   const manifest = readInquirySessionManifest(manifestPath);
   if (manifest === undefined) {
@@ -543,7 +541,7 @@ async function probeManifestPath(
 
   const client = new InquirySessionClient(manifest, requestTimeoutMs);
   try {
-    const status = await client.status();
+    const status = await client.status(checkSourceInputs);
     if (
       status.pid !== manifest.pid
       || status.buildHash !== manifest.buildHash
@@ -552,7 +550,13 @@ async function probeManifestPath(
       return undefined;
     }
     return { client, status };
-  } catch {
+  } catch (error) {
+    // A busy or failing live session still owns its lease. A refused loopback
+    // connection can outlive its listener (including an unrelated reused PID).
+    const refused = error instanceof Error && "code" in error && error.code === "ECONNREFUSED";
+    if (!refused && isProcessAlive(manifest.pid)) {
+      throw error;
+    }
     return undefined;
   }
 }
@@ -570,12 +574,12 @@ function sendProtocolRequest<TResult>(
 ): Promise<TResult> {
   return new Promise((resolvePromise, rejectPromise) => {
     const id = `${Date.now()}:${process.pid}:${Math.random().toString(36).slice(2)}`;
-    const request: InquirySessionRequest = params === undefined ? { id, method } : { id, method, params };
+    const request: InquirySessionRequest = { id, method, sessionStartedAt: manifest.startedAt, params };
     const socket = createConnection({ host: manifest.endpoint.host, port: manifest.endpoint.port });
     let buffer = "";
     let settled = false;
     const timer = setTimeout(() => {
-      settle("reject", new Error(`Timed out waiting for Atlas session method ${method}.`));
+      settle("reject", Object.assign(new Error(`Timed out waiting for Atlas session method ${method}.`), { code: "ETIMEDOUT" }));
     }, timeoutMs);
     timer.unref();
 

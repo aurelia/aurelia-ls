@@ -1,3 +1,4 @@
+import { matchesProductPathPrefix, productSourceLocusPath, semanticRuntimeSourceRoot } from "./product-architecture-source.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
 import {
   BasisAuthority,
@@ -72,6 +73,10 @@ export function answerProductVocabulary(
   inquiry: Inquiry,
   sourceProject: SourceProject,
 ): Answer<ProductVocabularyValue> {
+  if (productSourceLocusPath(inquiry.locus, sourceProject.repoRoot) === null) {
+    return createAnswer(inquiry, OutcomeKind.NoClaim,
+      "Product vocabulary reads packages/semantic-runtime/src. Select the product package or a file in it.");
+  }
   const analysis = readProductVocabularyAnalysis(sourceProject);
   const projection = productVocabularyProjection(inquiry);
   const basis = productVocabularyBasis(sourceProject);
@@ -212,11 +217,18 @@ function productVocabularyProjection(inquiry: Inquiry): ProductVocabularyProject
   }
 }
 
+function vocabularyPathFilter(inquiry: Inquiry): string | undefined {
+  const scope = productSourceLocusPath(inquiry.locus);
+  return scope === semanticRuntimeSourceRoot ? undefined : scope ?? undefined;
+}
+
 function filterDefinitions(
   rows: readonly ProductVocabularyDefinitionRow[],
   inquiry: Inquiry,
 ): readonly ProductVocabularyDefinitionRow[] {
+  const path = vocabularyPathFilter(inquiry);
   return rows.filter((row) =>
+    matchesProductPathPrefix(row.source.filePath, path) &&
     matchesFilterValue(row.slot, inquiryStringFilter(inquiry, "slot")) &&
     matchesFilterValue(row.namespace, inquiryStringFilter(inquiry, "namespace")) &&
     matchesFilterValue(row.memberName, inquiryStringFilter(inquiry, "memberName")) &&
@@ -236,7 +248,9 @@ function filterUsages(
   rows: readonly ProductVocabularyUsageRow[],
   inquiry: Inquiry,
 ): readonly ProductVocabularyUsageRow[] {
+  const path = vocabularyPathFilter(inquiry);
   return rows.filter((row) =>
+    matchesProductPathPrefix(row.source.filePath, path) &&
     matchesFilterValue(row.rootName, inquiryStringFilter(inquiry, "rootName")) &&
     matchesFilterValue(row.namespace, inquiryStringFilter(inquiry, "namespace")) &&
     matchesFilterValue(row.memberName, inquiryStringFilter(inquiry, "memberName")) &&
@@ -258,7 +272,9 @@ function filterClaimPredicates(
 ): readonly ProductClaimPredicateRow[] {
   const endpointKind = inquiryStringFilter(inquiry, "endpointKind");
   const productKind = inquiryStringFilter(inquiry, "productKind");
+  const path = vocabularyPathFilter(inquiry);
   return rows.filter((row) =>
+    matchesProductPathPrefix(row.source.filePath, path) &&
     matchesFilterValue(row.namespace, inquiryStringFilter(inquiry, "namespace")) &&
     matchesFilterValue(row.memberName, inquiryStringFilter(inquiry, "memberName")) &&
     (endpointKind === undefined ||
@@ -284,7 +300,9 @@ function filterClaimGraphEdges(
   inquiry: Inquiry,
 ): readonly ProductClaimGraphEdgeRow[] {
   const productKind = inquiryStringFilter(inquiry, "productKind");
+  const path = vocabularyPathFilter(inquiry);
   return rows.filter((row) =>
+    matchesProductPathPrefix(row.source.filePath, path) &&
     matchesFilterValue(row.predicateKey, inquiryStringFilter(inquiry, "predicateKey")) &&
     (productKind === undefined ||
       row.subjectProductKindId === productKind ||
@@ -307,7 +325,9 @@ function filterClaimSignatureIssues(
   rows: readonly ProductClaimSignatureIssueRow[],
   inquiry: Inquiry,
 ): readonly ProductClaimSignatureIssueRow[] {
+  const path = vocabularyPathFilter(inquiry);
   return rows.filter((row) =>
+    matchesProductPathPrefix(row.source.filePath, path) &&
     matchesFilterValue(row.kind, inquiryStringFilter(inquiry, "issueKind")) &&
     matchesFilterValue(row.predicateKey, inquiryStringFilter(inquiry, "predicateKey")) &&
     matchesFilterValue(row.productKindRef ?? "", inquiryStringFilter(inquiry, "productKind")) &&

@@ -25,7 +25,7 @@ export interface InquirySessionManifest {
   readonly pid: number;
   /** Loopback endpoint where the daemon accepts line-delimited JSON requests. */
   readonly endpoint: InquirySessionEndpoint;
-  /** Content hash of the compiled build output the daemon is running. */
+  /** Compatibility hash of the compiled build, admitted root sources, package manifests and compiler settings. */
   readonly buildHash: string;
   /** Absolute path to the daemon entrypoint used to start this process. */
   readonly daemonEntry: string;
@@ -69,6 +69,8 @@ export const enum InquirySessionMethod {
 export interface InquirySessionRequest<TMethod extends InquirySessionMethod = InquirySessionMethod, TParams = unknown> {
   /** Caller-assigned request id echoed by the response. */
   readonly id: string;
+  /** Reject a request if this endpoint has since been reused by another daemon. */
+  readonly sessionStartedAt?: string;
   /** Method to invoke. */
   readonly method: TMethod;
   /** Method-specific parameters. */
@@ -138,7 +140,7 @@ export interface InquirySessionStatus {
   readonly packageName: "@aurelia-ls/atlas";
   /** Process id of the daemon serving requests. */
   readonly pid: number;
-  /** Build hash the daemon was started with. */
+  /** Candidate profile hash. Actual TypeScript host observations are also checked on fresh acquisition. */
   readonly buildHash: string;
   /** Loopback endpoint currently serving requests. */
   readonly endpoint: InquirySessionEndpoint;
@@ -148,6 +150,8 @@ export interface InquirySessionStatus {
   readonly idleMs: number;
   /** Number of protocol requests currently executing inside the daemon. */
   readonly activeRequestCount: number;
+  /** Present on fresh acquisition probes that check the Program's filesystem and resolution observations. */
+  readonly sourceInputsCurrent?: boolean;
   /** World summary exposed for cheap session inspection. */
   readonly world: InquirySessionWorldSummary;
   /** Runtime-implemented lens ids in this daemon. */
@@ -186,10 +190,10 @@ export interface InquirySessionSelfCheckResult {
   readonly selfOpenSeams: number;
 }
 
-/** Result returned after accepting a shutdown request. */
+/** Whether an existing daemon accepted the requested shutdown. */
 export interface InquirySessionShutdownResult {
-  /** True when the daemon accepted the shutdown request. */
-  readonly accepted: true;
+  /** False when the session API found no matching daemon. */
+  readonly accepted: boolean;
   /** Reason recorded for this shutdown. */
   readonly reason: string;
 }

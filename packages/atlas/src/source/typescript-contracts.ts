@@ -202,6 +202,8 @@ export interface SourceSelectorResolution {
   readonly selector: SourceSelector;
   /** Serializable targets matched by the selector after exact filters are applied. */
   readonly targets: readonly SourceTargetRow[];
+  /** Additional selected targets outside this result's metadata sample. Use ts.source:summary to page them. */
+  readonly omittedTargetCount?: number;
   /** Number of candidates before occurrence slicing. */
   readonly candidateCount: number;
   /** Machine-readable resolution diagnostics. */
@@ -224,12 +226,16 @@ export interface SourceResolutionDiagnostic {
 
 /** Options for bounded source text reads. */
 export interface SourceTextReadOptions {
-  /** Maximum source characters returned per target. */
+  /** UTF-16 text budget for a page, or per target for an unpaged substrate read. */
   readonly maxTextChars: number;
+  /** Target offset and optional UTF-16 offset into that target. */
+  readonly page?: { readonly offset: number; readonly textOffset: number; readonly limit: number };
 }
 
 /** One bounded source text slice. */
 export interface SourceTextSlice {
+  /** Zero-based offset within the target at which this slice starts. */
+  readonly textOffset: number;
   /** Target whose text was read. */
   readonly target: SourceTargetRow;
   /** True when the text came from a TypeScript Program source file. */
@@ -244,6 +250,10 @@ export interface SourceTextSlice {
 
 /** Result returned by the source text substrate. */
 export interface SourceTextRead {
+  /** Total matched targets before paging. */
+  readonly targetCount: number;
+  /** Opaque continuation over the remaining targets and, for text reads, their characters. */
+  readonly nextCursor?: string;
   /** Selector resolution used for the read. */
   readonly resolution: SourceSelectorResolution;
   /** Number of resolved targets backed by the TypeScript Program. */
@@ -328,7 +338,7 @@ export interface TypeScriptModuleEdge {
   readonly sourceFile: SourceFileIdentity;
   /** Exact module specifier text from source, without quotes. */
   readonly specifier: string;
-  /** Best-effort resolved in-repo target file for relative specifiers. */
+  /** Module file selected by TypeScript in the current Program, including package declaration files. */
   readonly resolvedFile?: SourceFileIdentity;
   /** Imported names, namespace names, or default import names visible on an import edge. */
   readonly importedNames: readonly string[];
@@ -908,6 +918,10 @@ export interface TypeScriptDiagnosticEntry {
 
 /** Bounded TypeScript diagnostics projection for resolved files. */
 export interface TypeScriptDiagnosticsRead {
+  /** Number of selected files actually checked by the shared LanguageService. */
+  readonly checkedFileCount: number;
+  /** Diagnostic categories across all selected files, before paging. */
+  readonly categoryCounts: Readonly<Record<string, number>>;
   /** Selector resolution used for this projection. */
   readonly resolution: SourceSelectorResolution;
   /** Total diagnostic rows before pagination. */

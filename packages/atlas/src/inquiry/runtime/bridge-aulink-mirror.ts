@@ -80,6 +80,8 @@ export interface AuLinkMirrorFilters extends AuLinkFilters {
   readonly memberDeclarationKind?: string;
   readonly presence?: string;
   readonly ownerName?: string;
+  /** Exact declaration or member that owns the usage site. */
+  readonly ownerSourceKey?: string;
   readonly ownerKind?: string;
   readonly ownerMemberName?: string;
   readonly usageRole?: string;

@@ -1,8 +1,10 @@
 import { LensId } from "../inquiry/lens.js";
+import type { PageInfo } from "../inquiry/budget.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
+import { capabilityCorpusMentions } from "../inquiry/runtime/framework-capability-territory.js";
 import { createApi } from "../session/index.js";
 import {
-  answerValue,
+  readAllPagedRows,
   assertHitOrMissAnswer,
   assertKnownScriptArguments,
   scriptNumberArgumentValue,
@@ -104,6 +106,7 @@ interface CapabilitiesValue {
 
 interface FamilyCoverage {
   readonly family: string;
+  readonly sourcePage: PageInfo | undefined;
   readonly total: number;
   readonly internal: readonly SourceConstruct[];
   readonly publicTotal: number;
@@ -115,14 +118,12 @@ interface FamilyCoverage {
 
 const api = createApi({ idleTtlMs: 120_000, requestTimeoutMs: 180_000 });
 
-const capabilitiesAnswer = await api.ask({
+const capabilityRows = await readAllPagedRows<CapabilitiesValue, CapabilityRow>(api, {
+  label: "framework.capabilities:catalog",
   lens: LensId.FrameworkCapabilities,
-  locus: RepoRootLocus,
   projection: "catalog",
-  budget: { rows: rowBudget, evidencePerSubject: 0 },
+  rowsFromValue: (value) => value?.capabilityRows ?? [],
 });
-assertHitOrMissAnswer("framework.capabilities:catalog", capabilitiesAnswer);
-const capabilityRows = answerValue<CapabilitiesValue>(capabilitiesAnswer)?.capabilityRows ?? [];
 const corpus = capabilityCorpus(capabilityRows);
 
 const familyCoverages: FamilyCoverage[] = [];
@@ -145,6 +146,7 @@ for (const family of COVERAGE_FAMILIES) {
   const uncovered = publicConstructs.filter((construct) => !isBroadlyRepresented(construct, corpus));
   familyCoverages.push({
     family: family.id,
+    sourcePage: answer.page,
     total: constructs.length,
     internal,
     publicTotal: publicConstructs.length,
@@ -176,7 +178,7 @@ function printCoverage(families: readonly FamilyCoverage[], capabilityRowCount: 
   for (const family of families) {
     console.log("");
     console.log(`family: ${family.family}`);
-    console.log(`- source constructs: ${family.total}`);
+    console.log(`- source constructs in this page: ${family.total} of ${family.sourcePage?.total ?? "unknown"}`);
     console.log(`- internal constructs not counted as author-facing capability gaps: ${family.internal.length}`);
     console.log(`- author-facing constructs: ${family.publicTotal}`);
     console.log(`- exact construct identity represented: ${family.exact}`);
@@ -242,22 +244,12 @@ function capabilityCorpus(rows: readonly CapabilityRow[]): string {
 }
 
 function isExactlyRepresented(construct: SourceConstruct, corpus: string): boolean {
-  return construct.exactMatchTerms.some((term) => corpusHasTerm(corpus, term));
+  return construct.exactMatchTerms.some((term) => capabilityCorpusMentions(corpus, term));
 }
 
 function isBroadlyRepresented(construct: SourceConstruct, corpus: string): boolean {
   return isExactlyRepresented(construct, corpus)
-    || construct.broadMatchTerms.some((term) => corpusHasTerm(corpus, term));
-}
-
-function corpusHasTerm(corpus: string, term: string): boolean {
-  const normalized = term.trim().toLowerCase();
-  if (normalized.length < 2) {
-    return false;
-  }
-  const escaped = normalized.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  // Hyphen-aware word boundary so "case" does not match inside "default-case".
-  return new RegExp(`(^|[^a-z0-9-])${escaped}([^a-z0-9-]|$)`).test(corpus);
+    || construct.broadMatchTerms.some((term) => capabilityCorpusMentions(corpus, term));
 }
 
 function readArrayField<TRow>(value: unknown, field: string): readonly TRow[] {

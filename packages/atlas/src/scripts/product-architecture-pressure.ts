@@ -1,3 +1,4 @@
+import type { ProductArchitectureValue } from "../inquiry/runtime/product-architecture-lenses.js";
 import { performance } from "node:perf_hooks";
 
 import { countEntriesBy, groupBy } from "../collections.js";
@@ -16,138 +17,7 @@ import {
   printEmptyRows,
   readAllPagedRows,
   sourceLabel,
-  type ScriptSourceRef,
 } from "./script-output.js";
-
-interface ProductArchitecturePressureValue {
-  readonly modules?: readonly {
-    readonly filePath: string;
-    readonly lineCount: number;
-    readonly functionSurfaceCount: number;
-    readonly largeFunctionCount: number;
-    readonly maxFunctionLineCount: number;
-    readonly maxFunctionName: string | null;
-    readonly crossAreaImportCount: number;
-    readonly localImportInCount: number;
-  }[];
-  readonly areaDependencies?: readonly {
-    readonly fromArea: string;
-    readonly toArea: string;
-    readonly dependencyCount: number;
-    readonly sourceModuleCount: number;
-    readonly targetModuleCount: number;
-  }[];
-  readonly classSurfaces?: readonly {
-    readonly name: string;
-    readonly filePath: string;
-    readonly lineCount: number;
-    readonly methodCount: number;
-    readonly propertyCount: number;
-    readonly auLinkIds: readonly string[];
-    readonly auLinkCatalogIdsForName: readonly string[];
-    readonly surfaceRole: string;
-    readonly surfaceRoleReason: string;
-    readonly source?: SourceRef;
-  }[];
-  readonly functionSurfaces?: readonly {
-    readonly name: string;
-    readonly functionKind: string;
-    readonly filePath: string;
-    readonly lineCount: number;
-    readonly callSiteCount: number;
-    readonly crossAreaCallSiteCount: number;
-    readonly source?: SourceRef;
-  }[];
-  readonly callSites?: readonly {
-    readonly calleeName: string;
-    readonly calleeText: string;
-    readonly firstArgumentText?: string | null;
-    readonly firstArgumentSyntaxKind?: string | null;
-    readonly firstArgumentOriginKind?: string;
-    readonly firstArgumentOriginText?: string | null;
-    readonly fromFilePath: string;
-    readonly className: string | null;
-    readonly functionName: string | null;
-    readonly source?: SourceRef;
-  }[];
-  readonly functionDuplicateGroups?: readonly {
-    readonly name: string;
-    readonly functionCount: number;
-    readonly fileCount: number;
-    readonly lineCount: number;
-    readonly distinctBodyFingerprintCount: number | null;
-    readonly repeatedBodyFingerprintCount: number;
-    readonly distinctBodyShapeFingerprintCount: number | null;
-    readonly repeatedBodyShapeFingerprintCount: number;
-    readonly samples: readonly string[];
-  }[];
-  readonly sourceTemplateDuplicateGroups?: readonly {
-    readonly templateFingerprint: string;
-    readonly templateCount: number;
-    readonly fileCount: number;
-    readonly templateLineCount: number;
-    readonly templateCharacterCount: number;
-    readonly templateNames: readonly string[];
-    readonly filePaths: readonly string[];
-    readonly placeholderNames: readonly string[];
-    readonly samples: readonly string[];
-    readonly source?: SourceRef;
-  }[];
-  readonly functionControlFlowShapeGroups?: readonly {
-    readonly switchTopologyFingerprint: string;
-    readonly functionCount: number;
-    readonly nameCount: number;
-    readonly fileCount: number;
-    readonly lineCount: number;
-    readonly switchTopologyCount: number;
-    readonly nameSamples: readonly string[];
-    readonly fileSamples: readonly string[];
-  }[];
-  readonly kernelRecordConstructions?: readonly {
-    readonly constructionKind: "new-expression" | "object-literal";
-    readonly className: string | null;
-    readonly recordKind: string;
-    readonly productKindExpression: string | null;
-    readonly predicateKeyExpression: string | null;
-    readonly seamKindExpression: string | null;
-    readonly evidenceKindExpression: string | null;
-    readonly filePath: string;
-    readonly ownerFunctionName: string | null;
-    readonly source?: SourceRef;
-  }[];
-  readonly kernelRecordBatches?: readonly {
-    readonly committed: boolean;
-    readonly recordsExpression: string | null;
-    readonly labelExpression: string | null;
-    readonly labelLiteral: string | null;
-    readonly commitReceiverExpression: string | null;
-    readonly filePath: string;
-    readonly ownerFunctionName: string | null;
-    readonly source?: SourceRef;
-  }[];
-  readonly fieldProvenanceConstructions?: readonly {
-    readonly constructionKind: "new-expression" | "fieldProvenanceEntries-call";
-    readonly fieldNameOrigin:
-      | "constructor-argument"
-      | "array-literal-element"
-      | "array-conditional-element"
-      | "array-spread-element"
-      | "array-dynamic-element"
-      | "dynamic-field-collection";
-    readonly fieldNameExpression: string | null;
-    readonly fieldNameLiteral: string | null;
-    readonly provenanceExpression: string | null;
-    readonly provenanceExpressionOrigin:
-      | "exclusive-callback-switch-remap"
-      | "callback-parameter"
-      | "other";
-    readonly filePath: string;
-    readonly ownerFunctionName: string | null;
-    readonly source?: SourceRef;
-  }[];
-}
-
-type SourceRef = ScriptSourceRef;
 
 const detail = process.argv.includes("--detail");
 const structureDisplayRows = detail ? 12 : 6;
@@ -274,8 +144,8 @@ const [
     budget: { rows: 80, evidencePerSubject: 1 },
   }),
   readAllPagedRows<
-    ProductArchitecturePressureValue,
-    NonNullable<ProductArchitecturePressureValue["kernelRecordBatches"]>[number]
+    ProductArchitectureValue,
+    NonNullable<ProductArchitectureValue["kernelRecordBatches"]>[number]
   >(api, {
     label: "product.architecture:kernel-batches",
     lens: LensId.ProductArchitecture,
@@ -283,8 +153,8 @@ const [
     rowsFromValue: (value) => value?.kernelRecordBatches ?? [],
   }),
   readAllPagedRows<
-    ProductArchitecturePressureValue,
-    NonNullable<ProductArchitecturePressureValue["kernelRecordConstructions"]>[number]
+    ProductArchitectureValue,
+    NonNullable<ProductArchitectureValue["kernelRecordConstructions"]>[number]
   >(api, {
     label: "product.architecture:kernel-records",
     lens: LensId.ProductArchitecture,
@@ -292,8 +162,8 @@ const [
     rowsFromValue: (value) => value?.kernelRecordConstructions ?? [],
   }),
   readAllPagedRows<
-    ProductArchitecturePressureValue,
-    NonNullable<ProductArchitecturePressureValue["fieldProvenanceConstructions"]>[number]
+    ProductArchitectureValue,
+    NonNullable<ProductArchitectureValue["fieldProvenanceConstructions"]>[number]
   >(api, {
     label: "product.architecture:field-provenance",
     lens: LensId.ProductArchitecture,
@@ -327,11 +197,11 @@ assertHitOrMissAnswer(
 );
 
 const structureMilliseconds = performance.now() - structureStarted;
-const modules = answerValue<ProductArchitecturePressureValue>(moduleAnswer)?.modules ?? [];
+const modules = answerValue<ProductArchitectureValue>(moduleAnswer)?.modules ?? [];
 const areaDependencies =
-  answerValue<ProductArchitecturePressureValue>(areaDependencyAnswer)?.areaDependencies ?? [];
-const classes = answerValue<ProductArchitecturePressureValue>(classAnswer)?.classSurfaces ?? [];
-const inputClasses = answerValue<ProductArchitecturePressureValue>(inputClassAnswer)?.classSurfaces ?? [];
+  answerValue<ProductArchitectureValue>(areaDependencyAnswer)?.areaDependencies ?? [];
+const classes = answerValue<ProductArchitectureValue>(classAnswer)?.classSurfaces ?? [];
+const inputClasses = answerValue<ProductArchitectureValue>(inputClassAnswer)?.classSurfaces ?? [];
 const inputEnvelopeClasses = inputClasses.filter((row) =>
   row.methodCount === 0 && row.auLinkIds.length === 0
 );
@@ -340,17 +210,17 @@ const auLinkInputClasses = inputClasses.filter((row) =>
 );
 const behavioralInputClasses = inputClasses.filter((row) => row.methodCount > 0);
 const unanchoredAuLinkNameMatches =
-  answerValue<ProductArchitecturePressureValue>(auLinkNameMatchAnswer)?.classSurfaces ?? [];
+  answerValue<ProductArchitectureValue>(auLinkNameMatchAnswer)?.classSurfaces ?? [];
 const duplicateFunctionNameGroups =
-  answerValue<ProductArchitecturePressureValue>(duplicateFunctionAnswer)?.functionDuplicateGroups ?? [];
+  answerValue<ProductArchitectureValue>(duplicateFunctionAnswer)?.functionDuplicateGroups ?? [];
 const duplicateFunctionPressureGroups = duplicateFunctionNameGroups.filter((group) =>
   (group.repeatedBodyShapeFingerprintCount ?? 0) > 0 ||
   (group.repeatedBodyFingerprintCount ?? 0) > 0
 );
 const functionControlFlowShapeGroups =
-  answerValue<ProductArchitecturePressureValue>(functionControlFlowShapeAnswer)?.functionControlFlowShapeGroups ?? [];
+  answerValue<ProductArchitectureValue>(functionControlFlowShapeAnswer)?.functionControlFlowShapeGroups ?? [];
 const sourceTemplateDuplicateGroups =
-  answerValue<ProductArchitecturePressureValue>(sourceTemplateDuplicateAnswer)?.sourceTemplateDuplicateGroups ?? [];
+  answerValue<ProductArchitectureValue>(sourceTemplateDuplicateAnswer)?.sourceTemplateDuplicateGroups ?? [];
 const kernelRecordKindGroups = countEntriesBy(kernelRecordRows, (row) => row.recordKind);
 const kernelProductKindGroups = countEntriesBy(
   kernelRecordRows.filter((row) => row.productKindExpression !== null),
@@ -651,11 +521,11 @@ for (const [index, answer] of sourceReadAnswers.entries()) {
   assertHitOrMissAnswer(`product.architecture:call-sites ${sourceReadCalleeNames[index]}`, answer);
 }
 const checkerApiCallSites = checkerApiAnswers.flatMap((answer) =>
-  answerValue<ProductArchitecturePressureValue>(answer)?.callSites ?? []
+  answerValue<ProductArchitectureValue>(answer)?.callSites ?? []
 );
 const checkerApiPressureRows = checkerApiCallPressureRows(checkerApiCallSites);
 const sourceReadCallSites = sourceReadAnswers.flatMap((answer) =>
-  answerValue<ProductArchitecturePressureValue>(answer)?.callSites ?? []
+  answerValue<ProductArchitectureValue>(answer)?.callSites ?? []
 );
 const sourceReadPressureRows = sourceReadCallPressureRows(sourceReadCallSites);
 
@@ -713,7 +583,7 @@ const functionAnswer = await api.ask({
 
 assertHitOrMissAnswer("product.architecture:functions", functionAnswer);
 
-const functions = answerValue<ProductArchitecturePressureValue>(functionAnswer)?.functionSurfaces ?? [];
+const functions = answerValue<ProductArchitectureValue>(functionAnswer)?.functionSurfaces ?? [];
 
 console.log("");
 console.log("function call pressure");
@@ -807,7 +677,7 @@ interface FieldProvenanceFanOutPressureRow {
 }
 
 function checkerApiCallPressureRows(
-  rows: readonly NonNullable<ProductArchitecturePressureValue["callSites"]>[number][],
+  rows: readonly NonNullable<ProductArchitectureValue["callSites"]>[number][],
 ): readonly CheckerApiCallPressureRow[] {
   return [...groupBy(rows, (row) => row.calleeName).entries()]
     .map(([calleeName, group]) => {
@@ -832,7 +702,7 @@ function checkerApiCallPressureRows(
 }
 
 function sourceReadCallPressureRows(
-  rows: readonly NonNullable<ProductArchitecturePressureValue["callSites"]>[number][],
+  rows: readonly NonNullable<ProductArchitectureValue["callSites"]>[number][],
 ): readonly SourceReadCallPressureRow[] {
   return [...groupBy(rows, (row) => row.fromFilePath).entries()]
     .map(([filePath, group]) => {
@@ -856,13 +726,13 @@ function sourceReadCallPressureRows(
 }
 
 function checkerApiCallOwner(
-  row: NonNullable<ProductArchitecturePressureValue["callSites"]>[number],
+  row: NonNullable<ProductArchitectureValue["callSites"]>[number],
 ): string {
   return `${row.className ?? "(none)"}.${row.functionName ?? "(top)"}`;
 }
 
 function checkerApiFirstArgumentShape(
-  row: NonNullable<ProductArchitecturePressureValue["callSites"]>[number],
+  row: NonNullable<ProductArchitectureValue["callSites"]>[number],
 ): string {
   const text = row.firstArgumentText ?? "";
   if (text.length === 0) {
@@ -884,7 +754,7 @@ function checkerApiFirstArgumentShape(
 }
 
 function checkerApiFirstArgumentOrigin(
-  row: NonNullable<ProductArchitecturePressureValue["callSites"]>[number],
+  row: NonNullable<ProductArchitectureValue["callSites"]>[number],
 ): string {
   const originKind = row.firstArgumentOriginKind ?? "unknown";
   const originText = row.firstArgumentOriginText ?? "";
@@ -903,7 +773,7 @@ function checkerApiFirstArgumentOrigin(
 }
 
 function kernelRecordFilePressureRows(
-  rows: readonly NonNullable<ProductArchitecturePressureValue["kernelRecordConstructions"]>[number][],
+  rows: readonly NonNullable<ProductArchitectureValue["kernelRecordConstructions"]>[number][],
 ): readonly KernelRecordFilePressureRow[] {
   return [...groupBy(rows, (row) => row.filePath)]
     .map(([filePath, group]) => ({
@@ -923,7 +793,7 @@ function kernelRecordFilePressureRows(
 }
 
 function kernelRecordOwnerPressureRows(
-  rows: readonly NonNullable<ProductArchitecturePressureValue["kernelRecordConstructions"]>[number][],
+  rows: readonly NonNullable<ProductArchitectureValue["kernelRecordConstructions"]>[number][],
 ): readonly KernelRecordOwnerPressureRow[] {
   return [...groupBy(rows, productArchitectureOwnerLabel)]
     .map(([owner, group]) => ({
@@ -943,7 +813,7 @@ function kernelRecordOwnerPressureRows(
 }
 
 function kernelBatchFilePressureRows(
-  rows: readonly NonNullable<ProductArchitecturePressureValue["kernelRecordBatches"]>[number][],
+  rows: readonly NonNullable<ProductArchitectureValue["kernelRecordBatches"]>[number][],
 ): readonly KernelBatchFilePressureRow[] {
   return [...groupBy(rows, (row) => row.filePath)]
     .map(([filePath, group]) => ({
@@ -963,7 +833,7 @@ function kernelBatchFilePressureRows(
 }
 
 function kernelBatchOwnerPressureRows(
-  rows: readonly NonNullable<ProductArchitecturePressureValue["kernelRecordBatches"]>[number][],
+  rows: readonly NonNullable<ProductArchitectureValue["kernelRecordBatches"]>[number][],
 ): readonly KernelBatchOwnerPressureRow[] {
   return [...groupBy(rows, productArchitectureOwnerLabel)]
     .map(([owner, group]) => ({
@@ -983,7 +853,7 @@ function kernelBatchOwnerPressureRows(
 }
 
 function fieldProvenanceFilePressureRows(
-  rows: readonly NonNullable<ProductArchitecturePressureValue["fieldProvenanceConstructions"]>[number][],
+  rows: readonly NonNullable<ProductArchitectureValue["fieldProvenanceConstructions"]>[number][],
 ): readonly FieldProvenanceFilePressureRow[] {
   return [...groupBy(rows, (row) => row.filePath)]
     .map(([filePath, group]) => ({
@@ -1003,7 +873,7 @@ function fieldProvenanceFilePressureRows(
 }
 
 function fieldProvenanceOwnerPressureRows(
-  rows: readonly NonNullable<ProductArchitecturePressureValue["fieldProvenanceConstructions"]>[number][],
+  rows: readonly NonNullable<ProductArchitectureValue["fieldProvenanceConstructions"]>[number][],
 ): readonly FieldProvenanceOwnerPressureRow[] {
   return [...groupBy(rows, productArchitectureOwnerLabel)]
     .map(([owner, group]) => ({
@@ -1023,7 +893,7 @@ function fieldProvenanceOwnerPressureRows(
 }
 
 function fieldProvenanceFanOutPressureRows(
-  rows: readonly NonNullable<ProductArchitecturePressureValue["fieldProvenanceConstructions"]>[number][],
+  rows: readonly NonNullable<ProductArchitectureValue["fieldProvenanceConstructions"]>[number][],
 ): readonly FieldProvenanceFanOutPressureRow[] {
   return productArchitectureSameHandleFanOutGroups(rows).map((group) => ({
     owner: group.owner,
@@ -1036,7 +906,7 @@ function fieldProvenanceFanOutPressureRows(
 }
 
 function classRoleLabel(
-  row: NonNullable<ProductArchitecturePressureValue["classSurfaces"]>[number],
+  row: NonNullable<ProductArchitectureValue["classSurfaces"]>[number],
 ): string {
   return row.surfaceRoleReason.length === 0
     ? row.surfaceRole

@@ -6,7 +6,8 @@ import {
   EvaluationEffectCertainty,
   type EvaluationInvocationEffect,
 } from "../../evaluation/index.js";
-import { readFrameworkDiIndex } from "../../framework/di-index.js";
+import { frameworkDeclaredDiKeyAtSource, readFrameworkDiIndex } from "../../framework/di-index.js";
+import { diProviderSourceKey } from "../../framework/di-source.js";
 import {
   readFrameworkConfigurationDiWorld,
   type FrameworkDiDependencyAccess,
@@ -17,7 +18,6 @@ import {
 } from "../../framework/di-world.js";
 import {
   FrameworkMaterializationProviderIdentity,
-  FrameworkMaterializationProviderIdentityKind,
   FrameworkMaterializationRouteDescriptor,
   type FrameworkMaterializationRouteKind,
 } from "../../framework/materialization.js";
@@ -478,7 +478,7 @@ export function readFrameworkMaterializationIndex(
 ): FrameworkMaterializationIndex {
   const diIndex = readFrameworkDiIndex(sourceProject);
   const world = readFrameworkConfigurationDiWorld(sourceProject);
-  const routes = uniqueMaterializationRoutes([
+  const routes = uniqueMaterializationRoutes(sourceProject, [
     ...diIndex.relationships
       .filter(isProviderSeedAtom)
       .filter((row) => !isParameterizedProviderSeed(sourceProject, row))
@@ -487,7 +487,7 @@ export function readFrameworkMaterializationIndex(
       .filter((slot) => slot.role !== "resource-type-factory")
       .map((slot) => routeForConfigurationWorldSlot(sourceProject, world, slot))
       .filter((row): row is FrameworkMaterializationRouteRow => row !== null),
-  ]).filter((row) => routeMatches(row, filters));
+  ].filter((row) => routeMatches(row, filters)));
   const constructionAtoms = diIndex.relationships.filter(isConstructionSiteAtom);
   const dependencies = routes
     .flatMap((row) => row.dependencies)
@@ -616,10 +616,8 @@ export function answerFrameworkMaterialization(
   const evidence = routes
     .slice(0, evidenceLimit(inquiry))
     .map(evidenceForRoute);
-  const openSeams = openSeamsForRoutes(
-    routes.slice(0, evidence.length),
-    evidence,
-  );
+  const callbackRoutes = routes.filter(row => FrameworkMaterializationRouteDescriptor.forRouteKind(row.routeKind).tracesCallbackDependencies);
+  const openSeams = callbackRoutes.length > 0 ? [callbackOpenSeam(callbackRoutes[0]!, undefined)] : [];
   return createAnswer(
     inquiry,
     routes.length === 0
@@ -627,7 +625,7 @@ export function answerFrameworkMaterialization(
       : openSeams.length > 0
       ? OutcomeKind.Partial
       : OutcomeKind.Hit,
-    `Framework materialization has ${routes.length} DI provider route(s) and ${resourceInstantiations.length} resource instantiation row(s).`,
+    `Framework materialization has ${routes.length} DI provider route(s) and ${resourceInstantiations.length} resource instantiation row(s); ${callbackRoutes.length} callback provider(s) have open return/value effects.`,
     {
       value: materializationCounts(index),
       basis,
@@ -722,7 +720,7 @@ function routeForProviderSeed(
 ): FrameworkMaterializationRouteRow {
   const route = FrameworkMaterializationRouteDescriptor.forProviderSeed(row);
   const id = `framework-materialization:${row.id}`;
-  const key = row.key ?? row.from.name;
+  const key = frameworkDeclaredDiKeyAtSource(sourceProject, row.from.source)?.name ?? row.key ?? row.from.name;
   const providerIdentity = FrameworkMaterializationProviderIdentity.forRoute(
     key,
     route.routeKind,
@@ -792,8 +790,8 @@ function routeForConfigurationWorldSlot(
     providerEndpoint,
     providerExpressionLabelForDiWorldValueRef(slot.provider),
   );
-  const dependencies = world
-    .readDependenciesForRoute(slot.key.name, slot.provider.name)
+  const dependencies = world.dependencies
+    .filter(dependency => dependency.slotId === slot.id)
     .map((dependency, index) =>
       dependencyRowForDiWorldDependency(
         sourceProject,
@@ -836,8 +834,14 @@ function dependencyRowsFromConfigurationDiWorld(
   routeId: string,
 ): readonly FrameworkMaterializationDependencyRow[] {
   const key = row.key ?? row.from.name;
-  return readFrameworkConfigurationDiWorld(sourceProject)
-    .readDependenciesForRoute(key, row.to.name)
+  const world = readFrameworkConfigurationDiWorld(sourceProject);
+  const provider = diProviderSourceKey(sourceProject, row.to.source);
+  const keyOrigin = frameworkDeclaredDiKeyAtSource(sourceProject, row.from.source);
+  const matchingSlots = new Set(world.resolverSlots.filter(slot =>
+    provider !== null && provider === diProviderSourceKey(sourceProject, slot.provider.source) &&
+    (keyOrigin !== null ? keyOrigin.id === frameworkDeclaredDiKeyAtSource(sourceProject, slot.key.source)?.id : slot.key.name === key)
+  ).map(slot => slot.id));
+  return world.dependencies.filter(dependency => matchingSlots.has(dependency.slotId))
     .map((dependency, index) =>
       dependencyRowForDiWorldDependency(
         sourceProject,
@@ -881,14 +885,14 @@ function dependencyRowForDiWorldDependency(
     dependencyKey: dependency.dependencyKey.name,
     access,
     policy: FrameworkMaterializationDependencyPolicy.Direct,
-    certainty: EvaluationEffectCertainty.Unconditional,
+    certainty: EvaluationEffectCertainty.Potential,
     controlPath: dependency.path,
     callSite: dependency.callSite,
     receiver: null,
     argument: dependency.argument,
     source,
     argumentSource,
-    summary: `${key} depends on ${dependency.dependencyKey.name} through DI world ${dependency.access}.`,
+    summary: `${key}'s provider contains a ${dependency.access} of ${dependency.dependencyKey.name}; execution of this site depends on the runtime path.`,
   };
 }
 
@@ -947,16 +951,16 @@ function packageInfoForSource(
 }
 
 function uniqueMaterializationRoutes(
+  sourceProject: SourceProject,
   rows: readonly FrameworkMaterializationRouteRow[],
 ): readonly FrameworkMaterializationRouteRow[] {
   const seen = new Set<string>();
   const unique: FrameworkMaterializationRouteRow[] = [];
   for (const row of rows) {
-    const providerKey =
-      row.providerIdentity.kind === FrameworkMaterializationProviderIdentityKind.Named
-        ? row.providerIdentity.name
-        : row.providerIdentity.id;
-    const key = `${row.key}:${providerKey}:${row.strategy ?? "unknown"}`;
+    const identity = frameworkDeclaredDiKeyAtSource(sourceProject, row.keyEndpoint.source)?.id
+      ?? `${row.keyEndpoint.packageId}:${row.key}`;
+    const provider = diProviderSourceKey(sourceProject, row.provider.source) ?? row.id;
+    const key = JSON.stringify([identity, provider, row.strategy]);
     if (seen.has(key)) {
       continue;
     }
@@ -1351,6 +1355,7 @@ function routeMatches(
     (filters.packageId === undefined || row.packageId === filters.packageId) &&
     (filters.key === undefined ||
       row.key === filters.key ||
+      row.keyEndpoint.name === filters.key ||
       row.provider.name === filters.key ||
       row.providerIdentity.name === filters.key) &&
     (filters.strategy === undefined || row.strategy === filters.strategy) &&

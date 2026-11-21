@@ -1,4 +1,3 @@
-import path from "node:path";
 import { performance } from "node:perf_hooks";
 
 import ts from "typescript";
@@ -20,10 +19,11 @@ import {
   propertyNameText,
   readAuLinkModel,
   requiredSourceFileIdentity,
-  resolveAlias,
+  symbolForExpressionName,
   sourceReferenceForNode,
   SourcePackageId,
   SourceProjectKeyedMemo,
+  SourceProjectMemo,
   TypeScriptCallSiteKind,
   type SourceDeclarationRow,
   type SourceProject,
@@ -215,11 +215,11 @@ export interface ProductArchitectureDependencyRow {
   readonly relative: boolean;
   /** True when the target resolves to semantic-runtime src. */
   readonly local: boolean;
-  /** True when a relative import resolved to a source file. */
+  /** True when TypeScript resolved the import to a Program file or ambient module. */
   readonly resolved: boolean;
-  /** Resolved repository-relative semantic-runtime target file, when local. */
+  /** Program file selected by module resolution, when the import has a physical target. */
   readonly toFilePath: string | null;
-  /** Resolved target area, external for package imports, or null for unresolved relatives. */
+  /** Product area for a local target, external for a resolved external module, or null if unresolved. */
   readonly toArea: string | null;
   /** Import surface kind. */
   readonly importKind: "value-or-type" | "type-only" | "side-effect";
@@ -800,6 +800,28 @@ type ProductArchitecturePhaseRunner = <TValue>(
 const semanticRuntimeSrcPrefix = "packages/semantic-runtime/src/";
 const rootArea = "root";
 const largeFunctionLineThreshold = 100;
+// The five option axes select independent products. Keep each source-wide row family
+// once per immutable Program; an option tuple only holds a view onto the rows it requests.
+interface ProductArchitectureParts {
+  structure?: ReturnType<typeof readProductStructure>;
+  kernelRows?: ReturnType<typeof readProductArchitectureKernelRecordRows>;
+  functions?: ProductArchitectureAnalysis["functionSurfaces"];
+  bodyFunctions?: ProductArchitectureAnalysis["functionSurfaces"];
+  functionsWithCalls?: ProductArchitectureAnalysis["functionSurfaces"];
+  bodyFunctionsWithCalls?: ProductArchitectureAnalysis["functionSurfaces"];
+  compactCalls?: ProductArchitectureAnalysis["callSites"];
+  detailedCalls?: ProductArchitectureAnalysis["callSites"];
+  callDependencies?: ProductArchitectureAnalysis["callDependencies"];
+  symbolReferences?: ProductArchitectureAnalysis["symbolReferences"];
+  symbolDependencies?: ProductArchitectureAnalysis["symbolDependencies"];
+  sourceTemplates?: ProductArchitectureAnalysis["sourceTemplates"];
+  modules?: ProductArchitectureAnalysis["modules"];
+  areaDependencies?: ProductArchitectureAnalysis["areaDependencies"];
+  cycles?: ProductArchitectureAnalysis["cycles"];
+  areas?: ProductArchitectureAnalysis["areas"];
+}
+
+const productArchitectureParts = new SourceProjectMemo<ProductArchitectureParts>();
 const productArchitectureMemo =
   new SourceProjectKeyedMemo<string, ProductArchitectureAnalysis>();
 
@@ -847,6 +869,7 @@ export function readProductArchitectureAnalysis(
       includeCallDetails,
       includeSymbols,
       includeKernelRecords,
+      productArchitectureParts.read(sourceProject, () => ({})),
     ),
   );
 }
@@ -893,7 +916,139 @@ function buildProductArchitectureAnalysis(
   includeCallDetails: boolean = false,
   includeSymbols: boolean = true,
   includeKernelRecords: boolean = true,
+  retained: ProductArchitectureParts = {},
 ): ProductArchitectureAnalysis {
+  const { sourceFiles, declarationRows, dependencies, classSurfaces } =
+    retained.structure ??= readProductStructure(sourceProject, phase);
+  const kernelRecordRows = includeKernelRecords
+    ? retained.kernelRows ??= phase(
+      "kernel record source rows",
+      () => readProductArchitectureKernelRecordRows(sourceFiles),
+      (value) => value.constructions.length + value.batches.length + value.fieldProvenanceConstructions.length,
+    )
+    : {
+        constructorClassCount: 0,
+        constructions: [],
+        batches: [],
+        fieldProvenanceConstructions: [],
+      };
+  const kernelRecordConstructions = kernelRecordRows.constructions;
+  const kernelRecordBatches = kernelRecordRows.batches;
+  const fieldProvenanceConstructions = kernelRecordRows.fieldProvenanceConstructions;
+  const rawFunctionSurfaces = retained[includeFunctionBodyAnalysis ? "bodyFunctions" : "functions"] ??= phase(
+    "function surface rows",
+    () => sourceFiles.flatMap((entry) =>
+      functionSurfaceRows(entry, includeFunctionBodyAnalysis)
+    ),
+    rowCount,
+  );
+  const sourceTemplates = retained.sourceTemplates ??= phase(
+    "source template rows",
+    () => sourceFiles.flatMap(sourceTemplateRows),
+    rowCount,
+  );
+  const callSites = includeCallSites
+    ? retained[includeCallDetails ? "detailedCalls" : "compactCalls"] ??= phase(
+      "checker call-site rows",
+      () => callSiteRows(sourceProject, sourceFiles, includeCallDetails),
+      rowCount,
+    )
+    : [];
+  const functionSurfaces = includeCallSites
+    ? retained[includeFunctionBodyAnalysis ? "bodyFunctionsWithCalls" : "functionsWithCalls"] ??= phase(
+      "function surface call enrichment",
+      () => enrichFunctionSurfaces(rawFunctionSurfaces, callSites),
+      rowCount,
+    )
+    : rawFunctionSurfaces;
+  const callDependencies = includeCallSites
+    ? retained.callDependencies ??= phase(
+      "call dependency rows",
+      () => callDependencyRows(callSites),
+      rowCount,
+    )
+    : [];
+  const symbolReferences = includeSymbols
+    ? retained.symbolReferences ??= phase(
+      "checker symbol reference rows",
+      () => symbolReferenceRows(sourceProject, sourceFiles),
+      rowCount,
+    )
+    : [];
+  const symbolDependencies = includeSymbols
+    ? retained.symbolDependencies ??= phase(
+      "symbol dependency rows",
+      () => symbolDependencyRows(symbolReferences),
+      rowCount,
+    )
+    : [];
+  const modules = retained.modules ??= phase(
+    "module rows",
+    () => moduleRows(
+      sourceFiles,
+      declarationRows,
+      dependencies,
+      functionSurfaces,
+    ),
+    rowCount,
+  );
+  const areaDependencies = retained.areaDependencies ??= phase(
+    "area dependency rows",
+    () => areaDependencyRows(dependencies),
+    rowCount,
+  );
+  const cycles = retained.cycles ??= phase(
+    "import cycle rows",
+    () => cycleRows(modules, dependencies),
+    rowCount,
+  );
+  const areas = retained.areas ??= phase(
+    "area rows",
+    () => areaRows(modules, declarationRows, dependencies),
+    rowCount,
+  );
+
+  return {
+    version: PRODUCT_ARCHITECTURE_ANALYSIS_VERSION,
+    rollup: productArchitectureRollup(
+      areas,
+      modules,
+      declarationRows,
+      cycles,
+      classSurfaces,
+      functionSurfaces,
+      sourceTemplates,
+      callSites,
+      callDependencies,
+      symbolReferences,
+      symbolDependencies,
+      kernelRecordConstructions,
+      kernelRecordRows.constructorClassCount,
+      kernelRecordBatches,
+      fieldProvenanceConstructions,
+      dependencies,
+      areaDependencies,
+    ),
+    areas,
+    modules,
+    dependencies,
+    areaDependencies,
+    declarations: declarationRows,
+    cycles,
+    classSurfaces,
+    functionSurfaces,
+    sourceTemplates,
+    callSites,
+    callDependencies,
+    symbolReferences,
+    symbolDependencies,
+    kernelRecordConstructions,
+    kernelRecordBatches,
+    fieldProvenanceConstructions,
+  };
+}
+
+function readProductStructure(sourceProject: SourceProject, phase: ProductArchitecturePhaseRunner) {
   const sourceFiles = phase(
     "semantic-runtime source files",
     () => semanticRuntimeSourceFiles(sourceProject),
@@ -941,132 +1096,7 @@ function buildProductArchitectureAnalysis(
     ),
     rowCount,
   );
-  const kernelRecordRows = includeKernelRecords
-    ? phase(
-      "kernel record source rows",
-      () => readProductArchitectureKernelRecordRows(sourceFiles),
-      (value) => value.constructions.length + value.batches.length + value.fieldProvenanceConstructions.length,
-    )
-    : {
-        constructorClassCount: 0,
-        constructions: [],
-        batches: [],
-        fieldProvenanceConstructions: [],
-      };
-  const kernelRecordConstructions = kernelRecordRows.constructions;
-  const kernelRecordBatches = kernelRecordRows.batches;
-  const fieldProvenanceConstructions = kernelRecordRows.fieldProvenanceConstructions;
-  const rawFunctionSurfaces = phase(
-    "function surface rows",
-    () => sourceFiles.flatMap((entry) =>
-      functionSurfaceRows(entry, includeFunctionBodyAnalysis)
-    ),
-    rowCount,
-  );
-  const sourceTemplates = phase(
-    "source template rows",
-    () => sourceFiles.flatMap(sourceTemplateRows),
-    rowCount,
-  );
-  const callSites = includeCallSites
-    ? phase(
-      "checker call-site rows",
-      () => callSiteRows(sourceProject, sourceFiles, includeCallDetails),
-      rowCount,
-    )
-    : [];
-  const functionSurfaces = includeCallSites
-    ? phase(
-      "function surface call enrichment",
-      () => enrichFunctionSurfaces(rawFunctionSurfaces, callSites),
-      rowCount,
-    )
-    : rawFunctionSurfaces;
-  const callDependencies = includeCallSites
-    ? phase(
-      "call dependency rows",
-      () => callDependencyRows(callSites),
-      rowCount,
-    )
-    : [];
-  const symbolReferences = includeSymbols
-    ? phase(
-      "checker symbol reference rows",
-      () => symbolReferenceRows(sourceProject, sourceFiles),
-      rowCount,
-    )
-    : [];
-  const symbolDependencies = includeSymbols
-    ? phase(
-      "symbol dependency rows",
-      () => symbolDependencyRows(symbolReferences),
-      rowCount,
-    )
-    : [];
-  const modules = phase(
-    "module rows",
-    () => moduleRows(
-      sourceFiles,
-      declarationRows,
-      dependencies,
-      functionSurfaces,
-    ),
-    rowCount,
-  );
-  const areaDependencies = phase(
-    "area dependency rows",
-    () => areaDependencyRows(dependencies),
-    rowCount,
-  );
-  const cycles = phase(
-    "import cycle rows",
-    () => cycleRows(modules, dependencies),
-    rowCount,
-  );
-  const areas = phase(
-    "area rows",
-    () => areaRows(modules, declarationRows, dependencies),
-    rowCount,
-  );
-
-  return {
-    version: PRODUCT_ARCHITECTURE_ANALYSIS_VERSION,
-    rollup: productArchitectureRollup(
-      areas,
-      modules,
-      declarationRows,
-      cycles,
-      classSurfaces,
-      functionSurfaces,
-      sourceTemplates,
-      callSites,
-      callDependencies,
-      symbolReferences,
-      symbolDependencies,
-      kernelRecordConstructions,
-      kernelRecordRows.constructorClassCount,
-      kernelRecordBatches,
-      fieldProvenanceConstructions,
-      dependencies,
-      areaDependencies,
-    ),
-    areas,
-    modules,
-    dependencies,
-    areaDependencies,
-    declarations: declarationRows,
-    cycles,
-    classSurfaces,
-    functionSurfaces,
-    sourceTemplates,
-    callSites,
-    callDependencies,
-    symbolReferences,
-    symbolDependencies,
-    kernelRecordConstructions,
-    kernelRecordBatches,
-    fieldProvenanceConstructions,
-  };
+  return { sourceFiles, declarationRows, dependencies, classSurfaces };
 }
 
 function runProductArchitecturePhase<TValue>(
@@ -1144,14 +1174,7 @@ function dependencyRows(
     }
     const moduleSpecifier = statement.moduleSpecifier.text;
     const relative = moduleSpecifier.startsWith(".");
-    const target = relative
-      ? resolveRelativeImport(sourceProject, entry.sourceFile, moduleSpecifier)
-      : {
-          local: false,
-          resolved: true,
-          toFilePath: null,
-          toArea: "external",
-        };
+    const target = resolveImportTarget(sourceProject, statement.moduleSpecifier);
     const crossesArea =
       target.local && target.toArea !== null && entry.area !== target.toArea;
     rows.push({
@@ -1178,76 +1201,23 @@ function dependencyRows(
   return rows;
 }
 
-function resolveRelativeImport(
+function resolveImportTarget(
   sourceProject: SourceProject,
-  sourceFile: ts.SourceFile,
-  moduleSpecifier: string,
+  specifier: ts.StringLiteral,
 ): ResolvedImportTarget {
-  const basePath = path.resolve(path.dirname(sourceFile.fileName), moduleSpecifier);
-  for (const candidate of candidateImportPaths(basePath)) {
-    const targetFile = sourceProject.readSourceFile(candidate);
-    if (targetFile === null) {
-      continue;
-    }
-    const identity = sourceProject.sourceFileIdentity(targetFile);
-    if (
-      identity?.packageId === SourcePackageId.SemanticRuntime &&
-      identity.repoPath.startsWith(semanticRuntimeSrcPrefix)
-    ) {
-      return {
-        local: true,
-        resolved: true,
-        toFilePath: identity.repoPath,
-        toArea: areaForFilePath(identity.repoPath),
-      };
-    }
-    if (identity === null) {
-      return {
-        local: false,
-        resolved: true,
-        toFilePath: null,
-        toArea: "external",
-      };
-    }
-    return {
-      local: false,
-      resolved: true,
-      toFilePath: identity.repoPath,
-      toArea: identity.packageId ?? "external",
-    };
+  const file = sourceProject.resolvedModuleFile(specifier);
+  if (file === null) {
+    const symbol = sourceProject.checker.getSymbolAtLocation(specifier);
+    const ambient = symbol?.declarations?.some(ts.isModuleDeclaration) ?? false;
+    return { local: false, resolved: ambient, toFilePath: null, toArea: ambient ? "external" : null };
   }
+  const local = file.packageId === SourcePackageId.SemanticRuntime && file.repoPath.startsWith(semanticRuntimeSrcPrefix);
   return {
-    local: false,
-    resolved: false,
-    toFilePath: null,
-    toArea: null,
+    local,
+    resolved: true,
+    toFilePath: file.repoPath,
+    toArea: local ? areaForFilePath(file.repoPath) : "external",
   };
-}
-
-function candidateImportPaths(basePath: string): readonly string[] {
-  const extension = path.extname(basePath);
-  if (extension === ".js" || extension === ".mjs" || extension === ".cjs") {
-    const withoutExtension = basePath.slice(0, -extension.length);
-    return [
-      `${withoutExtension}.ts`,
-      `${withoutExtension}.tsx`,
-      `${withoutExtension}.mts`,
-      `${withoutExtension}.cts`,
-      basePath,
-    ];
-  }
-  if (extension.length > 0) {
-    return [basePath];
-  }
-  return [
-    basePath,
-    `${basePath}.ts`,
-    `${basePath}.tsx`,
-    `${basePath}.mts`,
-    `${basePath}.cts`,
-    path.join(basePath, "index.ts"),
-    path.join(basePath, "index.tsx"),
-  ];
 }
 
 function importKind(
@@ -2339,7 +2309,7 @@ function callSiteRowForExpression(
   symbolResolution: ProductArchitectureSymbolResolutionCache,
   includeCallDetails: boolean,
 ): ProductArchitectureCallSiteRow | null {
-  const symbol = symbolForCallCallee(sourceProject.checker, expression.expression);
+  const symbol = symbolForExpressionName(sourceProject.checker, expression.expression);
   const resolved = symbol === null ? null : symbolResolution.read(symbol);
   const callSite = lightweightCallSiteFact(
     sourceProject,
@@ -2988,26 +2958,6 @@ function targetDeclarationForSymbol(
   return null;
 }
 
-function symbolForCallCallee(
-  checker: ts.TypeChecker,
-  expression: ts.Expression,
-): ts.Symbol | null {
-  let symbol: ts.Symbol | undefined;
-  if (ts.isPropertyAccessExpression(expression)) {
-    symbol = checker.getSymbolAtLocation(expression.name) ??
-      checker.getSymbolAtLocation(expression);
-  } else if (
-    ts.isElementAccessExpression(expression) &&
-    expression.argumentExpression !== undefined
-  ) {
-    symbol = checker.getSymbolAtLocation(expression.argumentExpression) ??
-      checker.getSymbolAtLocation(expression);
-  } else {
-    symbol = checker.getSymbolAtLocation(expression);
-  }
-  return symbol === undefined ? null : resolveAlias(checker, symbol);
-}
-
 interface ProductArchitectureCallSiteDetails {
   readonly calleeType: string;
   readonly signature: string | null;
@@ -3186,7 +3136,7 @@ function dependencySummary(
   crossesArea: boolean,
 ): string {
   if (!target.resolved) {
-    return `${fromArea} imports unresolved relative module ${moduleSpecifier}.`;
+    return `${fromArea} imports unresolved module ${moduleSpecifier}.`;
   }
   if (!target.local) {
     return `${fromArea} imports ${moduleSpecifier}.`;

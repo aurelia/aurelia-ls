@@ -9,7 +9,8 @@ import type {
 } from "../inquiry/runtime/index.js";
 import type { InquirySurfaceMap } from "../inquiry/surface-map.js";
 import type { SourceProjectSummary } from "../source/index.js";
-import { ensureInquirySession, type EnsureInquirySessionOptions } from "./client.js";
+import { ensureInquirySession, shutdownExistingInquirySession, type EnsureInquirySessionOptions, type InquirySessionClient } from "./client.js";
+import { ownsInquirySessionManifest } from "./manifest.js";
 import type {
   InquirySessionSelfCheckResult,
   InquirySessionShutdownResult,
@@ -175,7 +176,7 @@ export interface OrientationSourceProjectGuide {
   readonly packageRoots: Record<string, string>;
 }
 
-/** Session-backed API that auto-starts the daemon before each request. */
+/** Session-backed API whose source reads and continuations share one immutable TypeScript epoch. */
 export interface Api {
   /** Return the normal first orientation bundle for Codex-facing work. */
   orient(): Promise<Orientation>;
@@ -197,14 +198,29 @@ export interface Api {
   isImplemented(lens: LensId): Promise<boolean>;
 }
 
-/** Create the default session API, backed by an auto-ensured daemon. */
+/** Create an API that selects the current epoch on first use. Create another after editing source or rebuilding Atlas. */
 export function createApi(
   /** Session startup and probing options. */
   options: EnsureInquirySessionOptions = {},
 ): Api {
+  let pinned: InquirySessionClient | undefined;
+  let opening: Promise<InquirySessionClient> | undefined;
+  async function sessionForRead() {
+    if (pinned === undefined) {
+      opening ??= ensureInquirySession(options).then((client) => {
+        pinned = client;
+        return client;
+      }).finally(() => { opening = undefined; });
+      return opening;
+    }
+    if (!ownsInquirySessionManifest(pinned.manifest)) {
+      throw new Error("The pinned Atlas session ended. Create a new API and restart the inquiry.");
+    }
+    return pinned;
+  }
   return {
     orient: async () => {
-      const session = await ensureInquirySession(options);
+      const session = await sessionForRead();
       const [status, map, self] = await Promise.all([
         session.status(),
         session.map("orient"),
@@ -224,35 +240,38 @@ export function createApi(
       };
     },
     status: async () => {
-      const session = await ensureInquirySession(options);
+      const session = await sessionForRead();
       return session.status();
     },
     map: async (focus) => {
-      const session = await ensureInquirySession(options);
+      const session = await sessionForRead();
       return session.map(focus);
     },
     ask: async (input) => {
-      const session = await ensureInquirySession(options);
+      const session = await sessionForRead();
       return session.ask(input);
     },
     follow: async (continuation) => {
-      const session = await ensureInquirySession(options);
+      const session = await sessionForRead();
       return session.follow(continuation);
     },
     frameworkEmulationSymbolsReport: async () => {
-      const session = await ensureInquirySession(options);
+      const session = await sessionForRead();
       return session.frameworkEmulationSymbolsReport();
     },
     selfCheck: async () => {
-      const session = await ensureInquirySession(options);
+      const session = await sessionForRead();
       return session.selfCheck();
     },
-    shutdown: async (reason) => {
-      const session = await ensureInquirySession(options);
-      return session.shutdown(reason);
+    shutdown: async (reason = "client requested shutdown") => {
+      if (opening !== undefined) await opening;
+      if (pinned === undefined) {
+        return { accepted: await shutdownExistingInquirySession({ ...options, reason }), reason };
+      }
+      return ownsInquirySessionManifest(pinned.manifest) ? pinned.shutdown(reason) : { accepted: false, reason };
     },
     isImplemented: async (lens) => {
-      const session = await ensureInquirySession(options);
+      const session = await sessionForRead();
       return session.isImplemented(lens);
     },
   };
@@ -362,6 +381,11 @@ function orientationScripts(): readonly OrientationScriptGuide[] {
       command: "pnpm --filter @aurelia-ls/atlas orient:json",
       summary:
         "Print the full request-shaped orientation bundle for tools that need machine-readable detail.",
+    },
+    {
+      id: "work:router",
+      command: "pnpm --filter @aurelia-ls/atlas work:router -- --projection=route-plan --query=fromView --rows=1",
+      summary: "Find a work route and its owners for a topic. Replace fromView with the term under investigation.",
     },
     {
       id: "pressure:self",

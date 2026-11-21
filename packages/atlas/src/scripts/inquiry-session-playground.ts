@@ -1,10 +1,12 @@
+import path from "node:path";
+
 import { LensId } from "../inquiry/lens.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
-import { createApi } from "../session/index.js";
+import { createApi, resolveInquirySessionPaths } from "../session/index.js";
 
 const api = createApi({
+  manifestPath: path.join(resolveInquirySessionPaths().sessionDir, `playground-${process.pid}.json`),
   idleTtlMs: 30_000,
-  startupTimeoutMs: 10_000,
 });
 const firstStatus = await api.status();
 const secondStatus = await api.status();

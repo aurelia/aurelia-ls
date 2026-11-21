@@ -15,7 +15,6 @@ import {
   AURELIA_PLUGIN_PACKAGE_ID_PREFIX,
   AURELIA_TOOLING_PACKAGE_ID_PREFIX,
   EXTERNAL_SOURCE_PACKAGE_ID_PREFIX,
-  assignmentTargetReceiverName,
   declarationInitializer,
   firstArgumentText,
   hasStaticModifier,
@@ -41,16 +40,15 @@ import {
   aureliaStaticBindablesPropertyMechanism,
 } from "./aurelia-bindable-carriers.js";
 import {
+  AureliaReceiverSet,
   AureliaSourceImports,
+  collectAureliaServiceReceivers,
+  aureliaDiResolutionMechanismForCall,
   aureliaAppTaskMechanismForCall,
   aureliaDecoratorExportNameForExpression,
   aureliaResolveFirstArgument,
   aureliaRegistrationFactoryMechanismForCall,
-  isContainerLookupMethodName,
-  isAureliaContainerReference,
-  isAureliaContainerReceiverTypeNode,
   isAureliaConstructorReference,
-  isAureliaKernelReference,
   isAureliaReceiverEntityName,
   isInsideCommonJsRequireDeclaration,
   isInsideImportDeclaration,
@@ -58,8 +56,6 @@ import {
   isImportedRouterDecorator,
   isReceiverDeclaration,
   isRouterInstanceMethodName,
-  isRouterReceiverInitializer,
-  isRouterReceiverTypeNode,
   isRouterReceiverValueExpression,
   readAureliaSourceImportsInto,
   readCommonJsRequireModuleSpecifier,
@@ -830,16 +826,18 @@ function manifestSurface(
 }
 
 class WorkspaceSourceBindings extends AureliaSourceImports {
-  readonly aureliaReceiverNames = new Set<string>();
-  readonly aureliaContainerReceiverNames = new Set<string>();
+  readonly aureliaReceivers: AureliaReceiverSet;
+  constructor(checker?: ts.TypeChecker) {
+    super(checker);
+    this.aureliaReceivers = new AureliaReceiverSet(checker);
+  }
 }
 
-function readWorkspaceSourceBindings(sourceFile: ts.SourceFile): WorkspaceSourceBindings {
-  const bindings = new WorkspaceSourceBindings();
+function readWorkspaceSourceBindings(sourceFile: ts.SourceFile, checker?: ts.TypeChecker): WorkspaceSourceBindings {
+  const bindings = new WorkspaceSourceBindings(checker);
   readAureliaSourceImportsInto(sourceFile, bindings);
   collectAureliaReceiverBindings(sourceFile, bindings);
-  collectAureliaContainerReceiverBindings(sourceFile, bindings);
-  collectRouterReceiverBindings(sourceFile, bindings);
+  collectAureliaServiceReceivers(sourceFile, bindings);
   return bindings;
 }
 
@@ -849,77 +847,16 @@ function collectAureliaReceiverBindings(
 ): void {
   const visit = (node: ts.Node): void => {
     if (isReceiverDeclaration(node) && ts.isIdentifier(node.name) && declarationHasAureliaReceiverShape(node, bindings)) {
-      bindings.aureliaReceiverNames.add(node.name.text);
+      bindings.aureliaReceivers.add(node.name);
     }
     if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
-      const receiverName = assignmentTargetReceiverName(node.left);
-      if (receiverName !== null && isAureliaReceiverValueExpression(node.right, bindings)) {
-        bindings.aureliaReceiverNames.add(receiverName);
+      if (isAureliaReceiverValueExpression(node.right, bindings)) {
+        bindings.aureliaReceivers.add(node.left);
       }
     }
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
-}
-
-function collectAureliaContainerReceiverBindings(
-  sourceFile: ts.SourceFile,
-  bindings: WorkspaceSourceBindings,
-): void {
-  const visit = (node: ts.Node): void => {
-    if (isReceiverDeclaration(node) && ts.isIdentifier(node.name) && declarationHasAureliaContainerReceiverShape(node, bindings)) {
-      bindings.aureliaContainerReceiverNames.add(node.name.text);
-    }
-    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
-      const receiverName = assignmentTargetReceiverName(node.left);
-      if (receiverName !== null && isAureliaContainerReceiverValueExpression(node.right, bindings)) {
-        bindings.aureliaContainerReceiverNames.add(receiverName);
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-}
-
-function declarationHasAureliaContainerReceiverShape(
-  node: ReceiverDeclaration,
-  bindings: WorkspaceSourceBindings,
-): boolean {
-  return (
-    isAureliaContainerReceiverTypeNode(node.type, bindings) ||
-    isAureliaContainerReceiverInitializer(declarationInitializer(node), bindings)
-  );
-}
-
-function isAureliaContainerReceiverInitializer(
-  expression: ts.Expression | undefined,
-  bindings: WorkspaceSourceBindings,
-): boolean {
-  if (expression === undefined) {
-    return false;
-  }
-  if (
-    ts.isCallExpression(expression) &&
-    isAureliaKernelReference(expression.expression, "resolve", bindings)
-  ) {
-    const first = expression.arguments[0];
-    return first !== undefined && isAureliaContainerReference(first, bindings);
-  }
-  return isAureliaContainerReceiverValueExpression(expression, bindings);
-}
-
-function isAureliaContainerReceiverValueExpression(
-  expression: ts.Expression,
-  bindings: WorkspaceSourceBindings,
-): boolean {
-  return (
-    (ts.isIdentifier(expression) && bindings.aureliaContainerReceiverNames.has(expression.text)) ||
-    (
-      ts.isPropertyAccessExpression(expression) &&
-      expression.expression.kind === ts.SyntaxKind.ThisKeyword &&
-      bindings.aureliaContainerReceiverNames.has(expression.name.text)
-    )
-  );
 }
 
 function declarationHasAureliaReceiverShape(
@@ -952,45 +889,8 @@ function isAureliaReceiverValueExpression(
   expression: ts.Expression,
   bindings: WorkspaceSourceBindings,
 ): boolean {
-  return (
-    (ts.isIdentifier(expression) && bindings.aureliaReceiverNames.has(expression.text)) ||
-    (
-      ts.isPropertyAccessExpression(expression) &&
-      expression.expression.kind === ts.SyntaxKind.ThisKeyword &&
-      bindings.aureliaReceiverNames.has(expression.name.text)
-    ) ||
-    (ts.isNewExpression(expression) && isAureliaConstructorReference(expression.expression, bindings))
-  );
-}
-
-function collectRouterReceiverBindings(
-  sourceFile: ts.SourceFile,
-  bindings: WorkspaceSourceBindings,
-): void {
-  const visit = (node: ts.Node): void => {
-    if (isReceiverDeclaration(node) && ts.isIdentifier(node.name) && workspaceDeclarationHasRouterReceiverShape(node, sourceFile, bindings)) {
-      bindings.routerReceiverNames.add(node.name.text);
-    }
-    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
-      const receiverName = assignmentTargetReceiverName(node.left);
-      if (receiverName !== null && isRouterReceiverValueExpression(node.right, bindings)) {
-        bindings.routerReceiverNames.add(receiverName);
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-}
-
-function workspaceDeclarationHasRouterReceiverShape(
-  node: ReceiverDeclaration,
-  sourceFile: ts.SourceFile,
-  bindings: WorkspaceSourceBindings,
-): boolean {
-  return (
-    isRouterReceiverTypeNode(node.type, bindings) ||
-    isRouterReceiverInitializer(declarationInitializer(node), bindings)
-  );
+  return bindings.aureliaReceivers.has(expression) ||
+    (ts.isNewExpression(expression) && isAureliaConstructorReference(expression.expression, bindings));
 }
 
 function scanWorkspaceSourceFile(
@@ -1010,7 +910,7 @@ function scanWorkspaceSourceFile(
   if (!shouldScanWorkspaceAureliaSurfaces(role)) {
     return rows;
   }
-  const bindings = readWorkspaceSourceBindings(sourceFile);
+  const bindings = readWorkspaceSourceBindings(sourceFile, sourceProject?.checker);
   const visit = (node: ts.Node): void => {
     rows.push(...workspaceSurfacesForNode(sourceProject, sourceFile, packageId, packageName, node, bindings));
     ts.forEachChild(node, visit);
@@ -1563,7 +1463,7 @@ function workspaceSurfaceRowsForCallExpression(
   bindings: WorkspaceSourceBindings,
 ): readonly WorkspaceSurfaceRow[] {
   const rows: WorkspaceSurfaceRow[] = [];
-  const diResolutionMechanism = workspaceDiResolutionMechanismForCall(call, bindings);
+  const diResolutionMechanism = aureliaDiResolutionMechanismForCall(call, bindings);
   if (diResolutionMechanism !== null) {
     pushIfPresent(rows,
       workspaceSourceRowForNode(sourceProject, sourceFile, packageId, packageName, call, "di-resolution", diResolutionMechanism, firstArgumentText(call, sourceFile)),
@@ -1863,27 +1763,9 @@ function registrationMechanismForCall(
   if (isAureliaBootstrapExpression(expression.expression, bindings)) {
     return "aurelia.register";
   }
-  return isAureliaContainerReceiverExpression(expression.expression, bindings)
+  return bindings.containerReceivers.has(expression.expression)
     ? "container.register"
     : null;
-}
-
-function workspaceDiResolutionMechanismForCall(
-  call: ts.CallExpression,
-  bindings: WorkspaceSourceBindings,
-): string | null {
-  if (isAureliaKernelReference(call.expression, "resolve", bindings)) {
-    return "kernel.resolve";
-  }
-  const expression = call.expression;
-  if (
-    ts.isPropertyAccessExpression(expression) &&
-    isContainerLookupMethodName(expression.name.text) &&
-    isAureliaContainerReceiverExpression(expression.expression, bindings)
-  ) {
-    return `container.${expression.name.text}`;
-  }
-  return null;
 }
 
 function workspaceRouterMechanismForCall(
@@ -1946,14 +1828,14 @@ function isAureliaBootstrapExpression(
     return isAureliaConstructorReference(expression.expression, bindings);
   }
   if (ts.isIdentifier(expression)) {
-    return bindings.aureliaReceiverNames.has(expression.text) ||
+    return bindings.aureliaReceivers.has(expression) ||
       bindings.aureliaImportedNames.get(expression.text) === "Aurelia";
   }
   if (
     ts.isPropertyAccessExpression(expression) &&
     expression.expression.kind === ts.SyntaxKind.ThisKeyword
   ) {
-    return bindings.aureliaReceiverNames.has(expression.name.text);
+    return bindings.aureliaReceivers.has(expression);
   }
   if (
     ts.isPropertyAccessExpression(expression) &&
@@ -2381,18 +2263,6 @@ function routeConfigPropertyValuePreview(
     return `${expression.elements.length} route(s)`;
   }
   return compactExpressionText(expression, sourceFile);
-}
-
-function isAureliaContainerReceiverExpression(
-  expression: ts.Expression,
-  bindings: WorkspaceSourceBindings,
-): boolean {
-  if (ts.isIdentifier(expression)) {
-    return bindings.aureliaContainerReceiverNames.has(expression.text);
-  }
-  return ts.isPropertyAccessExpression(expression)
-    && expression.expression.kind === ts.SyntaxKind.ThisKeyword
-    && bindings.aureliaContainerReceiverNames.has(expression.name.text);
 }
 
 function routeNameFromDecorator(

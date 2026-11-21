@@ -6,7 +6,7 @@ The daemon is not an external transport. It is a loopback workbench for hot stat
 
 ## Responsibilities
 
-- [api.ts](api.ts) exposes the default session-backed API; every request auto-starts or reuses the daemon.
+- [api.ts](api.ts) selects the current daemon on an API's first read and pins subsequent inquiries to its lease.
 - [protocol.ts](protocol.ts) defines the daemon manifest and request/response contracts.
 - [client.ts](client.ts) owns idempotent startup, probing, restart-on-build-hash-change, and shutdown.
 - [daemon.ts](daemon.ts) hosts the in-memory inquiry API in an external process.
@@ -17,7 +17,11 @@ The daemon is not an external transport. It is a loopback workbench for hot stat
 
 ## Lifecycle
 
-`createApi()` is the normal entrypoint. Each method calls `ensureInquirySession()` before forwarding the request, so callers do not need a separate startup step.
+`createApi()` selects an immutable build and TypeScript Program on its first read. Keep that API for related
+inquiries, pagination and continuations. After editing source or rebuilding Atlas, create a new API in the same
+process to select the current world. A live older API answers from its original Program until its lease ends. After
+expiry or replacement, restart the inquiry with a new API. Shutdown only contacts an existing matching daemon.
+Filesystem-backed lenses can observe changes independently of the TypeScript epoch.
 
 `createApi().orient()` is the intended first call for repo work. It returns status, the surface map, the `atlas.self`
 maintenance answer, initial continuations, and a derived usage guide that names callable lenses, projections, request
@@ -80,11 +84,13 @@ configuration and bundle exports are queryable through ordinary lenses such as `
 
 `ensureInquirySession()` computes the current session compatibility hash, probes that hash profile's manifest, reuses a
 compatible daemon, asks an incompatible daemon in the same profile to shut down, or starts a new detached process from
-`dist/session/daemon.js`. The hash intentionally changes when admitted TypeScript roots in Atlas, semantic-runtime, MCP, the
-Aurelia framework checkout, the public `aurelia2-plugins` checkout, or `ATLAS_EXTERNAL_SOURCE_ROOTS` clean-room source
-roots change, because the daemon owns a fixed source epoch for its lifetime. The compatibility hash is cached
-process-locally for the source-admission environment, so a script that issues several `createApi()` calls does not
-re-stat the admitted source epoch before every request.
+`dist/session/daemon.js`. Each independent ensure or new API reads the admitted package manifests, root source bytes,
+effective tsconfig settings, TypeScript version and compiled Atlas build. These inputs select a candidate profile.
+Before reusing it, the daemon rechecks the snapshots, package metadata, positive and negative path lookups,
+realpaths and directory reads that its TypeScript host actually consumed. A dependency edit can replace a daemon
+within the same profile. Paged or other repeated reads through one API pin the daemon lease and avoid rescanning
+the filesystem. After constructing the Program, cold startup also verifies the supervisor's compatibility hash and
+the host observations before advertising the session.
 If an admitted package tsconfig cannot be read, the compatibility hash fails early with the TypeScript diagnostic
 instead of walking the package as a substitute epoch; a daemon should only advertise a hot source basis it can actually
 admit.
@@ -95,13 +101,16 @@ pending promise plus an atomic
 `.temp/atlas/session/profiles/<compatibility-key>/startup.lock.json` lease so parallel callers for the same source
 profile wait for the first startup instead of spawning duplicate heavyweight daemons. Different compatibility profiles,
 such as a normal repo session and a session with large external roots admitted, can run side by side without replacing
-each other's manifest. Stale startup locks are removed when their owner process exits or when the startup timeout
-expires.
+each other's manifest. A valid startup lock uses its owner's startup deadline. An unreadable lock can be recovered
+after the startup timeout. Early daemon exit reports the status and matching stderr log path. A timed-out status
+probe against a live process leaves its lease intact.
 
 The daemon writes a heartbeat into `.temp/atlas/session/profiles/<compatibility-key>/session.json`, exits after an idle
 TTL, and exits if another daemon takes over the same profile manifest. Idle shutdown and manifest lease-loss shutdown
 are both gated by the active request count, so a long-running inquiry can outlive the TTL or finish after a profile
-handoff; shutdown is deferred until the active work drains. The transport binds to `127.0.0.1`; no auth token is used
+handoff; shutdown is deferred until the active work drains. If file sharing temporarily denies an established heartbeat,
+the prior manifest stays readable. The daemon checks ownership again on its next tick and reports the failure and
+eventual recovery in the profile's stderr log. The transport binds to `127.0.0.1`; no auth token is used
 because the session is local-only and intended as a developer workbench.
 
 For profiling, prefer targeted environment toggles over permanent warmup. `ATLAS_PROFILE_SOURCE_HOST=1` prints

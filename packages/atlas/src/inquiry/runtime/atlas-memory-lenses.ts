@@ -6,6 +6,8 @@ import {
   type Basis,
 } from "../basis.js";
 import type { Inquiry } from "../inquiry.js";
+import { LocusKind, type Locus } from "../locus.js";
+import { findTerrainById } from "../terrain.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
 import { PagedRowFamily } from "../paged-row-family.js";
 import { pageOffset, rowLimit } from "../paging.js";
@@ -46,6 +48,7 @@ import {
 } from "./atlas-memory-contracts.js";
 import {
   readAtlasMemoryAnalysis,
+  memoryRollup,
   staleAtlasMemoryRecordRows,
 } from "./atlas-memory-store.js";
 import {
@@ -54,7 +57,8 @@ import {
   compareAtlasMemoryNextActionRowsByRank,
   type AtlasMemoryNextActionRow,
 } from "./atlas-memory-next-actions.js";
-import type { SourceProject } from "../../source/index.js";
+import { repoRelativePath, resolveRepoPath, type SourceProject } from "../../source/index.js";
+import { atlasMemoryBackingPaths, atlasMemoryRepoPathMatches } from "./atlas-memory-row-matching.js";
 
 /** Value returned by the atlas.memory lens. */
 export interface AtlasMemoryValue {
@@ -84,7 +88,15 @@ export function answerAtlasMemory(
   sourceProject: SourceProject,
 ): Answer<AtlasMemoryValue> {
   const projection = atlasMemoryProjection(inquiry);
-  const analysis = readAtlasMemoryAnalysis(sourceProject);
+  const scope = memoryScopePath(inquiry.locus, sourceProject);
+  if (scope === null) {
+    return createAnswer(inquiry, OutcomeKind.NoClaim, "This locus has no repository path in the current Atlas memory basis.");
+  }
+  if (scope !== undefined && projection === "schema") {
+    return createAnswer(inquiry, OutcomeKind.Unsupported, "Ask for the Atlas memory storage schema at the repository locus.");
+  }
+  const store = readAtlasMemoryAnalysis(sourceProject);
+  const analysis = scope === undefined ? store : memoryAtPath(store, scope, inquiry.locus.kind === LocusKind.SourceFile);
   const basis = atlasMemoryBasis(sourceProject, analysis);
   switch (projection) {
     case "summary":
@@ -125,6 +137,28 @@ export function answerAtlasMemory(
   }
 }
 
+function memoryScopePath(locus: Locus, project: SourceProject): string | null | undefined {
+  if (locus.kind === LocusKind.Repo) return undefined;
+  if (locus.kind === LocusKind.RepoArea) return findTerrainById(locus.areaId)?.root ?? null;
+  const path = locus.kind === LocusKind.SourceFile ? locus.filePath
+    : locus.kind === LocusKind.Package ? locus.relativePath : undefined;
+  return path === undefined ? null : repoRelativePath(project.repoRoot, resolveRepoPath(project.repoRoot, path));
+}
+
+function memoryAtPath(store: AtlasMemoryAnalysis, path: string, exactFile: boolean): AtlasMemoryAnalysis {
+  const matches = (candidate: string) => exactFile ? candidate === path : atlasMemoryRepoPathMatches(candidate, path);
+  const records = store.records.filter(row =>
+    (exactFile && row.shardPath === path) || atlasMemoryBackingPaths(row).some(matches),
+  );
+  const untrackedProductClassFrontiers = store.untrackedProductClassFrontiers.filter(row => matches(row.filePath));
+  return {
+    ...store,
+    records,
+    untrackedProductClassFrontiers,
+    rollup: memoryRollup(records, untrackedProductClassFrontiers, store.issues),
+  };
+}
+
 function answerAtlasMemorySummary(
   inquiry: Inquiry,
   analysis: AtlasMemoryAnalysis,
@@ -138,8 +172,7 @@ function answerAtlasMemorySummary(
     inquiry,
   ).slice(0, limit);
   const issues = analysis.issues.slice(0, limit);
-  const nextActions = filterNextActions(atlasMemoryNextActionRows(analysis), inquiry)
-    .slice(0, limit);
+  const nextActions = atlasMemoryNextRowsForInquiry(analysis, inquiry).slice(0, limit);
   const evidence = [
     ...summaryRecords.map(memoryRowEvidence),
     ...nextActions.map(nextActionEvidence),
@@ -296,7 +329,13 @@ function atlasMemoryNextRowsForInquiry(
   analysis: AtlasMemoryAnalysis,
   inquiry: Inquiry,
 ): readonly AtlasMemoryNextActionRow[] {
-  const computedRows = atlasMemoryNextActionRows(analysis);
+  // A targeted inquiry can name a class outside the global queue sample.
+  const rows = atlasMemoryNextActionRows(
+    analysis,
+    hasConsultableMemoryFilter(inquiry) ? analysis.untrackedProductClassFrontiers.length : undefined,
+  );
+  // Integrity issues qualify the whole store. Only the repository queue schedules storage repairs.
+  const computedRows = inquiry.locus.kind === LocusKind.Repo ? rows : rows.filter(row => row.issue === undefined);
   return filterNextActions([
     ...computedRows,
     ...consultRecordNextRowsForInquiry(analysis, inquiry, computedRows),
@@ -308,8 +347,7 @@ function consultRecordNextRowsForInquiry(
   inquiry: Inquiry,
   computedRows: readonly AtlasMemoryNextActionRow[],
 ): readonly AtlasMemoryNextActionRow[] {
-  const recordId = inquiryStringFilter(inquiry, "recordId");
-  if (recordId === undefined && !hasConsultableMemoryFilter(inquiry)) {
+  if (!hasConsultableMemoryFilter(inquiry)) {
     return [];
   }
   const computedRecordIds = new Set(computedRows.flatMap((row) =>
@@ -323,9 +361,12 @@ function consultRecordNextRowsForInquiry(
 }
 
 function hasConsultableMemoryFilter(inquiry: Inquiry): boolean {
-  return inquiryStringListFilter(inquiry, "domain").length > 0 ||
+  return inquiry.locus.kind !== LocusKind.Repo ||
+    inquiryStringListFilter(inquiry, "domain").length > 0 ||
     [
       "query",
+      "recordId",
+      "surfaceRole",
       "kind",
       "status",
       "path",
@@ -378,7 +419,6 @@ function answerAtlasMemorySchema(
     liveChecks: [],
     shardPath: "packages/atlas/memory/README.md",
     shardIndex: 0,
-    shardLine: 1,
     record: {
       id: "atlas.memory:schema",
       kind: "doc-shard",
@@ -386,27 +426,10 @@ function answerAtlasMemorySchema(
       summary:
         "Atlas memory stores a root manifest plus focused JSON record shards; records have id, kind, domains, summary, optional rationale, guidance, anchors, and liveChecks.",
       guidance: [
-        "Keep the root manifest small; add durable records to focused shards under packages/atlas/memory/records.",
-        "Use pressure-frontier for live work that should become resolved.",
-        "Use nextActionPolicy=proactive for live work that should drive unfiltered autonomous next actions, when-touched for solved/currently quiet frontiers that should only steer matching tasks, and hidden only for records that must stay queryable without becoming work queue rows.",
-        "Use intentional-shape for large or unusual structures that are deliberately kept.",
-        "Use reuse-guide for 'what should I inspect before solving this kind of problem?' records.",
-        "Use doc-shard for stable large-document headings that should be queryable without rereading the whole workbench.",
-        "Prefer liveChecks when Atlas can verify status from source instead of trusting prose; source/file/auLink presence checks are anchors, not pressure by themselves.",
-        "Use source-declaration-exists when a record depends on a specific admitted TypeScript declaration rather than a broad file; pair it with a pressure-shaped check when it should keep a pressure-frontier active.",
-        "Use atlas-self-source-file, atlas-self-class, atlas-self-function, or atlas-self-variable when a record depends on Atlas-owned source pressure rather than semantic-runtime product pressure.",
-        "Use untracked product-class frontiers and surfaceRole rollups as a canary for missing durable handles, not as a static task list.",
-        "Use --surfaceRole when a broad frontier pass needs to focus product-owner, service-surface, epoch-context, semantic-model, or carrier-like rows.",
-        "Use --liveCheckKind when you want records grouped by the mechanism that keeps them active, stale, or resolved.",
-        "Use --path with a source path, documentation path, live-check path, untracked source path, or durable memory shard path.",
-        "Use --query for substring plus camel-case/punctuation token matching before narrowing by structural filters.",
-        "Use --anchorKind, --anchorLensId, or --symbolName when you need structural memory lookup instead of fuzzy query text.",
-        "Use auLink anchors and auLink-exists live checks when durable memory points at framework-shaped semantic-runtime concepts.",
-        "Use memory:write --template --auLinkId plus optional --symbolName to draft framework-shaped records without hand-authoring the auLink anchor envelope.",
-        "Lens anchors are checked against LensCatalog ids and projections; recognized pnpm package-script anchors are checked against package.json scripts.",
-        "auLink anchors continue to bridge.aulink mirror rows and are checked against product.architecture auLink decorator placements.",
-        "Use memory:write to list shards, print a template, upsert a draft record, or remove a stale record with --dry-run first.",
-        "Keep JSON memory as the queryable handle; use README files for stable boundaries, workbenches for rolling context, and .temp only for scratch/review packs.",
+        "Store each record in the shard for its primary domain. Use memory:write --mode=list-shards to discover targets and --template to draft one.",
+        "Use pressure-frontier or intentional-shape for measured source pressure. A presence check alone establishes that an anchor exists.",
+        "Use reuse-guide, decision, and doc-shard to retain guidance, intent, and documentation pointers.",
+        "Read the storage schema and retrieval examples in packages/atlas/memory/README.md. The TypeScript contracts and writer below own validation.",
       ],
       anchors: [
         {

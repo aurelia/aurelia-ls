@@ -5,6 +5,7 @@ import type { SourceProject } from "../project.js";
 import {
   requiredSourceFileIdentity,
   requiredSourceRangeForNode,
+  sourceRangeKey,
 } from "./source-ranges.js";
 import { declarationNameNode, propertyNameNodeText } from "./ast.js";
 
@@ -39,6 +40,12 @@ export interface TypeScriptUsageOwner {
   readonly ownerMemberKind?: TypeScriptUsageOwnerMemberKind;
   readonly ownerMemberName?: string;
   readonly ownerMemberSource?: SourceRange;
+}
+
+/** A declaration or member's exact source identity; a file-level use is owned by its file path. */
+export function usageOwnerSourceKey(owner: TypeScriptUsageOwner): string {
+  const source = owner.ownerMemberSource ?? owner.ownerSource;
+  return source === undefined ? owner.ownerName : sourceRangeKey(source);
 }
 
 export function sourceDeclarationForDeclarationFileMirror(

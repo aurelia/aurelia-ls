@@ -772,7 +772,9 @@
           "kind": "lens",
           "lensId": "framework.observation",
           "projection": "dependency-circuit",
-          "circuitRole": "template-expression-read",
+          "filters": {
+            "circuitRole": "template-expression-read"
+          },
           "summary": "Atlas rows for framework astEvaluate AccessScope, AccessMember, and AccessKeyed dependency-collection flow sites."
         },
         {
@@ -785,7 +787,9 @@
           "kind": "lens",
           "lensId": "framework.observation",
           "projection": "dependency-circuit",
-          "surfaceKind": "proxy-observable",
+          "filters": {
+            "surfaceKind": "proxy-observable"
+          },
           "summary": "Atlas rows for framework ProxyObservable identity, escape, property, collection, and trackable dependency-circuit roles."
         },
         {
@@ -798,14 +802,18 @@
           "kind": "lens",
           "lensId": "framework.observation",
           "projection": "dependency-circuit",
-          "circuitRole": "computed-observer-dependency",
+          "filters": {
+            "circuitRole": "computed-observer-dependency"
+          },
           "summary": "Atlas rows for framework ComputedObserver auto-dependency collection and ControlledComputedObserver explicit dependency handoff."
         },
         {
           "kind": "lens",
           "lensId": "framework.observation",
           "projection": "relationships",
-          "surfaceKind": "computed-decorator",
+          "filters": {
+            "surfaceKind": "computed-decorator"
+          },
           "summary": "Atlas rows for @computed metadata handoff to ComputedPropertyInfo, ComputedMethodOptions, astTrackableMethodMarker, and IObserverLocator.getComputedObserver."
         },
         {
@@ -1180,7 +1188,7 @@
         }
       ],
       "createdAt": "2026-05-18",
-      "updatedAt": "2026-07-29"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:computed-observer-source-projection",
@@ -1219,7 +1227,9 @@
           "kind": "lens",
           "lensId": "framework.observation",
           "projection": "dependency-circuit",
-          "circuitRole": "computed-observer-dependency",
+          "filters": {
+            "circuitRole": "computed-observer-dependency"
+          },
           "summary": "Framework rows for ComputedObserver auto-dependency collection and ControlledComputedObserver explicit dependency handoff."
         },
         {
@@ -1321,7 +1331,7 @@
         }
       ],
       "createdAt": "2026-05-18",
-      "updatedAt": "2026-05-19"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:select-and-checked-value-channel-drafts",
@@ -1380,22 +1390,28 @@
           "kind": "lens",
           "lensId": "framework.observation",
           "projection": "flow-sites",
-          "surfaceKind": "checked-observer",
+          "filters": {
+            "surfaceKind": "checked-observer"
+          },
           "summary": "Framework CheckedObserver flow rows for synchronize, collection subscription, and subscriber notification behavior."
         },
         {
           "kind": "lens",
           "lensId": "framework.observation",
           "projection": "flow-sites",
-          "surfaceKind": "select-value-observer",
+          "filters": {
+            "surfaceKind": "select-value-observer"
+          },
           "summary": "Framework SelectValueObserver flow rows for multiple-select array observation, mapped errors, and sync behavior."
         },
         {
           "kind": "lens",
           "lensId": "framework.corpus",
           "projection": "fixture-seeds",
-          "concept": "forms",
-          "classificationKey": "checked-map-binding",
+          "filters": {
+            "concept": "forms",
+            "classificationKey": "checked-map-binding"
+          },
           "summary": "Framework checked-observer table-driven Map tests are discoverable as behavior-grounding fixture seeds."
         },
         {
@@ -1459,7 +1475,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-20"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:binding-value-channel-materializer",

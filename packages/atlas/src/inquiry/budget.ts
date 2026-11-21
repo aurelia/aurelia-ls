@@ -10,7 +10,7 @@ export interface Budget {
   readonly members?: number;
   /** Route limit for path, corridor, or graph-route projections. */
   readonly routes?: number;
-  /** Evidence rows retained per subject before continuations should broaden. */
+  /** Display witnesses per subject (each returned row in a paged row family). Zero suppresses answer evidence. */
   readonly evidencePerSubject?: number;
   /** Traversal or evaluator depth limit. */
   readonly depth?: number;

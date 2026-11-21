@@ -473,10 +473,12 @@ export function answerFrameworkAdmission(
     });
   }
 
+  const unknownRelationships = relationships.filter(row => row.to.kind === FrameworkRelationshipEndpointKind.Unknown);
   return createAnswer(
     inquiry,
-    OutcomeKind.Hit,
-    `Framework admission has ${bundleSummaries.length} bundle row(s) and ${relationships.length} relationship row(s).`,
+    unknownRelationships.length > 0 ? OutcomeKind.Partial :
+      bundleSummaries.length > 0 || relationships.length > 0 ? OutcomeKind.Hit : OutcomeKind.Miss,
+    `Framework admission has ${bundleSummaries.length} bundle row(s) and ${relationships.length} relationship row(s); ${unknownRelationships.length} admitted target(s) remain unclassified.`,
     {
       value: valueSummary(bundleSummaries, relationships),
       basis,
@@ -485,7 +487,7 @@ export function answerFrameworkAdmission(
         ...relationships.slice(0, 4).map(frameworkAdmissionEvidenceForRelationship),
       ],
       openSeams: openSeamsForRelationships(
-        relationships.slice(0, evidenceLimit(inquiry)),
+        unknownRelationships.slice(0, 1),
         [],
       ),
       continuations: admissionSummaryContinuations(inquiry),

@@ -1,3 +1,4 @@
+import { matchesQualifiedEnumMember } from "../../source/enum-usage.js";
 import type { Answer } from "../answer.js";
 import {
   EvidenceConfidence,
@@ -244,15 +245,7 @@ function filterEnumValueSpaces(
   const valueKind = inquiryStringFilter(inquiry, "valueKind");
   const query = inquiryLowerStringFilter(inquiry, "query");
   return rows.filter((row) => {
-    if (enumName !== undefined && !row.enumNames.includes(enumName)) {
-      return false;
-    }
-    if (
-      memberName !== undefined &&
-      !row.memberNames.some((name) => name.endsWith(`.${memberName}`))
-    ) {
-      return false;
-    }
+    if (!matchesQualifiedEnumMember(row.memberNames, enumName, memberName)) return false;
     if (value !== undefined && String(row.value) !== value) {
       return false;
     }
@@ -283,18 +276,8 @@ function filterEnumValueOccurrences(
   const contextualOnly = inquiryBooleanFilter(inquiry, "contextualOnly");
   const query = inquiryLowerStringFilter(inquiry, "query");
   return rows.filter((row) => {
-    if (
-      enumName !== undefined &&
-      !row.memberNames.some((name) => name.startsWith(`${enumName}.`))
-    ) {
-      return false;
-    }
-    if (
-      memberName !== undefined &&
-      !row.memberNames.some((name) => name.endsWith(`.${memberName}`))
-    ) {
-      return false;
-    }
+    const names = contextualOnly ? row.contextualMemberNames : row.memberNames;
+    if (!matchesQualifiedEnumMember(names, enumName, memberName)) return false;
     if (role !== undefined && row.role !== role) {
       return false;
     }

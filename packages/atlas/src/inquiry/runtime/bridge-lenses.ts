@@ -409,6 +409,7 @@ function auLinkMirrorFiltersFromRecord(
     productMemberAccess: nonEmptyString(source.productMemberAccess),
     memberDeclarationKind: nonEmptyString(source.memberDeclarationKind),
     presence: nonEmptyString(source.presence),
+    ownerSourceKey: nonEmptyString(source.ownerSourceKey),
     ownerName: nonEmptyString(source.ownerName),
     ownerKind: nonEmptyString(source.ownerKind),
     ownerMemberName: nonEmptyString(source.ownerMemberName),

@@ -1,5 +1,6 @@
 import {
   EvaluationOpenKind,
+  hasEvaluationRoot,
   StaticEvaluator,
   readEvaluationEffectTrace,
   sourceRangeForEvaluationEffect,
@@ -42,7 +43,9 @@ import {
 import type { Inquiry } from "../inquiry.js";
 import {
   evidenceLimit,
+  pageInfo,
   pageOffset,
+  pageRows,
   rowLimit,
 } from "../paging.js";
 import {
@@ -51,7 +54,7 @@ import {
   projectionContinuation,
 } from "./framework-continuation-core.js";
 import { stringFilter } from "./lens-filter-utils.js";
-import { sourceSelectorFromInquiry } from "./source-selector.js";
+import { sourceSelectorFromInquiry, unresolvedSourceSelectionAnswer } from "./source-selector.js";
 
 /** Value returned by the framework.evaluator runtime lens. */
 export interface FrameworkEvaluatorValue {
@@ -104,7 +107,12 @@ export function answerFrameworkEvaluator(
   /** Hot source project owned by the daemon. */
   sourceProject: SourceProject,
 ): Answer<FrameworkEvaluatorValue> {
-  const selector = sourceSelectorFromInquiry(inquiry);
+  const selector = sourceSelectorFromInquiry(inquiry, sourceProject);
+  if (selector === null) return unresolvedSourceSelectionAnswer(inquiry);
+  if (!hasEvaluationRoot(selector)) {
+    return createAnswer(inquiry, OutcomeKind.Reroute,
+      "Select a source file, named package, declaration, or range. An evaluator effect filter cannot choose a source root.");
+  }
   const resolution = resolveSourceSelector(sourceProject, selector);
   const projection = inquiry.projection ?? "effects";
   const pageOptions = {
@@ -176,12 +184,15 @@ export function answerFrameworkEvaluator(
       selector,
       targetCount: resolution.targets.length,
       candidateCount: resolution.candidateCount,
-      effectTrace,
+      effectTrace: { ...effectTrace, openSeams: effectTrace.openSeams.slice(0, pageOptions.limit) },
+      openSeamKindCounts: openSeamKindCounts(effectTrace.openSeams),
       openSeams: effectTrace.openSeams.slice(0, pageOptions.limit),
     };
     return createAnswer(
       inquiry,
-      effectTrace.totalEffects === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+      effectTrace.openSeams.length > 0
+        ? (effectTrace.totalEffects === 0 ? OutcomeKind.Open : OutcomeKind.Partial)
+        : (effectTrace.totalEffects === 0 ? OutcomeKind.Miss : OutcomeKind.Hit),
       `Returned ${effectTrace.effects.length} of ${effectTrace.totalEffects} static invocation effect row(s) from ${effectTrace.roots.length} root(s).`,
       {
         value,
@@ -194,7 +205,7 @@ export function answerFrameworkEvaluator(
           .slice(0, evidenceLimit(inquiry))
           .map(evidenceForEffect),
         openSeams: effectTrace.openSeams
-          .slice(0, evidenceLimit(inquiry))
+          .slice(0, Math.max(1, evidenceLimit(inquiry)))
           .map(answerOpenSeam),
         page: {
           size: effectTrace.limit,
@@ -208,31 +219,36 @@ export function answerFrameworkEvaluator(
     );
   }
 
-  const modules = moduleSummaries(sourceProject, selector, pageOptions.limit);
+  const files = uniqueSourceFiles(resolution.targets.flatMap(target => target.sourceFile ? [target.sourceFile] : []));
+  const page = pageRows(files, pageOptions.offset, pageOptions.limit);
+  const modules = moduleSummaries(sourceProject, page.rows, clampBudget(inquiry.budget?.members, pageOptions.limit, 1000));
+  const seams = modules.flatMap(module => module.openSeams);
   return createAnswer(
     inquiry,
-    modules.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-    `Returned ${modules.length} static module evaluation summary row(s).`,
+    seams.length > 0 ? OutcomeKind.Partial : files.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+    `Returned ${modules.length} of ${files.length} static module evaluation summary row(s).`,
     {
       value: {
         selector,
         targetCount: resolution.targets.length,
         candidateCount: resolution.candidateCount,
         modules,
-        openSeams: modules.flatMap((module) => module.openSeams),
+        openSeams: seams,
       },
       basis: [
         frameworkEvaluatorStaticBasis(sourceProject),
         frameworkEvaluatorSourceTextBasis(sourceProject),
       ],
-      evidence: modules
-        .flatMap((module) => module.openSeams)
+      evidence: seams
         .slice(0, evidenceLimit(inquiry))
         .map(evidenceForOpenSeam),
-      openSeams: modules
-        .flatMap((module) => module.openSeams)
-        .slice(0, evidenceLimit(inquiry))
+      openSeams: seams
+        .slice(0, Math.max(1, evidenceLimit(inquiry)))
         .map(answerOpenSeam),
+      page: pageInfo(inquiry, modules.length, files.length, pageOptions.limit, page.nextOffset),
+      continuations: page.nextOffset === undefined ? [] : [
+        nextPageContinuation(inquiry, "framework.evaluator:value:next-page", "Read the next module summaries.", page.nextOffset, pageOptions.limit),
+      ],
     },
   );
 }
@@ -249,20 +265,11 @@ function openSeamKindCounts(
 
 function moduleSummaries(
   sourceProject: SourceProject,
-  selector: SourceSelector,
+  sourceFiles: readonly ts.SourceFile[],
   limit: number,
 ): readonly FrameworkEvaluatorModuleSummary[] {
-  const resolution = resolveSourceSelector(sourceProject, selector);
-  const sourceFiles = uniqueSourceFiles(
-    resolution.targets
-      .map((target) => target.sourceFile)
-      .filter(
-        (sourceFile): sourceFile is NonNullable<typeof sourceFile> =>
-          sourceFile !== undefined,
-      ),
-  );
   const frameworkBoot = readFrameworkModuleBootIndex(sourceProject);
-  return sourceFiles.slice(0, limit).map((sourceFile) => {
+  return sourceFiles.map((sourceFile) => {
     const identity = requiredSourceFileIdentity(sourceProject, sourceFile);
     const moduleKey = identity.repoPath;
     const result =
@@ -294,8 +301,8 @@ function moduleSummaries(
         id: `module-evaluation-open:${moduleKey}:${index}`,
         openKind: seam.openKind,
         summary: seam.summary,
-        file: identity,
-        span: sourceSpanForNode(sourceFile, seam.node),
+        file: requiredSourceFileIdentity(sourceProject, seam.node.getSourceFile()),
+        span: sourceSpanForNode(seam.node.getSourceFile(), seam.node),
         syntaxKindName: ts.SyntaxKind[seam.node.kind] ?? String(seam.node.kind),
       })),
     };

@@ -197,7 +197,7 @@ export function answerFrameworkResources(
   const projection = inquiry.projection ?? "summary";
   const filters = resourceFiltersFromInquiry(inquiry);
   const allRows = readFrameworkResourceConvergenceRowUniverse(sourceProject);
-  const rows = allRows.filter((row) => convergenceRowMatches(row, filters));
+  const rows = readFrameworkResourceConvergenceRows(sourceProject, filters);
   const baseValue = resourceValue(rows, allRows.length);
   const limit = rowLimit(inquiry);
   const offset = pageOffset(inquiry);
@@ -220,7 +220,7 @@ export function answerFrameworkResources(
 
   return createAnswer(
     inquiry,
-    OutcomeKind.Hit,
+    rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
     resourceConvergenceSummary(rows.length, allRows.length),
     {
       value: baseValue,
@@ -245,8 +245,21 @@ export function readFrameworkResourceConvergenceRows(
   sourceProject: SourceProject,
   filters: FrameworkResourceFilters,
 ): readonly FrameworkResourceConvergenceRow[] {
-  return readFrameworkResourceConvergenceRowUniverse(sourceProject)
+  const rows = readFrameworkResourceConvergenceRowUniverse(sourceProject)
     .filter((row) => convergenceRowMatches(row, filters));
+  if (filters.producerKind === undefined && filters.productKind === undefined
+    && filters.instructionName === undefined && filters.bindingName === undefined) {
+    return rows;
+  }
+  // All syntax selectors must describe the same production site on the carrier.
+  const productIds = new Set(readFrameworkSyntaxProducts(sourceProject, {
+    packageId: filters.packageId,
+    producerKind: filters.producerKind,
+    productKind: filters.productKind,
+    instructionName: filters.instructionName,
+    bindingName: filters.bindingName,
+  }).map((product) => product.id));
+  return rows.filter((row) => row.syntaxProductIds.some((id) => productIds.has(id)));
 }
 
 function readFrameworkResourceConvergenceRowUniverse(
@@ -259,25 +272,23 @@ function readFrameworkResourceConvergenceRowUniverse(
 function readAllFrameworkResourceConvergenceRows(
   sourceProject: SourceProject,
 ): readonly FrameworkResourceConvergenceRow[] {
-  const filters: FrameworkResourceFilters = {};
-  const carrierFilters = resourceDefinitionFilters(filters);
-  const carriers = readFrameworkResourceCarriers(sourceProject, carrierFilters);
+  const carriers = readFrameworkResourceCarriers(sourceProject, {});
   const exportsByCarrier = groupBy(
-    readFrameworkResourceExports(sourceProject, resourceDefinitionFilters(filters)),
+    readFrameworkResourceExports(sourceProject, {}),
     (row) => row.carrier.id,
   );
   const admissionsByCarrier = groupBy(
-    readResourceAdmissionRows(sourceProject, filters),
+    readResourceAdmissionRows(sourceProject, {}),
     (row) => row.resourceCarrierId,
   );
   const instantiationsByCarrier = new Map(
     readFrameworkResourceInstantiationRows(
       sourceProject,
-      resourceDefinitionFilters(filters),
+      {},
     ).map((row) => [resourceInstantiationCarrierId(row), row] as const),
   );
   const syntaxProductsByCarrier = groupBy(
-    readFrameworkSyntaxProducts(sourceProject, syntaxProductFilters(filters)).filter(
+    readFrameworkSyntaxProducts(sourceProject, {}).filter(
       (row) => row.resourceCarrier !== undefined,
     ),
     (row) => row.resourceCarrier!.id,
@@ -519,26 +530,6 @@ function readResourceAdmissionRows(
   );
 }
 
-function resourceDefinitionFilters(
-  filters: FrameworkResourceFilters,
-): FrameworkDiscoveryFilters {
-  return {
-    packageId: filters.packageId,
-    resourceKind: filters.resourceKind,
-  };
-}
-
-function syntaxProductFilters(
-  filters: FrameworkResourceFilters,
-): FrameworkDiscoveryFilters {
-  return {
-    packageId: filters.packageId,
-    resourceKind: filters.resourceKind,
-    producerKind: filters.producerKind,
-    productKind: filters.productKind,
-  };
-}
-
 function resourceInstantiationCarrierId(row: FrameworkResourceInstantiationRow): string {
   const prefix = "framework-resource-instantiation:";
   return row.id.startsWith(prefix) ? row.id.slice(prefix.length) : row.id;
@@ -572,10 +563,6 @@ function convergenceRowMatches(
       )) &&
     (filters.materializationSiteKind === undefined ||
       row.materializationSiteKinds.includes(filters.materializationSiteKind)) &&
-    (filters.producerKind === undefined ||
-      row.lanes.includes(FrameworkResourceConvergenceLane.SyntaxProduct)) &&
-    (filters.productKind === undefined ||
-      row.syntaxProductKinds.includes(filters.productKind)) &&
     (filters.query === undefined ||
       [
         row.packageId,

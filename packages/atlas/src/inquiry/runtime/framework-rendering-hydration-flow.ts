@@ -7,8 +7,10 @@ import {
   type SourceProject,
 } from "../../source/index.js";
 import type { FrameworkBindingAdmissionRow } from "./framework-entities.js";
+import { EvidenceKind, EvidenceRole, OpenSeamKind, type OpenSeam } from "../evidence.js";
 import type { SourceRange } from "../locus.js";
 import type { FrameworkDiscoveryFilters } from "./framework-filters.js";
+import { admittedFrameworkSourceFile } from "./framework-support.js";
 import { readFrameworkPackageNames } from "./framework-package-exports.js";
 import { readFrameworkBindingAdmissions } from "./framework-rendering-bindings.js";
 import { rendererClassExpression } from "./framework-rendering-inspection.js";
@@ -115,11 +117,13 @@ export type FrameworkHydrationFlowReadMode = "overview" | "filtered";
 export interface FrameworkHydrationFlowRead {
   /** Rows visible to the current inquiry after overview/detail selection and filtering. */
   readonly rows: readonly FrameworkHydrationFlowRow[];
+  /** Missing source landmarks that affect this selection. */
+  readonly openSeams: readonly OpenSeam[];
   /** Whether this read is the default overview or a filter-driven detail read. */
   readonly mode: FrameworkHydrationFlowReadMode;
-  /** Total source-backed rows known to the hydration-flow substrate. */
+  /** Source-backed rows available in the selected package or repository before detail filters. */
   readonly totalRowCount: number;
-  /** Source-backed rows marked as overview rows. */
+  /** Rows in that same source scope marked for overview. */
   readonly overviewRowCount: number;
 }
 
@@ -131,9 +135,15 @@ const RENDERING_FILE =
   "aurelia/packages/runtime-html/src/templating/rendering.ts";
 const RENDERER_FILE = "aurelia/packages/runtime-html/src/renderer.ts";
 
-const hydrationFlowMemo = new SourceProjectMemo<
-  readonly FrameworkHydrationFlowRow[]
->();
+interface HydrationLandmark extends FrameworkHydrationFlowRow {
+  /** Unresolved textual anchor retained only for a drift diagnostic. */
+  readonly missingNeedle?: string;
+}
+
+const hydrationFlowMemo = new SourceProjectMemo<{
+  rows: readonly FrameworkHydrationFlowRow[];
+  missing: readonly HydrationLandmark[];
+}>();
 
 /** Read compact source-backed hydration/rendering corridor rows. */
 export function readFrameworkHydrationFlowRows(
@@ -148,42 +158,54 @@ export function readFrameworkHydrationFlow(
   sourceProject: SourceProject,
   filters: FrameworkHydrationFlowFilters,
 ): FrameworkHydrationFlowRead {
-  const rows = hydrationFlowMemo.read(sourceProject, () =>
+  const { rows, missing } = hydrationFlowMemo.read(sourceProject, () =>
     scanFrameworkHydrationFlow(sourceProject),
   );
+  const scopedRows = filters.packageId === undefined ? rows : rows.filter((row) => row.packageId === filters.packageId);
+  const overviewRows = scopedRows.filter((row) => row.overview);
   const useOverview = shouldUseHydrationOverview(filters);
-  const visibleRows = useOverview
-    ? rows.filter((row) => row.overview)
-    : rows;
+  const visibleRows = useOverview ? overviewRows : scopedRows;
   return {
     rows: visibleRows.filter((row) => hydrationFlowRowMatches(row, filters)),
+    openSeams: missing.filter((row) => hydrationFlowRowMatches(row, filters)).map((row) => ({
+      id: `missing:${row.id}:${row.missingNeedle}`,
+      kind: OpenSeamKind.InsufficientBasis,
+      summary: `Atlas could not locate "${row.missingNeedle}" in ${row.ownerName}.${row.methodName}.`,
+      evidence: {
+        kind: EvidenceKind.SourceSpan,
+        role: EvidenceRole.Boundary,
+        source: row.source,
+        summary: "Framework declaration or source file for the missing hydration landmark.",
+      },
+    })),
     mode: useOverview ? "overview" : "filtered",
-    totalRowCount: rows.length,
-    overviewRowCount: rows.filter((row) => row.overview).length,
+    totalRowCount: scopedRows.length,
+    overviewRowCount: overviewRows.length,
   };
 }
 
-function scanFrameworkHydrationFlow(
-  sourceProject: SourceProject,
-): readonly FrameworkHydrationFlowRow[] {
-  const rows = [
+function scanFrameworkHydrationFlow(sourceProject: SourceProject) {
+  const candidates: HydrationLandmark[] = [
     ...appRootRows(sourceProject),
     ...controllerRows(sourceProject),
     ...renderingRows(sourceProject),
     ...rendererRows(sourceProject),
     ...bindingAdmissionRows(sourceProject),
-  ];
-  return rows.sort(
+  ].sort(
     (left, right) =>
       left.source.filePath.localeCompare(right.source.filePath) ||
       left.source.start.line - right.source.start.line ||
       left.source.start.character - right.source.start.character,
   );
+  return {
+    rows: candidates.filter((row) => row.missingNeedle === undefined),
+    missing: candidates.filter((row) => row.missingNeedle !== undefined),
+  };
 }
 
 function appRootRows(
   sourceProject: SourceProject,
-): readonly FrameworkHydrationFlowRow[] {
+): readonly HydrationLandmark[] {
   const basis = classBasis(sourceProject, APP_ROOT_FILE, "AppRoot");
   const ctor = basis?.classDeclaration.members.find(ts.isConstructorDeclaration);
   if (basis === null || ctor?.body === undefined) {
@@ -197,7 +219,7 @@ function appRootRows(
       "app-root",
       "AppRoot",
       "constructor",
-      hydrationFlowNodeContaining(ctor.body, "_runAppTasks('creating')") ?? ctor,
+      hydrationFlowNodeContaining(ctor.body, "_runAppTasks('creating')"),
       "creating",
       "Run creating AppTasks before root controller construction starts.",
     ),
@@ -208,7 +230,7 @@ function appRootRows(
       "view-model",
       "AppRoot",
       "constructor",
-      hydrationFlowNodeContaining(ctor.body, "childCtn.invoke(component)") ?? ctor,
+      hydrationFlowNodeContaining(ctor.body, "childCtn.invoke(component)"),
       "component",
       "Materialize the root component through the child container when the component is a constructor.",
     ),
@@ -219,7 +241,7 @@ function appRootRows(
       "custom-element",
       "AppRoot",
       "constructor",
-      hydrationFlowNodeContaining(ctor.body, "Controller.$el") ?? ctor,
+      hydrationFlowNodeContaining(ctor.body, "Controller.$el"),
       "Controller.$el",
       "Create the root custom-element controller with a hydration instruction that delays child hydration.",
     ),
@@ -230,7 +252,7 @@ function appRootRows(
       "custom-element",
       "AppRoot",
       "constructor",
-      hydrationFlowNodeContaining(ctor.body, "controller._hydrateCustomElement") ?? ctor,
+      hydrationFlowNodeContaining(ctor.body, "controller._hydrateCustomElement"),
       "Controller._hydrateCustomElement",
       "Initialize root custom-element controller state before hydrating/compiling children.",
     ),
@@ -241,7 +263,7 @@ function appRootRows(
       "app-root",
       "AppRoot",
       "constructor",
-      hydrationFlowNodeContaining(ctor.body, "_runAppTasks('hydrating')") ?? ctor,
+      hydrationFlowNodeContaining(ctor.body, "_runAppTasks('hydrating')"),
       "hydrating",
       "Run hydrating AppTasks between root controller setup and view compilation.",
       false,
@@ -253,7 +275,7 @@ function appRootRows(
       "compiled-definition",
       "AppRoot",
       "constructor",
-      hydrationFlowNodeContaining(ctor.body, "controller._hydrate()") ?? ctor,
+      hydrationFlowNodeContaining(ctor.body, "controller._hydrate()"),
       "Controller._hydrate",
       "Compile the root custom-element definition and materialize its node sequence.",
     ),
@@ -264,7 +286,7 @@ function appRootRows(
       "app-root",
       "AppRoot",
       "constructor",
-      hydrationFlowNodeContaining(ctor.body, "_runAppTasks('hydrated')") ?? ctor,
+      hydrationFlowNodeContaining(ctor.body, "_runAppTasks('hydrated')"),
       "hydrated",
       "Run hydrated AppTasks after root compilation and before child rendering.",
       false,
@@ -276,7 +298,7 @@ function appRootRows(
       "instruction",
       "AppRoot",
       "constructor",
-      hydrationFlowNodeContaining(ctor.body, "controller._hydrateChildren") ?? ctor,
+      hydrationFlowNodeContaining(ctor.body, "controller._hydrateChildren"),
       "Controller._hydrateChildren",
       "Render compiled root instruction rows into DOM targets after hydration tasks complete.",
     ),
@@ -285,12 +307,12 @@ function appRootRows(
 
 function controllerRows(
   sourceProject: SourceProject,
-): readonly FrameworkHydrationFlowRow[] {
+): readonly HydrationLandmark[] {
   const basis = classBasis(sourceProject, CONTROLLER_FILE, "Controller");
   if (basis === null) {
     return [];
   }
-  const rows: FrameworkHydrationFlowRow[] = [];
+  const rows: HydrationLandmark[] = [];
   rows.push(
     ...methodRows(basis, "$el", [
       {
@@ -605,12 +627,12 @@ function controllerRows(
 
 function renderingRows(
   sourceProject: SourceProject,
-): readonly FrameworkHydrationFlowRow[] {
+): readonly HydrationLandmark[] {
   const basis = classBasis(sourceProject, RENDERING_FILE, "Rendering");
   if (basis === null) {
     return [];
   }
-  const rows: FrameworkHydrationFlowRow[] = [];
+  const rows: HydrationLandmark[] = [];
   const rendererAccessor = basis.classDeclaration.members.find(
     (member): member is ts.GetAccessorDeclaration =>
       ts.isGetAccessorDeclaration(member) &&
@@ -625,8 +647,7 @@ function renderingRows(
         "renderer-table",
         "Rendering",
         "renderers",
-        hydrationFlowNodeContaining(rendererAccessor.body, "getAll(IRenderer") ??
-          rendererAccessor,
+        hydrationFlowNodeContaining(rendererAccessor.body, "getAll(IRenderer"),
         "IRenderer",
         "Materialize the renderer dispatch table from all registered IRenderer implementations.",
       ),
@@ -729,12 +750,12 @@ function renderingRows(
 
 function rendererRows(
   sourceProject: SourceProject,
-): readonly FrameworkHydrationFlowRow[] {
+): readonly HydrationLandmark[] {
   const basis = fileBasis(sourceProject, RENDERER_FILE);
   if (basis === null) {
     return [];
   }
-  const rows: FrameworkHydrationFlowRow[] = [];
+  const rows: HydrationLandmark[] = [];
   const decorator = functionDeclaration(basis.sourceFile, "renderer");
   if (decorator?.body !== undefined) {
     rows.push(
@@ -745,8 +766,7 @@ function rendererRows(
         "renderer",
         "renderer",
         "renderer",
-        hydrationFlowNodeContaining(decorator.body, "singletonRegistration(IRenderer") ??
-          decorator,
+        hydrationFlowNodeContaining(decorator.body, "singletonRegistration(IRenderer"),
         "IRenderer",
         "Renderer helper registers renderer classes as singleton IRenderer implementations.",
       ),
@@ -932,7 +952,7 @@ function rendererRows(
 
 function bindingAdmissionRows(
   sourceProject: SourceProject,
-): readonly FrameworkHydrationFlowRow[] {
+): readonly HydrationLandmark[] {
   return readFrameworkBindingAdmissions(sourceProject, {}).map((row) =>
     bindingAdmissionHydrationRow(row),
   );
@@ -993,7 +1013,7 @@ interface RowSpec {
 }
 
 function fileBasis(sourceProject: SourceProject, repoPath: string): FileBasis | null {
-  const sourceFile = sourceProject.readSourceFile(repoPath);
+  const sourceFile = admittedFrameworkSourceFile(sourceProject, RUNTIME_HTML_PACKAGE_ID, repoPath);
   if (sourceFile === null) {
     return null;
   }
@@ -1027,7 +1047,7 @@ function methodRows(
   basis: ClassBasis,
   methodName: string,
   specs: readonly RowSpec[],
-): readonly FrameworkHydrationFlowRow[] {
+): readonly HydrationLandmark[] {
   const member =
     methodName === "constructor"
       ? basis.classDeclaration.members.find(ts.isConstructorDeclaration)
@@ -1036,55 +1056,36 @@ function methodRows(
             ts.isMethodDeclaration(candidate) &&
             propertyNameText(candidate.name) === methodName,
         );
-  if (member === undefined || member.body === undefined) {
-    return [];
-  }
-  const body = member.body;
-  return specs.map((spec) =>
-    hydrationRow(
-      basis,
-      spec.stage,
-      spec.operation,
-      spec.targetKind,
-      basis.classDeclaration.name?.text ?? "<anonymous>",
-      methodName,
-      hydrationFlowNodeContaining(body, spec.needle) ?? member,
-      spec.targetName,
-      spec.summary,
-      spec.overview ?? false,
-    ),
-  );
+  return operationRows(basis, basis.classDeclaration.name?.text ?? "<anonymous>", methodName, member, specs);
 }
 
 function rendererMethodRows(
   basis: FileBasis,
   rendererName: string,
   specs: readonly RowSpec[],
-): readonly FrameworkHydrationFlowRow[] {
+): readonly HydrationLandmark[] {
   const declaration = rendererDeclaration(basis.sourceFile, rendererName);
-  if (declaration === null) {
-    return [];
-  }
-  const renderMethod = declaration.rendererClass.members.find(
+  const renderMethod = declaration?.rendererClass.members.find(
     (member): member is ts.MethodDeclaration =>
       ts.isMethodDeclaration(member) && propertyNameText(member.name) === "render",
   );
-  if (renderMethod?.body === undefined) {
-    return [];
-  }
-  const body = renderMethod.body;
+  return operationRows(basis, rendererName, "render", renderMethod, specs);
+}
+
+function operationRows(
+  basis: FileBasis,
+  owner: string,
+  method: string,
+  member: ts.MethodDeclaration | ts.ConstructorDeclaration | undefined,
+  specs: readonly RowSpec[],
+): readonly HydrationLandmark[] {
   return specs.map((spec) =>
     hydrationRow(
-      basis,
-      spec.stage,
-      spec.operation,
-      spec.targetKind,
-      rendererName,
-      "render",
-      hydrationFlowNodeContaining(body, spec.needle) ?? renderMethod,
-      spec.targetName,
-      spec.summary,
-      spec.overview ?? false,
+      basis, spec.stage, spec.operation, spec.targetKind, owner, method,
+      member?.body === undefined
+        ? { node: member ?? basis.sourceFile, missingNeedle: spec.needle }
+        : hydrationFlowNodeContaining(member.body, spec.needle),
+      spec.targetName, spec.summary, spec.overview ?? false,
     ),
   );
 }
@@ -1133,12 +1134,12 @@ function hydrationRow(
   targetKind: FrameworkHydrationTargetKind,
   ownerName: string,
   methodName: string,
-  node: ts.Node,
+  landmark: { readonly node: ts.Node; readonly missingNeedle?: string },
   targetName: string | null,
   summary: string,
   overview = true,
-): FrameworkHydrationFlowRow {
-  const source = requiredSourceRangeForNode(basis.sourceProject, node);
+): HydrationLandmark {
+  const source = requiredSourceRangeForNode(basis.sourceProject, landmark.node);
   return {
     id: `framework-hydration-flow:${ownerName}:${methodName}:${stage}:${operation}:${targetKind}:${source.start.line}:${source.start.character}`,
     packageId: basis.packageId,
@@ -1152,11 +1153,13 @@ function hydrationRow(
     overview,
     source,
     summary,
+    ...(landmark.missingNeedle === undefined ? {} : { missingNeedle: landmark.missingNeedle }),
   };
 }
 
-function hydrationFlowNodeContaining(root: ts.Node, text: string): ts.Node | null {
-  return deepestNodeContainingText(root, text, isHydrationFlowSourceCandidate);
+function hydrationFlowNodeContaining(root: ts.Node, needle: string) {
+  const match = deepestNodeContainingText(root, needle, isHydrationFlowSourceCandidate);
+  return match === null ? { node: root.parent, missingNeedle: needle } : { node: match };
 }
 
 function isHydrationFlowSourceCandidate(node: ts.Node): boolean {

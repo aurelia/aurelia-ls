@@ -277,7 +277,7 @@ function answerFrameworkErrorsSummary(
   const codes = filtered.codes.slice(0, rowLimit(inquiry));
   return createAnswer(
     inquiry,
-    OutcomeKind.Hit,
+    filtered.packages.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
     `Read ${rollup.codeCount} Aurelia framework error/event code(s), ${rollup.messageCount} mapped message(s), ${rollup.usageCount} usage site(s), and ${rollup.semanticRuntimeCodeReferenceCount} semantic-runtime AUR reference(s).`,
     {
       value: {

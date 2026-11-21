@@ -19,7 +19,8 @@ import {
 } from "../evidence.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
-import { LocusKind, RepoRootLocus } from "../locus.js";
+import { RepoRootLocus } from "../locus.js";
+import { matchesProductPathPrefix as matchesPathPrefix, productSourceLocusPath, semanticRuntimeSourceRoot } from "./product-architecture-source.js";
 import {
   NavigationPlane,
   NavigationRelation,
@@ -265,6 +266,15 @@ export function answerProductArchitecture(
   inquiry: Inquiry,
   sourceProject: SourceProject,
 ): Answer<ProductArchitectureValue> {
+  const scope = productSourceLocusPath(inquiry.locus, sourceProject.repoRoot);
+  if (scope === null) {
+    return createAnswer(inquiry, OutcomeKind.NoClaim,
+      "Product architecture reads packages/semantic-runtime/src. Select the product package or a file in it.");
+  }
+  const path = inquiryStringFilter(inquiry, "pathPrefix");
+  if (path !== undefined && scope !== semanticRuntimeSourceRoot && !matchesPathPrefix(path, scope) && !matchesPathPrefix(scope, path)) {
+    return createAnswer(inquiry, OutcomeKind.Miss, "The requested path prefix and product locus do not intersect.");
+  }
   const projection = productArchitectureProjection(inquiry);
   const basis = productArchitectureBasis(sourceProject);
   if (projection === "profile") {
@@ -288,7 +298,7 @@ export function answerProductArchitecture(
         inquiry,
         "product.architecture:areas",
         "semantic-runtime area row(s)",
-        filterAreas(analysis.areas, inquiry),
+        filterAreas(analysis, inquiry),
         basis,
         (rows) => ({ ...productArchitectureBaseValue(analysis), areas: rows }),
         evidenceForArea,
@@ -508,7 +518,7 @@ function answerProductArchitectureSummary(
     {
       value: {
         ...productArchitectureBaseValue(analysis, true),
-        areas: filterAreas(analysis.areas, inquiry),
+        areas: filterAreas(analysis, inquiry),
         modules: summaryRows.largeModules,
         functionSurfaces: summaryRows.largeFunctions,
         callDependencies: summaryRows.callDependencies,
@@ -823,10 +833,15 @@ function productArchitectureProjectionRequestsCallArgumentOrigins(
 }
 
 function filterAreas(
-  rows: readonly ProductArchitectureAreaRow[],
+  analysis: ProductArchitectureAnalysis,
   inquiry: Inquiry,
 ): readonly ProductArchitectureAreaRow[] {
-  return rows.filter((row) =>
+  const prefix = pathPrefixFilter(inquiry);
+  const areas = prefix === undefined ? undefined : new Set(
+    analysis.modules.filter(row => matchesPathPrefix(row.filePath, prefix)).map(row => row.area),
+  );
+  return analysis.areas.filter((row) =>
+    (areas === undefined || areas.has(row.area)) &&
     matchesFilterValue(row.area, inquiryStringFilter(inquiry, "area")) &&
     inquiryQueryMatches(inquiry, [
       row.id,
@@ -1947,7 +1962,7 @@ function productArchitectureBasis(sourceProject: SourceProject): readonly Basis[
       authority: BasisAuthority.Checker,
       freshness: BasisFreshness.Live,
       summary:
-        "Read semantic-runtime source files, declarations, and import declarations from the hot TypeScript Program.",
+        "Read packages/semantic-runtime/src in the hot TypeScript Program. Incoming import counts cover static import declarations in this cohort. Re-export edges and readers in other admitted packages can be inspected with ts.structure:module-graph and ts.type:references.",
       identity: sourceProject.summary().identity,
     },
   ];
@@ -1958,77 +1973,10 @@ function atLeast(value: number, minimum: number | undefined): boolean {
 }
 
 function pathPrefixFilter(inquiry: Inquiry): string | undefined {
+  const scope = productSourceLocusPath(inquiry.locus);
   const explicit = inquiryStringFilter(inquiry, "pathPrefix");
-  if (explicit !== undefined) {
-    return explicit;
-  }
-  return inquiry.locus === undefined ? undefined : locusPathPrefix(inquiry.locus);
-}
-
-function locusPathPrefix(
-  locus: NonNullable<Inquiry["locus"]>,
-): string | undefined {
-  switch (locus.kind) {
-    case LocusKind.SourceFile:
-      return locus.filePath;
-    case LocusKind.SourceRange:
-      return locus.range.filePath;
-    case LocusKind.Symbol:
-      return locus.filePath;
-    case LocusKind.Package:
-      return packageLocusPathPrefix(locus);
-    case LocusKind.RepoArea:
-      return locus.areaId === "semantic-runtime"
-        ? "packages/semantic-runtime/src"
-        : undefined;
-    case LocusKind.GitTree:
-      return locus.inner === undefined
-        ? undefined
-        : locusPathPrefix(locus.inner);
-    case LocusKind.Repo:
-    case LocusKind.Handle:
-    default:
-      return undefined;
-  }
-}
-
-function packageLocusPathPrefix(
-  locus: Extract<NonNullable<Inquiry["locus"]>, { readonly kind: LocusKind.Package }>,
-): string | undefined {
-  if (
-    locus.packageId === "semantic-runtime" ||
-    locus.packageName === "@aurelia-ls/semantic-runtime"
-  ) {
-    return "packages/semantic-runtime/src";
-  }
-  if (locus.relativePath === undefined) {
-    return undefined;
-  }
-  const normalized = normalizeInquiryPath(locus.relativePath)
-    .replace(/\/+$/u, "");
-  if (normalized === "packages/semantic-runtime") {
-    return "packages/semantic-runtime/src";
-  }
-  return normalized.startsWith("packages/semantic-runtime/src")
-    ? normalized
-    : undefined;
-}
-
-function matchesPathPrefix(value: string, prefix: string | undefined): boolean {
-  if (prefix === undefined) {
-    return true;
-  }
-  const normalizedValue = normalizeInquiryPath(value);
-  const normalizedPrefix = normalizeInquiryPath(prefix).replace(/\/+$/u, "");
-  return normalizedValue === normalizedPrefix
-    || normalizedValue.startsWith(`${normalizedPrefix}/`);
-}
-
-function normalizeInquiryPath(value: string): string {
-  const normalized = value.replace(/\\/g, "/").replace(/^\.\//u, "");
-  const semanticRuntimeRoot = "packages/semantic-runtime/src/";
-  const index = normalized.indexOf(semanticRuntimeRoot);
-  return index < 0 ? normalized : normalized.slice(index);
+  if (scope === null || scope === semanticRuntimeSourceRoot) return explicit;
+  return explicit !== undefined && matchesPathPrefix(explicit, scope) ? explicit : scope;
 }
 
 function matchesUsageFamily(

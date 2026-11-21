@@ -138,7 +138,9 @@ function routeMatchesFilters(
   const symbolName = filters.symbolName;
   if (
     symbolName !== undefined &&
-    !route.anchors.some((anchor) => anchorMatchesSymbol(anchor, symbolName))
+    !route.anchors.some((anchor) =>
+      anchorMatchesSymbol(anchor, symbolName) && (path === undefined || anchorMatchesPath(anchor, path))
+    )
   ) {
     return false;
   }
@@ -670,7 +672,7 @@ function anchorMatchesPath(
     case "doc":
       return sourcePathMatches(anchor.path, path);
     case "path":
-      return sourcePathMatches(anchor.pathPrefix, path);
+      return routePathAnchorMatches(anchor.pathPrefix, path);
     default:
       return false;
   }
@@ -743,6 +745,15 @@ export function sourcePathMatches(candidate: string, requested: string): boolean
   return normalizedCandidate === normalizedRequested ||
     normalizedCandidate.startsWith(`${normalizedRequested}/`) ||
     normalizedRequested.startsWith(`${normalizedCandidate}/`);
+}
+
+export function routePathAnchorMatches(prefix: string, requested: string): boolean {
+  if (!prefix.endsWith("*")) {
+    return sourcePathMatches(prefix, requested);
+  }
+  const stem = normalizeRoutePath(prefix).slice(0, -1);
+  const path = normalizeRoutePath(requested);
+  return path.startsWith(stem) || stem.startsWith(`${path}/`);
 }
 
 const normalizedRoutePathCache = new Map<string, string>();

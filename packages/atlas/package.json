@@ -67,7 +67,7 @@
     "session:ensure": "pnpm build && node dist/scripts/inquiry-session-ensure.js",
     "session:playground": "pnpm build && node dist/scripts/inquiry-session-playground.js",
     "session:shutdown": "pnpm build && node dist/scripts/inquiry-session-shutdown.js",
-    "self-check": "pnpm build && node dist/scripts/self-check.js",
+    "self-check": "pnpm build && node dist/scripts/self-check.js && node --test --test-concurrency=1",
     "smoke": "pnpm self-check"
   },
   "devDependencies": {

@@ -6,20 +6,25 @@ export function atlasMemoryRecordRowPathMatches(
   row: AtlasMemoryRecordRow,
   pathFilter: string,
 ): boolean {
-  return (row.record.anchors ?? []).some((anchor) =>
-    anchor.kind === "source"
-      ? atlasMemoryRepoPathMatches(anchor.filePath, pathFilter)
-      : anchor.kind === "doc" || anchor.kind === "fixture"
-        ? atlasMemoryRepoPathMatches(anchor.path, pathFilter)
-        : false,
-  ) || atlasMemoryRepoPathMatches(row.shardPath, pathFilter) ||
-  row.liveChecks.some((result) =>
-    "filePath" in result.check &&
-    result.check.filePath !== undefined &&
-    atlasMemoryRepoPathMatches(result.check.filePath, pathFilter),
-  );
+  return atlasMemoryRepoPathMatches(row.shardPath, pathFilter) ||
+    atlasMemoryBackingPaths(row).some(path => atlasMemoryRepoPathMatches(path, pathFilter));
 }
 
+/** Authored paths providing evidence for a record. The storage location is a separate address. */
+export function atlasMemoryBackingPaths(row: AtlasMemoryRecordRow): readonly string[] {
+  return [
+    ...(row.record.anchors ?? []).flatMap(anchor => {
+      if (anchor.kind === "source") return [anchor.filePath];
+      if (anchor.kind === "doc" || anchor.kind === "fixture") return [anchor.path];
+      return [];
+    }),
+    ...row.liveChecks.flatMap(({ check, source }) =>
+      "filePath" in check && check.filePath !== undefined
+        ? [check.filePath]
+        : source === undefined ? [] : [source.filePath],
+    ),
+  ];
+}
 /** Match a memory row against a live-check discriminator. */
 export function atlasMemoryRecordRowHasLiveCheckKind(
   row: AtlasMemoryRecordRow,

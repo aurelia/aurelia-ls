@@ -39,7 +39,7 @@ export interface AtlasWorkRouterValue {
   readonly version: typeof ATLAS_WORK_ROUTER_VERSION;
   /** Compact catalog and match rollup. */
   readonly rollup: AtlasWorkRouterRollup;
-  /** Matched route rows. */
+  /** Matched route rows for this page. Coverage pages can refer to several rows for the same route. */
   readonly routes?: readonly AtlasWorkRouteRow[];
   /** Route plans joining route anchors to live Atlas substrates. */
   readonly routePlans?: readonly AtlasWorkRoutePlanRow[];
@@ -174,6 +174,8 @@ export interface AtlasWorkRouteHealthIssue {
   /** Stable issue kind. */
   readonly kind:
     | "missing-source-anchor"
+    | "invalid-script-anchor"
+    | "invalid-lens-anchor"
     | "empty-memory-join"
     | "empty-fixture-seed-join"
     | "empty-expected-effect-join"

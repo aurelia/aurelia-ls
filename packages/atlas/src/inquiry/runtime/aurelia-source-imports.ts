@@ -1,6 +1,6 @@
 import ts from "typescript";
 
-import { propertyNameText } from "../../source/semantic-surface/index.js";
+import { declarationInitializer, propertyNameText, unwrapExpression } from "../../source/semantic-surface/index.js";
 
 /** Source-file-local Aurelia imports shared by workspace and public-plugin architecture lenses. */
 export class AureliaSourceImports {
@@ -14,7 +14,45 @@ export class AureliaSourceImports {
   readonly routerIdentifiers = new Set<string>();
   readonly routerImportedNames = new Map<string, string>();
   readonly routerNamespaces = new Set<string>();
-  readonly routerReceiverNames = new Set<string>();
+  readonly routerReceivers: AureliaReceiverSet;
+  readonly containerReceivers: AureliaReceiverSet;
+
+  constructor(checker?: ts.TypeChecker) {
+    this.routerReceivers = new AureliaReceiverSet(checker);
+    this.containerReceivers = new AureliaReceiverSet(checker);
+  }
+}
+
+/** Identities admitted from a receiver declaration or direct assignment in one source file. */
+export class AureliaReceiverSet {
+  readonly #keys = new Set<string | ts.Symbol>();
+  constructor(private readonly checker?: ts.TypeChecker) {}
+
+  has(expression: ts.Expression): boolean {
+    const key = this.key(expression);
+    return key !== undefined && this.#keys.has(key);
+  }
+
+  add(expression: ts.Expression): void {
+    const key = this.key(expression);
+    if (key !== undefined) this.#keys.add(key);
+    if (this.checker && ts.isIdentifier(expression) &&
+        ts.isParameterPropertyDeclaration(expression.parent, expression.parent.parent)) {
+      for (const symbol of this.checker.getSymbolsOfParameterPropertyDeclaration(expression.parent, expression.text)) {
+        this.#keys.add(symbol);
+      }
+    }
+  }
+
+  private key(expression: ts.Expression): string | ts.Symbol | undefined {
+    const target = unwrapExpression(expression);
+    const name = ts.isIdentifier(target) ? target
+      : ts.isPropertyAccessExpression(target) && target.expression.kind === ts.SyntaxKind.ThisKeyword ? target.name
+      : undefined;
+    if (name === undefined) return undefined;
+    // Loose scripts inventoried outside the admitted Program supply syntax only.
+    return this.checker === undefined ? name.text : this.checker.getSymbolAtLocation(name);
+  }
 }
 
 export type ReceiverDeclaration =
@@ -103,6 +141,37 @@ export function readAureliaSourceImportsInto(
     }
   }
   readCommonJsAureliaRequiresInto(sourceFile, bindings);
+}
+
+/** Follow container and router receivers from declarations and direct assignments for both architecture lenses. */
+export function collectAureliaServiceReceivers(sourceFile: ts.SourceFile, bindings: AureliaSourceImports): void {
+  const visit = (node: ts.Node): void => {
+    if (isReceiverDeclaration(node) && ts.isIdentifier(node.name)) {
+      const value = declarationInitializer(node);
+      const resolved = value === undefined ? null : aureliaResolveFirstArgument(value, bindings);
+      if (isAureliaContainerReceiverTypeNode(node.type, bindings) ||
+          (resolved !== null && isAureliaContainerReference(resolved, bindings)) ||
+          (value !== undefined && bindings.containerReceivers.has(value))) {
+        bindings.containerReceivers.add(node.name);
+      }
+      if (isRouterReceiverTypeNode(node.type, bindings) || isRouterReceiverInitializer(value, bindings)) {
+        bindings.routerReceivers.add(node.name);
+      }
+    } else if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+      if (bindings.containerReceivers.has(node.right)) bindings.containerReceivers.add(node.left);
+      if (isRouterReceiverValueExpression(node.right, bindings)) bindings.routerReceivers.add(node.left);
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(sourceFile, visit);
+}
+
+/** Kernel resolve(...) and container-instance lookup calls evidenced by this file's Aurelia bindings. */
+export function aureliaDiResolutionMechanismForCall(call: ts.CallExpression, bindings: AureliaSourceImports): string | null {
+  if (isAureliaKernelReference(call.expression, "resolve", bindings)) return "kernel.resolve";
+  const receiver = call.expression;
+  return ts.isPropertyAccessExpression(receiver) && isContainerLookupMethodName(receiver.name.text) &&
+    bindings.containerReceivers.has(receiver.expression) ? `container.${receiver.name.text}` : null;
 }
 
 function readCommonJsAureliaRequiresInto(
@@ -444,29 +513,14 @@ export function isRouterReceiverInitializer(
   if (resolved !== null) {
     return isRouterReceiverReference(resolved, bindings);
   }
-  return isStoredRouterReceiverExpression(expression, bindings);
+  return bindings.routerReceivers.has(expression);
 }
 
 export function isRouterReceiverValueExpression(
   expression: ts.Expression,
   bindings: AureliaSourceImports,
 ): boolean {
-  return isStoredRouterReceiverExpression(expression, bindings) ||
-    isRouterReceiverInitializer(expression, bindings);
-}
-
-function isStoredRouterReceiverExpression(
-  expression: ts.Expression,
-  bindings: AureliaSourceImports,
-): boolean {
-  return (
-    (ts.isIdentifier(expression) && bindings.routerReceiverNames.has(expression.text)) ||
-    (
-      ts.isPropertyAccessExpression(expression) &&
-      expression.expression.kind === ts.SyntaxKind.ThisKeyword &&
-      bindings.routerReceiverNames.has(expression.name.text)
-    )
-  );
+  return isRouterReceiverInitializer(expression, bindings);
 }
 
 export function isAureliaDecoratorExportName(text: string): boolean {
