@@ -598,7 +598,7 @@ export class TemplateTypeSystemOverlayBuilder {
       const typeExpression = this.slotTypeExpression(slot, overlayFileName);
       builder.appendLine(typeExpression == null
         ? `let ${slot.name} = $this.${slot.name};`
-        : `let ${slot.name} = $this.${slot.name} as unknown as ${typeExpression};`);
+        : `let ${slot.name}: ${typeExpression} = $this.${slot.name} as unknown as ${typeExpression};`);
     }
     builder.appendLine();
   }

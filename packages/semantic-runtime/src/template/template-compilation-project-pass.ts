@@ -1229,7 +1229,10 @@ export class TemplateCompilationProjectPass {
         // A resource-local SCC deliberately does not render peer views. Predecessor writers are therefore an
         // incomplete specialization basis for every member of a cycle; fall back to each declared bindable type rather
         // than narrowing from whichever external writer happened to reach the SCC first.
-        const boundControllerValues = runtimeAnalysisBreadth === 'resource-local' && group.length > 1
+        const recursivelyWritten = group.length > 1 || group[0]!.compiledTemplate.instructions.some(instruction =>
+          instruction instanceof HydrateElementInstruction && instruction.definitionProductHandle != null
+          && instruction.definitionProductHandle === group[0]!.definition.productHandle);
+        const boundControllerValues = runtimeAnalysisBreadth === 'resource-local' && recursivelyWritten
           ? RuntimeBoundControllerValueTable.empty
           : predecessorBoundControllerValues;
         const groupResources = group.map((compilation) =>

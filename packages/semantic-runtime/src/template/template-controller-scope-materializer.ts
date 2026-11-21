@@ -49,6 +49,9 @@ import {
   type RuntimeBindingExpressionScopeProjectionReader,
 } from '../observation/runtime-binding-expression-scope.js';
 import { runtimeBindingSourceLifecycle } from '../observation/runtime-binding-source-lifecycle.js';
+import { RuntimeBindingSourceEvaluationKind } from '../observation/runtime-binding-observation.js';
+import { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
+import { NamedResourceDefinitionContributionKind } from '../resources/resource-kind.js';
 import { runtimeAssignmentInputScopeForAccessScope } from '../observation/binding-source-write-capability.js';
 import {
   aggregateRuntimeBindingSourceExpressionChainIndex,
@@ -69,6 +72,7 @@ import {
 import { ConfigurationProductDetails } from '../configuration/product-details.js';
 import type {
   AddressHandle,
+  HotDetailHandle,
   ProductHandle,
 } from '../kernel/handles.js';
 import {
@@ -141,6 +145,8 @@ import {
   PropertyBindingInstruction,
   SetPropertyInstruction,
   SpreadElementPropBindingInstruction,
+  SpreadValueBindingInstruction,
+  SpreadTransferedBindingInstruction,
   StateBindingInstruction,
   type TemplateInstruction,
   type TemplateInstructionSequence,
@@ -2201,22 +2207,65 @@ export class TemplateControllerScopeMaterializer {
       instruction.productHandle,
       controllerContext,
     );
+    const slots = this.definitionBindingContextSlots(
+      frame.input, definition, controller?.productHandle ?? instruction.productHandle, frame.services,
+    );
+    const generated = definition.contributions.some(contribution =>
+      contribution.contributionKind === NamedResourceDefinitionContributionKind.LocalTemplate);
     const emission = frame.services.scopeMaterializer.prepare(BindingScope.forCustomElementController({
       localKey: `${frame.input.localKey}:scope:hydrate-element:${localSuffix}`,
       ownerProductHandle: controller?.productHandle ?? instruction.productHandle,
       ownerIdentityHandle: controller?.identityHandle ?? instruction.identityHandle,
       parent,
       viewModelType: definition.target.targetType,
-      bindingContextSlots: this.definitionBindingContextSlots(
-        frame.input,
-        definition,
-        controller?.productHandle ?? instruction.productHandle,
-        frame.services,
-      ),
+      bindingContextSlots: generated && controller != null
+        ? this.localTemplateUseSlots(frame, parent, instruction, controller, slots, localSuffix) : slots,
       sourceAddressHandle: instruction.sourceAddressHandle,
     }));
     controller?.attachScope(emission.scope.toReference());
     return emission;
+  }
+
+  /** A generated element has no TS class. Its concrete use receives inputs in the declaring parent's scope. */
+  private localTemplateUseSlots(
+    frame: TemplateScopeConstructionFrame,
+    parent: BindingScope,
+    instruction: HydrateElementInstruction,
+    controller: RuntimeControllerFrame,
+    slots: readonly BindingContextSlotDraft[],
+    localSuffix: string,
+  ): readonly BindingContextSlotDraft[] {
+    const props = instruction.bindableInstructionProductHandles.map(handle => frame.readInstruction(handle));
+    if (props.some(prop => prop == null || prop instanceof SpreadValueBindingInstruction
+      || prop instanceof SpreadElementPropBindingInstruction || prop instanceof SpreadTransferedBindingInstruction)) return slots;
+    return slots.map(slot => {
+      const writers = props.filter(prop => instructionTargetsProperty(prop, slot.name));
+      if (writers.length !== 1) return slot;
+      const writer = writers[0]!;
+      const local = `${frame.input.localKey}:scope:${localSuffix}:local-bindable:${slot.name}`;
+      let type: CheckerTypeReference | null = null;
+      let sourceMember: HotDetailHandle | null = null;
+      if (writer instanceof SetPropertyInstruction) {
+        type = frame.services.typeSupport.literalTypeReference(frame.input, writer.value, local, writer.sourceAddressHandle);
+      } else {
+        const bindings = frame.input.runtimeBindings.readBindingsForInstruction(writer.productHandle)
+          .filter(isRuntimeExpressionBinding)
+          .filter(binding => frame.input.runtimeBindings.readRenderContextForBinding(binding.productHandle)?.targetController?.productHandle === controller.productHandle);
+        if (bindings.length !== 1) return slot;
+        const binding = bindings[0]!;
+        const lifecycle = runtimeBindingSourceLifecycle(binding, frame.input.expressionResourcePlan);
+        if (lifecycle.evaluationReachability !== RuntimeOperationReachability.Reached ||
+          (lifecycle.evaluationKind !== RuntimeBindingSourceEvaluationKind.ConnectableRead &&
+           lifecycle.evaluationKind !== RuntimeBindingSourceEvaluationKind.UntrackedRead)) return slot;
+        const projection = this.runtimeControllerPropertyTypeProjection(frame.input, binding, parent, slot.name, local, frame.services);
+        type = projection?.targetType ?? null;
+        sourceMember = projection?.sourceTypeMember?.detailHandle ?? null;
+      }
+      return type == null ? slot : new BindingContextSlotDraft(
+        slot.name, slot.targetIdentityHandle, slot.targetTypeMemberHandle, type, slot.sourceAddressHandle,
+        slot.fieldProvenance, slot.staticValueEvaluation, slot.memberTypes, slot.assignmentAccessKind, sourceMember,
+      );
+    });
   }
 
   private constructCustomElementChildTemplateScopes(
