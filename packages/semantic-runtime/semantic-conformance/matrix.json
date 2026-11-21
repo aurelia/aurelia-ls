@@ -7314,9 +7314,9 @@
               "name": "app diagnostics present agreement once",
               "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
               "equals": {
-                "value.presentation.rawRowCount": 9,
+                "value.presentation.rawRowCount": 10,
                 "value.presentation.primaryCount": 6,
-                "value.presentation.contextualCount": 3
+                "value.presentation.contextualCount": 4
               },
               "rows": [
                 {
@@ -7326,7 +7326,7 @@
                     "related.0.role": "contextual",
                     "related.0.relation": "checker-evidence"
                   },
-                  "count": 2
+                  "count": 3
                 }
               ]
             }
@@ -9532,8 +9532,9 @@
                 "cursor": { "marker": "${resolvedProduct?.label}", "token": "resolvedProduct" },
                 "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } }
               },
-              "equals": { "value.rows.length": 4 },
+              "equals": { "value.rows.length": 5 },
               "rows": [
+                { "fields": { "referenceKind": "typescript-usage", "name": "resolvedProduct" }, "source": { "sourceFile": "src/assurance-bridge.ts", "marker": "vm.resolvedProduct?.label", "token": "resolvedProduct" } },
                 { "fields": { "referenceKind": "declaration", "name": "resolvedProduct" }, "source": { "sourceFile": "src/template-controller-built-ins-app.ts", "marker": "resolvedProduct: BuiltInProduct | undefined", "token": "resolvedProduct" } },
                 { "fields": { "referenceKind": "template-usage", "name": "resolvedProduct" }, "source": { "marker": "then=\"resolvedProduct\"", "token": "resolvedProduct" } },
                 { "fields": { "referenceKind": "template-usage", "name": "resolvedProduct" }, "source": { "marker": "${resolvedProduct?.label}", "token": "resolvedProduct" } },
@@ -9543,9 +9544,10 @@
             {
               "name": "root target rename includes TypeScript declaration assignment and reads",
               "query": { "kind": "template-rename", "cursor": { "marker": "${resolvedProduct?.label}", "token": "resolvedProduct" }, "options": { "newName": "fulfilledProduct" } },
-              "equals": { "value.status": "available", "value.edits.length": 4 },
+              "equals": { "value.status": "available", "value.edits.length": 5 },
               "rows": [
-                { "rowPath": "value.edits", "fields": { "editKind": "typescript-reference", "oldText": "resolvedProduct", "newText": "fulfilledProduct" }, "count": 1, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "typescript-reference", "oldText": "resolvedProduct", "newText": "fulfilledProduct" }, "source": { "sourceFile": "src/template-controller-built-ins-app.ts", "marker": "resolvedProduct: BuiltInProduct | undefined", "token": "resolvedProduct" }, "count": 1, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "typescript-reference", "oldText": "resolvedProduct", "newText": "fulfilledProduct" }, "source": { "sourceFile": "src/assurance-bridge.ts", "marker": "vm.resolvedProduct?.label", "token": "resolvedProduct" }, "count": 1, "oldTextMatchesSource": true },
                 { "rowPath": "value.edits", "fields": { "editKind": "template-usage", "oldText": "resolvedProduct", "newText": "fulfilledProduct" }, "count": 3, "oldTextMatchesSource": true }
               ]
             }
@@ -9571,8 +9573,9 @@
                 "cursor": { "marker": "formatReason($parent.rejectedReason)", "token": "rejectedReason" },
                 "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } }
               },
-              "equals": { "value.rows.length": 3 },
+              "equals": { "value.rows.length": 4 },
               "rows": [
+                { "fields": { "referenceKind": "typescript-usage", "name": "rejectedReason" }, "source": { "sourceFile": "src/assurance-bridge.ts", "marker": "vm.rejectedReason ??", "token": "rejectedReason" } },
                 { "fields": { "referenceKind": "declaration", "name": "rejectedReason" }, "source": { "sourceFile": "src/template-controller-built-ins-app.ts", "marker": "rejectedReason: unknown", "token": "rejectedReason" } },
                 { "fields": { "referenceKind": "template-usage", "name": "rejectedReason" }, "source": { "marker": "catch=\"$parent.rejectedReason\"", "token": "rejectedReason" } },
                 { "fields": { "referenceKind": "template-usage", "name": "rejectedReason" }, "source": { "marker": "formatReason($parent.rejectedReason)", "token": "rejectedReason" } }
@@ -9808,8 +9811,8 @@
               "name": "invalid repeat source consequences are contextual presentation evidence",
               "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
               "equals": {
-                "value.presentation.rawRowCount": 19,
-                "value.presentation.primaryCount": 11,
+                "value.presentation.rawRowCount": 18,
+                "value.presentation.primaryCount": 10,
                 "value.presentation.contextualCount": 7,
                 "value.presentation.withheldCount": 1
               },
@@ -9904,7 +9907,7 @@
               "rows": [
                 {
                   "fields": { "frameworkErrorCode": "AUR0812" },
-                  "source": { "marker": "target.bind: portalTarget", "token": "portalTarget" },
+                  "source": { "marker": "target.bind: portalTarget; position: afterbegin; strict: true", "token": "true" },
                   "absent": true
                 }
               ]
@@ -14485,12 +14488,11 @@
           "expectations": [
             { "name": "diagnostics", "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } }, "equals": { "value.rows.length": 0 } },
             {
-              "name": "generated-slot type pressure",
+              "name": "from-view-only input leaves its generated slot without an incoming type",
               "query": { "kind": "open-seams", "options": { "detail": "full", "page": { "size": 100 } } },
-              "equals": { "value.rows.length": 15 },
+              "equals": { "value.rows.length": 3 },
               "rows": [
-                { "fields": { "pressureKind": "product-pressure", "reasonKinds.0": "binding-source-slot-no-static-value" }, "count": 13 },
-                { "fields": { "pressureKind": "product-pressure", "reasonKinds.0": "binding-source-type-open" }, "count": 2 }
+                { "fields": { "pressureKind": "product-pressure", "reasonKinds.0": "binding-source-slot-no-static-value" }, "source": { "marker": "<input value.bind=\"fromViewValue\">", "token": "value.bind=\"fromViewValue\"" }, "count": 3 }
               ]
             },
             {
@@ -14898,6 +14900,7 @@
                 { "fields": { "diagnosticKind": "runtime-binding-behavior-framework-error", "frameworkErrorCode": "AUR0102" }, "source": { "marker": "innerAudit:'first' & innerAudit:'second'", "token": "innerAudit", "occurrence": 1 }, "count": 1 },
                 { "fields": { "diagnosticKind": "runtime-value-converter-framework-error", "frameworkErrorCode": "AUR0103" }, "source": { "marker": "${count | missingConverter}", "token": "missingConverter" }, "count": 1 },
                 { "fields": { "diagnosticKind": "runtime-value-converter-framework-error", "frameworkErrorCode": "AUR0103" }, "source": { "marker": "missingConverter | sanitize", "token": "missingConverter" }, "count": 1 },
+                { "fields": { "frameworkErrorCode": "AUR0103", "selectedMemberName": "sanitize" }, "count": 0 },
                 { "fields": { "diagnosticKind": "runtime-value-converter-framework-error", "frameworkErrorCode": "AUR0099" }, "source": { "marker": "missingConverter | sanitize", "token": "sanitize" }, "absent": true },
                 { "fields": { "diagnosticKind": "runtime-binding-behavior-framework-error", "frameworkErrorCode": "AUR0101" }, "source": { "marker": "${item.label & missingBehavior}", "token": "missingBehavior" }, "count": 1 },
                 { "fields": { "diagnosticKind": "expression-parse-error", "frameworkErrorCode": "AUR0156" }, "source": { "marker": "typedAudit:'reverse':limit | numberText", "token": "|" }, "count": 1 }
@@ -15312,10 +15315,11 @@
                   "fields": {
                     "component.className": "AdmittedPluginApp",
                     "registrationAdmissions": 5,
-                    "compiledTemplates": 1
+                    "compiledTemplates": 3
                   },
                   "count": 1
                 },
+                { "rowPath": "value.appRoots", "fields": { "component.className": "SharedPluginApp", "compiledTemplates": 1 }, "count": 2 },
                 {
                   "rowPath": "value.appRoots",
                   "fields": {
@@ -15535,10 +15539,10 @@
                   "fields": {
                     "definitionName": "admitted-plugin-app",
                     "sourceName": "entries",
-                    "targetProperty": "items",
-                    "valueChannelKind": "template-controller-iteration",
+                    "targetProperty": null,
+                    "valueChannelKind": null,
                     "sourceEvaluationReachability": "open",
-                    "sourceToTargetAssignable": true
+                    "sourceToTargetAssignable": null
                   },
                   "source": { "marker": "virtual-repeat.for=\"entry of entries\"", "token": "virtual-repeat.for=\"entry of entries\"" },
                   "count": 1
@@ -15555,9 +15559,9 @@
               "name": "app diagnostic presentation",
               "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
               "equals": {
-                "value.presentation.rawRowCount": 11,
+                "value.presentation.rawRowCount": 13,
                 "value.presentation.primaryCount": 9,
-                "value.presentation.contextualCount": 2
+                "value.presentation.contextualCount": 4
               },
               "rows": [
                 {
@@ -15566,7 +15570,7 @@
                     "rawRowCount": 2,
                     "related.0.relation": "derived-consequence"
                   },
-                  "count": 2
+                  "count": 4
                 }
               ]
             }
