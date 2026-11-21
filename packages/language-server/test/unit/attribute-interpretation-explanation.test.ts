@@ -1,3 +1,4 @@
+import { testSourceDocument } from "./test-request-guard.js";
 import path from "node:path";
 import { describe, expect, test, vi } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
@@ -161,7 +162,7 @@ function operation(attributeInterpretationExplanation: ReturnType<typeof vi.fn>)
   return createTestOperation({
     documents: {
       ensureProgramDocument: () => document,
-      lookupText: (uri: string) => documentUris.sameDocument(uri, templateUri) ? templateText : null,
+      lookupReadableDocument: (uri: string) => documentUris.sameDocument(uri, templateUri) ? testSourceDocument(uri, templateText) : null,
     },
     attributeInterpretationExplanation,
   });

@@ -1,3 +1,4 @@
+import { testSourceDocument } from "./test-request-guard.js";
 import path from "node:path";
 import { describe, test, expect } from "vitest";
 import {
@@ -22,7 +23,7 @@ import {
   mapSemanticRuntimeTemplateRenameCandidates,
   mapSemanticRuntimeTemplateRenameEdit,
   semanticRuntimeDiagnosticCode,
-  type LookupTextFn,
+  type LookupReadableDocumentFn,
 } from "../../src/mapping/lsp-types.js";
 import { languageIdForSource } from "../../src/utils/document-kind.js";
 import { WorkspaceDocumentUris } from "../../src/utils/document-uri.js";
@@ -37,7 +38,7 @@ const textByUri = new Map<DocumentUri, string>([
   [definitionUri, definitionText],
 ]);
 
-const lookupText: LookupTextFn = (uri) => textByUri.get(uri) ?? null;
+const lookupDocument: LookupReadableDocumentFn = (uri) => testSourceDocument(uri, textByUri.get(uri) ?? null);
 
 function completeDiagnosticAnswer<T extends { readonly value: { readonly rows: readonly unknown[] } }>(
   answer: T,
@@ -2366,7 +2367,7 @@ describe("mapSemanticRuntimeTemplateReferences", () => {
           },
         ],
       },
-    } as never, () => "short", {
+    } as never, uri => testSourceDocument(uri, "short"), {
       documentUris: appDocumentUris,
       originDocument,
       scope: "workspace",
@@ -2452,7 +2453,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
           selectedBindable: null,
           selectedDefinition: null,
         },
-      } as never, lookupText, {
+      } as never, lookupDocument, {
         documentUris: appDocumentUris,
         originDocument,
       });
@@ -2502,7 +2503,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
           selectedDefinition: null,
         },
       } as never,
-      lookupText,
+      lookupDocument,
       {
         documentUris: appDocumentUris,
         originDocument,
@@ -2553,7 +2554,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
           selectedDefinition: null,
         },
       } as never,
-      lookupText,
+      lookupDocument,
       {
         documentUris: appDocumentUris,
         originDocument,
@@ -2614,7 +2615,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
           },
         },
       } as never,
-      (uri) => (uri === targetUri ? targetText : null),
+      (uri) => (uri === targetUri ? testSourceDocument(uri, targetText) : null),
       {
         documentUris: appDocumentUris,
         originDocument,
@@ -2666,7 +2667,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
           },
         },
       } as never,
-      (uri) => (uri === targetUri ? targetText : null),
+      (uri) => (uri === targetUri ? testSourceDocument(uri, targetText) : null),
       {
         documentUris: appDocumentUris,
         originDocument,
@@ -2731,7 +2732,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
           diagnostics: [],
         },
       } as never,
-      lookupText,
+      lookupDocument,
       {
         documentUris: appDocumentUris,
         originDocument,
@@ -2791,7 +2792,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
           },
         },
       } as never,
-      (uri) => (uri === resourceUri ? resourceText : null),
+      (uri) => (uri === resourceUri ? testSourceDocument(uri, resourceText) : null),
       {
         documentUris: appDocumentUris,
         originDocument,
@@ -2850,7 +2851,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
           },
         },
       } as never,
-      lookupText,
+      lookupDocument,
       {
         documentUris: appDocumentUris,
         originDocument,
@@ -2922,7 +2923,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
           },
         },
       } as never,
-      lookupText,
+      lookupDocument,
       {
         documentUris: appDocumentUris,
         originDocument,
@@ -2982,7 +2983,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
           diagnostics: [],
         },
       } as never,
-      lookupText,
+      lookupDocument,
       {
         documentUris: appDocumentUris,
         originDocument,
@@ -3038,7 +3039,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
 
     const rangeFailure = mapSemanticRuntimeTemplateDefinition(
       answer(source(definitionText.length + 1)),
-      () => definitionText,
+      uri => testSourceDocument(uri, definitionText),
       { documentUris: appDocumentUris, originDocument },
     );
     expect(rangeFailure).toEqual({

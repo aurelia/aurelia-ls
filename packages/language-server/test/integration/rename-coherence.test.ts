@@ -7,6 +7,7 @@ import {
   changeDocument,
   collectEdits,
   copyFixtureDirectory,
+  createAureliaAppFixture,
   createDiagnosticsRecorder,
   fileUri,
   initialize,
@@ -22,6 +23,48 @@ import {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const helloWorldFixture = path.join(repoRoot, "fixtures", "hello-world");
+
+test("rename from either language uses editor columns for a closed BOM-prefixed target", async () => {
+  const html = "<p>${heading}</p><p>${neighbor}</p>";
+  const script = "import {customElement} from 'aurelia'; import template from './app.html'; @customElement({name:'app-root',template}) export class AppRoot { heading = 'hello'; neighbor = 'kept'; }";
+  const fixture = createAureliaAppFixture({ "src/app.html": "\uFEFF" + html, "src/app.ts": "\uFEFF" + script });
+  const { connection, child, dispose, getStderr } = startServer(fixture);
+  const htmlUri = fileUri(fixture, "src/app.html");
+  const scriptUri = fileUri(fixture, "src/app.ts");
+  const expectedRange = (text: string) => ({
+    start: { line: 0, character: text.indexOf("heading") },
+    end: { line: 0, character: text.indexOf("heading") + "heading".length },
+  });
+  try {
+    await initialize(connection, child, getStderr, fixture);
+    openDocument(connection, htmlUri, "html", html, 1);
+    const fromTemplate = await connection.sendRequest("textDocument/rename", {
+      textDocument: { uri: htmlUri }, position: expectedRange(html).start, newName: "caption",
+    }) as RenameResult;
+    expect(collectEdits(fromTemplate)).toHaveLength(2);
+    expect(fromTemplate.documentChanges).toContainEqual({
+      textDocument: { uri: scriptUri, version: null },
+      edits: [{ range: expectedRange(script), newText: "caption" }],
+    });
+
+    await connection.sendNotification("textDocument/didClose", { textDocument: { uri: htmlUri } });
+    openDocument(connection, scriptUri, "typescript", script, 1);
+    const fromScript = await connection.sendRequest("aurelia/renameFromTs", {
+      uri: scriptUri, position: expectedRange(script).start, newName: "caption",
+    }) as RenameFromTsResponse;
+    if (fromScript.status !== "success") throw new Error("Expected a complete cross-language rename");
+    expect(collectEdits(fromScript.workspaceEdit)).toHaveLength(2);
+    expect(fromScript.workspaceEdit.documentChanges).toContainEqual({
+      textDocument: { uri: htmlUri, version: null },
+      edits: [{ range: expectedRange(html), newText: "caption" }],
+    });
+  } finally {
+    dispose();
+    child.kill("SIGKILL");
+    await waitForExit(child);
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+});
 
 test("template-origin bindable rename stays coherent across immediate open-buffer rename cycles", async () => {
   const fixture = copyFixtureDirectory(helloWorldFixture);

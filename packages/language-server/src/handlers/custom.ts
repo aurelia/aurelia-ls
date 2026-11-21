@@ -201,7 +201,7 @@ export async function handleAttributeInterpretationExplanation(
   );
   const mappingContext = {
     documentUris: ctx.documentUris,
-    lookupText: (uri: string) => operation.documents.lookupText(uri),
+    lookupDocument: (uri: string) => operation.documents.lookupReadableDocument(uri),
   };
   const answerTransport = mapAttributeInterpretationExplanationAnswer(answer, mappingContext);
   if (`${answer.result}` !== "answered") {
@@ -321,7 +321,7 @@ export async function handleResourceAvailabilityExplanation(
   );
   const mappingContext = {
     documentUris: ctx.documentUris,
-    lookupText: (uri: string) => operation.documents.lookupText(uri),
+    lookupDocument: (uri: string) => operation.documents.lookupReadableDocument(uri),
   };
   const answerTransport = mapResourceAvailabilityExplanationAnswer(answer, mappingContext);
   if (`${answer.result}` !== "answered") {
@@ -441,7 +441,7 @@ export async function handleBindingUncertaintyExplanation(
   );
   const mappingContext = {
     documentUris: ctx.documentUris,
-    lookupText: (uri: string) => operation.documents.lookupText(uri),
+    lookupDocument: (uri: string) => operation.documents.lookupReadableDocument(uri),
   };
   const answerTransport = mapBindingUncertaintyExplanationAnswer(answer, mappingContext);
   if (`${answer.result}` !== "answered") {
@@ -563,7 +563,7 @@ export async function handleFrameworkCapabilityExplanation(
   );
   const mappingContext = {
     documentUris: ctx.documentUris,
-    lookupText: (uri: string) => operation.documents.lookupText(uri),
+    lookupDocument: (uri: string) => operation.documents.lookupReadableDocument(uri),
   };
   const answerTransport = mapFrameworkCapabilityExplanationAnswer(answer, mappingContext);
   if (`${answer.result}` !== "answered") {
@@ -646,7 +646,7 @@ export async function handleAnalysisLimitations(
   const summary = await operation.workspaceSummary();
   const mappingContext = {
     documentUris: ctx.documentUris,
-    lookupText: (uri: string) => operation.documents.lookupText(uri),
+    lookupDocument: (uri: string) => operation.documents.lookupReadableDocument(uri),
   };
   const projects: AnalysisLimitationsResponse["projects"][number][] = [];
   for (const candidate of selectedAppProjects(summary.value, params?.projectSelection)) {
@@ -753,7 +753,7 @@ export async function handleResourceInventory(
   const summary = await operation.workspaceSummary();
   const mappingContext = {
     documentUris: ctx.documentUris,
-    lookupText: (uri: string) => operation.documents.lookupText(uri),
+    lookupDocument: (uri: string) => operation.documents.lookupReadableDocument(uri),
   };
   const projects: ResourceInventoryResponse["projects"][number][] = [];
   for (const candidate of selectedAppProjects(
@@ -854,7 +854,7 @@ export async function handleTemplateResourceAvailability(
   );
   const mappingContext = {
     documentUris: ctx.documentUris,
-    lookupText: (uri: string) => operation.documents.lookupText(uri),
+    lookupDocument: (uri: string) => operation.documents.lookupReadableDocument(uri),
   };
   return {
     fingerprint,
@@ -931,7 +931,7 @@ export async function handleRenameFromTs(
   const candidateCount = answer.value.candidateRows.length;
   const candidateMapping = mapSemanticRuntimeTemplateRenameCandidates(
     answer,
-    (uri) => operation.documents.lookupText(uri),
+    (uri) => operation.documents.lookupReadableDocument(uri),
     {
       documentUris: ctx.documentUris,
       originDocument: doc,

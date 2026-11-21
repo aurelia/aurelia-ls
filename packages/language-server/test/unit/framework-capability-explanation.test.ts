@@ -1,3 +1,4 @@
+import { testSourceDocument } from "./test-request-guard.js";
 import path from "node:path";
 import { describe, expect, test, vi } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
@@ -29,7 +30,7 @@ describe("framework capability explanation protocol boundary", () => {
             throw new Error("broken URI projection");
           },
         } as never,
-        lookupText: expect.unreachable,
+        lookupDocument: expect.unreachable,
       },
     );
 
@@ -270,7 +271,7 @@ function operation(
   return createTestOperation({
     documents: {
       ensureProgramDocument: () => programDocument,
-      lookupText: (uri: string) => documentUris.sameDocument(uri, templateUri) ? templateText : null,
+      lookupReadableDocument: (uri: string) => documentUris.sameDocument(uri, templateUri) ? testSourceDocument(uri, templateText) : null,
     },
     frameworkCapabilityExplanation,
   });

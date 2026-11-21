@@ -1,3 +1,4 @@
+import { testSourceDocument } from "./test-request-guard.js";
 import path from "node:path";
 import { describe, expect, test, vi } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
@@ -29,7 +30,7 @@ describe("resource availability explanation protocol boundary", () => {
           throw new Error("broken URI projection");
         },
       } as never,
-      lookupText: expect.unreachable,
+      lookupDocument: expect.unreachable,
     });
 
     expect(mapped.subject.template.source).toEqual({
@@ -289,11 +290,11 @@ function operation(
   return createTestOperation({
     documents: {
       ensureProgramDocument: () => programDocument,
-      lookupText: (uri: string) => {
-        if (documentUris.sameDocument(uri, templateUri)) return templateText;
-        if (uri.endsWith("/other.html")) return templateText;
+      lookupReadableDocument: (uri: string) => {
+        if (documentUris.sameDocument(uri, templateUri)) return testSourceDocument(uri, templateText);
+        if (uri.endsWith("/other.html")) return testSourceDocument(uri, templateText);
         if (uri.endsWith("/product-card.ts") || uri.endsWith("/winner-card.ts") || uri.endsWith("/main.ts")) {
-          return resourceText;
+          return testSourceDocument(uri, resourceText);
         }
         return null;
       },

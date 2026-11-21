@@ -10,7 +10,7 @@ import {
   type SymbolInformation,
   type WorkspaceSymbolParams,
 } from "vscode-languageserver/node";
-import { TextDocument } from "vscode-languageserver-textdocument";
+import { SourceDocument } from "../runtime/source-document.js";
 import type {
   SemanticResourceDefinitionRow,
 } from "@aurelia-ls/semantic-runtime";
@@ -117,12 +117,7 @@ function workspaceSymbolForResource(
     };
   }
 
-  const document = TextDocument.create(
-    snapshot.uri,
-    snapshot.languageId,
-    snapshot.version ?? 0,
-    snapshot.text,
-  );
+  const document = new SourceDocument(snapshot);
   const range = semanticSourceRangeForDocument(source, document);
   if (range == null) {
     return {

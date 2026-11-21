@@ -86,7 +86,7 @@ async function documentDiagnostics(
       answer,
       document,
       ctx.documentUris,
-      (uri) => operation.documents.lookupText(uri),
+      (uri) => operation.documents.lookupReadableDocument(uri),
       {
         clientOwnsTypeScriptProgramDiagnostics: ctx.typeScriptProgramDiagnostics === "client",
       },

@@ -1,3 +1,4 @@
+import { testSourceDocument } from "./test-request-guard.js";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, test, vi } from "vitest";
@@ -193,7 +194,7 @@ describe("analysis limitation transport mapping", () => {
     ]);
     const context = {
       documentUris,
-      lookupText: (uri: string) => texts.get(uri) ?? null,
+      lookupDocument: (uri: string) => testSourceDocument(uri, texts.get(uri) ?? null),
     };
     const policy = {
       ruleId: SemanticProjectFindingRuleId.DynamicRegistrationSpread,
@@ -297,7 +298,7 @@ describe("analysis limitation transport mapping", () => {
     const sourceUri = documentUris.uriForHostPath(sourcePath);
     const context = {
       documentUris,
-      lookupText: (uri: string) => uri === sourceUri ? "register(...items);\n" : null,
+      lookupDocument: (uri: string) => uri === sourceUri ? testSourceDocument(uri, "register(...items);\n") : null,
     };
     const row = limitationRow(sourcePath, {
       start: { line: 0, character: 1 },

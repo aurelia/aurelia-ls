@@ -58,6 +58,7 @@ import { languageIdForSource } from "../utils/document-kind.js";
 import { stableDigest } from "../utils/stable-digest.js";
 import { loadExtensionHostTestSemanticWorkspaceDescriptor } from "./extension-host-test-topology.js";
 import type { AureliaSupportSemanticSessionSnapshot } from "../protocol.js";
+import { SourceDocument } from "./source-document.js";
 
 export interface SemanticRuntimeLspOpenDocumentMetadata {
   readonly uri: DocumentUri;
@@ -89,7 +90,7 @@ export interface SemanticRuntimeLspOperationDocuments {
   ensureProgramDocument(uri: DocumentUri): TextDocument | null;
   lookupDocumentSnapshot(uri: DocumentUri): SemanticRuntimeLspDocumentSnapshot | null;
   lookupWorkspaceDocumentSnapshot(uri: DocumentUri): SemanticRuntimeLspDocumentSnapshot | null;
-  lookupText(uri: DocumentUri): string | null;
+  lookupReadableDocument(uri: DocumentUri): SourceDocument | null;
 }
 
 export interface SemanticRuntimeLspOperation {
@@ -1709,14 +1710,7 @@ class SemanticRuntimeLspOperationDocumentsScope implements SemanticRuntimeLspOpe
   ensureProgramDocument(uri: DocumentUri): TextDocument | null {
     this.assertActive();
     const snapshot = this.lookupDocumentSnapshot(uri);
-    return snapshot == null
-      ? null
-      : TextDocument.create(
-          snapshot.uri,
-          snapshot.languageId,
-          snapshot.version ?? 0,
-          snapshot.text,
-        );
+    return snapshot == null ? null : new SourceDocument(snapshot);
   }
 
   lookupDocumentSnapshot(uri: DocumentUri): SemanticRuntimeLspDocumentSnapshot | null {
@@ -1752,23 +1746,24 @@ class SemanticRuntimeLspOperationDocumentsScope implements SemanticRuntimeLspOpe
     return snapshot;
   }
 
-  lookupText(uri: DocumentUri): string | null {
+  lookupReadableDocument(uri: DocumentUri): SourceDocument | null {
     this.assertActive();
     const workspaceSnapshot = this.lookupWorkspaceDocumentSnapshot(uri);
     if (workspaceSnapshot != null) {
-      return workspaceSnapshot.text;
+      return new SourceDocument(workspaceSnapshot);
     }
     const resolved = this.documentUris.resolve(uri);
     const canonical = resolved.uri;
     if (resolved.hostPath == null || this.documentUris.workspaceHostPath(canonical) != null) {
       return null;
     }
-    if (this.externalSourceTextByUri.has(canonical)) {
-      return this.externalSourceTextByUri.get(canonical) ?? null;
+    if (!this.externalSourceTextByUri.has(canonical)) {
+      this.externalSourceTextByUri.set(canonical, this.readSourceText(resolved.hostPath) ?? null);
     }
-    const text = this.readSourceText(resolved.hostPath) ?? null;
-    this.externalSourceTextByUri.set(canonical, text);
-    return text;
+    const text = this.externalSourceTextByUri.get(canonical);
+    return text == null ? null : new SourceDocument({
+      uri: canonical, languageId: languageIdForSource(canonical), version: null, text,
+    });
   }
 
   close(): void {

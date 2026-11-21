@@ -28,6 +28,30 @@ afterEach(() => {
 });
 
 describe("rename transaction mapping", () => {
+  test.each([
+    { version: null, firstColumn: 2 }, // The filesystem BOM is encoding metadata.
+    { version: 4, firstColumn: 3 }, // A leading U+FEFF in synchronized text was authored.
+  ])("maps the editor range and authenticates the full text at version $version", ({ version, firstColumn }) => {
+    const fixture = mappingFixture();
+    const text = "\uFEFF😀title\r\nnext title\n";
+    const edits = [text.indexOf("title"), text.lastIndexOf("title")].map(start =>
+      edit(fixture.targetPath, text, start, start + "title".length));
+    const mapped = mapSemanticRuntimeTemplateRenameEdit(renameAnswer(edits), () => ({
+      uri: fixture.targetUri, languageId: "typescript", version, text,
+    }), { documentUris: fixture.documentUris, originDocument: fixture.originDocument });
+    expect(mapped.failures).toEqual([]);
+    expect(mapped.edit?.documentChanges).toMatchObject([{
+      textDocument: { uri: fixture.targetUri, version },
+      edits: [
+        { range: { start: { line: 0, character: firstColumn }, end: { line: 0, character: firstColumn + 5 } } },
+        { range: { start: { line: 1, character: 5 }, end: { line: 1, character: 10 } } },
+      ],
+    }]);
+    expect(mapped.edit?.aureliaWorkspaceEditTransaction?.documents).toMatchObject([{
+      version, contentRevision: aureliaWorkspaceEditContentRevision(text),
+    }]);
+  });
+
   test("carries exact open and closed document revisions to the client", () => {
     const fixture = mappingFixture();
     const mapping = mapSemanticRuntimeTemplateRenameEdit(

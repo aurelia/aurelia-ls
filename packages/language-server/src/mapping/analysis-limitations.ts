@@ -6,13 +6,12 @@ import type {
   SemanticSourceReference,
 } from "@aurelia-ls/semantic-runtime";
 import { semanticExactSourceReference } from "@aurelia-ls/semantic-runtime";
-import { TextDocument } from "vscode-languageserver-textdocument";
+import type { SourceDocument } from "../runtime/source-document.js";
 import type {
   AnalysisLimitationEffectivePolicy,
   AnalysisLimitationItem,
   AnalysisLimitationSourceTarget,
 } from "../protocol.js";
-import { languageIdForSource } from "../utils/document-kind.js";
 import type { WorkspaceDocumentUris } from "../utils/document-uri.js";
 import {
   semanticSourceRangeForDocument,
@@ -21,7 +20,7 @@ import {
 
 export interface AnalysisLimitationsMappingContext {
   readonly documentUris: WorkspaceDocumentUris;
-  readonly lookupText: (uri: string) => string | null;
+  readonly lookupDocument: (uri: string) => SourceDocument | null;
 }
 
 export function mapAnalysisLimitationItem(
@@ -79,12 +78,11 @@ function mapSemanticSourceTarget(
     uri = null;
   }
   if (uri == null) return { state: "unavailable", reason: "source-uri-unavailable" };
-  const text = context.lookupText(uri);
-  if (text == null) return { state: "unavailable", reason: "source-text-unavailable" };
-  const document = TextDocument.create(uri, languageIdForSource(uri), 0, text);
+  const document = context.lookupDocument(uri);
+  if (document == null) return { state: "unavailable", reason: "source-text-unavailable" };
   const range = semanticSourceRangeForDocument(exact, document);
   if (range == null) return { state: "unavailable", reason: "source-range-unavailable" };
-  if (expectedRange != null && !sameRange(range, expectedRange)) {
+  if (expectedRange != null && !sameRange(range, document.editorRange(expectedRange))) {
     return { state: "unavailable", reason: "source-range-mismatch" };
   }
   return { state: "available", location: { uri, range } };
@@ -101,9 +99,8 @@ function mapPolicySourceTarget(
   } catch {
     return { state: "unavailable", reason: "source-uri-unavailable" };
   }
-  const text = context.lookupText(uri);
-  if (text == null) return { state: "unavailable", reason: "source-text-unavailable" };
-  const document = TextDocument.create(uri, languageIdForSource(uri), 0, text);
+  const document = context.lookupDocument(uri);
+  if (document == null) return { state: "unavailable", reason: "source-text-unavailable" };
   const range = semanticSourceRangeForDocument({
     kind: "project-finding-policy",
     label: source.filePath,
@@ -116,7 +113,7 @@ function mapPolicySourceTarget(
     start: source.startPosition,
     end: source.endPosition,
   };
-  if (!sameRange(range, expectedRange)) {
+  if (!sameRange(range, document.editorRange(expectedRange))) {
     return { state: "unavailable", reason: "source-range-mismatch" };
   }
   return { state: "available", location: { uri, range } };

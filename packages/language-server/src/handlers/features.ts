@@ -60,7 +60,7 @@ import {
   semanticRuntimeTemplateCodeActionIdentityFromData,
   semanticRuntimeTemplateCodeActionResolveData,
   withSemanticRuntimeTemplateCodeActionResolveRefusal,
-  type LookupTextFn,
+  type LookupReadableDocumentFn,
 } from "../mapping/lsp-types.js";
 import { mapBindingUncertaintyExplanationCodeAction } from "../mapping/binding-uncertainty-explanation.js";
 import { mapAttributeInterpretationExplanationCodeAction } from "../mapping/attribute-interpretation-explanation.js";
@@ -160,12 +160,12 @@ export async function handleDefinition(
   if (!doc) return null;
   if (!isTemplateDocument(doc)) return null;
 
-  const lookupText: LookupTextFn = (uri) => operation.documents.lookupText(uri);
+  const lookupDocument: LookupReadableDocumentFn = (uri) => operation.documents.lookupReadableDocument(uri);
   const response = await operation.templateCursorInfo(
     doc.uri,
     params.position,
   );
-  const mapping = mapSemanticRuntimeTemplateDefinition(response, lookupText, {
+  const mapping = mapSemanticRuntimeTemplateDefinition(response, lookupDocument, {
     documentUris: ctx.documentUris,
     originDocument: doc,
   });
@@ -190,13 +190,13 @@ export async function handleReferences(
   const doc = operation.documents.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
 
-  const lookupText: LookupTextFn = (uri) => operation.documents.lookupText(uri);
+  const lookupDocument: LookupReadableDocumentFn = (uri) => operation.documents.lookupReadableDocument(uri);
   const response = await operation.templateReferences(
     doc.uri,
     params.position,
     params.context.includeDeclaration,
   );
-  const mapping = mapSemanticRuntimeTemplateReferences(response, lookupText, {
+  const mapping = mapSemanticRuntimeTemplateReferences(response, lookupDocument, {
     documentUris: ctx.documentUris,
     originDocument: doc,
     scope: "workspace",
@@ -244,13 +244,13 @@ export async function handleDocumentHighlight(
   if (!doc) return null;
   if (!isTemplateDocument(doc)) return null;
 
-  const lookupText: LookupTextFn = (uri) => operation.documents.lookupText(uri);
+  const lookupDocument: LookupReadableDocumentFn = (uri) => operation.documents.lookupReadableDocument(uri);
   const response = await operation.templateReferences(
     doc.uri,
     params.position,
     true,
   );
-  const mapping = mapSemanticRuntimeTemplateReferences(response, lookupText, {
+  const mapping = mapSemanticRuntimeTemplateReferences(response, lookupDocument, {
     documentUris: ctx.documentUris,
     originDocument: doc,
     scope: "origin-document",
@@ -300,7 +300,7 @@ export function handlePrepareRename(
       if (response.value.reason === "unresolved-candidates") {
         const candidateMapping = mapSemanticRuntimeTemplateRenameCandidates(
           response,
-          (uri) => operation.documents.lookupText(uri),
+          (uri) => operation.documents.lookupReadableDocument(uri),
           { documentUris: ctx.documentUris, originDocument: doc },
         );
         throw renameCandidateResponseError(
@@ -335,7 +335,7 @@ export async function handleRename(
   if (response.value.status !== "available") {
     const candidateMapping = mapSemanticRuntimeTemplateRenameCandidates(
       response,
-      (uri) => operation.documents.lookupText(uri),
+      (uri) => operation.documents.lookupReadableDocument(uri),
       { documentUris: ctx.documentUris, originDocument: doc },
     );
     throw renameCandidateResponseError(
@@ -448,7 +448,7 @@ export async function handleCodeAction(
         params.context.only,
         {
           documentUris: ctx.documentUris,
-          lookupText: (uri) => operation.documents.lookupText(uri),
+          lookupDocument: (uri) => operation.documents.lookupReadableDocument(uri),
         },
       )
     : null;
@@ -460,7 +460,7 @@ export async function handleCodeAction(
         params.context.only,
         {
           documentUris: ctx.documentUris,
-          lookupText: (uri) => operation.documents.lookupText(uri),
+          lookupDocument: (uri) => operation.documents.lookupReadableDocument(uri),
         },
       )
     : null;

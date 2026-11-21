@@ -2,6 +2,7 @@ import type {
   SemanticRuntimeLspGeneration,
   SemanticRuntimeLspOperation,
 } from "../../src/runtime/semantic-runtime-session.js";
+import { SourceDocument } from "../../src/runtime/source-document.js";
 
 export const testAnalysisGeneration: SemanticRuntimeLspGeneration = {
   requestEpoch: 0,
@@ -26,7 +27,7 @@ export function createTestOperation(
       ensureProgramDocument: () => null,
       lookupDocumentSnapshot: () => null,
       lookupWorkspaceDocumentSnapshot: () => null,
-      lookupText: () => null,
+      lookupReadableDocument: () => null,
       ...documents,
     },
     deferEffect: () => {},
@@ -92,13 +93,18 @@ export function createContextTestOperation(
         ctx.lookupWorkspaceDocumentSnapshot?.(uri)
         ?? ctx.lookupDocumentSnapshot?.(uri)
         ?? textSnapshot(uri, ctx.lookupText?.(uri) ?? null),
-      lookupText: (uri: string) => ctx.lookupText?.(uri) ?? null,
+      lookupReadableDocument: (uri: string) => testSourceDocument(uri, ctx.lookupText?.(uri) ?? null),
     },
     deferEffect: (effect: unknown) => publishTestEffect(ctx, effect),
   });
 }
 
-function textSnapshot(uri: string, text: string | null): unknown {
+export function testSourceDocument(uri: string, text: string | null): SourceDocument | null {
+  const snapshot = textSnapshot(uri, text);
+  return snapshot == null ? null : new SourceDocument(snapshot);
+}
+
+function textSnapshot(uri: string, text: string | null) {
   if (text == null) return null;
   return {
     uri,

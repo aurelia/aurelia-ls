@@ -8,7 +8,7 @@ import {
   type SemanticRuntimeContinuationRow,
   type SemanticSourceReference,
 } from "@aurelia-ls/semantic-runtime";
-import { TextDocument } from "vscode-languageserver-textdocument";
+import type { SourceDocument } from "../runtime/source-document.js";
 import type {
   FrameworkCapabilityExplanation,
   FrameworkCapabilityExplanationAnswerTransport,
@@ -18,7 +18,6 @@ import type {
   FrameworkCapabilityExplanationSourceTarget,
   FrameworkCapabilityExplanationSubject,
 } from "../protocol.js";
-import { languageIdForSource } from "../utils/document-kind.js";
 import type { WorkspaceDocumentUris } from "../utils/document-uri.js";
 import {
   semanticSourceRangeForDocument,
@@ -28,7 +27,7 @@ import { mapRuntimeAnswer } from "./resource-discovery.js";
 
 export interface FrameworkCapabilityExplanationMappingContext {
   readonly documentUris: WorkspaceDocumentUris;
-  readonly lookupText: (uri: string) => string | null;
+  readonly lookupDocument: (uri: string) => SourceDocument | null;
 }
 
 export function mapFrameworkCapabilityExplanation(
@@ -210,16 +209,15 @@ export function mapFrameworkCapabilityExplanationSourceTarget(
     return { state: "unavailable", reason: "source-uri-unavailable" };
   }
   if (uri == null) return { state: "unavailable", reason: "source-uri-unavailable" };
-  let text: string | null;
+  let document: SourceDocument | null;
   try {
-    text = context.lookupText(uri);
+    document = context.lookupDocument(uri);
   } catch {
     return { state: "unavailable", reason: "source-text-unavailable" };
   }
-  if (text == null) return { state: "unavailable", reason: "source-text-unavailable" };
+  if (document == null) return { state: "unavailable", reason: "source-text-unavailable" };
   let range: ReturnType<typeof semanticSourceRangeForDocument>;
   try {
-    const document = TextDocument.create(uri, languageIdForSource(uri), 0, text);
     range = semanticSourceRangeForDocument(exact, document);
   } catch {
     return { state: "unavailable", reason: "source-range-unavailable" };

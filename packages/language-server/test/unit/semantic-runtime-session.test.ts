@@ -1,3 +1,4 @@
+import { testSourceDocument } from "./test-request-guard.js";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
@@ -136,11 +137,11 @@ function mappedAvailabilityNavigationFacts(
   documentUris.configure(pathToFileURL(workspaceRoot).toString());
   const mappedRows = rows.map((row) => mapTemplateResourceAvailabilityItem(row, {
     documentUris,
-    lookupText: (uri: string): string | null => {
+    lookupDocument: (uri: string) => {
       const hostPath = documentUris.hostPath(uri);
       if (hostPath == null) return null;
       try {
-        return fs.readFileSync(hostPath, "utf8");
+        return testSourceDocument(uri, fs.readFileSync(hostPath, "utf8"));
       } catch {
         return null;
       }
@@ -2786,7 +2787,7 @@ describe("SemanticRuntimeLspSession diagnostic receipt cache", () => {
     const session = createSession(fixtureRoot, documents);
     const render = vi.fn((operation) => {
       operation.documents.ensureProgramDocument(htmlUri);
-      return [{ message: operation.documents.lookupText(tsUri) ?? "missing" }];
+      return [{ message: operation.documents.lookupReadableDocument(tsUri)?.getText() ?? "missing" }];
     });
 
     const first = await session.runDiagnosticRequest(null, diagnosticRequest(htmlUri), render);
@@ -2820,7 +2821,7 @@ describe("SemanticRuntimeLspSession diagnostic receipt cache", () => {
     documents.add(TextDocument.create(htmlUri, "html", 1, fs.readFileSync(htmlPath, "utf8")));
     const session = createSession(fixtureRoot, documents);
     const render = vi.fn((operation) => [{
-      text: operation.documents.lookupText(externalUri),
+      text: operation.documents.lookupReadableDocument(externalUri)?.getText() ?? null,
       authoredSnapshot: operation.documents.lookupDocumentSnapshot(externalUri),
       workspaceSnapshot: operation.documents.lookupWorkspaceDocumentSnapshot(externalUri),
     }]);
