@@ -136,6 +136,10 @@ export class IncrementalConformanceHarness {
   private currentApp: SemanticApp;
   private currentState: ComputationState;
 
+  get app(): SemanticApp {
+    return this.currentApp;
+  }
+
   private constructor(
     private readonly options: IncrementalConformanceOptions,
     private readonly overlay: MutableProjectSourceOverlay,

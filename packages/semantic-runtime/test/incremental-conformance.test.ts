@@ -110,10 +110,25 @@ describe('incremental production conformance', () => {
     expect(analysisPhaseTransition(semanticChange.trace.children, AureliaAppAnalysisPhase.PostTemplate))
       .toBe(ComputationChildTransitionKind.Executed);
 
-    const dependencyChange = await harness.advance('runtime dependency edit with stable compiler semantics', (overlay) => {
+    const chipLookup = () => {
+      const compilation = harness.app.emission.templates.resources.find(resource =>
+        resource.compilation.definition.name === 'secondary-host')!.compilation;
+      return {
+        parentScope: compilation.parentCompilerWorld.resourceScope.productHandle,
+        registration: compilation.parentCompilerWorld.resourceResolver.el('local-chip')?.sourceAddressHandle,
+        selectedDefinition: compilation.compilerWorld.resourceResolver.el('local-chip')?.definitionProductHandle,
+      };
+    };
+    const beforeDependency = chipLookup();
+    const dependencyChange = await harness.advance('explicit component registration shadowed by a template-local definition', (overlay) => {
       overlay.write(resourceFileName, dependencyResource);
     });
     expect(dependencyChange.equivalent).toBe(true);
+    const afterDependency = chipLookup();
+    expect(afterDependency.parentScope).not.toBe(beforeDependency.parentScope);
+    expect(afterDependency.registration).not.toBe(beforeDependency.registration);
+    expect(beforeDependency.selectedDefinition).toBeTruthy();
+    expect(afterDependency.selectedDefinition).toBe(beforeDependency.selectedDefinition);
     const dependencyChangeFamilies = dependencyChange.trace.children.filter(
       (child) => child.locusKind === 'template-compilation',
     );
@@ -121,7 +136,7 @@ describe('incremental production conformance', () => {
       'global-helper': [ComputationChildTransitionKind.Carried],
       'local-chip': [ComputationChildTransitionKind.Carried],
       'local-templates-app': [ComputationChildTransitionKind.Carried],
-      'secondary-host': [ComputationChildTransitionKind.Carried],
+      'secondary-host': [ComputationChildTransitionKind.Executed],
     });
     expect(dependencyChange.trace.runtimeAnalysisSubjects.indexOf('SecondaryHost'))
       .toBeLessThan(dependencyChange.trace.runtimeAnalysisSubjects.indexOf('GlobalLocalChip'));
