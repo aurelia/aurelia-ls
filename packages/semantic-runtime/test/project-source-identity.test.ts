@@ -469,7 +469,10 @@ describe('project source identity', () => {
 
     const relative = await read(relativeFile);
     const absolute = await read(path.join(fixtureRoot, relativeFile));
-    expect(relative.rows).toHaveLength(4);
+    // Each authored expression can contribute several phase-specific observation operations.
+    expect(new Set(relative.rows.map(row => row.occurrence.sourceName)))
+      .toEqual(new Set(['doubled', 'plainTotal', 'nestedSummary', 'calculate()']));
+    expect(relative.rows.every(row => row.occurrence.source?.path === relativeFile)).toBe(true);
     expect(absolute.rows).toEqual(relative.rows);
   }, 30_000);
 });
