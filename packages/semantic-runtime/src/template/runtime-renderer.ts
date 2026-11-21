@@ -1,5 +1,6 @@
 import { auLink } from '../kernel/au-link.js';
-import { splitWhitespace } from '../strings.js';
+import { tokenize, TokenType, isTokenIdent, isTokenWhiteSpaceOrComment, type CSSToken } from '@csstools/css-tokenizer';
+import { runtimeClassNames } from '../strings.js';
 import type {
   AddressHandle,
   IdentityHandle,
@@ -1483,7 +1484,7 @@ function renderSetClassAttributeTargetOperation(input: RuntimeRendererInvocation
     instruction.attribute.rawName ?? 'class',
     'classList',
     instruction.value,
-    splitWhitespace(instruction.value),
+    runtimeClassNames(instruction.value),
   ));
 }
 
@@ -1549,12 +1550,33 @@ function renderRendererTargetOperation(
 }
 
 function affectedStyleNamesFromCssText(cssText: string): readonly string[] {
-  return cssText
-    .split(';')
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0)
-    .map((part) => part.slice(0, part.indexOf(':')).trim())
-    .filter((name) => name.length > 0);
+  const names = new Set<string>();
+  const closers: TokenType[] = [];
+  let head: CSSToken | undefined;
+  let inValue = false;
+  for (const token of tokenize({ css: cssText })) {
+    if (isTokenWhiteSpaceOrComment(token)) continue;
+    const kind = token[0];
+    if (closers.length === 0) {
+      if (kind === TokenType.Semicolon) {
+        head = undefined;
+        inValue = false;
+      } else if (head === undefined) {
+        head = token;
+      } else if (!inValue) {
+        if (kind === TokenType.Colon && isTokenIdent(head)) {
+          const name = head[4].value;
+          names.add(name.startsWith('--') ? name : name.toLowerCase());
+        }
+        inValue = true;
+      }
+    }
+    if (kind === TokenType.Function || kind === TokenType.OpenParen) closers.push(TokenType.CloseParen);
+    else if (kind === TokenType.OpenCurly) closers.push(TokenType.CloseCurly);
+    else if (kind === TokenType.OpenSquare) closers.push(TokenType.CloseSquare);
+    else if (kind === closers.at(-1)) closers.pop();
+  }
+  return [...names];
 }
 
 function renderPropertyRuntimeBinding(input: RuntimeRendererInvocation): RuntimeRendererRenderResult {

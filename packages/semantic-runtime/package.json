@@ -139,6 +139,7 @@
     "test": "pnpm build && pnpm -w run test:semantic-runtime:built"
   },
   "dependencies": {
+    "@csstools/css-tokenizer": "3.0.4",
     "@jridgewell/trace-mapping": "^0.3.31",
     "@rollup/pluginutils": "5.0.2",
     "css-selector-parser": "3.3.0",

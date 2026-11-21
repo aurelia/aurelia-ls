@@ -21,7 +21,7 @@ import {
   type GenerationAuthority,
   type GenerationCurrentnessWitness,
 } from './generation-authority.js';
-import { sourceTextContentRevision } from './source-text-revision.js';
+import { decodeSourceText, sourceTextContentRevision } from './source-text.js';
 
 /** Optional non-filesystem source values layered over the host filesystem, such as open editor documents. */
 export interface SemanticRuntimeSourceTextOverlay {
@@ -68,7 +68,7 @@ export class NodeSemanticRuntimeProjectInputHost implements SemanticRuntimeProje
       return undefined;
     }
     try {
-      return readFileSync(fileName, 'utf8');
+      return decodeSourceText(readFileSync(fileName));
     } catch {
       return undefined;
     }

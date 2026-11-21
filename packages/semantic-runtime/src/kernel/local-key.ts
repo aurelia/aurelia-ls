@@ -64,6 +64,9 @@ export function catalogVariantLocalKey(input: CatalogVariantLocalKeyInput): stri
 
 /** Encode arbitrary authored/runtime text for use as one handle-local key segment. */
 export function localKeyPart(value: string): string {
+  // encodeURIComponent accepts only Unicode scalar values, while DI keys may contain any JS code unit.
+  // The normal branch escapes '!', so this prefix cannot collide with its output.
+  if (/[\uD800-\uDFFF]/u.test(value)) return '!utf16!' + Buffer.from(value, 'utf16le').toString('base64url');
   return encodeURIComponent(value).replace(/[!'()*]/g, (character) =>
     `%${character.charCodeAt(0).toString(16).toUpperCase()}`
   );

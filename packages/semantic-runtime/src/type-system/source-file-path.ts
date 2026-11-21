@@ -41,7 +41,7 @@ export function isTypeSystemPathAtOrUnder(
   candidatePath: string,
   parentPath: string,
 ): boolean {
-  return candidatePath === parentPath || candidatePath.startsWith(`${parentPath}/`);
+  return candidatePath === parentPath || candidatePath.startsWith(parentPath.endsWith('/') ? parentPath : `${parentPath}/`);
 }
 
 export function isDefaultLibrarySourceFile(normalizedFileName: string): boolean {

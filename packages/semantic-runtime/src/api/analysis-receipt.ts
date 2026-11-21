@@ -116,7 +116,8 @@ export class SemanticRuntimeAnalysisReceipt implements QueryClaimAnswerLease {
     );
   }
 
-  validate(): SemanticRuntimeAnalysisReceiptValidation {
+  /** Managed egress checks its pinned source world after the exact reads, inside the same event/lifetime fence. */
+  validate(validateSourceWorld?: () => void): SemanticRuntimeAnalysisReceiptValidation {
     if (this.disposed) {
       return Object.freeze({
         isCurrent: false,
@@ -143,6 +144,7 @@ export class SemanticRuntimeAnalysisReceipt implements QueryClaimAnswerLease {
     const changedSemanticFactReads = this.semanticFactReads
       .map((read) => ({ read, validation: read.validate() }))
       .filter(({ validation }) => !validation.isCurrent);
+    validateSourceWorld?.();
     const reentrantChangedProjectInputReads =
       this.projectInputAuthority.currentEventSequence === projectInputEventSequence
       ? []

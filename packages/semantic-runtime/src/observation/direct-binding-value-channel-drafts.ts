@@ -1,4 +1,4 @@
-import { splitWhitespace } from '../strings.js';
+import { runtimeClassNames } from '../strings.js';
 import { normalizeHtmlTagName } from '../template/html-ir.js';
 import {
   AttributeBinding,
@@ -205,7 +205,7 @@ export class DirectBindingValueChannelDrafts {
   ): RuntimeBindingValueChannelDraft {
     const sourceType = readSourceType();
     if (binding instanceof AttributeBinding && binding.attr === 'class') {
-      const classTokens = splitWhitespace(binding.target);
+      const classTokens = runtimeClassNames(binding.target);
       if (classTokens.length === 0) {
         return {
           channelKind: RuntimeBindingValueChannelKind.ClassToggle,

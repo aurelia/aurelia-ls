@@ -1,4 +1,5 @@
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -419,13 +420,14 @@ describe('managed semantic workspace session', () => {
     });
     vi.spyOn(SemanticRuntimeAnalysisReceipt.prototype, 'validate').mockImplementation(function (
       this: SemanticRuntimeAnalysisReceipt,
+      validateSourceWorld,
     ) {
       validatedReceipts.push(this);
       receiptBoundaries.set(this, activeReceiptBoundary ?? 'managed-egress');
       const previousReceipt = activeReceipt;
       activeReceipt = this;
       try {
-        return validateReceipt.call(this);
+        return validateReceipt.call(this, validateSourceWorld);
       } finally {
         activeReceipt = previousReceipt;
       }
@@ -686,6 +688,50 @@ describe('managed semantic workspace session', () => {
     expect(replacement.storeIdentity).not.toBe(baseline.storeIdentity);
     expect(replacement.sourceFilePaths).toContain('src/during-operation.ts');
   });
+
+  test.each(['new-member', 'changed-input', 'changed-neighbor'] as const)(
+    'guards final topology and exact reads during reentrant host validation: %s', async (change) => {
+      const root = await createWorkspace();
+      const file = await writeWorkspaceFile(root, 'view.html', 'old');
+      const neighbor = await writeWorkspaceFile(root, 'neighbor.html', 'neighbor');
+      let armed = false;
+      let checkedInput = false;
+      let changed = false;
+      class ReentrantHost extends NodeSemanticRuntimeProjectInputHost {
+        override readFile(name: string): string | undefined {
+          const value = super.readFile(name);
+          if (armed && path.resolve(name) === file) {
+            checkedInput = true;
+            if (change === 'new-member' && !changed) {
+              changed = true;
+              writeFileSync(path.join(root, 'new.ts'), 'export const added = true;');
+            }
+          }
+          return value;
+        }
+        override readDirectory(directory: string): readonly string[] {
+          if (checkedInput && !changed && change !== 'new-member') {
+            changed = true;
+            const target = change === 'changed-input' ? file : neighbor;
+            writeFileSync(target, 'new');
+            authority.advance([new SemanticRuntimeProjectInputChange(SemanticRuntimeProjectInputChangeKind.FileValue, target)]);
+          }
+          return super.readDirectory(directory);
+        }
+      }
+      const authority = new SemanticRuntimeProjectInputAuthority(new ReentrantHost());
+      const session = new ManagedSemanticWorkspaceSession({ workspaceRoot: root, projects: [{rootDir: root}], projectInputAuthority: authority });
+      sessions.push(session);
+      const result = session.run(({readSourceText}) => {
+        const text = readSourceText(file);
+        armed = true;
+        return text;
+      });
+      if (change === 'changed-neighbor') await expect(result).resolves.toBe('old');
+      else await expect(result).rejects.toMatchObject({ reason: change === 'new-member' ? 'source-world-changed' : 'analysis-basis-changed' });
+      expect(changed).toBe(true);
+    },
+  );
 
   test('auto-composes facade answer receipts and rejects analysis changes that leave source membership current', async () => {
     const workspaceRoot = await createWorkspace();

@@ -1,9 +1,12 @@
 import { describe, expect, test } from 'vitest';
+import { expectedSemanticEffectFilters, ExpectedSemanticEffect, ExpectedSemanticEffectKind } from '../src/fixture-verification/expected-effect.js';
+import { observedCountForExpectedSemanticEffect, type ExpectedSemanticEffectObservationSnapshot } from '../src/fixture-verification/effect-observation.js';
 
 import {
   answer,
   COMPLETE_COLLECTION_ANSWER_OPTIONS,
 } from '../src/api/answer-helpers.js';
+
 import type { SemanticApplicationTopologyResult } from '../src/api/app-topology.js';
 import {
   SemanticAppQueryKind,
@@ -15,6 +18,27 @@ import {
   readFixtureVerificationSnapshot,
   type FixtureVerificationAppSnapshotSource,
 } from '../src/fixture-verification/verification.js';
+
+test('verifies external template ownership and applies resource-definition filters to actual rows', () => {
+  const snapshot = {
+    components: [
+      { template: { source: { sourceFileRole: 'app-source', path: 'inline.ts' } } },
+      { template: { source: { sourceFileRole: 'template', path: 'external.html' } } },
+    ],
+    resourceDefinitions: 2,
+    resourceDefinitionRows: [{ name: 'first' }, { name: 'second' }],
+  } as unknown as ExpectedSemanticEffectObservationSnapshot;
+  expect(observedCountForExpectedSemanticEffect(
+    ExpectedSemanticEffect.fact('external template', ExpectedSemanticEffectKind.ExternalTemplate), snapshot,
+  )).toBe(1);
+  const count = (name: string, data = snapshot) => observedCountForExpectedSemanticEffect(
+    ExpectedSemanticEffect.fact('named resource', ExpectedSemanticEffectKind.ResourceDefinition, undefined, null,
+      undefined, null, expectedSemanticEffectFilters(['name', name])), data,
+  );
+  expect(count('first')).toBe(1);
+  expect(count('absent')).toBe(0);
+  expect(count('first', { ...snapshot, resourceDefinitionRows: null })).toBeNull();
+});
 
 describe('fixture verification', () => {
   test('routes every public projection through the fixture inquiry profile', () => {

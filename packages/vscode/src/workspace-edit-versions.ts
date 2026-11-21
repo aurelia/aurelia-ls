@@ -3,6 +3,7 @@ import path from "node:path";
 import {
   AURELIA_WORKSPACE_EDIT_TRANSACTION_SCHEMA,
   aureliaWorkspaceEditContentRevision,
+  decodeSourceText,
   type AureliaWorkspaceEditTransaction,
   type AureliaWorkspaceEditTransactionDocument,
   type ProtocolWorkspaceEdit,
@@ -108,7 +109,7 @@ export async function workspaceEditTransactionMismatches(
       text = open.getText();
     } else {
       try {
-        text = decodeWorkspaceText(await vscode.workspace.fs.readFile(uri));
+        text = decodeSourceText(await vscode.workspace.fs.readFile(uri));
       } catch {
         mismatches.push(`${expected.uri} is no longer readable`);
       }
@@ -191,11 +192,6 @@ function workspaceEditDocumentUris(
     failures.push("Aurelia text transaction must use versioned documentChanges");
   }
   return uris;
-}
-
-function decodeWorkspaceText(bytes: Uint8Array): string {
-  // Match semantic-runtime's Node UTF-8 source host exactly, including a leading UTF-8 BOM in a closed file.
-  return Buffer.from(bytes).toString("utf8");
 }
 
 async function physicalPathForUri(

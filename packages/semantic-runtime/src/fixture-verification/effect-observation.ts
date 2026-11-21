@@ -1,6 +1,7 @@
 import type {
   ExpectedSemanticEffect,
 } from './expected-effect.js';
+import { SourceFileRole } from '../kernel/address.js';
 import {
   ExpectedSemanticEffectCardinality,
   ExpectedSemanticEffectKind,
@@ -20,6 +21,7 @@ export interface ExpectedSemanticEffectObservationSnapshot {
   readonly projectSourceRoles: readonly object[];
   readonly appRoots: number;
   readonly resourceDefinitions: number;
+  readonly resourceDefinitionRows?: readonly object[] | null;
   readonly components: readonly object[];
   readonly styles: readonly object[];
   readonly services: readonly object[];
@@ -136,7 +138,7 @@ const expectedSemanticEffectRowSources: Partial<Record<ExpectedSemanticEffectKin
   [ExpectedSemanticEffectKind.ServiceInteraction]: (snapshot) => snapshot.serviceInteractions,
   [ExpectedSemanticEffectKind.ServiceInteractionBinding]: (snapshot) => snapshot.serviceInteractionBindings,
   [ExpectedSemanticEffectKind.ExternalTemplate]: (snapshot) => snapshot.components
-    .filter((component) => readPath(component, 'template.source') != null),
+    .filter((component) => readPath(component, 'template.source.sourceFileRole') === SourceFileRole.Template),
   [ExpectedSemanticEffectKind.TemplateDiagnostic]: (snapshot) => snapshot.templateDiagnostics,
   [ExpectedSemanticEffectKind.ObservationIssue]: (snapshot) => snapshot.observationIssues,
   [ExpectedSemanticEffectKind.RuntimeController]: (snapshot) => snapshot.runtimeControllers,
@@ -216,19 +218,20 @@ export function observedCountForExpectedSemanticEffect(
 
   switch (expectedEffect.effectKind) {
     case ExpectedSemanticEffectKind.ProjectShape:
-      return snapshot.projectShapeKind === 'aurelia-app' ? 1 : 0;
+      return filteredRowCount(snapshot.projectShapeKind === 'aurelia-app' ? 1 : 0, expectedEffect.filters);
     case ExpectedSemanticEffectKind.AppRoot:
-      return snapshot.appRoots;
+      return filteredRowCount(snapshot.appRoots, expectedEffect.filters);
     case ExpectedSemanticEffectKind.ResourceDefinition:
-      return snapshot.resourceDefinitions;
+      return expectedEffect.filters.length === 0 ? snapshot.resourceDefinitions
+        : filteredRowCount(snapshot.resourceDefinitionRows ?? snapshot.resourceDefinitions, expectedEffect.filters);
     case ExpectedSemanticEffectKind.TemplateCompilation:
-      return snapshot.compiledResources;
+      return filteredRowCount(snapshot.compiledResources, expectedEffect.filters);
     case ExpectedSemanticEffectKind.Route:
       return expectedEffect.filters.length === 0
         ? snapshot.routeFacts
         : routeFactRows(snapshot).filter((route) => matchesFilters(route, expectedEffect.filters)).length;
     case ExpectedSemanticEffectKind.DependencyInjection:
-      return snapshot.dependencyInjectionFacts;
+      return filteredRowCount(snapshot.dependencyInjectionFacts, expectedEffect.filters);
   }
   return null;
 }

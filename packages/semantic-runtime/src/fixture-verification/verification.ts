@@ -16,6 +16,7 @@ import type {
   SemanticI18nTranslationKeyRow,
   SemanticObservationIssueRow,
   SemanticOpenSeamRow,
+  SemanticResourceDefinitionRow,
   SemanticRuntimeCompositionRow,
   SemanticRuntimeControllerRow,
   SemanticRuntimeWatcherObservedDependencyRow,
@@ -100,6 +101,7 @@ export class FixtureVerificationSnapshot {
     readonly stateStores: readonly SemanticStateStoreRow[] = [],
     readonly bindingDataFlows: readonly SemanticBindingDataFlowRow[] | null = null,
     readonly routeFactRows: readonly object[] = [],
+    readonly resourceDefinitionRows: readonly SemanticResourceDefinitionRow[] | null = null,
   ) {}
 }
 
@@ -146,6 +148,7 @@ export function readFixtureVerificationSnapshot(
     readPagedRows<SemanticStateStoreRow>(app, SemanticAppQueryKind.StateStores, pageSize),
     readPagedRows<SemanticBindingDataFlowRow>(app, SemanticAppQueryKind.BindingDataFlows, pageSize),
     readRouteFactRows(app, topology, pageSize),
+    readPagedRows<SemanticResourceDefinitionRow>(app, SemanticAppQueryKind.ResourceDefinitions, pageSize),
   );
 }
 
@@ -306,6 +309,7 @@ function verificationObservationSnapshot(
     projectSourceRoles: snapshot.sourceFiles,
     appRoots: snapshot.summary.appRoots,
     resourceDefinitions: snapshot.summary.resourceDefinitions,
+    resourceDefinitionRows: snapshot.resourceDefinitionRows,
     components: snapshot.topology.components,
     styles: snapshot.topology.styles,
     services: snapshot.topology.services,

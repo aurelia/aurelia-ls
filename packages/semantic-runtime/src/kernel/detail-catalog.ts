@@ -94,6 +94,7 @@ export class DetailCatalog<
     }
     this.lifetimeOrdinalByHandle.delete(handle);
     this.mutationOrdinalByHandle.delete(handle);
+    this.allocateMutationOrdinal();
     const detailKind = this.detailKindForEntry(entry);
     const handles = this.handlesByDetailKind.get(detailKind);
     handles?.delete(handle);

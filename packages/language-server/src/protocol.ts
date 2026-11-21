@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+import { sourceTextContentRevision } from "@aurelia-ls/semantic-runtime/source-text";
+export { decodeSourceText } from "@aurelia-ls/semantic-runtime/source-text";
 export * from "./worker-progress-protocol.js";
 export * from "./diagnostic-failure-protocol.js";
 import type { AureliaSupportDiagnosticFailure } from "./diagnostic-failure-protocol.js";
@@ -379,7 +380,7 @@ export interface AureliaWorkspaceEditTransaction {
 
 /** Collision-resistant UTF-8 text revision shared by the language server and VS Code client. */
 export function aureliaWorkspaceEditContentRevision(text: string): string {
-  return `sha256:${createHash("sha256").update(text, "utf8").digest("hex")}`;
+  return `sha256:${sourceTextContentRevision(text, "hex")}`;
 }
 
 export type ProjectConfigurationParserDiagnosticsOwner = "semantic-runtime" | "client";

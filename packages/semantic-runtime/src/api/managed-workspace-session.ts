@@ -502,17 +502,19 @@ export class ManagedSemanticWorkspaceSession {
     incarnation: ManagedSemanticWorkspaceIncarnation,
     builder: SemanticRuntimeAnalysisReceiptBuilder,
   ): SemanticRuntimeAnalysisReceipt {
-    const staleSourceWorld = this.operationSourceWorldStaleness(incarnation);
-    if (staleSourceWorld != null) {
-      throw sourceWorldStaleError(staleSourceWorld);
-    }
+    if (incarnation.invalidation != null) throw sourceWorldStaleError(incarnation.invalidation);
     const receipt = builder.seal();
-    const validation = receipt.validate();
-    if (!validation.isCurrent) {
+    try {
+      const validation = receipt.validate(() => {
+        const staleSourceWorld = this.operationSourceWorldStaleness(incarnation);
+        if (staleSourceWorld != null) throw sourceWorldStaleError(staleSourceWorld);
+      });
+      if (!validation.isCurrent) throw analysisBasisStaleError(receipt, validation);
+      return receipt;
+    } catch (error) {
       receipt.dispose();
-      throw analysisBasisStaleError(receipt, validation);
+      throw error;
     }
-    return receipt;
   }
 
   private operationSourceWorldStaleness(

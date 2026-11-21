@@ -1,5 +1,5 @@
 import { auLink } from '../kernel/au-link.js';
-import { splitWhitespace } from '../strings.js';
+import { runtimeClassNames } from '../strings.js';
 import type {
   AddressHandle,
   IdentityHandle,
@@ -1460,7 +1460,7 @@ function attributeBindingTargetOperation(
     case 'class':
       return {
         kind: RuntimeBindingTargetOperationKind.ClassListToggle,
-        affectedNames: splitWhitespace(targetProperty),
+        affectedNames: runtimeClassNames(targetProperty),
       };
     case 'style':
       return {

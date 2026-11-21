@@ -2129,6 +2129,7 @@ export class KernelStore {
     }
     this.recordLifetimeOrdinalByHandle.delete(handle);
     this.recordMutationOrdinalByHandle.delete(handle);
+    this.allocateMutationOrdinal();
     this.handleCharacterCount -= record.handle.length;
     this.removeRecordFromIndexes(record);
     forgetAnswerLocalHandle(this.answerLocalRecordOwnership, handle);

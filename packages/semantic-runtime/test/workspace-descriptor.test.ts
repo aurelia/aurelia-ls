@@ -11,6 +11,21 @@ import {
 } from '../src/index.js';
 
 describe('semantic workspace descriptor', () => {
+  test('retains volume-root children, dot-prefixed descendants and distinct Unicode path identities', () => {
+    const workspaceRoot = path.resolve('workspace-descriptor-fixture');
+    const descriptorKey = (projectRootHints: string[]) =>
+      semanticRuntimeWorkspaceDescriptorKey({ workspaceRoot, projectRootHints });
+    expect(descriptorKey(['..valid', 'é', 'e\u0301'])).toBe(descriptorKey(['e\u0301', 'é', '..valid']));
+    expect(() => descriptorKey(['../outside'])).toThrow(/must be inside/);
+    const root = path.parse(workspaceRoot).root;
+    const topology = semanticWorkspaceDescriptorForRuntimeOptions({
+      workspaceRoot: root, projects: [{ rootDir: root, sourceFiles: [{ path: 'src/main.ts' }] }],
+    }).projectTopology;
+    expect(topology).toMatchObject({ kind: 'explicit', projects: [{
+      sourceInput: { kind: 'supplied', files: [{ path: path.join(root, 'src/main.ts') }] },
+    }] });
+  });
+
   test('normalizes active discovery boundaries and removes excluded or duplicate hints', () => {
     const workspaceRoot = path.resolve('workspace-descriptor-fixture');
     const descriptor = semanticWorkspaceDescriptorForRuntimeOptions({

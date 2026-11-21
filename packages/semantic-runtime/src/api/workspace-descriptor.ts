@@ -333,17 +333,22 @@ function deterministicHostPaths(values: readonly string[]): readonly string[] {
     const absolute = path.normalize(path.resolve(value));
     const identity = canonicalTypeSystemPath(absolute);
     const existing = pathsByIdentity.get(identity);
-    if (existing == null || absolute.localeCompare(existing) < 0) {
+    if (existing == null || compareDescriptorStrings(absolute, existing) < 0) {
       pathsByIdentity.set(identity, absolute);
     }
   }
   return [...pathsByIdentity.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => compareDescriptorStrings(left, right))
     .map(([, value]) => value);
 }
 
 function sortedUniqueStrings(values: ReadonlySet<string>): readonly string[] {
-  return [...values].sort((left, right) => left.localeCompare(right));
+  return [...values].sort(compareDescriptorStrings);
+}
+
+/** Keep the v1 order, breaking collation ties between distinct filesystem spellings. */
+function compareDescriptorStrings(left: string, right: string): number {
+  return left.localeCompare(right) || (left < right ? -1 : left > right ? 1 : 0);
 }
 
 function readSemanticWorkspaceDescriptor(value: unknown): SemanticWorkspaceDescriptor {
