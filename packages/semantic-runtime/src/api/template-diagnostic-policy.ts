@@ -471,10 +471,14 @@ function expressionRuntimeEvaluationDiagnosticForDataFlow(
   if (frameworkErrorCode == null) {
     return null;
   }
+  const expression = dataFlow.sourceTypeOpenExpression;
+  const span = expression?.$kind === 'BindingBehavior' || expression?.$kind === 'ValueConverter'
+    ? expression.name.span
+    : expression?.span;
   return expressionRuntimeEvaluationErrorDiagnostic(
     frameworkErrorCode,
     dataFlow.sourceTypeOpenReason ?? 'The TypeChecker projection reached a runtime expression-evaluation failure.',
-    source,
+    span?.file == null ? source : sourceReferenceForParserSpan(span.file.path, span, 'expression'),
     runtimeAstSelectedMemberName(store, dataFlow),
   );
 }
@@ -579,6 +583,7 @@ function runtimeAstDiagnosticExpression(
   store: KernelStore,
   dataFlow: RuntimeBindingDataFlow,
 ): ExpressionAstNode | null {
+  if (dataFlow.sourceTypeOpenExpression != null) return dataFlow.sourceTypeOpenExpression;
   const ast = runtimeDataFlowExpression(store, dataFlow);
   return ast == null
     ? null

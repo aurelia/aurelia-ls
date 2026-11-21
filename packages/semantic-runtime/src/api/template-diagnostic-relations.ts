@@ -170,6 +170,28 @@ export class TemplateDiagnosticRelations {
       };
   }
 
+  /** The checker and runtime may report the same failed application in a chain. */
+  forExpressionResourceFailure(dataFlow: RuntimeBindingDataFlow): TemplateDiagnosticRelationOrigin | null {
+    const node = dataFlow.sourceTypeOpenExpression;
+    if (node?.$kind !== 'ValueConverter' && node?.$kind !== 'BindingBehavior') return null;
+    const matches = node.$kind === 'ValueConverter'
+      ? this.resource.runtimeAnalysis.valueConverter.issues.filter(issue =>
+        issue.issueKind === RuntimeValueConverterIssueKind.ResourceNotFound && issue.application.converterName === node.name.name)
+      : this.resource.runtimeAnalysis.bindingBehavior.issues.filter(issue =>
+        issue.issueKind === RuntimeBindingBehaviorIssueKind.ResourceNotFound && issue.application.behaviorName === node.name.name);
+    const site = matches.filter(issue => {
+      const address = sourceSpanAddressForAddress(this.store, issue.sourceAddressHandle);
+      return dataFlow.binding.productHandle != null && issue.binding.productHandle === dataFlow.binding.productHandle
+        && address?.start === node.name.span.start && address.end === node.name.span.end;
+    });
+    if (site.length !== 1) return null;
+    const issue = site[0]!;
+    const demand = issue.application.productHandle == null ? null : this.capabilityDemandByApplication.get(issue.application.productHandle);
+    return demand == null
+      ? { relationKind: SemanticDiagnosticRelationKind.SameOperationEvidence, relatedDiagnosticIdentityHandle: issue.identityHandle }
+      : { relationKind: SemanticDiagnosticRelationKind.DerivedConsequence, relatedDiagnosticIdentityHandle: demand.identityHandle };
+  }
+
   forValueConverterIssue(
     issue: RuntimeValueConverterIssue,
   ): TemplateDiagnosticRelationOrigin | null {

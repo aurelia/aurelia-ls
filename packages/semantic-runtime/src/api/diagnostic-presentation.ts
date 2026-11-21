@@ -24,7 +24,7 @@ interface RelatedPresentationInput {
   readonly relation: SemanticDiagnosticPresentationRelation;
 }
 
-type TemplateTypeRelationship = 'missing-member' | 'binding-assignment';
+type TemplateTypeRelationship = 'missing-member' | 'binding-assignment' | 'nullish-receiver';
 type ResourceDecoratorCheckerRelationship =
   | 'bindable-class-configuration'
   | 'bindable-symbol-name'
@@ -195,7 +195,9 @@ export function appDiagnosticPresentation(
         candidate.index !== semanticRow.index
         && !consumed.has(candidate.index)
         && checkerTemplateTypeRelationship(candidate.row) === relationship
-        && sameDiagnosticSource(semanticRow.row, candidate.row)
+        && (relationship === 'nullish-receiver'
+          ? sameSourceReference(semanticRow.row.subject?.source ?? null, candidate.row.source)
+          : sameDiagnosticSource(semanticRow.row, candidate.row))
       ) ?? null;
       if (checkerEvidence == null) {
         continue;
@@ -545,6 +547,8 @@ function semanticTemplateTypeRelationship(
     return null;
   }
   switch (row.diagnosticKind) {
+    case 'expression-runtime-evaluation-error':
+      return row.frameworkErrorCode === 'AUR0114' || row.frameworkErrorCode === 'AUR0115' ? 'nullish-receiver' : null;
     case 'missing-expression-member':
       return 'missing-member';
     case 'binding-source-assignment-strictness':
@@ -568,6 +572,9 @@ function checkerTemplateTypeRelationship(
   }
   if (hasAnyMissingInput(row, ['typescript:TS2339', 'typescript:TS2551'])) {
     return 'missing-member';
+  }
+  if (hasAnyMissingInput(row, ['typescript:TS18047', 'typescript:TS18048', 'typescript:TS18049'])) {
+    return 'nullish-receiver';
   }
   if (hasAnyMissingInput(row, ['typescript:TS2322', 'typescript:TS2588'])) {
     return 'binding-assignment';

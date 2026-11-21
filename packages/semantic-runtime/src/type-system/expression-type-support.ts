@@ -322,7 +322,7 @@ export class CheckerExpressionTypeSupport {
     partialTypeReference: CheckerTypeReference | null = null,
     subject: CheckerExpressionTypeOpenSubject | null = null,
   ): CheckerExpressionTypeOpen {
-    return new CheckerExpressionTypeOpen(openKind, expression.$kind, summary, partialTypeReference, subject);
+    return new CheckerExpressionTypeOpen(openKind, expression.$kind, summary, partialTypeReference, subject, expression);
   }
 
   openSubject(

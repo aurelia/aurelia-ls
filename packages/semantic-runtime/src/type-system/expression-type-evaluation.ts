@@ -94,6 +94,8 @@ export class CheckerExpressionTypeOpen {
     readonly partialTypeReference: CheckerTypeReference | null = null,
     /** Specific open subject that should be repaired or inspected, when it is narrower than the expression span. */
     readonly subject: CheckerExpressionTypeOpenSubject | null = null,
+    /** Exact parser node at which evaluation became open, including nested resource applications. */
+    readonly expression: ExpressionAstNode | null = null,
   ) {}
 }
 

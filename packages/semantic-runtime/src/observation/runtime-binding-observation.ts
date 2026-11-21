@@ -1,3 +1,4 @@
+import type { ExpressionAstNode } from '../expression/ast.js';
 import type { BindingScopeReference } from '../configuration/scope.js';
 import type {
   AddressHandle,
@@ -401,5 +402,6 @@ export class RuntimeBindingDataFlow {
     readonly frameworkErrorCode: ObservationFrameworkErrorCode | null,
     readonly openReason: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
+    readonly sourceTypeOpenExpression: ExpressionAstNode | null = null,
   ) {}
 }

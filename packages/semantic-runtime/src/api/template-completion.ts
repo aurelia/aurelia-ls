@@ -73,6 +73,9 @@ import type { RuntimeControllerIssue } from '../template/runtime-controller-issu
 import type { RuntimeRendererIssue } from '../template/runtime-renderer-issue.js';
 import { RefBindingInstruction } from '../template/instruction-ir.js';
 import { RouterNavigationTargetKind, type RouterIssueModel } from '../router/model.js';
+import type { AttributeSyntax } from '../template/attribute-syntax.js';
+import { findUniqueBuiltInBindingCommandByName } from '../template/built-in-syntax.js';
+import { capabilityForBuiltInSyntaxGroup } from '../framework/capability-demand-materializer.js';
 import {
   FrameworkCapabilityAdmissionState,
   FrameworkCapabilityDemandSiteKind,
@@ -184,6 +187,7 @@ import type {
   SemanticTemplateCursorUncertainty,
 } from './contracts.js';
 import {
+  SemanticDiagnosticRelationKind,
   SemanticDiagnosticProjectionPolicy,
   SemanticRuntimeAnswerCoverage,
   SemanticRuntimeAnswerResult,
@@ -231,6 +235,7 @@ import {
   templateCompilerErrorDiagnostic,
 } from './template-diagnostic-policy.js';
 import {
+  resourceLocalAuthoredTemplateExpressionParses,
   resourceLocalBindingDataFlows,
   resourceLocalBindingTargetAccesses,
   resourceLocalCompilerReachableHtmlAttributeProductHandles,
@@ -239,6 +244,7 @@ import {
 import {
   runtimeExpressionAccessUsesForTemplateExpression,
   resourceLocalEffectiveTemplateExpressionParses,
+  templateInstructionForExpressionParse,
 } from '../template/template-expression-selection.js';
 import {
   RuntimeExpressionAccessForm,
@@ -1825,7 +1831,7 @@ function templateOverlayDiagnosticRow(
     ownerTypeOrigin: null,
     suggestion,
     siteKind: TemplateCompletionSiteKind.Expression,
-    valueSiteKind: TemplateValueSiteKind.BindingCommandValue,
+    valueSiteKind: parse?.site.siteKind ?? null,
     template: {
       compilationLane: selection.lane,
       source: describeAddress(store, selection.sourceAddressHandle),
@@ -2236,7 +2242,13 @@ function bindingDataFlowDiagnosticRowsForSelection(
       )) {
         return [];
       }
-      const key = templateDiagnosticRowKey(diagnostic, source);
+      const diagnosticSource = diagnostic.source ?? source;
+      const failure = dataFlow.sourceTypeOpenExpression;
+      const receiver = (diagnostic.frameworkErrorCode === 'AUR0114' && failure?.$kind === 'AccessMember')
+        || (diagnostic.frameworkErrorCode === 'AUR0115' && failure?.$kind === 'AccessKeyed')
+        ? failure.object.span
+        : null;
+      const key = templateDiagnosticRowKey(diagnostic, diagnosticSource);
       if (context.seenRows.has(key)) {
         return [];
       }
@@ -2251,15 +2263,21 @@ function bindingDataFlowDiagnosticRowsForSelection(
         ...templateDiagnosticRelationFields(
           diagnostic.diagnosticKind === 'binding-target-assignment-strictness'
             ? templateDiagnosticRelations(selection, context).forBindingDataFlow(dataFlow)
-            : null,
+            : diagnostic.diagnosticKind === 'expression-runtime-evaluation-error'
+              ? templateDiagnosticRelations(selection, context).forExpressionResourceFailure(dataFlow)
+              : null,
         ),
         siteKind: TemplateCompletionSiteKind.Expression,
         valueSiteKind: valueSiteKindForDataFlow(store, dataFlow.expressionProductHandle),
-        subject: templateExpressionDiagnosticSubject(
+        subject: receiver?.file != null ? {
+          subjectKind: 'template-expression' as const,
+          subjectName: null,
+          source: sourceReferenceForParserSpan(receiver.file.path, receiver, 'nullish-receiver'),
+        } : templateExpressionDiagnosticSubject(
           store,
           selection.resource,
           dataFlow.expressionProductHandle,
-          source,
+          diagnosticSource,
           diagnostic.selectedMemberName,
         ),
         template: {
@@ -2512,9 +2530,13 @@ function expressionParseDiagnosticRowsForSelection(
   sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
-  return resourceLocalEffectiveTemplateExpressionParses(store, selection.resource).flatMap((parse) => {
+  const { resource } = selection;
+  return resourceLocalAuthoredTemplateExpressionParses(store, resource).flatMap((parse) => {
     const payload = expressionParseDiagnosticPayload(parse);
-    if (payload == null) {
+    if (payload == null || (
+      !resource.compilation.compiledTemplate.rejectedAttributeParses.has(parse.productHandle)
+      && templateInstructionForExpressionParse(resource, parse) == null
+    )) {
       return [];
     }
     const source = sourceReferenceForExpressionParseDiagnostic(store, parse, payload.span);
@@ -2555,15 +2577,16 @@ function templateCompilerIssueDiagnosticRowsForSelection(
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
   return templateCompilerIssues(store, selection.resource).flatMap((issue) => {
-    const unknownCommandLookupKeys = issue.issueKind === TemplateCompilerIssueKind.UnknownBindingCommand
-      ? unknownBindingCommandLookupKeysForIssue(store, selection, issue)
+    const syntax = issue.issueKind === TemplateCompilerIssueKind.UnknownBindingCommand
+      ? unknownBindingCommandSyntaxForIssue(store, selection, issue)
       : null;
+    const commandKey = syntax?.command == null ? null : runtimeResourceKeyForKind(ResourceDefinitionKind.BindingCommand, syntax.command);
     if (
-      unknownCommandLookupKeys != null
+      commandKey != null
       && registrationHidingResourceSeamsForSelection(
         context.emission,
         selection,
-        unknownCommandLookupKeys,
+        new Set([commandKey]),
       ).length > 0
     ) {
       return [];
@@ -2595,6 +2618,12 @@ function templateCompilerIssueDiagnosticRowsForSelection(
       const relatedSource = describeAddress(store, related.sourceAddressHandle);
       return relatedSource == null ? [] : [{ message: related.message, source: relatedSource }];
     });
+    const command = syntax?.command == null ? null : findUniqueBuiltInBindingCommandByName(syntax.command);
+    const capability = command == null ? null : capabilityForBuiltInSyntaxGroup(command.group);
+    const demand = capability == null ? null : frameworkCapabilityDemandsForSelection(context.capabilityDemands, selection)
+      .find(candidate => candidate.ownerIdentityHandle === syntax?.identityHandle
+        && candidate.requiredCapability === capability.requiredCapability
+        && candidate.admissionState !== FrameworkCapabilityAdmissionState.Admitted);
     const key = templateDiagnosticRowKey(diagnostic, source);
     if (context.seenRows.has(key)) {
       return [];
@@ -2603,6 +2632,10 @@ function templateCompilerIssueDiagnosticRowsForSelection(
     return [{
       ...diagnostic,
       ...(relatedInformation.length === 0 ? {} : { relatedInformation }),
+      ...templateDiagnosticRelationFields(demand == null ? null : {
+        relationKind: SemanticDiagnosticRelationKind.DerivedConsequence,
+        relatedDiagnosticIdentityHandle: demand.identityHandle,
+      }),
       ...templateDiagnosticOriginFields(store, context.includeHandles, {
         phase: issue.phase,
         semanticProductHandle: issue.productHandle,
@@ -2642,23 +2675,20 @@ function projectionTargetLookupKeysForIssue(
   return lookupKey == null ? null : new Set([lookupKey]);
 }
 
-function unknownBindingCommandLookupKeysForIssue(
+function unknownBindingCommandSyntaxForIssue(
   store: KernelStore,
   selection: TemplateCompletionResourceSelection,
   issue: TemplateCompilerIssue,
-): ReadonlySet<string> | null {
+): AttributeSyntax | null {
   const issueSource = semanticExactSourceReference(describeAddress(store, issue.sourceAddressHandle));
   if (issueSource == null) return null;
-  const syntax = selection.resource.compilation.authoredAttributeSyntaxes.find((candidate) =>
+  return selection.resource.compilation.authoredAttributeSyntaxes.find((candidate) =>
     candidate.command != null
     && semanticTemplateCursorSourcesMatchExactly(
       semanticExactSourceReference(describeAddress(store, candidate.commandSourceAddressHandle)),
       issueSource,
     )
   ) ?? null;
-  if (syntax?.command == null) return null;
-  const lookupKey = runtimeResourceKeyForKind(ResourceDefinitionKind.BindingCommand, syntax.command);
-  return lookupKey == null ? null : new Set([lookupKey]);
 }
 
 function frameworkCapabilityDemandDiagnosticRowsForSelection(
@@ -4216,7 +4246,7 @@ function cursorDefinitionAuthoredName(
     if (
       value != null
       && taxonomyResourceKindForDefinition(definition) === ResourceDefinitionKind.BindingCommand
-      && resource.compilation.bindingCommandLowering.attributeSyntaxes.some((syntax) =>
+      && resource.compilation.bindingCommandLowering.authoredAttributeSyntaxes.some((syntax) =>
         syntax.command === runtimeMatchedName
         && semanticTemplateCursorSourcesMatchExactly(
           describeAddress(store, syntax.commandSourceAddressHandle),

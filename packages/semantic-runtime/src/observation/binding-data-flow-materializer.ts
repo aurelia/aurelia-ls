@@ -377,6 +377,7 @@ type DataFlowDraft = {
   readonly sourceType: CheckerTypeReference | null;
   readonly sourceTypeOpenReason: string | null;
   readonly sourceTypeOpenKind: CheckerExpressionTypeOpenKind | null;
+  readonly sourceTypeOpenExpression: ExpressionAstNode | null;
   readonly sourceAssignmentTargetType: CheckerTypeReference | null;
   readonly sourceAssignmentTargetSourceAddressHandle: AddressHandle | null;
   readonly targetPropertyType: CheckerTypeReference | null;
@@ -448,6 +449,7 @@ function runtimeBindingDataFlowForDraft(
     draft.frameworkErrorCode,
     draft.openReason,
     binding.sourceAddressHandle,
+    draft.sourceTypeOpenExpression,
   );
 }
 
@@ -472,6 +474,7 @@ type DataFlowSourceProjection = {
   readonly sourceType: CheckerTypeReference | null;
   readonly sourceTypeOpenReason: string | null;
   readonly sourceTypeOpenKind: CheckerExpressionTypeOpenKind | null;
+  readonly sourceTypeOpenExpression: ExpressionAstNode | null;
   readonly sourceAssignmentValueType: CheckerTypeReference | null;
   readonly targetToSourceValueType: CheckerTypeReference | null;
   readonly targetToSourceValueTypeOpenReason: string | null;
@@ -1092,6 +1095,7 @@ class RuntimeBindingDataFlowDraftMaterializer {
       sourceType: sourceProjection.sourceType,
       sourceTypeOpenReason: sourceProjection.sourceTypeOpenReason,
       sourceTypeOpenKind: sourceProjection.sourceTypeOpenKind,
+      sourceTypeOpenExpression: sourceProjection.sourceTypeOpenExpression,
       sourceAssignmentTargetType: needsSourceWriteCapability
         ? sourceProjection.sourceAssignmentValueType
           ?? sourceProjection.sourceInfo.sourceWriteCapability?.assignmentTargetType
@@ -1324,6 +1328,9 @@ class BindingDataFlowSourceProjector {
       sourceType,
       sourceTypeOpenReason,
       sourceTypeOpenKind,
+      sourceTypeOpenExpression: sourceTypeOpenKind != null && sourceEvaluation?.kind === CheckerExpressionTypeEvaluationResultKind.Open
+        ? sourceEvaluation.expression
+        : null,
       sourceAssignmentValueType,
       targetToSourceValueType,
       targetToSourceValueTypeOpenReason: sourceInfo.targetToSourceValueTypeOpenReason ?? null,

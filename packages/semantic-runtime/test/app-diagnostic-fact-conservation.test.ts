@@ -112,11 +112,13 @@ describe("app diagnostic fact conservation", () => {
       storeKey: "app-diagnostic-fact-conservation-evaluation-subject",
     });
     const evaluationApp = await evaluationRuntime.openApp({ analysisDepth: "binding-observation" });
-    const evaluationOwning = evaluationApp.ask({
+    const evaluationRows = evaluationApp.ask({
       kind: SemanticAppQueryKind.EvaluationIssues,
       detail: SemanticRuntimeDetail.Handles,
       page: { size: 100 },
-    }).value.rows.find((row) => row.issueKind === "event-aggregator-publish-invalid-event-name");
+    }).value.rows;
+    expect(evaluationRows.map(row => row.frameworkErrorCode).sort()).toEqual(["AUR0018", "AUR0019", "AUR0020", "AUR0020"]);
+    const evaluationOwning = evaluationRows.find(row => row.issueKind === "event-aggregator-publish-invalid-event-name");
     const evaluationDiagnostic = evaluationApp.ask({
       kind: SemanticAppQueryKind.AppDiagnostics,
       detail: SemanticRuntimeDetail.Handles,
@@ -422,6 +424,16 @@ describe("app diagnostic fact conservation", () => {
     expect(semanticTemplateRow?.handles?.semanticProductHandle).not.toBeNull();
     expect(semanticTemplateRow?.handles?.semanticIdentityHandle).not.toBeNull();
     expect(semanticTemplateRow?.handles?.sourceAddressHandle).not.toBeNull();
+    expect(checkerTemplateRow?.valueSiteKind).toBe("text-interpolation");
+    const nullable = detailed.presentation?.groups.find(group =>
+      detailed.rows[group.primary.rowIndex]?.frameworkErrorCode === "AUR0114");
+    expect(nullable).toBeDefined();
+    expect(nullable?.related.map(related => {
+      const checker = detailed.rows[related.rowIndex];
+      const receiver = detailed.rows[nullable.primary.rowIndex]?.subject?.source;
+      return [related.relation, checker?.typeScriptDiagnosticCode,
+        checker?.source?.start === receiver?.start && checker?.source?.end === receiver?.end];
+    })).toEqual([["checker-evidence", 18047, true]]);
     expect(checkerTemplateRow?.phase).toBe("semantic");
     expect(checkerTemplateRow?.typeScriptDiagnosticCode).toBe(2339);
     expect(checkerTemplateRow?.handles?.semanticProductHandle).not.toBeNull();
