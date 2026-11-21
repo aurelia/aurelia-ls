@@ -107,6 +107,12 @@ describe('production template-family lifecycle', () => {
     expect(appState.children.some((child) =>
       child.locus.kind === 'computation-remainder'
     )).toBe(false);
+    const carriedSibling = requireNamedCompilation(attempt.candidateEmission, 'flag-card');
+    const siblingState = requireFamilyChildState(runtime, project.projectKey, carriedSibling.familyOwnerHandle);
+    expect(siblingState.candidateReads).toContainEqual(expect.objectContaining({
+      handle: carriedSibling.definition.productHandle,
+      actualKind: ResourceProductDetails.Definition.detailKind,
+    }));
     expect(appState.children.filter((child) =>
       child.locus.kind === 'aurelia-app-analysis-phase'
     ).map((child) => child.locus.reconciliationKey).sort()).toEqual([
@@ -630,7 +636,12 @@ describe('production template-family lifecycle', () => {
     expect(equalRootWorld?.container).not.toBe(baselineRootWorld?.container);
     expect(equalRootWorld?.world).not.toBe(canonicalRootWorld);
     expect(equalCompilation).not.toBe(baselineCompilation);
-    expect(equalCompilation.parentCompilerWorld).toBe(equalRootWorld);
+    const componentWorld = equal.emission.templates.cohortPlan.ownerPlans
+      .find(owner => owner.ownerHandle === equalCompilation.familyOwnerHandle)?.cohorts[0]?.parentCompilerWorld;
+    expect(equalCompilation.parentCompilerWorld).toBe(componentWorld);
+    expect(componentWorld).not.toBe(baselineCompilation.parentCompilerWorld);
+    expect(componentWorld?.resourceScope.parent?.productHandle).toBe(equalRootWorld?.resourceScope.productHandle);
+    expect(componentWorld?.resourceResolver.el('flag-card')?.name).toBe('flag-card');
     expect(equalCompilation.compilerWorld.container).toBe(equalRootWorld?.container);
     for (const baselineRead of baselineCompilation.registeredReads) {
       const equalRead = equalCompilation.registeredReads.find((read) => read.readKey === baselineRead.readKey) ?? null;

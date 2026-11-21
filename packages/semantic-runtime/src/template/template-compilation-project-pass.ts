@@ -541,9 +541,11 @@ class TemplateCompilationFamilyCarryRebaser {
     if (parentCompilerWorld == null || compilerWorld == null) {
       throw new Error(`Carried template family ${this.owner.ownerHandle} lost its current compiler-world container.`);
     }
+    // Carry already validated the family's owner-definition read and its local-definition outputs.
+    // Rehydrate their current values without recording a second read in the outer computation.
     const definition = compilation.definition.productHandle == null
       ? compilation.definition
-      : this.publication.readProductDetail(ResourceProductDetails.Definition, compilation.definition.productHandle);
+      : this.publication.domainReadProjection.readProductDetail(ResourceProductDetails.Definition, compilation.definition.productHandle);
     if (!(definition instanceof CustomElementDefinition)) {
       throw new Error(`Carried template family ${this.owner.ownerHandle} lost its current custom-element definition.`);
     }
