@@ -63,7 +63,7 @@ export function readComputedObservationSites(
     const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     return sourceFile == null
       ? []
-      : readSourceFileComputedObservationSites(source.path, source.addressHandle, sourceFile);
+      : readSourceFileComputedObservationSites(source.path, source.addressHandle, sourceFile, typeSystem.checker);
   });
 }
 
@@ -71,11 +71,13 @@ function readSourceFileComputedObservationSites(
   sourcePath: string,
   sourceFileAddressHandle: AddressHandle,
   sourceFile: ts.SourceFile,
+  checker: ts.TypeChecker,
 ): readonly ComputedObservationSite[] {
   const bindings = readSourceImportBindings(
     sourceFile,
     AURELIA_COMPUTED_DECORATOR_MODULES,
     AURELIA_COMPUTED_DECORATOR_EXPORTS,
+    checker,
   );
   const sites: ComputedObservationSite[] = [];
   const visit = (node: ts.Node): void => {

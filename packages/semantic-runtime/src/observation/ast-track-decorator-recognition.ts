@@ -50,7 +50,7 @@ export function readInvalidAstTrackDecoratorSites(
     const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     return sourceFile == null
       ? []
-      : readSourceFileInvalidAstTrackDecoratorSites(source.path, source.addressHandle, sourceFile);
+      : readSourceFileInvalidAstTrackDecoratorSites(source.path, source.addressHandle, sourceFile, typeSystem.checker);
   });
 }
 
@@ -58,11 +58,13 @@ function readSourceFileInvalidAstTrackDecoratorSites(
   sourcePath: string,
   sourceFileAddressHandle: AddressHandle,
   sourceFile: ts.SourceFile,
+  checker: ts.TypeChecker,
 ): readonly AstTrackDecoratorSite[] {
   const bindings = readSourceImportBindings(
     sourceFile,
     AURELIA_AST_TRACK_DECORATOR_MODULES,
     AURELIA_AST_TRACK_DECORATOR_EXPORTS,
+    checker,
   );
   const sites: AstTrackDecoratorSite[] = [];
   const visit = (node: ts.Node): void => {

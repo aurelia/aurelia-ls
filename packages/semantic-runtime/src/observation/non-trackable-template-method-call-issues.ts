@@ -117,7 +117,7 @@ export class NonTrackableTemplateMethodCallIssueMaterializer {
       return null;
     }
     const method = this.methodDeclarationForDependency(typeSystem, dependency);
-    if (method == null || readTrackableMethodDependency(method) != null) {
+    if (method == null || readTrackableMethodDependency(method, typeSystem.checker) != null) {
       return null;
     }
     const bodyReads = collectHiddenTemplateMethodReads(

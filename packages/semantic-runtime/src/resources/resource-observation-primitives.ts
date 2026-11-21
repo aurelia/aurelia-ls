@@ -37,7 +37,7 @@ export class AttributePatternObservation {
     readonly pattern: string,
     /** Static symbol string supplied with the pattern. */
     readonly symbols: string,
-    /** Source node that produced the pattern entry. */
-    readonly node: ts.Node,
+    /** Authored literal that produced the complete pattern, when recoverable. */
+    readonly node: ts.Node | null,
   ) {}
 }

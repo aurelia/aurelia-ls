@@ -50,7 +50,7 @@ export function readInvalidComputedDecoratorSites(
     const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     return sourceFile == null
       ? []
-      : readSourceFileInvalidComputedDecoratorSites(source.path, source.addressHandle, sourceFile);
+      : readSourceFileInvalidComputedDecoratorSites(source.path, source.addressHandle, sourceFile, typeSystem.checker);
   });
 }
 
@@ -58,11 +58,13 @@ function readSourceFileInvalidComputedDecoratorSites(
   sourcePath: string,
   sourceFileAddressHandle: AddressHandle,
   sourceFile: ts.SourceFile,
+  checker: ts.TypeChecker,
 ): readonly ComputedDecoratorSite[] {
   const bindings = readSourceImportBindings(
     sourceFile,
     AURELIA_COMPUTED_DECORATOR_MODULES,
     AURELIA_COMPUTED_DECORATOR_EXPORTS,
+    checker,
   );
   const sites: ComputedDecoratorSite[] = [];
   const visit = (node: ts.Node): void => {

@@ -1,4 +1,7 @@
 import ts from 'typescript';
+import { importedValueExportName, readImportedExportName, readSourceImportBindings, resolveValueAlias } from '../evaluation/import-bindings.js';
+import { declarationMatchesFrameworkSource } from '../type-system/framework-declaration-source.js';
+import type { ResourceRecognitionContext } from './resource-recognition-context.js';
 import {
   evaluationAbruptCompletionSummary,
   type EvaluationAbruptCompletion,
@@ -84,20 +87,41 @@ interface AttributePatternEntryRead {
   readonly open: boolean;
 }
 
-export function readDecoratorCalleeName(
-  decorator: ts.Decorator,
-): string | null {
+const decoratorModules = new Set(['aurelia', '@aurelia/runtime-html', '@aurelia/template-compiler']);
+const decoratorExports = new Set([...RESOURCE_DECORATOR_KIND.keys(), 'bindable']);
+const decoratorDeclarationSource = {
+  names: decoratorExports,
+  packageNames: [...decoratorModules],
+  sourcePathFragments: ['/aurelia/packages/runtime-html/', '/aurelia/packages/template-compiler/'],
+};
+const emptyPathIndex = new Map<string, string>();
+
+export function readDecoratorCalleeName(decorator: ts.Decorator, context: ResourceRecognitionContext): string | null {
   const expression = unwrapExpression(decorator.expression);
-  if (ts.isCallExpression(expression)) {
-    return readCallCalleeText(expression.expression)?.split('.').at(-1) ?? null;
+  const callee = unwrapExpression(ts.isCallExpression(expression) ? expression.expression : expression);
+  const project = context.typeSystem;
+  const node = project?.readProgramNode(callee);
+  if (project == null || node == null) {
+    // npm packages can expose only declarations to the Program while evaluation admits the
+    // implementation. On a module-level class the decorator sees that same module's imports.
+    const owner = ts.isClassLike(decorator.parent) ? decorator.parent : decorator.parent.parent;
+    if (!ts.isClassDeclaration(owner) || !ts.isSourceFile(owner.parent)) return null;
+    const bindings = readSourceImportBindings(callee.getSourceFile(), decoratorModules, decoratorExports);
+    return readImportedExportName(callee, bindings, decoratorExports);
   }
-  if (ts.isIdentifier(expression)) {
-    return expression.text;
+  // A member of a type-only namespace can resolve to a real framework symbol while its receiver is erased.
+  if (ts.isPropertyAccessExpression(node)
+    && resolveValueAlias(project.checker, project.checker.getSymbolAtLocation(node.expression)) == null) return null;
+  const symbol = resolveValueAlias(project.checker, project.checker.getSymbolAtLocation(node));
+  if (symbol == null) return null;
+  // Resolved imports, including paths redirects and re-exports, are owned by the declaring module.
+  if (symbol.declarations?.length) {
+    const name = symbol.getName();
+    return decoratorExports.has(name) && symbol.declarations.some(declaration =>
+      declarationMatchesFrameworkSource(declaration, emptyPathIndex, decoratorDeclarationSource)) ? name : null;
   }
-  if (ts.isPropertyAccessExpression(expression)) {
-    return expression.name.text;
-  }
-  return null;
+  const direct = importedValueExportName(node, project.checker, decoratorModules);
+  return direct != null && decoratorExports.has(direct) ? direct : null;
 }
 
 export function readStaticAuInitializer(
@@ -367,16 +391,8 @@ function attributePatternObservationFromObject(
   if (pattern == null || symbols == null) {
     return null;
   }
-  const patternProperty = readStaticOwnProperty(value, 'pattern');
-  return new AttributePatternObservation(
-    pattern,
-    symbols,
-    authoredStringLiteralNode(
-      patternValue,
-      patternValue.node,
-      patternProperty?.node ?? sourceExpression,
-    ) ?? patternProperty?.node ?? sourceExpression,
-  );
+  const literal = authoredStringLiteralNode(patternValue, patternValue.node, null);
+  return new AttributePatternObservation(pattern, symbols, literal?.text === pattern ? literal : null);
 }
 
 function attributePatternEntriesFieldRead(

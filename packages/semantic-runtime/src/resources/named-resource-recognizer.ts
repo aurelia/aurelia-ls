@@ -127,18 +127,19 @@ function recognizeDecorators(
     : [];
   const target = targetOverride ?? readClassTarget(classNode);
   return decorators.flatMap((decorator) => {
-    const read = readDecoratorResource(decorator, wantedKind, expressionReader, target);
+    const read = readDecoratorResource(context, decorator, wantedKind, expressionReader, target);
     return read == null ? [] : [read];
   });
 }
 
 function readDecoratorResource(
+  context: ResourceRecognitionContext,
   decorator: ts.Decorator,
   wantedKind: NamedResourceDefinitionKind | null,
   expressionReader: StaticEvaluationExpressionReader,
   target: EvaluationTargetRead,
 ): ResourceRecognitionObservation | null {
-  const calleeName = readDecoratorCalleeName(decorator);
+  const calleeName = readDecoratorCalleeName(decorator, context);
   const resourceKind = resourceKindForDecorator(calleeName, wantedKind);
   if (resourceKind == null) {
     return null;
@@ -248,6 +249,8 @@ function recognizeStaticAu(
   }
   const target = readClassTarget(classNode);
   if (resourceKind == null) {
+    // A closed value outside the framework's resource taxonomy does not declare a resource.
+    if (kindRead.openReasonKinds.length === 0) return [];
     return wantedKind == null
       ? [
         new ResourceRecognitionObservation(
@@ -322,7 +325,7 @@ function recognizeConventions(
   if (!ts.isClassDeclaration(classNode) || classNode.name == null || hasDeclareModifier(classNode)) {
     return [];
   }
-  if (hasExplicitResourceCarrier(classNode) || defineCallTargets.has(classNode)) {
+  if (hasExplicitResourceCarrier(context, classNode) || defineCallTargets.has(classNode)) {
     return [];
   }
 
@@ -569,12 +572,12 @@ function appendTargetReadOpen(
   ));
 }
 
-function hasExplicitResourceCarrier(classNode: ts.ClassLikeDeclarationBase): boolean {
+function hasExplicitResourceCarrier(context: ResourceRecognitionContext, classNode: ts.ClassLikeDeclarationBase): boolean {
   const decorators = ts.canHaveDecorators(classNode)
     ? ts.getDecorators(classNode) ?? []
     : [];
   if (decorators.some((decorator) => {
-    const calleeName = readDecoratorCalleeName(decorator);
+    const calleeName = readDecoratorCalleeName(decorator, context);
     return calleeName != null && RESOURCE_DECORATOR_KIND.has(calleeName);
   })) {
     return true;

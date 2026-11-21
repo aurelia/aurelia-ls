@@ -68,6 +68,7 @@ const AURELIA_AST_TRACK_DECORATOR_EXPORTS = new Set([
  */
 export function readTrackableMethodDependency(
   method: ts.MethodDeclaration,
+  checker: ts.TypeChecker,
 ): ComputedDependencyRead | null {
   if (!ts.canHaveDecorators(method)) {
     return null;
@@ -76,11 +77,13 @@ export function readTrackableMethodDependency(
     method.getSourceFile(),
     AURELIA_COMPUTED_DECORATOR_MODULES,
     AURELIA_COMPUTED_DECORATOR_EXPORTS,
+    checker,
   );
   const astTrackBindings = readSourceImportBindings(
     method.getSourceFile(),
     AURELIA_AST_TRACK_DECORATOR_MODULES,
     AURELIA_AST_TRACK_DECORATOR_EXPORTS,
+    checker,
   );
   let dependency: ComputedDependencyRead | null = null;
   for (const decorator of ts.getDecorators(method) ?? []) {

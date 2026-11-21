@@ -62,6 +62,7 @@ export class ObservableDecoratorSite {
 /** Whether an exact checker member declaration installs the framework's getter-owned SetterNotifier. */
 export function declarationHasObservableDecorator(
   declaration: ts.Declaration,
+  checker?: ts.TypeChecker,
 ): boolean {
   if (sourceDecoratorTargetKind(declaration) !== 'field' || !ts.canHaveDecorators(declaration)) {
     return false;
@@ -70,6 +71,7 @@ export function declarationHasObservableDecorator(
     declaration.getSourceFile(),
     AURELIA_OBSERVABLE_DECORATOR_MODULES,
     AURELIA_OBSERVABLE_DECORATOR_EXPORTS,
+    checker,
   );
   return (ts.getDecorators(declaration) ?? []).some((decorator) =>
     fieldObservableDecoratorState(decorator, bindings) === ObservableDescriptorRecognitionState.Exact
@@ -79,8 +81,9 @@ export function declarationHasObservableDecorator(
 /** Exact-symbol counterpart used by source-effect and controller-setup materializers. */
 export function symbolHasObservableDecorator(
   symbol: ts.Symbol | null | undefined,
+  checker?: ts.TypeChecker,
 ): boolean {
-  return (symbol?.declarations ?? []).some(declarationHasObservableDecorator);
+  return (symbol?.declarations ?? []).some(declaration => declarationHasObservableDecorator(declaration, checker));
 }
 
 /**
@@ -92,13 +95,14 @@ export function observableDescriptorRecognitionForMember(
   ownerDeclarations: readonly ts.Declaration[],
   memberDeclarations: readonly ts.Declaration[],
   propertyName: string,
+  checker: ts.TypeChecker | undefined,
 ): ObservableDescriptorRecognitionState {
   let open = false;
   for (const declaration of memberDeclarations) {
     if (sourceDecoratorTargetKind(declaration) !== 'field' || !ts.canHaveDecorators(declaration)) {
       continue;
     }
-    const bindings = observableImportBindings(declaration.getSourceFile());
+    const bindings = observableImportBindings(declaration.getSourceFile(), checker);
     for (const decorator of ts.getDecorators(declaration) ?? []) {
       const state = fieldObservableDecoratorState(decorator, bindings);
       if (state === ObservableDescriptorRecognitionState.Exact) {
@@ -123,7 +127,7 @@ export function observableDescriptorRecognitionForMember(
     if (!ts.canHaveDecorators(declaration)) {
       continue;
     }
-    const bindings = observableImportBindings(declaration.getSourceFile());
+    const bindings = observableImportBindings(declaration.getSourceFile(), checker);
     for (const decorator of ts.getDecorators(declaration) ?? []) {
       const state = classObservableDecoratorState(decorator, bindings, propertyName);
       if (state === ObservableDescriptorRecognitionState.Exact) {
@@ -146,7 +150,7 @@ export function readInvalidObservableDecoratorSites(
     const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     return sourceFile == null
       ? []
-      : readSourceFileInvalidObservableDecoratorSites(source.path, source.addressHandle, sourceFile);
+      : readSourceFileInvalidObservableDecoratorSites(source.path, source.addressHandle, sourceFile, typeSystem.checker);
   });
 }
 
@@ -154,11 +158,13 @@ function readSourceFileInvalidObservableDecoratorSites(
   sourcePath: string,
   sourceFileAddressHandle: AddressHandle,
   sourceFile: ts.SourceFile,
+  checker: ts.TypeChecker,
 ): readonly ObservableDecoratorSite[] {
   const bindings = readSourceImportBindings(
     sourceFile,
     AURELIA_OBSERVABLE_DECORATOR_MODULES,
     AURELIA_OBSERVABLE_DECORATOR_EXPORTS,
+    checker,
   );
   const sites: ObservableDecoratorSite[] = [];
   const visit = (node: ts.Node): void => {
@@ -188,11 +194,12 @@ function readSourceFileInvalidObservableDecoratorSites(
   return sites;
 }
 
-function observableImportBindings(sourceFile: ts.SourceFile): SourceImportBindings {
+function observableImportBindings(sourceFile: ts.SourceFile, checker: ts.TypeChecker | undefined): SourceImportBindings {
   return readSourceImportBindings(
     sourceFile,
     AURELIA_OBSERVABLE_DECORATOR_MODULES,
     AURELIA_OBSERVABLE_DECORATOR_EXPORTS,
+    checker,
   );
 }
 

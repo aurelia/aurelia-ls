@@ -114,23 +114,18 @@ export function readResourceKindFromRuntimeTypeName(
 ): ResourceDefinitionKind | null {
   switch (typeName) {
     case 'custom-element':
-    case 'elementTypeName':
       return ResourceDefinitionKind.CustomElement;
     case 'custom-attribute':
-    case 'attrTypeName':
       return ResourceDefinitionKind.CustomAttribute;
     // Semantic-runtime accepts this as an authoring/generation taxonomy spelling.
     // Framework runtime keys still register template controllers as custom attributes.
     case 'template-controller':
       return ResourceDefinitionKind.TemplateController;
     case 'value-converter':
-    case 'converterTypeName':
       return ResourceDefinitionKind.ValueConverter;
     case 'binding-behavior':
-    case 'behaviorTypeName':
       return ResourceDefinitionKind.BindingBehavior;
     case 'binding-command':
-    case 'bindingCommandTypeName':
       return ResourceDefinitionKind.BindingCommand;
     case 'attribute-pattern':
       return ResourceDefinitionKind.AttributePattern;

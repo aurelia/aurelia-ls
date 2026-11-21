@@ -7,6 +7,22 @@ import {
 export interface SourceImportBindings {
   readonly locals: ReadonlyMap<string, string>;
   readonly namespaces: ReadonlySet<string>;
+  readonly checker?: ts.TypeChecker;
+  readonly moduleSpecifiers?: ReadonlySet<string>;
+}
+
+/** Follow value aliases through barrels without crossing an erased type-only declaration. */
+export function resolveValueAlias(checker: ts.TypeChecker, symbol: ts.Symbol | undefined): ts.Symbol | null {
+  if (symbol == null) return null;
+  if ((symbol.flags & ts.SymbolFlags.Alias) === 0) return symbol;
+  const seen = new Set<ts.Symbol>();
+  let target: ts.Symbol | undefined = symbol;
+  while (target != null && (target.flags & ts.SymbolFlags.Alias) !== 0) {
+    if (seen.has(target) || target.declarations?.some(ts.isTypeOnlyImportOrExportDeclaration)) return null;
+    seen.add(target);
+    target = checker.getImmediateAliasedSymbol(target);
+  }
+  return target ?? null;
 }
 
 /** Resolve a value use by the import declaration visible at the use site, including namespace imports. */
@@ -16,24 +32,31 @@ export function isImportedValue(
   modules: ReadonlySet<string>,
   exportName: string,
 ): boolean {
+  return importedValueExportName(expression, checker, modules) === exportName;
+}
+
+/** Export selected by this value use's actual import, even when its local name differs. */
+export function importedValueExportName(
+  expression: ts.Expression,
+  checker: ts.TypeChecker,
+  modules: ReadonlySet<string>,
+): string | null {
   const value = unwrapExpression(expression);
-  const namespace = ts.isPropertyAccessExpression(value) && value.name.text === exportName;
+  const namespace = ts.isPropertyAccessExpression(value);
   const identifier = namespace ? unwrapExpression(value.expression) : value;
-  if (!ts.isIdentifier(identifier)) return false;
-  return checker.getSymbolAtLocation(identifier)?.declarations?.some(declaration => {
-    if (namespace ? !ts.isNamespaceImport(declaration) : !ts.isImportSpecifier(declaration)) return false;
-    let clause: ts.ImportClause;
-    if (ts.isImportSpecifier(declaration)) {
-      if (declaration.isTypeOnly || (declaration.propertyName ?? declaration.name).text !== exportName) return false;
-      clause = declaration.parent.parent;
-    } else if (ts.isNamespaceImport(declaration)) {
-      clause = declaration.parent;
-    } else {
-      return false;
-    }
+  if (!ts.isIdentifier(identifier)) return null;
+  for (const declaration of checker.getSymbolAtLocation(identifier)?.declarations ?? []) {
+    if (!ts.isNamespaceImport(declaration) && !ts.isImportSpecifier(declaration)) continue;
+    if (namespace !== ts.isNamespaceImport(declaration)) continue;
+    if (ts.isImportSpecifier(declaration) && declaration.isTypeOnly) continue;
+    const clause = ts.isNamespaceImport(declaration) ? declaration.parent : declaration.parent.parent;
     const source = clause.parent.moduleSpecifier;
-    return !clause.isTypeOnly && ts.isStringLiteralLike(source) && modules.has(source.text);
-  }) ?? false;
+    if (!clause.isTypeOnly && ts.isStringLiteralLike(source) && modules.has(source.text)) {
+      if (ts.isImportSpecifier(declaration)) return (declaration.propertyName ?? declaration.name).text;
+      if (ts.isPropertyAccessExpression(value)) return value.name.text;
+    }
+  }
+  return null;
 }
 
 /** Read named and namespace imports for a bounded module/export set. */
@@ -41,6 +64,7 @@ export function readSourceImportBindings(
   sourceFile: ts.SourceFile,
   moduleSpecifiers: ReadonlySet<string>,
   exportedNames: ReadonlySet<string>,
+  checker?: ts.TypeChecker,
 ): SourceImportBindings {
   const locals = new Map<string, string>();
   const namespaces = new Set<string>();
@@ -51,6 +75,7 @@ export function readSourceImportBindings(
     if (!moduleSpecifiers.has(statement.moduleSpecifier.text)) {
       continue;
     }
+    if (statement.importClause?.isTypeOnly) continue;
     const namedBindings = statement.importClause?.namedBindings ?? null;
     if (namedBindings == null) {
       continue;
@@ -61,7 +86,7 @@ export function readSourceImportBindings(
     }
     for (const element of namedBindings.elements) {
       const exportedName = element.propertyName?.text ?? element.name.text;
-      if (exportedNames.has(exportedName)) {
+      if (!element.isTypeOnly && exportedNames.has(exportedName)) {
         locals.set(element.name.text, exportedName);
       }
     }
@@ -69,6 +94,7 @@ export function readSourceImportBindings(
   return {
     locals,
     namespaces,
+    ...(checker == null ? {} : { checker, moduleSpecifiers }),
   };
 }
 
@@ -79,6 +105,11 @@ export function readImportedExportName(
   bareAllowedExports: ReadonlySet<string> | true,
 ): string | null {
   const current = unwrapExpression(expression);
+  if (bindings.checker != null && bindings.moduleSpecifiers != null) {
+    if (ts.isIdentifier(current) && !bindings.locals.has(current.text)) return null;
+    const name = importedValueExportName(current, bindings.checker, bindings.moduleSpecifiers);
+    return name != null && (bareAllowedExports === true || bareAllowedExports.has(name)) ? name : null;
+  }
   if (ts.isIdentifier(current)) {
     const exportedName = bindings.locals.get(current.text) ?? null;
     return exportedName != null && (bareAllowedExports === true || bareAllowedExports.has(exportedName))

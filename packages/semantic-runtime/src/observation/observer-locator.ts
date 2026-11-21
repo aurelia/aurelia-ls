@@ -851,6 +851,7 @@ export class ObserverLocator {
       targetType?.shape.carrier?.declarations ?? [],
       property?.valueAccess.declarations ?? [],
       input.targetProperty,
+      targetType?.shape.carrier?.checker,
     );
     const objectAdapters = this.configuration.objectAdapters.filter((adapter) =>
       appTaskSlotHasRun(adapter.appTaskSlot, input.objectAdapterBoundary)

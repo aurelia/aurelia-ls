@@ -448,63 +448,24 @@ export class ResourceRecognitionPublicationSupport {
     declarationIdentityHandle: IdentityHandle | null,
     provenanceHandle: ProvenanceHandle,
   ): ResourceIdentityPublication {
-    const addressHandle = this.store.handles.address(`resource-attribute-pattern:${local}:${patternIndex}`);
+    const owner = context.readAdmittedNodeContext(pattern.node);
+    const span = owner == null ? null : sourceSpanRangeForNode(owner.sourceFile, pattern.node);
+    const address = owner == null || span == null ? null : new SourceSpanAddress(
+      this.store.handles.address(`resource-attribute-pattern:${local}:${patternIndex}`),
+      owner.sourceFileAddressHandle, span.start, span.end, SourceSpanRole.Value,
+    );
     const identityHandle = this.store.handles.identity(attributePatternIdentityLocalKey(local, pattern.pattern, pattern.symbols, patternIndex));
     const claimHandle = this.store.handles.claim(`resource-declares:${local}:attribute-pattern:${patternIndex}`);
     return new ResourceIdentityPublication(
-      this.recordsForAttributePatternIdentity(
-        context,
-        pattern,
-        addressHandle,
-        identityHandle,
-        claimHandle,
-        subjectHandle,
-        declarationIdentityHandle,
-        provenanceHandle,
-      ),
+      [
+        ...(address == null ? [] : [address]),
+        new AureliaAttributePatternIdentity(identityHandle, pattern.pattern, pattern.symbols, declarationIdentityHandle, address?.handle ?? null),
+        new SemanticClaim(claimHandle, subjectHandle, KernelVocabulary.Resource.Declares.key, identityHandle, provenanceHandle),
+      ],
       identityHandle,
       claimHandle,
-      addressHandle,
+      address?.handle ?? null,
     );
-  }
-
-  private recordsForAttributePatternIdentity(
-    context: ResourceRecognitionContext,
-    pattern: AttributePatternObservation,
-    addressHandle: AddressHandle,
-    identityHandle: IdentityHandle,
-    claimHandle: ClaimHandle,
-    subjectHandle: ClaimEndpointHandle,
-    declarationIdentityHandle: IdentityHandle | null,
-    provenanceHandle: ProvenanceHandle,
-  ): readonly KernelStoreRecord[] {
-    const span = sourceSpanRangeForNode(context.sourceFile, pattern.node);
-    if (span == null) {
-      throw new Error('Attribute-pattern source node did not produce a valid authored span.');
-    }
-    return [
-      new SourceSpanAddress(
-        addressHandle,
-        context.sourceFileAddressHandle,
-        span.start,
-        span.end,
-        SourceSpanRole.Value,
-      ),
-      new AureliaAttributePatternIdentity(
-        identityHandle,
-        pattern.pattern,
-        pattern.symbols,
-        declarationIdentityHandle,
-        addressHandle,
-      ),
-      new SemanticClaim(
-        claimHandle,
-        subjectHandle,
-        KernelVocabulary.Resource.Declares.key,
-        identityHandle,
-        provenanceHandle,
-      ),
-    ];
   }
 
   private recordsForAliases(

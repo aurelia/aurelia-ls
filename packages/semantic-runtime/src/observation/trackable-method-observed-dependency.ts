@@ -321,7 +321,7 @@ function trackableDependenciesForMember(
   if (method == null) {
     return null;
   }
-  const dependency = readTrackableMethodDependency(method);
+  const dependency = readTrackableMethodDependency(method, carrier.checker);
   if (dependency == null || dependency.dependencyMode === ComputedObservationDependencyMode.Disabled) {
     return null;
   }

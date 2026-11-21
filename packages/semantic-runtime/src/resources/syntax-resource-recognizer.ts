@@ -58,7 +58,7 @@ function recognizeAttributePatternDecorators(
   const observations: ResourceRecognitionObservation[] = [];
 
   for (const decorator of decorators) {
-    if (readDecoratorCalleeName(decorator) !== 'attributePattern') {
+    if (readDecoratorCalleeName(decorator, context) !== 'attributePattern') {
       continue;
     }
     const expression = decorator.expression;

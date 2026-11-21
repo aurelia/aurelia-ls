@@ -623,7 +623,7 @@ class RuntimeProxyObservedDependencyDraftCollector {
     if (method == null || this.trackableMethodStack.has(method)) {
       return [];
     }
-    const dependency = readTrackableMethodDependency(method);
+    const dependency = readTrackableMethodDependency(method, this.typeContext.checker);
     if (dependency == null || dependency.dependencyMode === ComputedObservationDependencyMode.Disabled) {
       return [];
     }
@@ -674,7 +674,7 @@ class RuntimeProxyObservedDependencyDraftCollector {
       return [];
     }
     const method = this.methodDeclarationForCallee(callee);
-    if (method == null || this.trackableMethodStack.has(method) || readTrackableMethodDependency(method) != null) {
+    if (method == null || this.trackableMethodStack.has(method) || readTrackableMethodDependency(method, this.typeContext.checker) != null) {
       return [];
     }
     const body = functionBodyOrExpression(method);

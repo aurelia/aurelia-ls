@@ -41,6 +41,7 @@ import { CheckerTypeProjector } from '../type-system/checker-projector.js';
 import { checkerTypeMemberSourceAddressHandle } from '../type-system/checker-type-member-source.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
 import { bindableAttributeNameForProperty } from './bindable-attribute.js';
+import { readDecoratorCalleeName } from './resource-field-readers.js';
 import { ResourceTargetReference } from './resource-reference.js';
 import {
   BindableBindingMode,
@@ -60,8 +61,6 @@ import {
 import { ResourceIssuePublisher } from './resource-issue-publication.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
 import {
-  decoratorCallNamed,
-  decoratorIdentifierNamed,
   convergenceOpenForReadPressure,
   memberName,
   memberNameNode,
@@ -109,12 +108,10 @@ class ClassBindableDecoratorFrame {
   ) {}
 
   read(): BindableEntryRead | null {
-    if (decoratorIdentifierNamed(this.decorator, 'bindable')) {
+    if (readDecoratorCalleeName(this.decorator, this.context) !== 'bindable') return null;
+    const call = this.decorator.expression;
+    if (!ts.isCallExpression(call)) {
       return this.publishMissingPropertyNameConfiguration(this.decorator, SourceSpanRole.Name);
-    }
-    const call = decoratorCallNamed(this.decorator, 'bindable');
-    if (call == null) {
-      return null;
     }
     const argument = call.arguments[0] ?? null;
     if (argument == null) {
@@ -335,7 +332,8 @@ function readDecoratorBindables(
       continue;
     }
     for (const [index, decorator] of (ts.getDecorators(member) ?? []).entries()) {
-      const entry = readMemberBindableDecorator(store, context, `${local}:member:${propertyName ?? 'computed'}:${index}`, decorator, member, propertyName, ownerIdentityHandle, provenanceHandle, contributionKind);
+      const memberKey = propertyName ?? `computed@${member.pos}`;
+      const entry = readMemberBindableDecorator(store, context, `${local}:member:${memberKey}:${index}`, decorator, member, propertyName, ownerIdentityHandle, provenanceHandle, contributionKind);
       if (entry != null) {
         entries.push(entry);
       }
@@ -375,33 +373,36 @@ function readMemberBindableDecorator(
   provenanceHandle: ProvenanceHandle,
   contributionKind: BindableContributionKind,
 ): BindableEntryRead | null {
-  const source = sourceSpanEvidenceForNode(store, context, memberNameNode(member) ?? member, local, SourceSpanRole.Name);
+  if (readDecoratorCalleeName(decorator, context) !== 'bindable') return null;
+  const memberKey = memberNameNode(member);
+  let nameSource: ts.Node | null = memberKey;
   const expression = decorator.expression;
-  if (propertyName == null && isBindableDecorator(decorator)) {
-    return publishBindableIssueEntry(
-      store,
-      context,
-      local,
-      ResourceIssueKind.InvalidBindableDecoratorUsageSymbol,
-      '@bindable cannot target a symbol or computed property name.',
-      ResourceFrameworkErrorCode.InvalidBindableDecoratorUsageSymbol,
-      memberNameNode(member) ?? member,
-      SourceSpanRole.Name,
-      ownerIdentityHandle,
-      provenanceHandle,
-    );
+  if (memberKey != null && ts.isComputedPropertyName(memberKey)) {
+    const keyExpression = memberKey.expression;
+    const key = context.readNodeContext(keyExpression).expressionReader.evaluateExpression(keyExpression);
+    if (key.value?.kind === EvaluationValueKind.String || key.value?.kind === EvaluationValueKind.Number) {
+      propertyName = String(key.value.value);
+      nameSource = ts.isStringLiteralLike(keyExpression) || ts.isNumericLiteral(keyExpression) ? keyExpression : null;
+    } else {
+      const type = context.typeSystem?.readProgramTypeAtLocation(keyExpression);
+      if (type == null || (type.flags & ts.TypeFlags.ESSymbolLike) === 0) {
+        return bindableReadOpen('Computed @bindable property name did not close to an exact key.', key);
+      }
+      return publishBindableIssueEntry(
+        store, context, local, ResourceIssueKind.InvalidBindableDecoratorUsageSymbol,
+        '@bindable cannot target a symbol property.', ResourceFrameworkErrorCode.InvalidBindableDecoratorUsageSymbol,
+        memberKey, SourceSpanRole.Name, ownerIdentityHandle, provenanceHandle,
+      );
+    }
   }
   if (propertyName == null) {
     return null;
   }
-  if (ts.isIdentifier(expression) && expression.text === 'bindable') {
+  const source = sourceSpanEvidenceForNode(store, context, nameSource, local, SourceSpanRole.Name);
+  if (!ts.isCallExpression(expression)) {
     return bindableEntry(store, context, local, propertyName, null, contributionKind, source);
   }
-  const call = decoratorCallNamed(decorator, 'bindable');
-  if (call == null) {
-    return null;
-  }
-  const argument = call.arguments[0] ?? null;
+  const argument = expression.arguments[0] ?? null;
   if (argument == null) {
     return bindableEntry(store, context, local, propertyName, null, contributionKind, source);
   }
@@ -462,10 +463,6 @@ function memberBindableConfigurationMayHaveRuntimeProperties(
     default:
       return false;
   }
-}
-
-function isBindableDecorator(decorator: ts.Decorator): boolean {
-  return decoratorIdentifierNamed(decorator, 'bindable') || decoratorCallNamed(decorator, 'bindable') != null;
 }
 
 function readBindableListExpression(
