@@ -7,8 +7,9 @@ Aurelia app. In this README, `public` means exported from semantic-runtime, not
 supported as a standalone package or MCP endpoint. App-builder remains internal;
 MCP authoring uses Aurelia Patterns followed by semantic verification.
 
-`semanticWorkspaceDescriptorForRuntimeOptions(...)` is the shared, serializable source-world boundary used by IDE,
-MCP, and future AOT adapters. It normalizes workspace exclusions and either automatic marker discovery plus host root
+`semanticWorkspaceDescriptorForRuntimeOptions(...)` supplies the source-world descriptor used by the IDE and MCP managed
+sessions. The AOT provider opens a build snapshot with project-root and compiler-occurrence inputs. The descriptor
+normalizes workspace exclusions and either automatic marker discovery plus host root
 hints or a complete explicit-project topology; store namespaces and live input-authority objects are deliberately not
 semantic facts. `parseSemanticWorkspaceDescriptor(...)` is the strict untrusted JSON entry point for
 `semantic-workspace/1`: it rejects unknown versions/properties, invented source vocabularies, and non-normalized paths
@@ -286,9 +287,9 @@ hook as app-epoch disposal and is counted on the runtime query claim, so MCP-sty
 kernel/app-world retention and dependency-cache retention without adding an adapter-local `finally` cleanup.
 Conversely, `appRetention: 'retain-app'` disables retained-answer reuse when no compatible app epoch is already cached,
 because the caller is asking to warm the app world for follow-up tools, not merely to receive the same DTO again.
-Direct static facade answers such as `runtime.appQueryCatalog(...)` are also claim-backed. Public adapters should use
-runtime facade methods rather than raw catalog readers when the answer crosses a transport boundary, so retention,
-reuse, and cache overview all observe the same query-answer layer. Inside an already-entered claim boundary, use the
+Direct static facade answers such as `runtime.appQueryCatalog(...)` are also claim-backed. An adapter with a runtime
+can use its facade to participate in retention and cache accounting. The workspace-independent MCP catalog uses the
+static catalog reader so it can answer before opening any project. Inside an already-entered claim boundary, use the
 focused raw answer builder instead of calling another public facade method; otherwise an implementation detail can
 create an unrelated default-profile claim even though only one public answer crossed the API boundary.
 The retired legacy recipe-authoring catalog, guidance, and recipe-plan answers have been removed. Do not restore
@@ -546,7 +547,7 @@ const runtime = await createSemanticRuntime({ workspaceRoot: 'path/to/app' });
 const routedOverview = await runtime.answerAppQuery({
   kind: SemanticAppQueryKind.AppOverview,
 });
-const app = await runtime.openApp();
+const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
 
 const overview = app.ask({ kind: SemanticAppQueryKind.Summary });
 const appOverview = app.ask({ kind: SemanticAppQueryKind.AppOverview });
@@ -774,13 +775,12 @@ or re-evaluating the route expression.
 The cursor adapter likewise preserves narrower authoring domains that broad HTML site kinds cannot express by
 themselves. Ref-target candidates are host-sensitive and come from the same-node hydration products used by runtime ref
 validation; listener events come from the active TypeScript DOM event-map projections; listener modifiers come from
-the framework-default modifier model; and local-template bindable modes come from the exact declaration product and
+the framework defaults and the app's configured key mapping; and local-template bindable modes come from the exact declaration product and
 mode source address. The candidate kind records that semantic role while `siteKind` remains the compatible broad
 attribute-name or attribute-value surface expected by IDE clients. Once selected, an exact authoring domain owns the
 candidate list; generic attribute or value collectors do not add unrelated candidates to that syntax position.
-The public result preserves this narrower `domainKind`. Framework-default modifier candidates carry open answer coverage
-until the app-effective `IKeyMapping` and `IModifiedEventHandlerCreator` registrations can be projected; custom handler
-implementations do not expose an enumerable modifier vocabulary and must never be presented as a closed list.
+The public result preserves this narrower `domainKind`. Configured key mappings contribute candidates with their
+source. Unknown key membership or a custom modified-event handler without an enumerable vocabulary keeps coverage open.
 Completion answers own compact `displayText` with site kind, candidate count, template lane/path, frontier/missing-input
 state, and a small candidate preview. Public clients should forward that instead of turning candidate rows into prose in
 the adapter.
@@ -1373,9 +1373,8 @@ composed-child controller handoff for closed branches, and activation model hand
 as sufficient by itself. Rows also expose AuCompose context inputs that do not all arrive through the
 same lane: dynamic property bindings such as `component.bind`, `model.bind`, `composition.bind`, and `composing.bind`
 come from controller binding, while static `scope-behavior`, `tag`, and `flush-mode` come from literal
-`SetPropertyInstruction`s on the hydrate instruction. Component/template/model inputs also carry direct/promise/absent/open
-fulfillment fields so API callers can tell when a framework-supported promise-valued composition input was statically
-unwrapped. TypeChecker-backed component rows separately expose candidate coverage: `complete` means every member of a
+`SetPropertyInstruction`s on the hydrate instruction. Component and template inputs carry fulfillment evidence.
+The model is passed to activation as supplied. TypeChecker-backed component rows separately expose candidate coverage: `complete` means every member of a
 finite exact named-class basis resolved to a custom-element definition, `partial` retains useful candidates when that
 basis or its resource mapping is not exhaustive, and `open` means no useful resource identity survived. A broad
 construct signature can therefore contribute a candidate through its return type without claiming complete coverage.
