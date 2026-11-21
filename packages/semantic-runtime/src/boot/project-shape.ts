@@ -312,7 +312,9 @@ function countSourceFileSignals(
   }
   readDirectModuleAureliaInstances(sourceFile, bindings);
 
-  const visit = (node: ts.Node): void => {
+  let synchronousPrefix = true;
+  const visit = (node: ts.Node, moduleBody: boolean): void => {
+    let directAppCall = false;
     if (ts.isVariableDeclaration(node) && node.initializer != null && ts.isIdentifier(node.name)) {
       if (isConstVariableDeclaration(node) && isAureliaFacadeValue(node.initializer, bindings)) {
         bindings.aureliaInstances.add(node.name.text);
@@ -326,21 +328,22 @@ function countSourceFileSignals(
       const activationSignal = aureliaAppActivationSignal(method, node.expression.expression, bindings);
       if (activationSignal != null) {
         incrementSignal(counts, activationSignal);
-        if (
-          activationSignal === SemanticProjectAureliaSourceSignalKind.AureliaAppCall
+        directAppCall = activationSignal === SemanticProjectAureliaSourceSignalKind.AureliaAppCall
           && isDirectModuleExecution(node)
-          && isDirectAureliaFacadeValue(node.expression.expression, bindings)
-        ) {
-          authoredDirectApplicationEntrypointCount += 1;
-        }
+          && isDirectAureliaFacadeValue(node.expression.expression, bindings);
       }
       if (method === 'register' && isAureliaFacadeValue(node.expression.expression, bindings)) {
         incrementSignal(counts, SemanticProjectAureliaSourceSignalKind.AureliaRegisterCall);
       }
     }
-    ts.forEachChild(node, visit);
+    const executableBody = moduleBody && !ts.isFunctionLike(node);
+    ts.forEachChild(node, child => visit(child, executableBody));
+    // A call is reached after its arguments, but an await suspends only after its operand.
+    // After a possible module-level interruption leave the decision to evaluated preflight.
+    if (directAppCall && synchronousPrefix) authoredDirectApplicationEntrypointCount++;
+    if (executableBody && (ts.isAwaitExpression(node) || ts.isThrowStatement(node))) synchronousPrefix = false;
   };
-  ts.forEachChild(sourceFile, visit);
+  ts.forEachChild(sourceFile, statement => visit(statement, true));
   return authoredDirectApplicationEntrypointCount;
 }
 
