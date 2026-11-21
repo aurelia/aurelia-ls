@@ -856,7 +856,7 @@ function sameAttributeMapperConfiguration(
   previous: AttributeMapperConfiguration,
   next: AttributeMapperConfiguration,
 ): boolean {
-  return sameArrays(previous.mappings, next.mappings, (left, right) =>
+  return previous.svgAnalyzer === next.svgAnalyzer && sameArrays(previous.mappings, next.mappings, (left, right) =>
     sameValues(
       left.tagName,
       right.tagName,
@@ -873,7 +873,7 @@ function sameObserverLocatorConfiguration(
   previous: ObserverLocatorConfiguration,
   next: ObserverLocatorConfiguration,
 ): boolean {
-  return previous.node.allowDirtyCheck === next.node.allowDirtyCheck
+  return previous.svgAnalyzer === next.svgAnalyzer && previous.node.allowDirtyCheck === next.node.allowDirtyCheck
     && sameArrays(previous.node.nodeConfigs, next.node.nodeConfigs, (left, right) =>
       left.tagName === right.tagName
         && left.propertyName === right.propertyName

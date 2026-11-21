@@ -758,7 +758,7 @@ export class TemplateAttributeMapperService {
 
   /** Runtime `IAttrMapper.map(node, attr)` shape over product-authored HTML nodes. */
   map(node: TemplateAttributeMapperNode, attr: string): string | null {
-    return mapAttribute(node, attr)
+    return mapAttribute(node, attr, this.configuration.svgAnalyzer)
       ?? this.configuration.map(node, attr);
   }
 

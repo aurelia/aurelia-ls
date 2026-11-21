@@ -1,3 +1,4 @@
+import type { SvgAnalyzerService } from '../configuration/svg-analyzer-service.js';
 import {
   evaluateStaticCallableTruthiness,
   type StaticCallableExecutionBindings,
@@ -147,6 +148,7 @@ export class AttributeMapperConfiguration {
   constructor(
     readonly mappings: readonly AttributeMapperMapping[],
     readonly twoWayRules: readonly AttributeMapperTwoWayRule[],
+    readonly svgAnalyzer: SvgAnalyzerService = 'noop',
   ) {
     for (const mapping of mappings) {
       if (mapping.tagName == null) {
@@ -163,7 +165,7 @@ export class AttributeMapperConfiguration {
   }
 
   get isEmpty(): boolean {
-    return this.mappings.length === 0 && this.twoWayRules.length === 0;
+    return this.mappings.length === 0 && this.twoWayRules.length === 0 && this.svgAnalyzer === 'noop';
   }
 
   map(
@@ -196,6 +198,7 @@ const attrMapperHasAttributeBoundaryPath = 'aurelia.attr-mapper.element.hasAttri
 export function mapAttribute(
   element: TemplateAttributeMapperNode,
   attr: string,
+  svgAnalyzer: SvgAnalyzerService = 'noop',
 ): string | null {
   const tagName = normalizeHtmlTagName(element.tagName);
   const lowerAttr = attr.toLowerCase();
@@ -212,7 +215,7 @@ export function mapAttribute(
             : null;
   return tagMapping
     ?? globalAttributeMapping(lowerAttr)
-    ?? (isDataAttribute(element, attr) ? runtimeAttributeName(attr, element.namespace) : null);
+    ?? (isDataAttribute(element, attr, svgAnalyzer) ? runtimeAttributeName(attr, element.namespace) : null);
 }
 
 export { camelCase as camelCaseAttributeName };
@@ -320,12 +323,13 @@ function globalAttributeMapping(attr: string): string | null {
 function isDataAttribute(
   element: TemplateAttributeMapperNode,
   attr: string,
+  svgAnalyzer: SvgAnalyzerService,
 ): boolean {
   const lowerAttr = attr.toLowerCase();
   return lowerAttr.startsWith('data-')
     || lowerAttr.startsWith('aria-')
     || (
-      element.namespace === HtmlNamespaceKind.Svg
+      svgAnalyzer === 'standard' && element.namespace === HtmlNamespaceKind.Svg
       && isStandardSvgAttribute(element.tagName, attr)
     );
 }

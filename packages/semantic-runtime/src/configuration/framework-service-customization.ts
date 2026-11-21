@@ -1,5 +1,4 @@
 import { svgAnalyzerServiceLookup, type SvgAnalyzerService } from './svg-analyzer-service.js';
-import type { DiContainerChainFacts } from '../di/container-chain.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import ts from 'typescript';
 import {
@@ -122,7 +121,7 @@ import {
   ConfigurationRecognitionContext,
 } from './configuration-recognition-context.js';
 import {
-  ConfigurationIssue,
+  type ConfigurationIssue,
   ConfigurationIssueKind,
 } from './configuration-issue.js';
 import {
@@ -222,6 +221,7 @@ export class FrameworkServiceCustomization {
     readonly runtimeKeyMapping: RuntimeKeyMappingConfiguration,
     readonly callableBindings: StaticCallableExecutionBindings,
   ) {}
+
   withSvgAnalyzer(service: SvgAnalyzerService): FrameworkServiceCustomization {
     if (this.observerLocator.svgAnalyzer === service) return this;
     return new FrameworkServiceCustomization(
@@ -231,7 +231,6 @@ export class FrameworkServiceCustomization {
       this.callableBindings,
     );
   }
-
 }
 
 /** One app-root container and the nearest runtime AppTask cohort whose service state it observes. */
@@ -616,9 +615,8 @@ export class FrameworkServiceCustomizationRecognitionPass {
     diWorld: DiWorldConstructionEmission,
     targetContainers: readonly Container[],
     typeSystem: TypeSystemProject,
-    chains: DiContainerChainFacts,
   ): FrameworkServiceCustomizationProjectResult {
-    const svgService = svgAnalyzerServiceLookup(this.publication, typeSystem, configuration, diWorld, chains);
+    const svgService = svgAnalyzerServiceLookup(this.publication, typeSystem, configuration, diWorld);
     const sourceIndex = new StaticProjectEvaluationSourceIndex(configuration.evaluation);
     const customizationsByTaskContainer = new Map<IdentityHandle, FrameworkServiceCustomization>();
     const scopes: FrameworkServiceCustomizationScope[] = [];

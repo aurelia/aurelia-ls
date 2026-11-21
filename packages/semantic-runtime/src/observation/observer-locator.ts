@@ -1,4 +1,5 @@
-import ts from 'typescript';
+import type { SvgAnalyzerService } from '../configuration/svg-analyzer-service.js';
+import type ts from 'typescript';
 import { auLink } from '../kernel/au-link.js';
 import type {
   AddressHandle,
@@ -13,7 +14,7 @@ import {
   appTaskSlotHasRun,
 } from '../configuration/app-task.js';
 import {
-  CheckerTypeProjector,
+  type CheckerTypeProjector,
 } from '../type-system/checker-projector.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
 import type { TypeSystemProject } from '../type-system/project.js';
@@ -21,7 +22,7 @@ import {
   checkerTypeExtendsCollection,
 } from '../type-system/checker-collection-types.js';
 import {
-  CheckerTypeReference,
+  type CheckerTypeReference,
   CheckerTypeMemberKind,
   type CheckerTypeShape,
   type CheckerTypeCarrier,
@@ -390,6 +391,7 @@ export class ObserverLocatorConfiguration {
   constructor(
     readonly node: NodeObserverLocatorConfiguration,
     readonly objectAdapters: readonly ObjectObservationAdapterRegistration[],
+    readonly svgAnalyzer: SvgAnalyzerService = 'noop',
   ) {}
 }
 
@@ -733,9 +735,16 @@ export class ObserverLocator {
     const namespace = input.namespace ?? HtmlNamespaceKind.Unknown;
     const targetType = this.resolveNodeType(input, tagName, namespace);
     const property = targetType == null ? null : this.resolveProperty(input, targetType);
+    const svgAttribute = namespace === HtmlNamespaceKind.Svg && this.configuration.svgAnalyzer === 'standard'
+      && isStandardSvgAttribute(tagName, input.targetProperty);
+    if (namespace === HtmlNamespaceKind.Svg && this.configuration.svgAnalyzer === 'open'
+      && config == null && !isNodeNamespaceAttribute(input.targetProperty)
+      && !isDataAttributeAccessorProperty(input.targetProperty, false)
+      && !['class', 'style', 'css'].includes(input.targetProperty)) {
+      return this.open(input, 'The registered ISVGAnalyzer could change the accessor for this SVG target.');
+    }
     const strategy = nodeAccessStrategy(
-      tagName,
-      namespace,
+      svgAttribute,
       input.targetProperty,
       input.lookup,
       input.allowDirtyCheck || nodeAllowDirtyCheck,
@@ -744,8 +753,7 @@ export class ObserverLocator {
       hasAccessorOverride,
     );
     const frameworkErrorCode = nodeObserverStrategyNotFound(
-      tagName,
-      namespace,
+      svgAttribute,
       input.targetProperty,
       input.lookup,
       input.allowDirtyCheck || nodeAllowDirtyCheck,
@@ -1045,8 +1053,7 @@ export class ObserverLocator {
 }
 
 function nodeAccessStrategy(
-  tagName: string,
-  namespace: HtmlNamespaceKind,
+  svgAttribute: boolean,
   targetProperty: string,
   lookup: RuntimeBindingTargetAccessLookup,
   allowDirtyCheck: boolean,
@@ -1056,14 +1063,13 @@ function nodeAccessStrategy(
 ): RuntimeBindingTargetAccessStrategy {
   if (lookup === RuntimeBindingTargetAccessLookup.Observer
     || hasAccessorOverride) {
-    return nodeObserverStrategy(tagName, namespace, targetProperty, allowDirtyCheck, property, config);
+    return nodeObserverStrategy(svgAttribute, targetProperty, allowDirtyCheck, property, config);
   }
-  return nodeAccessorStrategy(tagName, namespace, targetProperty);
+  return nodeAccessorStrategy(svgAttribute, targetProperty);
 }
 
 function nodeObserverStrategy(
-  tagName: string,
-  namespace: HtmlNamespaceKind,
+  svgAttribute: boolean,
   targetProperty: string,
   allowDirtyCheck: boolean,
   property: PropertyResolution | null,
@@ -1081,7 +1087,7 @@ function nodeObserverStrategy(
   if (isNodeNamespaceAttribute(targetProperty)) {
     return RuntimeBindingTargetAccessStrategy.AttributeNSAccessor;
   }
-  if (isDataAttributeAccessorProperty(tagName, namespace, targetProperty)) {
+  if (isDataAttributeAccessorProperty(targetProperty, svgAttribute)) {
     return RuntimeBindingTargetAccessStrategy.DataAttributeAccessor;
   }
   if (targetProperty === 'model') {
@@ -1097,14 +1103,13 @@ function nodeObserverStrategy(
 }
 
 function nodeAccessorStrategy(
-  tagName: string,
-  namespace: HtmlNamespaceKind,
+  svgAttribute: boolean,
   targetProperty: string,
 ): RuntimeBindingTargetAccessStrategy {
   if (isNodeNamespaceAttribute(targetProperty)) {
     return RuntimeBindingTargetAccessStrategy.AttributeNSAccessor;
   }
-  if (isDataAttributeAccessorProperty(tagName, namespace, targetProperty)) {
+  if (isDataAttributeAccessorProperty(targetProperty, svgAttribute)) {
     return RuntimeBindingTargetAccessStrategy.DataAttributeAccessor;
   }
   if (isAttributeAccessorProperty(targetProperty)) {
@@ -1137,8 +1142,7 @@ function targetAccessDiagnosticReason(
 }
 
 function nodeObserverStrategyNotFound(
-  tagName: string,
-  namespace: HtmlNamespaceKind,
+  svgAttribute: boolean,
   targetProperty: string,
   lookup: RuntimeBindingTargetAccessLookup,
   allowDirtyCheck: boolean,
@@ -1158,7 +1162,7 @@ function nodeObserverStrategyNotFound(
   if (isNodeNamespaceAttribute(targetProperty)) {
     return false;
   }
-  if (isDataAttributeAccessorProperty(tagName, namespace, targetProperty)) {
+  if (isDataAttributeAccessorProperty(targetProperty, svgAttribute)) {
     return false;
   }
   return true;
@@ -1218,16 +1222,15 @@ function isAttributeAccessorProperty(targetProperty: string): boolean {
 }
 
 function isDataAttributeAccessorProperty(
-  tagName: string,
-  namespace: HtmlNamespaceKind,
   targetProperty: string,
+  svgAttribute: boolean,
 ): boolean {
   if (nodeNamespaceAttribute(targetProperty) != null) {
     return false;
   }
   return targetProperty.startsWith('data-')
     || targetProperty.startsWith('aria-')
-    || (namespace === HtmlNamespaceKind.Svg && isStandardSvgAttribute(tagName, targetProperty));
+    || svgAttribute;
 }
 
 function authorityFor(

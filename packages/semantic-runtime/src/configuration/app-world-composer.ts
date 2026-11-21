@@ -195,7 +195,7 @@ export class AureliaAppWorldComposer {
     const frameworkServiceCustomizations = new FrameworkServiceCustomizationRecognitionPass(
       this.store,
       this.publication,
-    ).recognize(configuration, diWorld, appRootContainers);
+    ).recognize(configuration, diWorld, appRootContainers, typeSystem);
     const currentResourceCallableBindings = mergeStaticCallableExecutionBindings(
       [resourceCallableBindings],
       () => evaluationAuthority.requireCurrent(),

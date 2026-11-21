@@ -4,6 +4,7 @@ import {
   Aurelia,
   NodeObserverLocator,
   StandardConfiguration,
+  SVGAnalyzer,
   ValueAttributeObserver as AliasedValueAttributeObserver,
 } from '@aurelia/runtime-html';
 import { TemplateNativeTargetPrecedenceApp } from './template-native-target-precedence-app';
@@ -68,6 +69,7 @@ const guardedSliderPositionIsTwoWay = (element: Element, property: string): bool
 new Aurelia()
   .register(
     StandardConfiguration,
+    SVGAnalyzer,
     AppTask.creating(AttrMapper, (mapper) => {
       mapper.useMapping({ 'NATIVE-SLIDER': { position: 'currentValue' } });
       mapper.useMapping({ 'inert-slider': { position: 'wrongValue' } });

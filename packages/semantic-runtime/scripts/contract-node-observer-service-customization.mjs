@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   createSemanticRuntime,
@@ -8,6 +9,14 @@ import {
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/node-observer-config-errors');
 const pressureFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-native-target-precedence');
+const fixtureSource = readFileSync(path.join(pressureFixtureRoot, 'src/main.ts'), 'utf8');
+function configArgumentSpan(property, argument) {
+  const call = `locator.useConfig('DIV', '${property}', ${argument})`;
+  const start = fixtureSource.indexOf(call);
+  if (start < 0 || start !== fixtureSource.lastIndexOf(call)) throw new Error(`Expected one fixture call: ${call}`);
+  const argumentStart = start + call.indexOf(argument);
+  return row => row.source?.path === 'src/main.ts' && row.source.start === argumentStart && row.source.end === argumentStart + argument.length;
+}
 
 const runtime = await createSemanticRuntime({
   workspaceRoot: fixtureRoot,
@@ -72,10 +81,8 @@ const closedSpellcheckObserver = pressureTargetAccessRows.find((row) =>
   row.targetType === 'HTMLDivElement'
   && row.targetProperty === 'spellcheck'
 );
-const runtimeFieldPressure = pressureSites.find((row) =>
-  row.reasonKinds.includes('host-environment-value')
-  && row.sourceRange?.start?.line === 93
-);
+const isRuntimeField = configArgumentSpan('dir', 'runtimeNodeObserverConfig');
+const runtimeFieldPressure = pressureSites.find(row => isRuntimeField(row) && row.reasonKinds.includes('host-environment-value'));
 const obsoleteTwoWayPressure = pressureSites.find((row) =>
   row.sampleSummary.includes('useTwoWay predicate could not be reduced')
 );
@@ -85,10 +92,7 @@ const guardedLiveDataFlow = pressureDataFlowRows.find((row) =>
 const guardedColdDataFlow = pressureDataFlowRows.find((row) =>
   row.sourceName === 'guardedColdPosition'
 );
-const closedAfterSpreadPressure = pressureSites.find((row) =>
-  row.source?.path?.endsWith('src/main.ts') === true
-  && row.sourceRange?.start?.line === 91
-);
+const closedAfterSpreadPressure = pressureSites.find(configArgumentSpan('spellcheck', 'closedAfterRuntimeNodeObserverConfig'));
 
 const failures = [];
 if (customNodeValueObserver == null) {

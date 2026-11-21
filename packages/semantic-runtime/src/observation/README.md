@@ -182,10 +182,9 @@ static type surfaces rather than hydrated runtime values.
 - Native element targets use framework-grounded node observer configuration first, then the TypeChecker DOM surface to
   attach target/property type facts such as `HTMLInputElement.value: string` or `HTMLInputElement.checked: boolean`.
   `xlink:*`, selected `xml:*`, and `xmlns*` attributes in Aurelia's runtime-html namespace table close through
-  `AttributeNSAccessor` before the generic attribute path. `data-*`, `aria-*`, and SVG-standard attributes outside that
-  namespace table close through the runtime-shaped `DataAttributeAccessor` lane instead of being treated as ordinary
-  element properties. SVG attribute closure uses `svg-analyzer-data.generated.ts`, generated from Aurelia's own
-  `runtime-html` `SVGAnalyzer`, and only applies when the authored HTML IR node is in the SVG namespace. Browser DOM
+  `AttributeNSAccessor` before the generic attribute path. `data-*` and `aria-*` use `DataAttributeAccessor`.
+  The default `ISVGAnalyzer` leaves SVG names to ordinary property lookup. Registering Aurelia's `SVGAnalyzer`
+  enables its attribute table on SVG nodes in that container. An unresolved provider leaves this decision open. Browser DOM
   element/attribute casing is a separate HTML-parser law owned by `template/html-foreign-name-adjustments.ts`; analyzer
   support cannot add, remove, or respell those names. Native DOM type and AttrMapper consumers spend the browser
   projection while accessor selection spends the framework capability table.
