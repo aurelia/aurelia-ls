@@ -1,3 +1,6 @@
+import { svgAnalyzerServiceLookup, type SvgAnalyzerService } from './svg-analyzer-service.js';
+import type { DiContainerChainFacts } from '../di/container-chain.js';
+import type { TypeSystemProject } from '../type-system/project.js';
 import ts from 'typescript';
 import {
   APP_TASK_SLOTS,
@@ -111,6 +114,7 @@ import {
 } from './configuration-observation.js';
 import {
   aureliaInterfaceEvaluationForValue,
+  aureliaFrameworkInterfaceEvaluationForValue,
   type AureliaAppTaskEvaluation,
 } from './aurelia-evaluation-runtime.js';
 import { ConfigurationKernelPublication } from './configuration-publication.js';
@@ -218,6 +222,16 @@ export class FrameworkServiceCustomization {
     readonly runtimeKeyMapping: RuntimeKeyMappingConfiguration,
     readonly callableBindings: StaticCallableExecutionBindings,
   ) {}
+  withSvgAnalyzer(service: SvgAnalyzerService): FrameworkServiceCustomization {
+    if (this.observerLocator.svgAnalyzer === service) return this;
+    return new FrameworkServiceCustomization(
+      new AttributeMapperConfiguration(this.attributeMapper.mappings, this.attributeMapper.twoWayRules, service),
+      new ObserverLocatorConfiguration(this.observerLocator.node, this.observerLocator.objectAdapters, service),
+      this.runtimeKeyMapping,
+      this.callableBindings,
+    );
+  }
+
 }
 
 /** One app-root container and the nearest runtime AppTask cohort whose service state it observes. */
@@ -601,7 +615,10 @@ export class FrameworkServiceCustomizationRecognitionPass {
     configuration: ConfigurationRecognitionProjectResult,
     diWorld: DiWorldConstructionEmission,
     targetContainers: readonly Container[],
+    typeSystem: TypeSystemProject,
+    chains: DiContainerChainFacts,
   ): FrameworkServiceCustomizationProjectResult {
+    const svgService = svgAnalyzerServiceLookup(this.publication, typeSystem, configuration, diWorld, chains);
     const sourceIndex = new StaticProjectEvaluationSourceIndex(configuration.evaluation);
     const customizationsByTaskContainer = new Map<IdentityHandle, FrameworkServiceCustomization>();
     const scopes: FrameworkServiceCustomizationScope[] = [];
@@ -618,7 +635,7 @@ export class FrameworkServiceCustomizationRecognitionPass {
         scopes.push(new FrameworkServiceCustomizationScope(
           targetContainer.identityHandle,
           null,
-          FrameworkServiceCustomization.empty,
+          FrameworkServiceCustomization.empty.withSvgAnalyzer(svgService(targetContainer)),
         ));
         continue;
       }
@@ -648,7 +665,7 @@ export class FrameworkServiceCustomizationRecognitionPass {
       scopes.push(new FrameworkServiceCustomizationScope(
         targetContainer.identityHandle,
         cohort.container.identityHandle,
-        customization,
+        customization.withSvgAnalyzer(svgService(targetContainer)),
       ));
     }
     const result = new FrameworkServiceCustomizationProjectResult(scopes, issues, records);
@@ -1535,7 +1552,7 @@ function serviceKindForKeyValue(
 function keyNameForValue(value: EvaluationValue | null, expression: ts.Expression): string | null {
   const interfaceEvaluation = aureliaInterfaceEvaluationForValue(value);
   if (interfaceEvaluation != null) {
-    return interfaceEvaluation.friendlyName;
+    return aureliaFrameworkInterfaceEvaluationForValue(value)?.friendlyName ?? null;
   }
   const sourceNode = value?.node ?? null;
   if (sourceNode != null) {

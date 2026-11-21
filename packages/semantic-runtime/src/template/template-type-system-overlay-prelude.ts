@@ -1,4 +1,5 @@
 import { TypeSystemOverlaySourceBuilder } from '../type-system/overlay.js';
+import { templateTypeSystemOverlayQuotedStringLiteral } from './template-type-system-overlay-plan.js';
 
 export interface TemplateTypeSystemOverlayPreludeViewModel {
   readonly typeName: string;
@@ -90,7 +91,7 @@ export function appendTemplateTypeSystemOverlayPrelude(
   viewModel: TemplateTypeSystemOverlayPreludeViewModel,
 ): void {
   builder
-    .appendLine(`import type { ${viewModel.typeName} as ViewModel } from '${viewModel.moduleSpecifier}';`)
+    .appendLine(`import type { ${viewModel.typeName} as ViewModel } from ${templateTypeSystemOverlayQuotedStringLiteral(viewModel.moduleSpecifier)};`)
     .appendLine('declare const $vm: ViewModel;');
   for (const helper of templateTypeSystemOverlayPreludeHelpers) {
     appendPreludeHelper(builder, helper);
