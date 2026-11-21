@@ -20,6 +20,7 @@ test('compiles owned DOM effects and distinguishes unsupported and abrupt hooks 
     "@customElement({ name: 'filter-gate', template: '<au-slot></au-slot>' })",
     'class FilterGate {',
     '  static processContent(el: HTMLElement) {',
+    "    if (el.contains(el.querySelectorAll('missing')[0])) throw 'unexpected descendant';",
     "    el.setAttribute('title', el.getAttribute('title') + '!');",
     '    el.removeChild(el.firstChild!);',
     "    el.firstElementChild!.setAttribute('title.bind', 'kept');",

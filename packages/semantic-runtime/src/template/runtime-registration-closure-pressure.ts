@@ -898,6 +898,11 @@ function programmaticUsePressure(app: SemanticApp): RuntimeRegistrationClosurePr
 function isTypePosition(node: ts.Node): boolean {
   let current: ts.Node | undefined = node;
   while (current?.parent != null) {
+    // TypeScript classifies the whole heritage entry as a type node, but a class's base expression executes.
+    const parent: ts.Node = current.parent;
+    if (ts.isExpressionWithTypeArguments(parent) && parent.expression === current
+      && ts.isHeritageClause(parent.parent) && parent.parent.token === ts.SyntaxKind.ExtendsKeyword
+      && ts.isClassLike(parent.parent.parent)) return false;
     current = current.parent;
     if (ts.isTypeNode(current) || ts.isImportTypeNode(current)) return true;
     if (ts.isExpressionStatement(current) || ts.isCallExpression(current) || ts.isDecorator(current)) return false;

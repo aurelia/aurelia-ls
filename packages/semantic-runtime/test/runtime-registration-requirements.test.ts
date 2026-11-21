@@ -471,6 +471,23 @@ describe('runtime registration requirements', () => {
   }, 20_000);
 
   test.each([
+    ['export class Consumer extends TemplateCompiler {}', true],
+    ['export interface Consumer extends TemplateCompiler {}', false],
+  ] as const)('distinguishes a runtime compiler base from erased heritage: %s', async (heritage, runtimeUse) => {
+    const overlay = new MutableProjectSourceOverlay();
+    overlay.write(path.join(minimalRoot, 'src/main.ts'), [
+      "import Aurelia from 'aurelia';",
+      "import { TemplateCompiler } from '@aurelia/template-compiler';",
+      "import { MyApp } from './my-app';",
+      heritage,
+      'Aurelia.app(MyApp).start();',
+    ].join('\n'));
+    const requirements = await readRequirements(minimalRoot, overlay, 'compiler-heritage');
+    expect(requirements.resources.reasons.some(reason =>
+      reason.reasonKind === RuntimeRegistrationRequirementReasonKind.RuntimeTemplateCompilationRequired)).toBe(runtimeUse);
+  }, 20_000);
+
+  test.each([
     ['stable', 'return false;', RuntimeRegistrationRequirementSelectionKind.ExactLeaves],
     ['unclosed', 'template.remove(); return false;', RuntimeRegistrationRequirementSelectionKind.ConservativeGroup],
   ])('preserves hook registry ABI aliases without bypassing %s hook closure', async (name, body, expectedSelection) => {

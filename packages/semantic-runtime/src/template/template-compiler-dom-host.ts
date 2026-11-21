@@ -623,7 +623,9 @@ export class TemplateCompilerDomHost {
     if (member === 'hasChildNodes') return staticInvocationValue(new EvaluationBooleanValue(occurrence.readChildren().length > 0));
     if (member === 'contains') {
       if (args.length === 0) return domThrow('TypeError', 'contains requires a node.');
-      if (args[0]!.kind === EvaluationValueKind.Null) return staticInvocationValue(new EvaluationBooleanValue(false));
+      if (args[0]!.kind === EvaluationValueKind.Null || args[0]!.kind === EvaluationValueKind.Undefined) {
+        return staticInvocationValue(new EvaluationBooleanValue(false));
+      }
       const candidate = this.references.read(args[0]!);
       if (candidate?.kind === 'document') return staticInvocationValue(new EvaluationBooleanValue(false));
       if (candidate?.kind !== 'node') return domThrow('TypeError', 'contains requires a node.');
