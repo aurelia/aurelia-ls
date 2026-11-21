@@ -87,7 +87,7 @@ export function appBuilderPolicyDetail(
   const hasExplicitSelection = appBuilderHasExplicitSelection(request.policyAxisIds);
   const includeInputReadiness = appBuilderIncludeDetail(request.includeInputReadiness, hasExplicitSelection);
   const includeInputContractDetail = appBuilderIncludeDetail(request.includeInputContractDetail, hasExplicitSelection);
-  const includePayloadSchemas = appBuilderIncludeDetail(request.includePayloadSchemas, hasExplicitSelection);
+  const includePayloadSchemas = includeInputContractDetail && appBuilderIncludeDetail(request.includePayloadSchemas, hasExplicitSelection);
   const policyAxisIds = request.policyAxisIds == null || request.policyAxisIds.length === 0
     ? null
     : new Set(request.policyAxisIds);

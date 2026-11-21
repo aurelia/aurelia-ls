@@ -48,7 +48,7 @@ export function normalizedSourceInputText(value: string | null | undefined): str
 
 /** Emit a single-quoted TypeScript string literal for small generated source fragments. */
 export function singleQuotedTypeScriptStringLiteralText(value: string): string {
-  return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+  return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r/g, '\\r').replace(/\n/g, '\\n')}'`;
 }
 
 export function indentSourceLines(text: string, indent: string): string {

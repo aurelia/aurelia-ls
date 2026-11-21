@@ -121,6 +121,13 @@ function appBuilderTextConstraintIssue(
   if (constraints == null) {
     return null;
   }
+  if (controlId === AppBuilderControlId.TextArea && constraints.pattern != null) {
+    return {
+      issueKind: AppBuilderNativeFieldConstraintIssueKind.UnsupportedTextConstraints,
+      fieldNames: [fieldName],
+      summary: `Field '${fieldName}' supplies a pattern, but native textarea controls do not enforce a pattern.`,
+    };
+  }
   if (!appBuilderControlCanSpendTextConstraints(controlId)) {
     return {
       issueKind: AppBuilderNativeFieldConstraintIssueKind.UnsupportedTextConstraints,

@@ -5677,9 +5677,9 @@
         "service-collection-load-method-name",
         "service-collection-record-type-name",
         "service-collection-source-target-path",
+        "source-lowering-class-member-invocations",
         "source-lowering-component-pair",
         "source-lowering-composition",
-        "source-lowering-invocation",
         "source-target-path",
         "template-path"
       ],
@@ -5896,13 +5896,13 @@
           }
         },
         {
-          "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.sourceLoweringClassMemberInvocations[0].sourceLoweringInvocation",
+          "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.sourceLoweringClassMemberInvocations",
           "ownerKind": "component-pair-class-member",
-          "fieldId": "source-lowering-invocation",
-          "requestFieldName": "sourceLoweringInvocation",
+          "fieldId": "source-lowering-class-member-invocations",
+          "requestFieldName": "sourceLoweringClassMemberInvocations",
           "valueShape": {
-            "kind": "object",
-            "keyCount": 4
+            "kind": "array",
+            "itemCount": 1
           }
         },
         {

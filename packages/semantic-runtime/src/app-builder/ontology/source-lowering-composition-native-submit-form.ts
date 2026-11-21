@@ -704,13 +704,17 @@ function lowerNativeSubmitFormMemberRelationships(
       controlPatternId: AppBuilderControlPatternId.NativeSingleSelect,
       controlId: AppBuilderControlId.SingleSelect,
       bindingExpression: frame.value.bindingExpression,
-      bindingExpressionSource: AppBuilderSourceLoweringBindingExpressionSource.ExplicitRequest,
+      bindingExpressionSource: normalizedSourceInputText(controlSelection?.bindingExpression) == null
+        ? AppBuilderSourceLoweringBindingExpressionSource.SelectedRelationshipLocalValue : AppBuilderSourceLoweringBindingExpressionSource.ExplicitRequest,
       labelText: frame.value.labelText,
-      labelTextSource: AppBuilderSourceLoweringLabelTextSource.ExplicitRequest,
+      labelTextSource: normalizedSourceInputText(controlSelection?.labelText) == null
+        ? AppBuilderSourceLoweringLabelTextSource.SelectedRelationshipTitle : AppBuilderSourceLoweringLabelTextSource.ExplicitRequest,
       fieldControlId: frame.value.fieldControlId,
-      fieldControlIdSource: AppBuilderSourceLoweringFieldControlIdSource.ExplicitRequest,
+      fieldControlIdSource: normalizedSourceInputText(controlSelection?.fieldControlId) == null
+        ? AppBuilderSourceLoweringFieldControlIdSource.SelectedRelationshipName : AppBuilderSourceLoweringFieldControlIdSource.ExplicitRequest,
       valueDomainExpression: frame.value.valueDomainExpression,
-      valueDomainExpressionSource: AppBuilderSourceLoweringValueDomainExpressionSource.ExplicitRequest,
+      valueDomainExpressionSource: normalizedSourceInputText(controlSelection?.valueDomainExpression) == null
+        ? AppBuilderSourceLoweringValueDomainExpressionSource.RelationshipCollection : AppBuilderSourceLoweringValueDomainExpressionSource.ExplicitRequest,
     })));
   }
   return {

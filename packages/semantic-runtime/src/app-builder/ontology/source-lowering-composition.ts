@@ -567,15 +567,15 @@ function lowerAppSectionChildren(
     return emptyAppSectionChildren(targetRef);
   }
   const parentSuppliedInputs = sourceLoweringCompositionAllSuppliedInputs(request);
-  const children = hasChildContent
-    ? childContentRequests.flatMap((childRequest, childContentIndex): readonly AppBuilderSourceLoweringCompositionChild[] => {
+  const loweredChildren = hasChildContent
+    ? childContentRequests.map((childRequest): AppBuilderSourceLoweringCompositionChild | null => {
       const hasComposition = childRequest.composition != null;
       const hasInvocation = childRequest.invocation != null;
       if (hasComposition === hasInvocation) {
-        return [];
+        return null;
       }
       if (childRequest.composition != null) {
-        return [{
+        return {
           composition: appBuilderSourceLoweringComposition({
             ...childRequest.composition,
             suppliedInputs: sourceLoweringCompositionChildSuppliedInputsFromParentInputs(
@@ -587,10 +587,10 @@ function lowerAppSectionChildren(
             emissionContext: childRequest.composition.emissionContext ?? request.emissionContext,
           }),
           invocation: null,
-        }];
+        };
       }
       if (childRequest.invocation != null) {
-        return [{
+        return {
           composition: null,
           invocation: appBuilderSourceLoweringInvocation({
             ...childRequest.invocation,
@@ -602,10 +602,9 @@ function lowerAppSectionChildren(
             includePreflight: childRequest.invocation.includePreflight ?? request.includePreflight,
             emissionContext: childRequest.invocation.emissionContext ?? request.emissionContext,
           }),
-        }];
+        };
       }
-      void childContentIndex;
-      return [];
+      return null;
     })
     : childCompositionRequests.map((nestedRequest): AppBuilderSourceLoweringCompositionChild => ({
       composition: appBuilderSourceLoweringComposition({
@@ -617,40 +616,19 @@ function lowerAppSectionChildren(
       }),
       invocation: null,
     }));
-  const structuralIssues = hasChildContent
-    ? childContentRequests.flatMap((childRequest, childContentIndex): readonly AppBuilderSourceLoweringCompositionIssue[] => {
-      const hasComposition = childRequest.composition != null;
-      const hasInvocation = childRequest.invocation != null;
-      if (hasComposition !== hasInvocation) {
-        return [];
-      }
-      return [{
-        issueKind: AppBuilderSourceLoweringCompositionIssueKind.InvalidSectionChildContent,
-        targetRef,
-        childContentIndex,
-        summary: hasComposition
-          ? `App-section childContent row ${childContentIndex + 1} must choose either composition or invocation, not both.`
-          : `App-section childContent row ${childContentIndex + 1} must choose a composition or invocation.`,
-      }];
-    })
-    : [];
-  const issues = [
-    ...structuralIssues,
-    ...children.flatMap((child, childContentIndex): readonly AppBuilderSourceLoweringCompositionIssue[] => {
-      if (child.composition != null) {
-        return childCompositionIssues(child.composition, targetRef, childContentIndex);
-      }
-      if (child.invocation != null) {
-        return childInvocationIssues(child.invocation, targetRef, childContentIndex);
-      }
-      return [{
-        issueKind: AppBuilderSourceLoweringCompositionIssueKind.InvalidSectionChildContent,
-        targetRef,
-        childContentIndex,
-        summary: `App-section childContent row ${childContentIndex + 1} did not produce a lowered composition or invocation.`,
-      }];
-    }),
-  ];
+  const issues = loweredChildren.flatMap((child, childContentIndex): readonly AppBuilderSourceLoweringCompositionIssue[] => {
+    if (child?.composition != null) return childCompositionIssues(child.composition, targetRef, childContentIndex);
+    if (child?.invocation != null) return childInvocationIssues(child.invocation, targetRef, childContentIndex);
+    return [{
+      issueKind: AppBuilderSourceLoweringCompositionIssueKind.InvalidSectionChildContent,
+      targetRef,
+      childContentIndex,
+      summary: childContentRequests[childContentIndex]?.composition != null
+        ? `App-section childContent row ${childContentIndex + 1} must choose either composition or invocation, not both.`
+        : `App-section childContent row ${childContentIndex + 1} must choose a composition or invocation.`,
+    }];
+  });
+  const children = loweredChildren.filter((child): child is AppBuilderSourceLoweringCompositionChild => child != null);
   const childCompositions = children.flatMap((child) => child.composition == null ? [] : [child.composition]);
   const childInvocations = children.flatMap((child) => child.invocation == null ? [] : [child.invocation]);
   return {

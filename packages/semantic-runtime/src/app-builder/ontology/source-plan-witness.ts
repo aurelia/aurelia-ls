@@ -113,6 +113,14 @@ export interface AppBuilderSourcePlanWitnessRow {
   readonly projectToolingFileLanguage?: SourcePlanProjectToolingLanguage;
 }
 
+/** Count the same policy, file, contribution and tooling records without allocating detail rows. */
+export function appBuilderSourcePlanWitnessCount(sourcePlan: SourcePlan | null): number {
+  if (sourcePlan == null) return 0;
+  const tooling = sourcePlan.projectTooling;
+  return 1 + sourcePlan.files.reduce((count, file) => count + 1 + file.contributions.length, 0)
+    + (tooling?.dependencies.length ?? 0) + (tooling?.scripts.length ?? 0) + (tooling?.files.length ?? 0);
+}
+
 /** Build compact SourcePlan witness rows from the generated SourcePlan boundary. */
 export function appBuilderSourcePlanWitnessRows(
   sourcePlan: SourcePlan | null,
@@ -120,14 +128,15 @@ export function appBuilderSourcePlanWitnessRows(
   if (sourcePlan == null) {
     return [];
   }
+  const hasCompleteFileText = sourcePlan.hasCompleteFileText;
   return [
-    sourcePlanPolicyWitnessRow(sourcePlan),
+    sourcePlanPolicyWitnessRow(sourcePlan, hasCompleteFileText),
     ...sourcePlan.files.flatMap((file) => {
       const fileRow: AppBuilderSourcePlanWitnessRow = {
         rowKind: AppBuilderSourcePlanWitnessRowKind.FileArtifact,
         effectContractId: AppBuilderEffectContractId.SourcePlanPreview,
         rootDir: sourcePlan.rootDir,
-        hasCompleteFileText: sourcePlan.hasCompleteFileText,
+        hasCompleteFileText,
         filePath: file.path,
         fileRole: file.role,
         fileLanguage: file.language,
@@ -144,7 +153,7 @@ export function appBuilderSourcePlanWitnessRows(
             rowKind: AppBuilderSourcePlanWitnessRowKind.Contribution,
             effectContractId: AppBuilderEffectContractId.SourcePlanPreview,
             rootDir: sourcePlan.rootDir,
-            hasCompleteFileText: sourcePlan.hasCompleteFileText,
+            hasCompleteFileText,
             filePath: file.path,
             fileRole: file.role,
             fileLanguage: file.language,
@@ -160,7 +169,7 @@ export function appBuilderSourcePlanWitnessRows(
           rowKind: AppBuilderSourcePlanWitnessRowKind.Contribution,
           effectContractId: AppBuilderEffectContractId.SourcePlanPreview,
           rootDir: sourcePlan.rootDir,
-          hasCompleteFileText: sourcePlan.hasCompleteFileText,
+          hasCompleteFileText,
           filePath: file.path,
           fileRole: file.role,
           fileLanguage: file.language,
@@ -174,7 +183,7 @@ export function appBuilderSourcePlanWitnessRows(
         }),
       ];
     }),
-    ...sourcePlanProjectToolingWitnessRows(sourcePlan),
+    ...sourcePlanProjectToolingWitnessRows(sourcePlan, hasCompleteFileText),
   ];
 }
 
@@ -190,12 +199,13 @@ function typeScriptImportRequirementIsTypeOnly(
 
 function sourcePlanPolicyWitnessRow(
   sourcePlan: SourcePlan,
+  hasCompleteFileText: boolean,
 ): AppBuilderSourcePlanWitnessRow {
   return {
     rowKind: AppBuilderSourcePlanWitnessRowKind.Policy,
     effectContractId: AppBuilderEffectContractId.SourcePlanPreview,
     rootDir: sourcePlan.rootDir,
-    hasCompleteFileText: sourcePlan.hasCompleteFileText,
+    hasCompleteFileText,
     conflictPolicy: sourcePlan.policy.conflictPolicy,
     formattingPolicy: sourcePlan.policy.formattingPolicy,
     packageToolingPolicy: sourcePlan.policy.packageToolingPolicy,
@@ -206,6 +216,7 @@ function sourcePlanPolicyWitnessRow(
 
 function sourcePlanProjectToolingWitnessRows(
   sourcePlan: SourcePlan,
+  hasCompleteFileText: boolean,
 ): readonly AppBuilderSourcePlanWitnessRow[] {
   const projectTooling = sourcePlan.projectTooling;
   if (projectTooling == null) {
@@ -216,7 +227,7 @@ function sourcePlanProjectToolingWitnessRows(
       rowKind: AppBuilderSourcePlanWitnessRowKind.ProjectToolingDependency,
       effectContractId: AppBuilderEffectContractId.SourcePlanPreview,
       rootDir: sourcePlan.rootDir,
-      hasCompleteFileText: sourcePlan.hasCompleteFileText,
+      hasCompleteFileText,
       packageManager: projectTooling.packageManager,
       buildToolPolicy: projectTooling.buildToolPolicy,
       dependencySpecifier: dependency.specifier,
@@ -227,7 +238,7 @@ function sourcePlanProjectToolingWitnessRows(
       rowKind: AppBuilderSourcePlanWitnessRowKind.ProjectToolingScript,
       effectContractId: AppBuilderEffectContractId.SourcePlanPreview,
       rootDir: sourcePlan.rootDir,
-      hasCompleteFileText: sourcePlan.hasCompleteFileText,
+      hasCompleteFileText,
       packageManager: projectTooling.packageManager,
       buildToolPolicy: projectTooling.buildToolPolicy,
       scriptName: script.name,
@@ -237,7 +248,7 @@ function sourcePlanProjectToolingWitnessRows(
       rowKind: AppBuilderSourcePlanWitnessRowKind.ProjectToolingFile,
       effectContractId: AppBuilderEffectContractId.SourcePlanPreview,
       rootDir: sourcePlan.rootDir,
-      hasCompleteFileText: sourcePlan.hasCompleteFileText,
+      hasCompleteFileText,
       packageManager: projectTooling.packageManager,
       buildToolPolicy: projectTooling.buildToolPolicy,
       filePath: file.path,

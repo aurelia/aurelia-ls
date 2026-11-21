@@ -8,7 +8,7 @@ import {
 } from './source-lowering-request-field.js';
 import { appBuilderSourceLoweringEmissionContext } from './source-lowering-context.js';
 import { appBuilderSourcePlanHandoffNotes } from './source-lowering-handoff.js';
-import { appBuilderSourcePlanWitnessRows } from './source-plan-witness.js';
+import { appBuilderSourcePlanWitnessCount, appBuilderSourcePlanWitnessRows } from './source-plan-witness.js';
 import {
   appBuilderDecisionBundleExpansionRows,
   appBuilderDecisionBundleInputCounts,
@@ -77,7 +77,8 @@ export function appBuilderSourceLoweringSourcePlan(
     sourceLoweringComponentPair: request.sourceLoweringComponentPair != null,
   });
   const sourceLoweringRequestFieldSummary = appBuilderSourceLoweringRequestFieldSummary(sourceLoweringRequestFields);
-  const sourcePlanWitnessRows = appBuilderSourcePlanWitnessRows(sourcePlan);
+  const sourcePlanWitnessRows = request.includeSourcePlanWitnessRows === true ? appBuilderSourcePlanWitnessRows(sourcePlan) : null;
+  const sourcePlanWitnessCount = sourcePlanWitnessRows?.length ?? appBuilderSourcePlanWitnessCount(sourcePlan);
   const explicitSuppliedInputs = sourcePlanAllExplicitSuppliedInputs(request);
   const decisionBundles = sourcePlanAllDecisionBundles(request);
   const handoffNotes = appBuilderSourcePlanHandoffNotes(sourcePlan, sourcePlanFrame, explicitSuppliedInputs);
@@ -86,14 +87,13 @@ export function appBuilderSourceLoweringSourcePlan(
     decisionBundles,
   );
   const includeDecisionBundleExpansionRows = request.includeDecisionBundleExpansionRows === true;
-  const includeSourcePlanWitnessRows = request.includeSourcePlanWitnessRows === true;
   const includeSourceLoweringResultDetails = request.includeSourceLoweringResultDetails === true;
   const includeControlUseInventoryRows = request.includeControlUseInventoryRows === true;
   const includeExpectedEffectRows = request.includeExpectedEffectRows === true;
   const includeSourceLoweringRequestFields = request.includeSourceLoweringRequestFields === true;
   const sourceLoweringSelectionKind = sourcePlanFrame.sourceLoweringSelectionKind;
   return {
-    displayText: `App-builder SourcePlan preview: root=${rootDir ?? 'none'}, template=${templatePath ?? 'none'}, target=${sourceTargetPath ?? 'none'}, source=${sourceLoweringSelectionKind ?? 'none'}, files=${sourcePlan?.files.length ?? 0}, witnesses=${sourcePlanWitnessRows.length}, controlUses=${controlUseInventoryRows.length}, expectedEffects=${expectedEffectRows.length}, handoffNotes=${handoffNotes.length}, decisionBundles=${inputCounts.decisionBundleCount}, issues=${issues.length}.`,
+    displayText: `App-builder SourcePlan preview: root=${rootDir ?? 'none'}, template=${templatePath ?? 'none'}, target=${sourceTargetPath ?? 'none'}, source=${sourceLoweringSelectionKind ?? 'none'}, files=${sourcePlan?.files.length ?? 0}, witnesses=${sourcePlanWitnessCount}, controlUses=${controlUseInventoryRows.length}, expectedEffects=${expectedEffectRows.length}, handoffNotes=${handoffNotes.length}, decisionBundles=${inputCounts.decisionBundleCount}, issues=${issues.length}.`,
     rootDir,
     templatePath,
     sourceTargetPath,
@@ -118,8 +118,8 @@ export function appBuilderSourceLoweringSourcePlan(
     ...(includeControlUseInventoryRows ? { controlUseInventoryRows } : {}),
     sourceLoweringRequestFieldSummary,
     ...(includeSourceLoweringRequestFields ? { sourceLoweringRequestFields } : {}),
-    sourcePlanWitnessCount: sourcePlanWitnessRows.length,
-    ...(includeSourcePlanWitnessRows ? { sourcePlanWitnessRows } : {}),
+    sourcePlanWitnessCount,
+    ...(sourcePlanWitnessRows != null ? { sourcePlanWitnessRows } : {}),
     handoffNoteCount: handoffNotes.length,
     handoffNotes,
     sourcePlan,

@@ -171,10 +171,14 @@ const APP_BUILDER_NATIVE_REQUIRED_CONTROL_SLOTS = [
   AppBuilderPartSlotKind.NativeRequired,
 ] as const;
 
-const APP_BUILDER_NATIVE_TEXT_CONTROL_SLOTS = [
+const APP_BUILDER_NATIVE_TEXT_LENGTH_SLOTS = [
   AppBuilderPartSlotKind.NativeRequired,
   AppBuilderPartSlotKind.TextMinLength,
   AppBuilderPartSlotKind.TextMaxLength,
+] as const;
+
+const APP_BUILDER_NATIVE_TEXT_CONTROL_SLOTS = [
+  ...APP_BUILDER_NATIVE_TEXT_LENGTH_SLOTS,
   AppBuilderPartSlotKind.TextPattern,
 ] as const;
 
@@ -484,7 +488,7 @@ export const APP_BUILDER_CONTROLS: readonly AppBuilderControlDescriptor[] = [
     applicationSites: [AppBuilderPartApplicationSiteKind.TemplateElement],
     operationKind: AppBuilderPartOperationKind.CreateControl,
     requiredSlotKinds: [AppBuilderPartSlotKind.BindingExpression],
-    optionalSlotKinds: APP_BUILDER_NATIVE_TEXT_CONTROL_SLOTS,
+    optionalSlotKinds: APP_BUILDER_NATIVE_TEXT_LENGTH_SLOTS,
     semanticValueKind: AppBuilderControlSemanticValueKind.Text,
     transportKind: AppBuilderControlTransportKind.NativeValueString,
     valueChannelResolution: AppBuilderPartValueChannelResolutionKind.PartOwned,

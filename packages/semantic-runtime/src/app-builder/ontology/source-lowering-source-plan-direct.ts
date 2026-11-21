@@ -74,6 +74,7 @@ import {
 } from '../domain-model.js';
 import {
   appBuilderDomainFieldDisplayExpression,
+  appBuilderDomainFieldsWithValueSetSelections,
   appBuilderDomainFieldResolvedOptions,
   appBuilderDomainFieldSourceModels,
   type AppBuilderDomainFieldSourceModel,
@@ -1507,6 +1508,22 @@ export function lowerLocalViewModelStateSourcePlan(
     ...collectionQueryState.issues,
     ...collectionSelectionState.issues,
     ...actionFeedbackState.issues,
+    ...appBuilderDomainFieldsWithValueSetSelections(localFields, fieldValueSetSelections)
+      .flatMap((field): AppBuilderSourceLoweringSourcePlanIssue[] => {
+        if (field.defaultValue === undefined) return [];
+        const options = appBuilderDomainFieldResolvedOptions(field, valueSets);
+        if (options.length === 0) return [];
+        const admits = (value: unknown) => options.some(option => option.value === value);
+        const valid = field.valueKind === AppBuilderDomainFieldValueKind.ChoiceSet
+          ? Array.isArray(field.defaultValue) && field.defaultValue.every(admits)
+          : admits(field.defaultValue);
+        return valid ? [] : [{
+          issueKind: AppBuilderSourceLoweringSourcePlanIssueKind.LocalViewModelStateInvalidSuppliedPayload,
+          targetRef: targetRef ?? undefined,
+          inputFacetId: AppBuilderInputFacetId.DomainFields,
+          summary: `Default value for '${field.name}' does not belong to its selected options.`,
+        }];
+      }),
   ];
   const fragmentOrigin = targetRef == null
     ? undefined
@@ -3128,9 +3145,6 @@ function localViewModelMaterializedOwnedRelationshipIssues(
   }
   for (const [recordIndex, record] of primarySeedRecords.entries()) {
     const value = record[relationship.localFieldName];
-    if (value == null) {
-      continue;
-    }
     if (relationship.kind === AppBuilderDomainRelationshipKind.OwnsOne) {
       if (value == null) {
         if (relationship.required === true) {
@@ -3169,6 +3183,7 @@ function localViewModelMaterializedOwnedRelationshipIssues(
       })));
       continue;
     }
+    if (value == null) continue;
     if (!isSeedRecordObjectArray(value)) {
       issues.push({
         issueKind: AppBuilderSourceLoweringSourcePlanIssueKind.LocalViewModelStateInvalidRelationshipDescriptor,

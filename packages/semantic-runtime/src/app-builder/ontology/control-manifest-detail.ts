@@ -253,7 +253,7 @@ function controlManifestDetailSelectionFrame(
   const hasExplicitSelection = appBuilderHasExplicitSelection(request.controlManifestIds);
   const includeInputReadiness = appBuilderIncludeDetail(request.includeInputReadiness, hasExplicitSelection);
   const includeInputContractDetail = appBuilderIncludeDetail(request.includeInputContractDetail, hasExplicitSelection);
-  const includePayloadSchemas = appBuilderIncludeDetail(request.includePayloadSchemas, hasExplicitSelection);
+  const includePayloadSchemas = includeInputContractDetail && appBuilderIncludeDetail(request.includePayloadSchemas, hasExplicitSelection);
   const includeApplicationPatterns = appBuilderIncludeDetail(request.includeApplicationPatterns, hasExplicitSelection);
   const includeControlPatterns = appBuilderIncludeDetail(request.includeControlPatterns, hasExplicitSelection);
   const includeControlDescriptors = appBuilderIncludeDetail(request.includeControlDescriptors, hasExplicitSelection);

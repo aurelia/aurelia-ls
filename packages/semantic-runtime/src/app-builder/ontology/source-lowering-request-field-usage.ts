@@ -576,15 +576,13 @@ function collectComponentPairRequestFieldUsageRows(
   const classMemberInvocations = Array.isArray(requestObject.sourceLoweringClassMemberInvocations)
     ? requestObject.sourceLoweringClassMemberInvocations
     : [];
+  addRequestFieldUsageRow(
+    rows, requestPath, 'sourceLoweringClassMemberInvocations',
+    AppBuilderSourceLoweringRequestFieldId.SourceLoweringClassMemberInvocations,
+    requestObject.sourceLoweringClassMemberInvocations,
+    AppBuilderSourceLoweringRequestFieldUsageOwnerKind.ComponentPairClassMember,
+  );
   classMemberInvocations.forEach((invocation, index) => {
-    addRequestFieldUsageRow(
-      rows,
-      `${requestPath}.sourceLoweringClassMemberInvocations[${index}]`,
-      'sourceLoweringInvocation',
-      AppBuilderSourceLoweringRequestFieldId.SourceLoweringInvocation,
-      invocation,
-      AppBuilderSourceLoweringRequestFieldUsageOwnerKind.ComponentPairClassMember,
-    );
     collectInvocationRequestFieldUsageRows(
       invocation,
       `${requestPath}.sourceLoweringClassMemberInvocations[${index}]`,

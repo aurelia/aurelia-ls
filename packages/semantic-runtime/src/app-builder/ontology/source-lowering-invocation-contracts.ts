@@ -300,6 +300,8 @@ export enum AppBuilderSourceLoweringFieldControlIdSource {
   SelectedFieldName = 'selected-field-name',
   /** The selected relationship local value member supplied the deterministic DOM id stem. */
   SelectedRelationshipLocalValue = 'selected-relationship-local-value',
+  /** The relationship name supplied the generated select control's id stem. */
+  SelectedRelationshipName = 'selected-relationship-name',
 }
 
 /** Stable value list for field-group control-id provenance. */
@@ -307,6 +309,7 @@ export const APP_BUILDER_SOURCE_LOWERING_FIELD_CONTROL_ID_SOURCES = [
   AppBuilderSourceLoweringFieldControlIdSource.ExplicitRequest,
   AppBuilderSourceLoweringFieldControlIdSource.SelectedFieldName,
   AppBuilderSourceLoweringFieldControlIdSource.SelectedRelationshipLocalValue,
+  AppBuilderSourceLoweringFieldControlIdSource.SelectedRelationshipName,
 ] as const;
 
 /** Issue kind produced while lowering a app-builder ontology target to source fragments. */

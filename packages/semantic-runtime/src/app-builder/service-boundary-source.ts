@@ -1,4 +1,5 @@
 import {
+  appBuilderDomainFieldChoiceTypeAliases,
   appBuilderDomainFieldSeedLiteral,
   appBuilderDomainFieldSourceModels,
   type AppBuilderDomainFieldSourceModel,
@@ -158,6 +159,7 @@ export function appBuilderServiceCollectionSource(
     ...updateMethods,
   ].join('\n\n');
   const typeDeclarations = [
+    ...appBuilderDomainFieldChoiceTypeAliases(serviceCollectionFieldModels(model)),
     serviceCollectionRecordInterfaceSource(model),
     serviceCollectionMutableRecordInterfaceSource(model),
   ].filter((source) => source.length > 0).join('\n\n');

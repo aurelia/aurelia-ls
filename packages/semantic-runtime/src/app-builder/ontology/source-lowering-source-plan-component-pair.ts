@@ -3,6 +3,7 @@ import {
   appBuilderRootCustomElementPairSourcePlan,
 } from '../custom-element-pair-source-plan.js';
 import { AppBuilderRouterAdmissionPolicy } from '../aurelia-lowering-option.js';
+import { customElementCompanionPathIssue } from '../custom-element-source-layout.js';
 import {
   appBuilderLocalViewModelStateSourcePlan,
   AppBuilderLocalViewModelFieldObjectStateSourceKind,
@@ -122,7 +123,14 @@ export function lowerComponentPairSourcePlan(
   const localState = lowerComponentPairLocalState(request, rootDir, componentPath, nested);
   const serviceSupport = lowerComponentPairServiceSupport(request, suppliedInputs, componentPath);
   const fragments = componentPairFragments(nested, localState, serviceSupport);
-  const issues = componentPairIssues(request, suppliedInputs, direct, nested, localState, serviceSupport, fragments);
+  const companionIssue = customElementCompanionPathIssue(direct.resourceCarrier.value, componentPath, templatePath);
+  const issues = [
+    ...componentPairIssues(request, suppliedInputs, direct, nested, localState, serviceSupport, fragments),
+    ...(companionIssue == null ? [] : [{
+      issueKind: AppBuilderSourceLoweringSourcePlanIssueKind.InconsistentConventionCarrier,
+      summary: companionIssue,
+    }]),
+  ];
   const sourcePlan = componentPairSourcePlan(rootDir, templatePath, componentPath, direct, serviceSupport, fragments, issues);
   const expectedEffects = direct.appShellRequest == null
     ? []

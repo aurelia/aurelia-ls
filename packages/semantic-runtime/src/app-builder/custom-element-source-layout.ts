@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { moduleSpecifier } from '../application/module-specifier.js';
 import { uniqueStrings } from '../kernel/collections.js';
 import { indentSourceLines } from '../source-plan/source-template.js';
@@ -42,7 +43,18 @@ export function appBuilderCustomElementSourceLayout(
   request: AppBuilderCustomElementSourceLayoutRequest,
 ): AppBuilderCustomElementSourceLayout {
   assertSupportedCustomElementSourceCarrier(request.carrier);
+  const issue = customElementCompanionPathIssue(request.carrier, request.componentPath, request.templatePath);
+  if (issue != null) throw new Error(issue);
   return request;
+}
+
+/** The generated convention carrier relies on the preprocessor finding a sibling HTML file. */
+export function customElementCompanionPathIssue(carrier: AppBuilderResourceCarrier | null, component: string | null, template: string | null): string | null {
+  if (carrier !== AppBuilderResourceCarrier.Convention || component == null || template == null) return null;
+  const file = path.posix.parse(path.posix.normalize(component.replaceAll('\\', '/')));
+  const companion = path.posix.join(file.dir, file.name + '.html');
+  return path.posix.normalize(template.replaceAll('\\', '/')) === companion ? null
+    : `Convention component '${component}' requires its generated template at '${companion}'. Received '${template}'.`;
 }
 
 /** Resolve the root custom-element layout for the selected source carrier. */

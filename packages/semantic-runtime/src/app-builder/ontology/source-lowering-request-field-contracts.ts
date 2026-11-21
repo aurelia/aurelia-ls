@@ -56,6 +56,8 @@ export enum AppBuilderSourceLoweringRequestFieldId {
   SourceLoweringComponentPair = 'source-lowering-component-pair',
   /** Direct one-target invocations inserted into a component-pair template file. */
   SourceLoweringTemplateInvocations = 'source-lowering-template-invocations',
+  /** Component-pair invocations that supply members in the generated TypeScript class. */
+  SourceLoweringClassMemberInvocations = 'source-lowering-class-member-invocations',
   /** Generated service collection support files attached to a component-pair SourcePlan. */
   ComponentPairServiceCollections = 'component-pair-service-collections',
   /** TypeScript service file path selected for a generated service collection. */
@@ -278,6 +280,8 @@ export const APP_BUILDER_SOURCE_LOWERING_REQUEST_FIELD_IDS = [
   AppBuilderSourceLoweringRequestFieldId.TemplatePath,
   AppBuilderSourceLoweringRequestFieldId.SourceTargetPath,
   AppBuilderSourceLoweringRequestFieldId.SourceLoweringAppShell,
+  AppBuilderSourceLoweringRequestFieldId.SourceLoweringApplicationAssembly,
+  AppBuilderSourceLoweringRequestFieldId.ApplicationAssemblyRouteAreas,
   AppBuilderSourceLoweringRequestFieldId.SourceLoweringRouterBackedListDetail,
   AppBuilderSourceLoweringRequestFieldId.RouterBackedListDetailPrimaryEntityName,
   AppBuilderSourceLoweringRequestFieldId.RouterBackedListDetailCreateForm,
@@ -290,6 +294,7 @@ export const APP_BUILDER_SOURCE_LOWERING_REQUEST_FIELD_IDS = [
   AppBuilderSourceLoweringRequestFieldId.SourceLoweringComposition,
   AppBuilderSourceLoweringRequestFieldId.SourceLoweringComponentPair,
   AppBuilderSourceLoweringRequestFieldId.SourceLoweringTemplateInvocations,
+  AppBuilderSourceLoweringRequestFieldId.SourceLoweringClassMemberInvocations,
   AppBuilderSourceLoweringRequestFieldId.ComponentPairServiceCollections,
   AppBuilderSourceLoweringRequestFieldId.ServiceCollectionSourceTargetPath,
   AppBuilderSourceLoweringRequestFieldId.ServiceCollectionClassName,

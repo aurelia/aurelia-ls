@@ -403,48 +403,6 @@
     },
     {
       "sourceReference": {
-        "sourceKind": "source-lowering-invocation",
-        "targetRef": {
-          "kind": "control-pattern",
-          "domain": "control",
-          "id": "native-button"
-        },
-        "compositionKind": null,
-        "fragmentKinds": [
-          "template-element"
-        ],
-        "fragmentCount": 1
-      },
-      "realizationPolicyId": "inline-native",
-      "controlPatternId": "native-button",
-      "controlId": null,
-      "innerControlPatternId": null,
-      "fieldName": null,
-      "actionName": "deleteSelectedTaskItems",
-      "bindingExpression": null,
-      "bindingExpressionSource": null,
-      "handlerExpression": "deleteSelectedTaskItems()",
-      "handlerExpressionSource": "explicit-request",
-      "eventName": "click",
-      "actionChannelKind": "direct-control-event",
-      "routeInstruction": null,
-      "linkText": null,
-      "buttonText": "Delete selected",
-      "buttonType": "button",
-      "labelText": "Delete selected",
-      "labelTextSource": "explicit-request",
-      "fieldControlId": null,
-      "fieldControlIdSource": null,
-      "describedByIds": [],
-      "messageKind": null,
-      "messageText": null,
-      "messageTextSource": null,
-      "messageId": null,
-      "valueDomainExpression": null,
-      "valueDomainExpressionSource": null
-    },
-    {
-      "sourceReference": {
         "sourceKind": "source-lowering-composition",
         "targetRef": {
           "kind": "application-pattern",

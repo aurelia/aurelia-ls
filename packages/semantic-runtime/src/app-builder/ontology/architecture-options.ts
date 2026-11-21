@@ -1,3 +1,4 @@
+import type { SemanticRuntimeAppBuilderQueryRequest } from '../../api/app-builder.js';
 import {
   AppBuilderAffordanceId,
 } from './affordance.js';
@@ -78,8 +79,8 @@ export interface AppBuilderArchitectureOptionsRequest {
 export interface AppBuilderArchitectureOptionQueryStep {
   /** Compact purpose of this follow-up query. */
   readonly summary: string;
-  /** Query payload shaped for the public MCP app-builder query tool. */
-  readonly appBuilderQuery: Readonly<Record<string, unknown>>;
+  /** Query payload accepted by the app-builder query dispatcher. */
+  readonly appBuilderQuery: SemanticRuntimeAppBuilderQueryRequest;
 }
 
 /** One concrete implementation shape that can guide a requested app without guessing source details. */
@@ -288,7 +289,7 @@ function architectureOptionQueryPlan(
     {
       summary: 'Inspect selected target rows with readiness and source-lowering request-field coverage.',
       appBuilderQuery: {
-        queryKind: 'target-catalog',
+        kind: 'target-catalog',
         targetCatalog: {
           targetRefs: row.targetRefs,
           includeInputReadiness: true,
@@ -299,7 +300,7 @@ function architectureOptionQueryPlan(
     {
       summary: 'Ask which input contracts/facets are still missing before source can be honest.',
       appBuilderQuery: {
-        queryKind: 'input-readiness',
+        kind: 'input-readiness',
         inputReadiness: {
           targetRefs: row.targetRefs,
           includeInputFacets: true,
@@ -309,7 +310,7 @@ function architectureOptionQueryPlan(
     {
       summary: 'Open payload schemas for the input contracts this option normally needs.',
       appBuilderQuery: {
-        queryKind: 'input-contract-detail',
+        kind: 'input-contract-detail',
         inputContractDetail: {
           inputContractIds: row.inputContractIds,
           includePayloadSchemas: true,
@@ -321,7 +322,7 @@ function architectureOptionQueryPlan(
     {
       summary: 'Run source-lowering preflight only after target selection and supplied inputs are available.',
       appBuilderQuery: {
-        queryKind: 'source-lowering-preflight',
+        kind: 'source-lowering-preflight',
         sourceLoweringPreflight: {
           targetRefs: row.targetRefs,
           includeSourceLoweringRequestFields: true,

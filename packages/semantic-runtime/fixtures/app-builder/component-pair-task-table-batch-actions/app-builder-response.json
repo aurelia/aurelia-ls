@@ -4,7 +4,7 @@
   "coverage": "complete",
   "summary": "Previewed app-builder ontology SourcePlan with 3 file(s) and 0 issue(s).",
   "value": {
-    "displayText": "App-builder SourcePlan preview: root=., template=src/batch-task-table.html, target=src/batch-task-table.ts, source=component-pair, files=3, witnesses=48, controlUses=3, expectedEffects=9, handoffNotes=4, decisionBundles=1, issues=0.",
+    "displayText": "App-builder SourcePlan preview: root=., template=src/batch-task-table.html, target=src/batch-task-table.ts, source=component-pair, files=3, witnesses=48, controlUses=2, expectedEffects=9, handoffNotes=4, decisionBundles=1, issues=0.",
     "rootDir": ".",
     "templatePath": "src/batch-task-table.html",
     "sourceTargetPath": "src/batch-task-table.ts",
@@ -50,20 +50,20 @@
       "open-seam-closure"
     ],
     "expectedEffectCount": 9,
-    "controlUseInventoryRowCount": 3,
+    "controlUseInventoryRowCount": 2,
     "sourceLoweringRequestFieldSummary": {
-      "requestFieldCount": 36,
+      "requestFieldCount": 37,
       "requiredCount": 4,
       "conditionalCount": 22,
-      "optionalCount": 10,
+      "optionalCount": 11,
       "hasRequiredRequestFields": true,
       "surfaces": [
         {
           "surfaceKind": "source-plan-preview",
-          "requestFieldCount": 36,
+          "requestFieldCount": 37,
           "requiredCount": 4,
           "conditionalCount": 22,
-          "optionalCount": 10,
+          "optionalCount": 11,
           "requiredRequestFieldNames": [
             "rootDir",
             "sourceTargetPath",
@@ -96,6 +96,7 @@
           ],
           "optionalRequestFieldNames": [
             "sourceLoweringTemplateInvocations",
+            "sourceLoweringClassMemberInvocations",
             "serviceCollections",
             "componentMemberName",
             "recordTypeName",
@@ -212,7 +213,7 @@
       },
       {
         "kind": "semantic-verification-contract",
-        "summary": "This SourcePlan declares 9 expected semantic effect(s), 3 generated control-use row(s), and generated source/tooling witnesses for verification after materialization; the preview itself has not written files or reopened the generated app.",
+        "summary": "This SourcePlan declares 9 expected semantic effect(s), 2 generated control-use row(s), and generated source/tooling witnesses for verification after materialization; the preview itself has not written files or reopened the generated app.",
         "targetRefs": [
           {
             "kind": "application-pattern",

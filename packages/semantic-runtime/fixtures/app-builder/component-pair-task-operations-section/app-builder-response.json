@@ -4,7 +4,7 @@
   "coverage": "complete",
   "summary": "Previewed app-builder ontology SourcePlan with 3 file(s) and 0 issue(s).",
   "value": {
-    "displayText": "App-builder SourcePlan preview: root=., template=src/task-operations-section.html, target=src/task-operations-section.ts, source=component-pair, files=3, witnesses=96, controlUses=11, expectedEffects=9, handoffNotes=4, decisionBundles=1, issues=0.",
+    "displayText": "App-builder SourcePlan preview: root=., template=src/task-operations-section.html, target=src/task-operations-section.ts, source=component-pair, files=3, witnesses=96, controlUses=10, expectedEffects=9, handoffNotes=4, decisionBundles=1, issues=0.",
     "rootDir": ".",
     "templatePath": "src/task-operations-section.html",
     "sourceTargetPath": "src/task-operations-section.ts",
@@ -75,20 +75,20 @@
       "open-seam-closure"
     ],
     "expectedEffectCount": 9,
-    "controlUseInventoryRowCount": 11,
+    "controlUseInventoryRowCount": 10,
     "sourceLoweringRequestFieldSummary": {
-      "requestFieldCount": 36,
+      "requestFieldCount": 37,
       "requiredCount": 4,
       "conditionalCount": 22,
-      "optionalCount": 10,
+      "optionalCount": 11,
       "hasRequiredRequestFields": true,
       "surfaces": [
         {
           "surfaceKind": "source-plan-preview",
-          "requestFieldCount": 36,
+          "requestFieldCount": 37,
           "requiredCount": 4,
           "conditionalCount": 22,
-          "optionalCount": 10,
+          "optionalCount": 11,
           "requiredRequestFieldNames": [
             "rootDir",
             "sourceTargetPath",
@@ -121,6 +121,7 @@
           ],
           "optionalRequestFieldNames": [
             "sourceLoweringTemplateInvocations",
+            "sourceLoweringClassMemberInvocations",
             "serviceCollections",
             "componentMemberName",
             "recordTypeName",
@@ -312,7 +313,7 @@
       },
       {
         "kind": "semantic-verification-contract",
-        "summary": "This SourcePlan declares 9 expected semantic effect(s), 11 generated control-use row(s), and generated source/tooling witnesses for verification after materialization; the preview itself has not written files or reopened the generated app.",
+        "summary": "This SourcePlan declares 9 expected semantic effect(s), 10 generated control-use row(s), and generated source/tooling witnesses for verification after materialization; the preview itself has not written files or reopened the generated app.",
         "targetRefs": [
           {
             "kind": "application-pattern",

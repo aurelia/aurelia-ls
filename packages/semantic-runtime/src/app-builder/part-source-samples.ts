@@ -103,7 +103,7 @@ const APP_BUILDER_PART_SLOT_SAMPLE_VALUE_ROWS: readonly AppBuilderPartSlotSample
   { slotKind: AppBuilderPartSlotKind.NativeRequired, sampleValue: 'true' },
   { slotKind: AppBuilderPartSlotKind.TextMinLength, sampleValue: '2' },
   { slotKind: AppBuilderPartSlotKind.TextMaxLength, sampleValue: '80' },
-  { slotKind: AppBuilderPartSlotKind.TextPattern, sampleValue: '[A-Za-z0-9 -]+' },
+  { slotKind: AppBuilderPartSlotKind.TextPattern, sampleValue: '[A-Za-z0-9 \\-]+' },
   { slotKind: AppBuilderPartSlotKind.NumericMinimum, sampleValue: '0' },
   { slotKind: AppBuilderPartSlotKind.NumericMaximum, sampleValue: '100' },
   { slotKind: AppBuilderPartSlotKind.NumericStep, sampleValue: '5' },

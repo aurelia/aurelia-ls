@@ -739,7 +739,6 @@ function collectionTableRenderedFrame(
     ],
     controlUseInventoryRows: [
       ...(rowSelectionFragment?.controlUseInventoryRows ?? []),
-      ...(batchActionToolbar?.controlUseInventoryRows ?? []),
       ...headerFragments.flatMap((fragment) => fragment.controlUseInventoryRows),
       ...cellFragments.flatMap((fragment) => fragment.controlUseInventoryRows),
       ...(paginationFooterFragment?.controlUseInventoryRows ?? []),
@@ -1220,7 +1219,7 @@ function collectionTablePaginationElement(
 function collectionTableBatchActionToolbar(
   controls: AppBuilderCollectionTableBatchActionControls,
   targetRef: AppBuilderOntologyRowRef,
-): AppBuilderCollectionTemplateElementLowering {
+): Pick<AppBuilderCollectionTemplateElementLowering, 'elementFragment' | 'contributingFragments'> {
   const buttonFragments = controls.actions.map((selectedAction) => {
     const actionFragment = selectedAction.actionInvocation.fragments.find((fragment): fragment is AppBuilderTemplateElementPartSourceFragment =>
       fragment.kind === AppBuilderPartSourceFragmentKind.TemplateElement
@@ -1250,9 +1249,6 @@ function collectionTableBatchActionToolbar(
       ...controls.contributingFragments,
       elementFragment,
     ],
-    controlUseInventoryRows: controls.actions.flatMap((selectedAction) =>
-      selectedAction.actionInvocation.controlUseInventoryRows
-    ),
   };
 }
 

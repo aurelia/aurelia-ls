@@ -112,7 +112,7 @@ export function appBuilderAffordanceDetail(
   const hasExplicitSelection = appBuilderHasExplicitSelection(request.affordanceIds);
   const includeInputReadiness = appBuilderIncludeDetail(request.includeInputReadiness, hasExplicitSelection);
   const includeInputContractDetail = appBuilderIncludeDetail(request.includeInputContractDetail, hasExplicitSelection);
-  const includePayloadSchemas = appBuilderIncludeDetail(request.includePayloadSchemas, hasExplicitSelection);
+  const includePayloadSchemas = includeInputContractDetail && appBuilderIncludeDetail(request.includePayloadSchemas, hasExplicitSelection);
   const includeEffectContracts = appBuilderIncludeDetail(request.includeEffectContracts, hasExplicitSelection);
   const includeApplicationPatterns = appBuilderIncludeDetail(request.includeApplicationPatterns, hasExplicitSelection);
   const includeFollowUps = appBuilderIncludeDetail(request.includeFollowUps, hasExplicitSelection);

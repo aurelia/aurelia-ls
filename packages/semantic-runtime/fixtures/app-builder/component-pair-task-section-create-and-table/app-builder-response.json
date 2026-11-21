@@ -62,18 +62,18 @@
     "expectedEffectCount": 9,
     "controlUseInventoryRowCount": 3,
     "sourceLoweringRequestFieldSummary": {
-      "requestFieldCount": 36,
+      "requestFieldCount": 37,
       "requiredCount": 4,
       "conditionalCount": 22,
-      "optionalCount": 10,
+      "optionalCount": 11,
       "hasRequiredRequestFields": true,
       "surfaces": [
         {
           "surfaceKind": "source-plan-preview",
-          "requestFieldCount": 36,
+          "requestFieldCount": 37,
           "requiredCount": 4,
           "conditionalCount": 22,
-          "optionalCount": 10,
+          "optionalCount": 11,
           "requiredRequestFieldNames": [
             "rootDir",
             "sourceTargetPath",
@@ -106,6 +106,7 @@
           ],
           "optionalRequestFieldNames": [
             "sourceLoweringTemplateInvocations",
+            "sourceLoweringClassMemberInvocations",
             "serviceCollections",
             "componentMemberName",
             "recordTypeName",

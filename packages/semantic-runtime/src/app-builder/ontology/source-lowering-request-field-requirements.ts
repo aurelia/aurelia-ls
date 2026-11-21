@@ -33,6 +33,7 @@ export const APP_BUILDER_SOURCE_LOWERING_REQUEST_FIELD_NAMES = {
   [AppBuilderSourceLoweringRequestFieldId.SourceLoweringComposition]: 'sourceLoweringComposition',
   [AppBuilderSourceLoweringRequestFieldId.SourceLoweringComponentPair]: 'sourceLoweringComponentPair',
   [AppBuilderSourceLoweringRequestFieldId.SourceLoweringTemplateInvocations]: 'sourceLoweringTemplateInvocations',
+  [AppBuilderSourceLoweringRequestFieldId.SourceLoweringClassMemberInvocations]: 'sourceLoweringClassMemberInvocations',
   [AppBuilderSourceLoweringRequestFieldId.ComponentPairServiceCollections]: 'serviceCollections',
   [AppBuilderSourceLoweringRequestFieldId.ServiceCollectionSourceTargetPath]: 'sourceTargetPath',
   [AppBuilderSourceLoweringRequestFieldId.ServiceCollectionClassName]: 'serviceClassName',
@@ -210,6 +211,12 @@ const SOURCE_PLAN_PREVIEW_COMPONENT_PAIR_REQUEST_FIELDS = [
     AppBuilderSourceLoweringRequestFieldId.SourceLoweringTemplateInvocations,
     AppBuilderSourceLoweringRequestFieldRequirementKind.Optional,
     'Component-pair SourcePlan previews may include direct one-target template invocations beside a higher-level template composition.',
+    AppBuilderSourceLoweringSurfaceKind.SourcePlanPreview,
+  ),
+  requestFieldRequirement(
+    AppBuilderSourceLoweringRequestFieldId.SourceLoweringClassMemberInvocations,
+    AppBuilderSourceLoweringRequestFieldRequirementKind.Optional,
+    'Component-pair SourcePlan previews can include invocations that supply TypeScript class members.',
     AppBuilderSourceLoweringSurfaceKind.SourcePlanPreview,
   ),
   requestFieldRequirement(
@@ -1187,12 +1194,14 @@ export function appBuilderSourceLoweringRequestFieldsForTarget(
   if (targetRef.kind !== AppBuilderOntologyRowKind.ApplicationPattern) {
     return [];
   }
-  switch (targetRef.id) {
+  switch (targetRef.id as AppBuilderApplicationPatternId) {
     case AppBuilderApplicationPatternId.AppSection:
       return [
         ...APP_SECTION_REQUEST_FIELDS,
         ...(supportsSourcePlanPreview ? SOURCE_PLAN_PREVIEW_COMPOSITION_REQUEST_FIELDS : []),
       ];
+    case AppBuilderApplicationPatternId.ActionFeedbackStatus:
+      return supportsSourcePlanPreview ? SOURCE_PLAN_PREVIEW_COMPOSITION_REQUEST_FIELDS : [];
     case AppBuilderApplicationPatternId.CollectionList:
     case AppBuilderApplicationPatternId.CollectionCard:
       return [

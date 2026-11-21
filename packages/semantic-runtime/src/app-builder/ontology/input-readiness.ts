@@ -332,6 +332,7 @@ export function appBuilderInputReadiness(
   const issues: AppBuilderInputReadinessIssue[] = [];
   issues.push(...targetSelection.issues.map(appBuilderInputReadinessIssueForTargetSelectionIssue));
   validateSuppliedInputContracts(suppliedInputs, issues);
+  const validatedInputs = new Map<AppBuilderSuppliedInput, readonly AppBuilderSuppliedInputPayloadValidationRow[]>();
   const targets = targetRefs.flatMap((targetRef) => {
     const target = appBuilderOntologyRowDescriptor(targetRef);
     if (target == null) {
@@ -347,15 +348,14 @@ export function appBuilderInputReadiness(
       appBuilderSuppliedInputsForTarget(suppliedInputs, target.ref),
       includeInputFacets,
       issues,
+      validatedInputs,
     )];
   });
   const satisfiedCount = sumTargets(targets, (target) => target.satisfiedCount);
   const missingRequiredCount = sumTargets(targets, (target) => target.missingRequiredCount);
   const missingRecommendedCount = sumTargets(targets, (target) => target.missingRecommendedCount);
   const deferredCount = sumTargets(targets, (target) => target.deferredCount);
-  const payloadValidations = targets.flatMap((target) =>
-    target.inputDependencies.flatMap((dependency) => dependency.payloadValidations)
-  );
+  const payloadValidations = suppliedInputs.flatMap(input => validatedInputs.get(input) ?? []);
   const validPayloadCount = payloadValidations.filter((row) =>
     row.state === AppBuilderSuppliedInputPayloadValidationState.Valid
   ).length;
@@ -448,6 +448,7 @@ function targetReadiness(
   suppliedInputs: readonly AppBuilderSuppliedInput[],
   includeInputFacets: boolean,
   issues: AppBuilderInputReadinessIssue[],
+  validatedInputs: Map<AppBuilderSuppliedInput, readonly AppBuilderSuppliedInputPayloadValidationRow[]>,
 ): AppBuilderInputReadinessTargetRow {
   const dependencies = ALL_INPUT_DEPENDENCY_RELATIONS
     .filter((row) => sameRowRef(row.from, target.ref))
@@ -470,6 +471,7 @@ function targetReadiness(
         suppliedInputs,
         includeInputFacets,
         issues,
+        validatedInputs,
       )];
     });
   return {
@@ -491,6 +493,7 @@ function dependencyReadiness(
   suppliedInputs: readonly AppBuilderSuppliedInput[],
   includeInputFacets: boolean,
   issues: AppBuilderInputReadinessIssue[],
+  validatedInputs: Map<AppBuilderSuppliedInput, readonly AppBuilderSuppliedInputPayloadValidationRow[]>,
 ): AppBuilderInputReadinessDependencyRow {
   const suppliedForContract = suppliedInputs.filter((input) => input.inputContractId === inputContract.id);
   const sourceAccepted = suppliedForContract.filter((input) =>
@@ -512,6 +515,7 @@ function dependencyReadiness(
   const payloadValidations: AppBuilderSuppliedInputPayloadValidationRow[] = [];
   for (const suppliedInput of sourceAccepted) {
     const validations = validateSuppliedInputPayloads(targetRef, inputContract, suppliedInput, issues);
+    validatedInputs.set(suppliedInput, validations);
     const invalidPayloadFacetIds = validations
       .filter((row) => row.state === AppBuilderSuppliedInputPayloadValidationState.Invalid)
       .map((row) => row.inputFacetId as AppBuilderInputFacetId);

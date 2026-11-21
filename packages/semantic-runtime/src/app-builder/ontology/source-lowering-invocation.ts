@@ -1086,7 +1086,10 @@ function selectStandaloneFieldControlAccessibility(
     'Standalone field-control source lowering',
   );
   const describedByIds = standaloneFieldControlDescribedByIds(
-    appBuilderSourceLoweringAccessibilityHelpErrorPayloads(accessibilityInputs),
+    fieldAccessibilityMessages(
+      appBuilderSourceLoweringAccessibilityHelpErrorPayloads(accessibilityInputs),
+      selectedField.sourceModel.memberName,
+    ),
   );
   return {
     labelText: labelSelection.text,
@@ -1268,7 +1271,7 @@ function fieldGroupRenderedFragments(
   },
 ): AppBuilderFieldGroupRenderedFragments {
   const messageRows = fieldGroupMessageRows(
-    fieldGroupAccessibilityMessages(
+    fieldAccessibilityMessages(
       appBuilderSourceLoweringAccessibilityHelpErrorPayloads(selection.suppliedInputs),
       selection.selectedField.sourceModel.memberName,
     ),
@@ -1678,7 +1681,7 @@ function fieldGroupMessageRows(
   }));
 }
 
-function fieldGroupAccessibilityMessages(
+function fieldAccessibilityMessages(
   helpErrorPayloads: readonly AppBuilderSourceLoweringAccessibilityHelpErrorPayload[],
   fieldName: string,
 ): readonly AppBuilderSourceLoweringAccessibilityHelpErrorPayload[] {

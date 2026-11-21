@@ -3,7 +3,7 @@ import {
   sourceNameWords,
   titleSourceName,
 } from './source-name.js';
-import { normalizedSourceInputText } from './source-template.js';
+import { normalizedSourceInputText, singleQuotedTypeScriptStringLiteralText as sourceStringLiteral } from './source-template.js';
 import { uniqueStrings } from '../kernel/collections.js';
 
 export interface SourceOptionSchemaGroup {
@@ -63,9 +63,7 @@ export function sourceOptionSchemaLiteralSearchValues(value: string): readonly s
   );
 }
 
-export function sourceStringLiteral(value: string): string {
-  return `'${value.replace(/\\/gu, '\\\\').replace(/'/gu, "\\'")}'`;
-}
+export { sourceStringLiteral };
 
 export function sourceOptionDomainKey(value: string): string {
   return kebabSourceName(sourceNameWords(value)).replace(/-/gu, '');

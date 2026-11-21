@@ -10242,6 +10242,7 @@ assert.deepEqual(
     [AppBuilderSourceLoweringRequestFieldId.TemplatePath, AppBuilderSourceLoweringRequestFieldRequirementKind.Required],
     [AppBuilderSourceLoweringRequestFieldId.SourceLoweringComponentPair, AppBuilderSourceLoweringRequestFieldRequirementKind.Required],
     [AppBuilderSourceLoweringRequestFieldId.SourceLoweringTemplateInvocations, AppBuilderSourceLoweringRequestFieldRequirementKind.Optional],
+    [AppBuilderSourceLoweringRequestFieldId.SourceLoweringClassMemberInvocations, AppBuilderSourceLoweringRequestFieldRequirementKind.Optional],
     [AppBuilderSourceLoweringRequestFieldId.ComponentPairServiceCollections, AppBuilderSourceLoweringRequestFieldRequirementKind.Optional],
     [AppBuilderSourceLoweringRequestFieldId.ServiceCollectionSourceTargetPath, AppBuilderSourceLoweringRequestFieldRequirementKind.Conditional],
     [AppBuilderSourceLoweringRequestFieldId.ServiceCollectionClassName, AppBuilderSourceLoweringRequestFieldRequirementKind.Conditional],
