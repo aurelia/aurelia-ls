@@ -239,23 +239,25 @@ assert.equal(conventionResourcePrepare.value.reason, 'resource-name-has-no-autho
 assert.equal(conventionResourcePrepare.value.edits.length, 0);
 
 const attributeDeclarationStart = attributeDefinitionText.indexOf('template-probe');
-const attributeUsageStart = attributeTemplateText.indexOf('template-probe=');
+const attributeUsageStarts = [...attributeTemplateText.matchAll(/\btemplate-probe=(?=")/gu)].map(match => match.index);
 assert.notEqual(attributeDeclarationStart, -1, 'Expected template-probe custom-attribute declaration.');
-assert.notEqual(attributeUsageStart, -1, 'Expected template-probe custom-attribute usage.');
+assert.equal(attributeUsageStarts.length, 3, 'Expected the three authored template-probe attributes.');
 
 const attributePrepare = await askAttributeResourceRename(null);
 assertExactRenameAnswer(attributePrepare);
 assert.equal(attributePrepare.value.status, 'available');
 assert.equal(attributePrepare.value.placeholder, 'template-probe');
-assert.equal(attributePrepare.value.activeSource?.start, attributeUsageStart);
+assert.equal(attributePrepare.value.activeSource?.start, attributeUsageStarts[0]);
 
 const attributeRename = await askAttributeResourceRename('template-marker');
 assertExactRenameAnswer(attributeRename);
 assert.equal(attributeRename.value.status, 'available');
 assert.equal(attributeRename.value.typeScriptReferenceCount, 0);
-assert.equal(attributeRename.value.templateReferenceCount, 1);
+assert.equal(attributeRename.value.templateReferenceCount, attributeUsageStarts.length);
 expectEdit(attributeRename.value.edits, 'resource-name-declaration', 'src/template-compiler-errors-app.ts', attributeDeclarationStart, attributeDeclarationStart + 'template-probe'.length, 'template-marker', attributeFixtureRoot);
-expectEdit(attributeRename.value.edits, 'resource-attribute-target', 'src/template-compiler-errors-app.html', attributeUsageStart, attributeUsageStart + 'template-probe'.length, 'template-marker', attributeFixtureRoot);
+for (const start of attributeUsageStarts) {
+  expectEdit(attributeRename.value.edits, 'resource-attribute-target', 'src/template-compiler-errors-app.html', start, start + 'template-probe'.length, 'template-marker', attributeFixtureRoot);
+}
 
 const uppercaseAttributeRename = await askAttributeResourceRename('TemplateMarker');
 assertExactRenameAnswer(uppercaseAttributeRename);
@@ -501,7 +503,7 @@ async function askAttributeResourceRename(newName) {
   const answer = await attributeRuntime.answerAppQuery({
     kind: SemanticAppQueryKind.TemplateRename,
     sourceFilePath: attributeTemplatePath,
-    cursor: cursorInside(attributeTemplateText, attributeTemplatePath, 'template-probe="value.bind: enabled; missing.bind: enabled"', 'template-probe', 1),
+    cursor: cursorInside(attributeTemplateText, attributeTemplatePath, 'template-probe="value.bind: enabled; missing.bind:', 'template-probe', 1),
     ...(newName == null ? {} : { newName }),
     analysisDepth: 'binding-observation',
     diagnosticProjection: 'type-projection',

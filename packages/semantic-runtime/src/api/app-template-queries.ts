@@ -467,11 +467,11 @@ export class SemanticAppTemplateQueries {
     const renameRows = context.rows.filter((row) =>
       referenceRowNeedsTemplateRenameEdit(row, context.renameSurface, context.selectedMemberName)
     );
-    const nonEditableRenameRow = renameRows.find((row) => !semanticEditSourceIsEditable(this.emission, row.source));
-    if (nonEditableRenameRow != null) {
+    const editRefusal = this.renameRowRefusal(renameRows, 'Rename');
+    if (editRefusal != null) {
       return templateRenameUnavailable(
         SemanticTemplateRenameUnavailableReason.SourceNotEditable,
-        `Rename would edit readable source '${nonEditableRenameRow.source?.path ?? '(unknown)'}' that this project does not own for edits.`,
+        editRefusal,
         context.selectedMemberName,
         context.targetSource,
         activeSource,
@@ -554,6 +554,18 @@ export class SemanticAppTemplateQueries {
         coverage: renameCoverage,
       },
     );
+  }
+
+  private renameRowRefusal(rows: readonly SemanticTemplateReferenceRow[], operation: string): string | null {
+    for (const row of rows) {
+      if (!semanticEditSourceIsEditable(this.emission, row.source)) {
+        return `${operation} would edit readable source '${row.source?.path ?? '(unknown)'}' that this project does not own for edits.`;
+      }
+      if (row.referenceKind === SemanticTemplateReferenceKind.TemplateUsage && this.authoredTextForSource(row.source) !== row.name) {
+        return `${operation} could not verify the authored expression token '${row.name}' in '${row.source?.path ?? '(unknown)'}'.`;
+      }
+    }
+    return null;
   }
 
   private authoredTextForSource(source: SemanticSourceReference | null): string | null {
@@ -675,13 +687,11 @@ export class SemanticAppTemplateQueries {
       );
     }
     const propagationRows = context.templateUsageRows.filter(referenceRowNeedsTypeScriptRenamePropagationEdit);
-    const nonEditablePropagationRow = propagationRows.find((row) =>
-      !semanticEditSourceIsEditable(this.emission, row.source)
-    );
-    if (nonEditablePropagationRow != null) {
+    const editRefusal = this.renameRowRefusal(propagationRows, 'Cross-domain rename');
+    if (editRefusal != null) {
       return templateRenameUnavailable(
         SemanticTemplateRenameUnavailableReason.SourceNotEditable,
-        `Cross-domain rename would edit readable source '${nonEditablePropagationRow.source?.path ?? '(unknown)'}' that this project does not own for edits.`,
+        editRefusal,
         context.selectedMemberName,
         context.targetSource,
         context.activeSource,
@@ -2291,6 +2301,7 @@ function frameworkRegistrationAdmissionEdits(
     return null;
   }
   const importEdits = planTypeScriptImportSourceOperations(sourceFile, admission.entrypointImports);
+  if (importEdits == null) return null;
   const registerEdit = planAureliaRegisterChainSourceOperation(sourceFile, {
     appCallStart: appSource.start,
     appCallEnd: appSource.end,
@@ -2417,28 +2428,25 @@ function declareViewModelMemberEdit(
   memberName: string,
 ): SemanticTemplateCodeActionEditRow | null {
   const definition = resource.compilation.definition;
-  const className = definition.target.localName;
-  if (className == null) {
+  const declaration = semanticExactSourceReference(describeAddress(store, definition.target.declarationSourceAddressHandle));
+  if (declaration?.start == null || declaration.end == null) {
     return null;
   }
-  const definitionSource = semanticExactSourceReference(describeAddress(store, definition.sourceAddressHandle));
-  if (definitionSource?.path == null) {
-    return null;
-  }
-  const sourceFile = semanticEditProgramSourceFile(emission, definitionSource);
+  const sourceFile = semanticEditProgramSourceFile(emission, declaration);
   if (sourceFile == null) {
     return null;
   }
-  const classDecl = findClassDeclaration(sourceFile, className);
+  const classDecl = classAtDeclarationSpan(sourceFile, declaration.start, declaration.end);
   if (classDecl == null) {
     return null;
   }
 
   const insertion = classMemberInsertion(sourceFile, classDecl);
+  const field = (sourceFile.flags & ts.NodeFlags.JavaScriptFile) !== 0 ? `${memberName};` : `${memberName}!: unknown;`;
   const newText = buildBlockInsertion(
     sourceFile.text,
     insertion.offset,
-    `${insertion.indent}${memberName}!: unknown;`,
+    `${insertion.indent}${field}`,
   );
   return {
     editKind: SemanticTemplateCodeActionEditKind.DeclareViewModelMember,
@@ -2454,25 +2462,22 @@ function declareViewModelMemberEdit(
   };
 }
 
-function findClassDeclaration(
+function classAtDeclarationSpan(
   sourceFile: ts.SourceFile,
-  className: string,
-): ts.ClassDeclaration | null {
-  let found: ts.ClassDeclaration | null = null;
-  visit(sourceFile, (node) => {
-    if (found != null || !ts.isClassDeclaration(node)) {
-      return;
-    }
-    if (node.name?.text === className) {
-      found = node;
-    }
-  });
-  return found;
+  start: number,
+  end: number,
+): ts.ClassLikeDeclaration | undefined {
+  function find(node: ts.Node): ts.ClassLikeDeclaration | undefined {
+    if (node.pos > start || node.end < end) return undefined;
+    if (ts.isClassLike(node) && node.end === end && node.getStart(sourceFile) === start) return node;
+    return ts.forEachChild(node, find);
+  }
+  return find(sourceFile);
 }
 
 function classMemberInsertion(
   sourceFile: ts.SourceFile,
-  classDecl: ts.ClassDeclaration,
+  classDecl: ts.ClassLikeDeclaration,
 ): { readonly offset: number; readonly indent: string } {
   const members = [...classDecl.members];
   if (members.length > 0) {
@@ -2719,7 +2724,9 @@ function referenceRowNeedsTemplateRenameEdit(
       || row.referenceKind === SemanticTemplateReferenceKind.Declaration
     )
     && isResourceRenameSurface(surface)
-    && row.name.toLowerCase() !== selectedMemberName.toLowerCase()
+    && (surface === TemplateRenameSurface.ResourceExpression
+      ? row.name !== selectedMemberName
+      : row.name.toLowerCase() !== selectedMemberName.toLowerCase())
   ) {
     return false;
   }

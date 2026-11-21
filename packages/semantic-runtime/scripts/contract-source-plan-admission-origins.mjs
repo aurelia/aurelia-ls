@@ -180,6 +180,29 @@ assert.ok(registerEdit != null, 'Expected one app-root register-chain source ope
 assert.equal(registerEdit.oldText, '');
 assert.equal(registerEdit.newText, '.register(ShortHandBindingSyntax)\n  ');
 
+for (const imports of [
+  "import { Aurelia, StandardConfiguration, type ShortHandBindingSyntax, type SideType } from '@aurelia/runtime-html';",
+  "import { Aurelia, StandardConfiguration } from '@aurelia/runtime-html';\nimport type { ShortHandBindingSyntax, SideType } from '@aurelia/runtime-html';",
+  "import { Aurelia, StandardConfiguration, ShortHandBindingSyntax, type SideType } from '@aurelia/runtime-html';",
+]) {
+  const text = shorthandMainText.replace(/^import[^\n]+/u, imports);
+  const source = ts.createSourceFile('main.ts', text, ts.ScriptTarget.Latest, true);
+  const importsPlan = planTypeScriptImportSourceOperations(source, shorthandAdmission.entrypointImports);
+  const chain = planAureliaRegisterChainSourceOperation(source, { registrationExpressions: shorthandAdmission.registrationExpressions });
+  assert.ok(importsPlan && chain);
+  let edited = text;
+  for (const edit of [...importsPlan, chain].sort((left, right) => right.start - left.start)) {
+    assert.equal(edited.slice(edit.start, edit.end), edit.oldText);
+    edited = edited.slice(0, edit.start) + edit.newText + edited.slice(edit.end);
+  }
+  const { outputText } = ts.transpileModule(edited, { compilerOptions: { module: ts.ModuleKind.ESNext, verbatimModuleSyntax: true } });
+  assert.match(outputText, /import \{[^}]*\bShortHandBindingSyntax\b[^}]*\} from '@aurelia\/runtime-html'/u);
+  assert.match(outputText, /\.register\(ShortHandBindingSyntax\)/u);
+  assert.doesNotMatch(outputText, /\bSideType\b/u);
+}
+const occupiedName = ts.createSourceFile('main.ts', "import { Other as ShortHandBindingSyntax } from '@aurelia/runtime-html';", ts.ScriptTarget.Latest, true);
+assert.equal(planTypeScriptImportSourceOperations(occupiedName, shorthandAdmission.entrypointImports), null);
+
 const multiRootMainText = `new Aurelia()
   .register(ShortHandBindingSyntax)
   .app({

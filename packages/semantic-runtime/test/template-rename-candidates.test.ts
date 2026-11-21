@@ -6,7 +6,9 @@ import { describe, expect, test } from 'vitest';
 
 import {
   createSemanticRuntime,
+  NodeSemanticRuntimeProjectInputHost,
   SemanticAppQueryKind,
+  SemanticRuntimeProjectInputAuthority,
 } from '../src/index.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -145,6 +147,40 @@ describe('template rename candidates', () => {
     expect(answer.value.edits.some((edit) =>
       edit.source?.path?.replace(/\\/gu, '/') === 'src/display-hint.ts'
     )).toBe(false);
+  }, 60_000);
+
+  test('renames only the selected exact converter or behavior key', async () => {
+    const root = path.join(pressureRoot, 'hover-name-normalization');
+    const filePath = path.join(root, 'src/hover-name-normalization-app.html');
+    const resources = await readFile(path.join(root, 'src/resources.ts'), 'utf8');
+    const html = (await readFile(filePath, 'utf8')).replace('</template>',
+      '<p>${title | formatName & trackEdit}</p></template>');
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: root,
+      projectInputAuthority: new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost({
+        readFile: file => path.resolve(file) === filePath ? html : undefined,
+        fileExists: file => path.resolve(file) === filePath ? true : undefined,
+      })),
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    for (const selected of ['FormatName', 'formatName', 'TrackEdit', 'trackEdit']) {
+      const result = app.ask({
+        kind: SemanticAppQueryKind.TemplateRename,
+        cursor: cursorInside(html, filePath, selected, selected),
+        newName: 'renamed',
+      });
+      expect(result.value.status).toBe('available');
+      expect(result.value.edits).toHaveLength(2);
+      for (const [filename, source, original] of [
+        [path.basename(filePath), html, selected],
+        ['resources.ts', resources, "'" + selected + "'"],
+      ]) {
+        const edit = result.value.edits.find(row => path.basename(row.source.path!) === filename)!;
+        expect(source.slice(edit.source.start!, edit.source.end!)).toBe(selected);
+        const applied = source.slice(0, edit.source.start!) + edit.newText + source.slice(edit.source.end!);
+        expect(applied).toBe(source.replace(original, original.replace(selected, 'renamed')));
+      }
+    }
   }, 60_000);
 });
 

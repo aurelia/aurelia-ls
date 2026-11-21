@@ -30,14 +30,18 @@ export interface AureliaRegisterChainEditModel {
   readonly registrationExpressions: readonly AureliaEntrypointRegistrationExpression[];
 }
 
-/** Plan existing-file imports for static value import requirements. */
+/** Plan value imports atomically. A conflicting local import binding makes the plan unavailable. */
 export function planTypeScriptImportSourceOperations(
   sourceFile: ts.SourceFile,
   imports: readonly TypeScriptImportRequirement[],
-): readonly TypeScriptSourceOperationEdit[] {
-  return mergeTypeScriptImportRequirements(imports).flatMap((importRequirement) =>
-    planTypeScriptImportSourceOperation(sourceFile, importRequirement)
-  );
+): readonly TypeScriptSourceOperationEdit[] | null {
+  const edits: TypeScriptSourceOperationEdit[] = [];
+  for (const requirement of mergeTypeScriptImportRequirements(imports)) {
+    const planned = planTypeScriptImportSourceOperation(sourceFile, requirement);
+    if (planned == null) return null;
+    edits.push(...planned);
+  }
+  return edits;
 }
 
 /** Plan a `.register(...)` chain insertion immediately before the app-root `.app(...)` call. */
@@ -78,15 +82,49 @@ export function planAureliaRegisterChainSourceOperation(
 function planTypeScriptImportSourceOperation(
   sourceFile: ts.SourceFile,
   importRequirement: TypeScriptImportRequirement,
-): readonly TypeScriptSourceOperationEdit[] {
-  const missingNamedImports = missingValueNamedImports(sourceFile, importRequirement);
+): readonly TypeScriptSourceOperationEdit[] | null {
+  const missing = new Set(importRequirement.namedImports);
+  const promotions: TypeScriptSourceOperationEdit[] = [];
+  for (const declaration of sourceFile.statements.filter(ts.isImportDeclaration)) {
+    const clause = declaration.importClause;
+    if (clause == null) continue;
+    if (missing.has(clause.name?.text ?? '')) return null;
+    const bindings = clause.namedBindings;
+    if (bindings == null) continue;
+    if (ts.isNamespaceImport(bindings)) {
+      if (missing.has(bindings.name.text)) return null;
+      continue;
+    }
+    const needed = bindings.elements.filter(specifier => missing.has(specifier.name.text));
+    if (needed.length === 0) continue;
+    if (!ts.isStringLiteral(declaration.moduleSpecifier) || declaration.moduleSpecifier.text !== importRequirement.moduleSpecifier
+      || needed.some(specifier => specifier.propertyName != null && specifier.propertyName.text !== specifier.name.text)) {
+      return null;
+    }
+    if (clause.isTypeOnly) {
+      if (clause.name != null) return null;
+      promotions.push(removeImportTypeModifier(sourceFile, clause));
+      for (const specifier of bindings.elements) {
+        if (!missing.has(specifier.name.text) && !specifier.isTypeOnly) {
+          const start = specifier.getStart(sourceFile);
+          promotions.push(editForRange(sourceFile, TypeScriptSourceOperationEditKind.ImportDeclaration, start, start, 'type '));
+        }
+      }
+    }
+    for (const specifier of needed) {
+      missing.delete(specifier.name.text);
+      if (specifier.isTypeOnly) promotions.push(removeImportTypeModifier(sourceFile, specifier));
+    }
+  }
+  const missingNamedImports = [...missing];
   const missingDefaultImport = importRequirement.defaultImport != null
     && !hasValueDefaultImport(sourceFile, importRequirement.moduleSpecifier, importRequirement.defaultImport);
   if (missingNamedImports.length === 0 && !missingDefaultImport) {
-    return [];
+    return promotions;
   }
 
-  const editableImport = findEditableValueImport(sourceFile, importRequirement.moduleSpecifier);
+  // An additional declaration keeps the new bindings disjoint from any type-token edits above.
+  const editableImport = promotions.length === 0 ? findEditableValueImport(sourceFile, importRequirement.moduleSpecifier) : null;
   if (editableImport != null) {
     return [updateImportDeclaration(sourceFile, editableImport, {
       ...importRequirement,
@@ -95,40 +133,18 @@ function planTypeScriptImportSourceOperation(
     })];
   }
 
-  return [insertImportDeclaration(sourceFile, {
+  return [...promotions, insertImportDeclaration(sourceFile, {
     moduleSpecifier: importRequirement.moduleSpecifier,
     defaultImport: missingDefaultImport ? importRequirement.defaultImport : undefined,
     namedImports: missingNamedImports.length === 0 ? undefined : missingNamedImports,
   })];
 }
 
-function missingValueNamedImports(
-  sourceFile: ts.SourceFile,
-  importRequirement: TypeScriptImportRequirement,
-): readonly string[] {
-  const required = importRequirement.namedImports ?? [];
-  if (required.length === 0) {
-    return [];
-  }
-  const imported = valueNamedImportsForModule(sourceFile, importRequirement.moduleSpecifier);
-  return required.filter((name) => !imported.has(name));
-}
-
-function valueNamedImportsForModule(
-  sourceFile: ts.SourceFile,
-  moduleSpecifier: string,
-): ReadonlySet<string> {
-  const imported = new Set<string>();
-  for (const declaration of importDeclarationsForModule(sourceFile, moduleSpecifier)) {
-    const clause = declaration.importClause;
-    if (clause == null || clause.isTypeOnly || clause.namedBindings == null || !ts.isNamedImports(clause.namedBindings)) {
-      continue;
-    }
-    for (const specifier of clause.namedBindings.elements) {
-      imported.add(specifier.name.text);
-    }
-  }
-  return imported;
+function removeImportTypeModifier(sourceFile: ts.SourceFile, node: ts.ImportClause | ts.ImportSpecifier): TypeScriptSourceOperationEdit {
+  const keyword = node.getFirstToken(sourceFile)!;
+  const start = keyword.getStart(sourceFile);
+  const end = keyword.end + (sourceFile.text[keyword.end] === ' ' ? 1 : 0);
+  return editForRange(sourceFile, TypeScriptSourceOperationEditKind.ImportDeclaration, start, end, '');
 }
 
 function hasValueDefaultImport(
