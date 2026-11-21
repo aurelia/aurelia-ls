@@ -801,15 +801,15 @@ function containerRootBasis(
   sourceApiRoots: AureliaSourceApiRootFacts,
   node: { readonly type?: ts.TypeNode; readonly initializer?: ts.Expression },
 ): FrameworkServiceRootBasis | null {
-  if (typeNodeReferencesImportedExport(node.type ?? null, bindings, new Set(['IContainer']))) {
-    return FrameworkServiceRootBasis.FrameworkTypeAnnotation;
-  }
   const initializer = node.initializer == null ? null : unwrapExpression(node.initializer);
   if (initializer != null && ts.isCallExpression(initializer) && callCreatesAureliaContainer(initializer, bindings)) {
     return FrameworkServiceRootBasis.DirectConstructor;
   }
-  return sourceApiRoots.expressionCreatesAureliaContainerRoot(sourcePath, sourceFile, node.initializer ?? null)
-    ? FrameworkServiceRootBasis.DiActivationBacked
+  if (sourceApiRoots.expressionCreatesAureliaContainerRoot(sourcePath, sourceFile, node.initializer ?? null)) {
+    return FrameworkServiceRootBasis.DiActivationBacked;
+  }
+  return typeNodeReferencesImportedExport(node.type ?? null, bindings, new Set(['IContainer']))
+    ? FrameworkServiceRootBasis.FrameworkTypeAnnotation
     : null;
 }
 
