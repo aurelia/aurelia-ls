@@ -2,7 +2,7 @@
 
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -309,7 +309,8 @@ async function main() {
   const client = new LspClient(SERVER_PATH);
   try {
     await initializeServer(client, fixtureRoot, fixtureName);
-    await openProbeDocuments(client, fixtureRoot, probes, readFixtureText);
+    // A focused probe sees the same open documents (and document versions) as the full lane.
+    const openFiles = await openProbeDocuments(client, fixtureRoot, allLaneProbes, readFixtureText);
 
     // A disk-equal didOpen only establishes editor overlay authority; it deliberately does not
     // invalidate analysis. Each following request on this same connection is the readiness barrier:
@@ -317,7 +318,7 @@ async function main() {
 
     const results = [];
     for (const probe of probes) {
-      results.push(await runLaneProbe(client, fixtureRoot, options.lane, probe, readFixtureText));
+      results.push(await runLaneProbe(client, fixtureRoot, options.lane, probe, readFixtureText, openFiles));
     }
 
     const snapshot = renderSnapshot({
@@ -326,7 +327,6 @@ async function main() {
       lane: options.lane,
       probeFile,
       probes: results,
-      selectedProbe: options.probe ?? null,
     });
     const snapshotPath = path.resolve(PACKAGE_ROOT, "snapshots", fixtureName, `${options.lane}.snap.md`);
 
@@ -341,7 +341,8 @@ async function main() {
           "Snapshot file does not exist. Re-run with --update to create it.",
         );
       }
-      const existing = await readFile(snapshotPath, "utf8");
+      const golden = await readFile(snapshotPath, "utf8");
+      const existing = options.probe == null ? golden : snapshotForProbe(golden, allLaneProbes, options.probe);
       if (existing !== snapshot) {
         throw new SnapshotMismatchError(
           path.relative(REPO_ROOT, snapshotPath),
@@ -391,6 +392,9 @@ function parseArgs(args) {
     }
   }
 
+  if (options.probe != null && options.update) {
+    throw new HarnessError("Cannot update a shared lane snapshot with --probe. Omit --probe to update the full lane.");
+  }
   return options;
 }
 
@@ -475,24 +479,26 @@ async function initializeServer(client, fixtureRoot, fixtureName) {
 }
 
 async function openProbeDocuments(client, fixtureRoot, probes, readFixtureText) {
-  const opened = new Set();
+  const opened = new Map();
   for (const probe of probes) {
     const relativeFile = normalizeRelativePath(probe.file);
     if (opened.has(relativeFile)) {
       continue;
     }
-    opened.add(relativeFile);
+    const version = 1;
+    opened.set(relativeFile, version);
     const absoluteFile = resolveFixturePath(fixtureRoot, relativeFile);
     const uri = pathToFileURL(absoluteFile).href;
     client.notify("textDocument/didOpen", {
       textDocument: {
         uri,
         languageId: languageIdForPath(relativeFile),
-        version: 1,
+        version,
         text: await readFixtureText(relativeFile),
       },
     });
   }
+  return opened;
 }
 
 function languageIdForPath(file) {
@@ -511,10 +517,10 @@ function languageIdForPath(file) {
   return "plaintext";
 }
 
-async function runLaneProbe(client, fixtureRoot, lane, probe, readFixtureText) {
+async function runLaneProbe(client, fixtureRoot, lane, probe, readFixtureText, openFiles) {
   switch (lane) {
     case "rename":
-      return runRenameProbe(client, fixtureRoot, probe, readFixtureText);
+      return runRenameProbe(client, fixtureRoot, probe, readFixtureText, openFiles);
     case "references":
       return runReferencesProbe(client, fixtureRoot, probe, readFixtureText);
     case "hover":
@@ -528,7 +534,7 @@ async function runLaneProbe(client, fixtureRoot, lane, probe, readFixtureText) {
     case "diagnostics":
       return runDiagnosticsProbe(client, fixtureRoot, probe, readFixtureText);
     case "codeAction":
-      return runCodeActionProbe(client, fixtureRoot, probe, readFixtureText);
+      return runCodeActionProbe(client, fixtureRoot, probe, readFixtureText, openFiles);
     default:
       throw new HarnessError(`Unsupported lane: ${lane}`);
   }
@@ -664,7 +670,7 @@ function formatCompletionTextEditSummary(edit) {
     : `${range} ${JSON.stringify(edit.newText)} (${edit.status}: ${edit.message})`;
 }
 
-async function runRenameProbe(client, fixtureRoot, probe, readFixtureText) {
+async function runRenameProbe(client, fixtureRoot, probe, readFixtureText, openFiles) {
   const relativeFile = normalizeRelativePath(probe.file);
   const sourceText = await readFixtureText(relativeFile);
   const anchor = resolveAnchorPosition(sourceText, probe);
@@ -696,6 +702,7 @@ async function runRenameProbe(client, fixtureRoot, probe, readFixtureText) {
         fixtureRoot,
         readFixtureText,
         expectedOldTexts,
+        openFiles,
       });
 
   return {
@@ -850,7 +857,7 @@ async function runDiagnosticsProbe(client, fixtureRoot, probe, readFixtureText) 
   };
 }
 
-async function runCodeActionProbe(client, fixtureRoot, probe, readFixtureText) {
+async function runCodeActionProbe(client, fixtureRoot, probe, readFixtureText, openFiles) {
   const relativeFile = normalizeRelativePath(probe.file);
   const sourceText = await readFixtureText(relativeFile);
   const anchor = resolveAnchorPosition(sourceText, probe);
@@ -914,6 +921,7 @@ async function runCodeActionProbe(client, fixtureRoot, probe, readFixtureText) {
         fixtureRoot,
         readFixtureText,
         expectedOldTexts,
+        openFiles,
       }),
     });
   }
@@ -1519,11 +1527,42 @@ function isRange(value) {
   );
 }
 
-async function applyWorkspaceEdit({ workspaceEdit, fixtureRoot, readFixtureText, expectedOldTexts }) {
+export async function requireCurrentLaneTransaction(workspaceEdit, fixtureRoot, readFixtureText, openFiles) {
+  const { AURELIA_WORKSPACE_EDIT_TRANSACTION_SCHEMA, aureliaWorkspaceEditContentRevision } =
+    await import(pathToFileURL(path.join(REPO_ROOT, "packages/language-server/out/protocol.js")).href);
+  const transaction = workspaceEdit.aureliaWorkspaceEditTransaction;
+  const changes = workspaceEdit.documentChanges;
+  if (transaction?.schema !== AURELIA_WORKSPACE_EDIT_TRANSACTION_SCHEMA || !Array.isArray(transaction.documents)
+    || !Array.isArray(changes) || changes.length === 0 || changes.length !== transaction.documents.length || workspaceEdit.changes != null) {
+    throw new HarnessError("Workspace edit requires one transaction document per versioned edit target.");
+  }
+  const documents = new Map(transaction.documents.map(document => [document.uri, document]));
+  for (const change of changes) {
+    const target = change.textDocument;
+    const document = documents.get(target?.uri);
+    const file = target && uriToFixtureRelativePath(target.uri, fixtureRoot);
+    if (!document || !file) throw new HarnessError("Invalid or duplicate transaction target.");
+    documents.delete(target.uri);
+    const version = openFiles.get(file) ?? null;
+    if (target.version !== version || document.version !== version) throw new HarnessError(`Transaction version differs for ${file}.`);
+    if (document.contentRevision !== aureliaWorkspaceEditContentRevision(await readFixtureText(file))) {
+      throw new HarnessError(`Transaction content revision differs for ${file}.`);
+    }
+    if (document.physicalPath == null) {
+      if (version == null) throw new HarnessError(`Missing physical identity for closed target ${file}.`);
+    } else if (!path.isAbsolute(document.physicalPath)
+      || path.relative(await realpath(document.physicalPath), await realpath(resolveFixturePath(fixtureRoot, file))) !== "") {
+      throw new HarnessError(`Transaction physical identity differs for ${file}.`);
+    }
+  }
+}
+
+async function applyWorkspaceEdit({ workspaceEdit, fixtureRoot, readFixtureText, expectedOldTexts, openFiles }) {
   if (!workspaceEdit) {
     return emptyApplyResult("no-workspace-edit", expectedOldTexts);
   }
 
+  await requireCurrentLaneTransaction(workspaceEdit, fixtureRoot, readFixtureText, openFiles);
   const collected = collectWorkspaceTextEdits(workspaceEdit);
   const anomalies = [...collected.unsupported];
   const grouped = new Map();
@@ -1926,16 +1965,30 @@ function readRangeText(text, range) {
   return text.slice(offsets.start, offsets.end);
 }
 
-function renderSnapshot({ fixtureName, fixtureRoot, lane, probeFile, probes, selectedProbe }) {
+export function snapshotForProbe(snapshot, probes, selectedId) {
+  const positions = probes.map(({ id }) => {
+    const heading = `\n## ${id}\n\n### Probe\n`;
+    const index = snapshot.indexOf(heading);
+    if (index < 0 || snapshot.indexOf(heading, index + 1) !== -1) {
+      throw new HarnessError(`Expected one snapshot section for probe ${id}.`);
+    }
+    return index;
+  });
+  const selected = probes.findIndex(({ id }) => id === selectedId);
+  if (selected < 0 || positions.some((start, index) => index > 0 && start <= positions[index - 1])) {
+    throw new HarnessError("Probe selection does not match the lane snapshot order.");
+  }
+  const content = snapshot.slice(positions[selected], positions[selected + 1]);
+  return snapshot.slice(0, positions[0]) + content.trimEnd() + "\n";
+}
+
+function renderSnapshot({ fixtureName, fixtureRoot, lane, probeFile, probes }) {
   const lines = [];
   lines.push(`# ${fixtureName} ${lane} lane snapshot`);
   lines.push("");
   lines.push(`Fixture: \`${toRepoRelative(fixtureRoot)}\``);
   lines.push(`Probe file: \`${toRepoRelative(probeFile)}\``);
   lines.push(`Lane: \`${lane}\``);
-  if (selectedProbe) {
-    lines.push(`Probe filter: \`${selectedProbe}\``);
-  }
   lines.push("");
   lines.push("This snapshot records observed language-server behavior. Operator verdicts live in the probe data.");
   lines.push("");

@@ -1,7 +1,8 @@
 import { spawnSync } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, symlink, unlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, realpath, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 import {
   LaneDetectionError,
@@ -13,7 +14,8 @@ import {
   laneDetectionPlanReceipt,
   parseLaneDetectionArguments,
 } from "../scripts/detect-lanes.mjs";
-import { laneStartupTimeoutMs } from "../scripts/run-lane.mjs";
+import { laneStartupTimeoutMs, requireCurrentLaneTransaction, snapshotForProbe } from "../scripts/run-lane.mjs";
+import { AURELIA_WORKSPACE_EDIT_TRANSACTION_SCHEMA, aureliaWorkspaceEditContentRevision } from "../../language-server/out/protocol.js";
 
 const temporaryRoots: string[] = [];
 const spawnedProcessRoots: number[] = [];
@@ -26,6 +28,35 @@ afterEach(async () => {
 });
 
 describe("aggregate lane detection", () => {
+  test("checks the resolved edit against the fixture snapshot before applying it", async () => {
+    const root = await mkdtemp(join(tmpdir(), "aurelia-lane-edit-"));
+    temporaryRoots.push(root);
+    const file = join(root, "main.ts");
+    await writeFile(file, "before");
+    const uri = pathToFileURL(file).href;
+    const read = (relative: string) => readFile(join(root, relative), "utf8");
+    const receipt = { uri, version: null, physicalPath: await realpath(file), contentRevision: aureliaWorkspaceEditContentRevision("before") };
+    const edit = {
+      documentChanges: [{ textDocument: { uri, version: null }, edits: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 6 } }, newText: "after" }] }],
+      aureliaWorkspaceEditTransaction: { schema: AURELIA_WORKSPACE_EDIT_TRANSACTION_SCHEMA, documents: [receipt] },
+    };
+    await requireCurrentLaneTransaction(edit, root, read, new Map());
+    await expect(requireCurrentLaneTransaction({ documentChanges: edit.documentChanges }, root, read, new Map()))
+      .rejects.toThrow("transaction document");
+    await expect(requireCurrentLaneTransaction(edit, root, read, new Map([["main.ts", 1]])))
+      .rejects.toThrow("version differs");
+    await writeFile(file, "changed");
+    await expect(requireCurrentLaneTransaction(edit, root, read, new Map())).rejects.toThrow("content revision differs");
+  });
+
+  test("compares a focused probe with its section of the complete snapshot", () => {
+    const header = "# lane snapshot\n";
+    const section = (name: string) => `\n## ${name}\n\n### Probe\n\nbody for ${name}\n`;
+    const probes = [{ id: "one" }, { id: "two" }, { id: "three" }];
+    const full = header + probes.map(probe => section(probe.id)).join("");
+    for (const probe of probes) expect(snapshotForProbe(full, probes, probe.id)).toBe(header + section(probe.id));
+  });
+
   test("allows a loaded release runner thirty seconds for each fresh language-server startup", () => {
     expect(laneStartupTimeoutMs).toBe(30_000);
   });
