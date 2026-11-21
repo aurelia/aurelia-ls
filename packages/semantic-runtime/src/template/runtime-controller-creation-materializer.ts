@@ -83,8 +83,12 @@ import {
   HydrateTemplateControllerInstruction,
   IteratorBindingInstruction,
   MultiAttrInstruction,
+  InterpolationInstruction,
+  PropertyBindingInstruction,
   SetPropertyInstruction,
+  type TemplateInstruction,
 } from './instruction-ir.js';
+import { frameworkTemplateControllerSemanticsForController, frameworkTemplateControllerSemanticsForInstruction } from './template-controller-semantics.js';
 import { TemplateProductDetails } from './product-details.js';
 import {
   RuntimeControllerCreationKind,
@@ -1004,13 +1008,14 @@ export class RuntimeControllerCreationMaterializer {
     records: KernelStoreRecord[],
     controllerIssues: RuntimeControllerIssue[],
   ): void {
+    if (!(creation.instruction instanceof HydrateTemplateControllerInstruction)
+      || frameworkTemplateControllerSemanticsForInstruction(this.publication, creation.instruction) == null) return;
     this.recordElseTemplateControllerLinkIssues(creation, frame, source, records, controllerIssues);
     this.recordSwitchTemplateControllerLinkIssues(creation, frame, source, records, controllerIssues);
     this.recordPromiseTemplateControllerLinkIssues(creation, frame, source, records, controllerIssues);
     this.recordPortalTemplateControllerActivationIssues(creation, frame, source, records, controllerIssues);
 
-    if (!(creation.instruction instanceof HydrateTemplateControllerInstruction)
-      || creation.instruction.controllerName !== 'repeat') {
+    if (creation.instruction.controllerName !== 'repeat') {
       return;
     }
 
@@ -1056,7 +1061,8 @@ export class RuntimeControllerCreationMaterializer {
       || creation.instruction.controllerName !== 'portal') {
       return;
     }
-    const instructions = staticSetPropertyInstructions(this.publication, creation.instruction.bindingInstructionProductHandles);
+    const instructions = creation.instruction.bindingInstructionProductHandles.flatMap(handle =>
+      this.publication.readProductDetail(TemplateProductDetails.Instruction, handle) ?? []);
     portalTemplateControllerActivationIssues(instructions).forEach((issue, index) => {
       const publication = this.controllerIssuePublisher.publish(
         `${creation.local}:controller-issue:portal-activation:${index}:${issue.kind}`,
@@ -1085,7 +1091,7 @@ export class RuntimeControllerCreationMaterializer {
     if (!(creation.instruction instanceof HydrateTemplateControllerInstruction)) {
       return;
     }
-    const issue = switchTemplateControllerLinkIssue(creation);
+    const issue = switchTemplateControllerLinkIssue(creation, this.publication);
     if (issue == null) {
       return;
     }
@@ -1115,7 +1121,7 @@ export class RuntimeControllerCreationMaterializer {
     if (!(creation.instruction instanceof HydrateTemplateControllerInstruction)) {
       return;
     }
-    const issue = elseTemplateControllerLinkIssue(creation);
+    const issue = elseTemplateControllerLinkIssue(creation, this.publication);
     if (issue == null) {
       return;
     }
@@ -1145,7 +1151,7 @@ export class RuntimeControllerCreationMaterializer {
     if (!(creation.instruction instanceof HydrateTemplateControllerInstruction)) {
       return;
     }
-    const issue = promiseTemplateControllerLinkIssue(creation);
+    const issue = promiseTemplateControllerLinkIssue(creation, this.publication);
     if (issue == null) {
       return;
     }
@@ -1428,6 +1434,7 @@ function repeatOptionIssue(
 
 function switchTemplateControllerLinkIssue(
   creation: ClosedRuntimeControllerCreationRequest,
+  publication: KernelPublicationContext,
 ): {
   readonly kind: RuntimeControllerIssueKind;
   readonly message: string;
@@ -1441,7 +1448,7 @@ function switchTemplateControllerLinkIssue(
   const switchController = creation.parent.parent;
   if (switchController == null
     || switchController.creationKind !== RuntimeControllerCreationKind.TemplateController
-    || switchController.name !== 'switch') {
+    || frameworkTemplateControllerSemanticsForController(publication, switchController)?.controllerName !== 'switch') {
     return {
       kind: RuntimeControllerIssueKind.SwitchInvalidUsage,
       message: `Invalid [${creation.instruction.controllerName}] usage. The parent [switch] controller was not found.`,
@@ -1450,7 +1457,8 @@ function switchTemplateControllerLinkIssue(
   }
 
   if (creation.instruction.controllerName === 'default-case'
-    && creation.parent.readChildren().some((child) => child.name === 'default-case')) {
+    && creation.parent.readChildren().some(child =>
+      frameworkTemplateControllerSemanticsForController(publication, child)?.controllerName === 'default-case')) {
     return {
       kind: RuntimeControllerIssueKind.SwitchNoMultipleDefault,
       message: `Invalid [default-case] usage. Multiple default-case controllers are linked to the same [switch].`,
@@ -1463,6 +1471,7 @@ function switchTemplateControllerLinkIssue(
 
 function elseTemplateControllerLinkIssue(
   creation: ClosedRuntimeControllerCreationRequest,
+  publication: KernelPublicationContext,
 ): {
   readonly kind: RuntimeControllerIssueKind;
   readonly message: string;
@@ -1475,7 +1484,7 @@ function elseTemplateControllerLinkIssue(
 
   const previousSibling = lastRuntimeController(creation.parent.readChildren());
   if (previousSibling?.creationKind === RuntimeControllerCreationKind.TemplateController
-    && previousSibling.name === 'if') {
+    && frameworkTemplateControllerSemanticsForController(publication, previousSibling)?.controllerName === 'if') {
     return null;
   }
   return {
@@ -1491,6 +1500,7 @@ function lastRuntimeController(controllers: readonly RuntimeControllerFrame[]): 
 
 function promiseTemplateControllerLinkIssue(
   creation: ClosedRuntimeControllerCreationRequest,
+  publication: KernelPublicationContext,
 ): {
   readonly kind: RuntimeControllerIssueKind;
   readonly message: string;
@@ -1504,7 +1514,7 @@ function promiseTemplateControllerLinkIssue(
   const promiseController = creation.parent.parent;
   if (promiseController == null
     || promiseController.creationKind !== RuntimeControllerCreationKind.TemplateController
-    || promiseController.name !== 'promise') {
+    || frameworkTemplateControllerSemanticsForController(publication, promiseController)?.controllerName !== 'promise') {
     return {
       kind: RuntimeControllerIssueKind.PromiseInvalidUsage,
       message: `Invalid [${creation.instruction.controllerName}] usage. The parent [promise].resolve controller was not found.`,
@@ -1520,7 +1530,7 @@ function isPromiseResultControllerName(name: string): boolean {
 }
 
 function portalTemplateControllerActivationIssues(
-  instructions: readonly SetPropertyInstruction[],
+  bindings: readonly TemplateInstruction[],
 ): readonly {
   readonly kind: RuntimeControllerIssueKind;
   readonly message: string;
@@ -1533,6 +1543,7 @@ function portalTemplateControllerActivationIssues(
     readonly frameworkErrorCode: RuntimeHtmlControllerFrameworkErrorCode;
     readonly instruction: SetPropertyInstruction;
   }[] = [];
+  const instructions = bindings.filter((binding): binding is SetPropertyInstruction => binding instanceof SetPropertyInstruction);
   const position = instructions.find((instruction) => instruction.targetProperty === PortalBindableName.Position) ?? null;
   if (position != null && !isPortalInsertPosition(position.value)) {
     issues.push({
@@ -1556,7 +1567,9 @@ function portalTemplateControllerActivationIssues(
       frameworkErrorCode: RuntimeHtmlControllerFrameworkErrorCode.PortalQueryEmpty,
       instruction: target,
     });
-  } else if (target == null) {
+  } else if (target == null && !bindings.some(binding =>
+    (binding instanceof PropertyBindingInstruction && binding.targetProperty === PortalBindableName.Target)
+    || (binding instanceof InterpolationInstruction && binding.target === PortalBindableName.Target))) {
     issues.push({
       kind: RuntimeControllerIssueKind.PortalNoTarget,
       message: 'Invalid strict portal target resolution: no static target was supplied.',
@@ -1566,15 +1579,6 @@ function portalTemplateControllerActivationIssues(
   }
 
   return issues;
-}
-
-function staticSetPropertyInstructions(
-  publication: KernelPublicationContext,
-  handles: readonly ProductHandle[],
-): readonly SetPropertyInstruction[] {
-  return handles
-    .map((handle) => publication.readProductDetail(TemplateProductDetails.Instruction, handle))
-    .filter((instruction): instruction is SetPropertyInstruction => instruction instanceof SetPropertyInstruction);
 }
 
 function staticPortalStrictValue(value: string): boolean {
