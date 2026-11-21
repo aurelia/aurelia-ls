@@ -196,6 +196,8 @@ export class BuiltInSyntaxCatalogMaterializer {
     readonly store: KernelStore,
     /** Immediate or staged owner of built-in syntax records and rich details. */
     private readonly publication: KernelPublicationContext,
+    /** Prefix for syntax derived from one project's authored configuration. */
+    private readonly ownerPrefix = '',
   ) {
     this.executables = new SyntaxResourceExecutableMaterializer(store);
   }
@@ -275,7 +277,9 @@ export class BuiltInSyntaxCatalogMaterializer {
 
   private recordsForCatalog(input: BuiltInSyntaxCatalogInput): BuiltInSyntaxCatalogPublication {
     const records: KernelStoreRecord[] = [];
-    const local = syntaxCatalogLocal(input);
+    const local = this.ownerPrefix + syntaxCatalogLocal(input);
+    // Shared syntax (e.g. translation parameters) still belongs to a particular configured catalog.
+    const memberPrefix = this.ownerPrefix === '' ? '' : `${local}:`;
     const source = this.recordsForSource(
       syntaxCatalogSourceLocal(input),
       input.packageId,
@@ -287,7 +291,7 @@ export class BuiltInSyntaxCatalogMaterializer {
     const attributePatternEmissions = input.attributePatterns.map((pattern) =>
       this.recordsForAttributePattern(
         pattern,
-        builtInAttributePatternLocal(input, pattern),
+        memberPrefix + builtInAttributePatternLocal(input, pattern),
         handles.productHandle,
         handles.identityHandle,
         source,
@@ -296,7 +300,7 @@ export class BuiltInSyntaxCatalogMaterializer {
     const bindingCommandEmissions = input.bindingCommands.map((command) =>
       this.recordsForBindingCommand(
         command,
-        builtInBindingCommandLocal(input, command),
+        memberPrefix + builtInBindingCommandLocal(input, command),
         handles.productHandle,
         handles.identityHandle,
         source,
@@ -611,9 +615,9 @@ export class ConfiguredBuiltInSyntaxCatalogMaterializer {
     private readonly support: FrameworkSupportCatalogs,
   ) {}
 
-  materialize(configuration: ConfigurationKernelEmission): ConfiguredBuiltInSyntaxCatalogEmission {
+  materialize(configuration: ConfigurationKernelEmission, projectKey: string): ConfiguredBuiltInSyntaxCatalogEmission {
     const selectionRequests = readConfiguredSyntaxCatalogRequests(configuration, this.publication);
-    const catalogEmission = this.catalogEmissionForRequests(selectionRequests);
+    const catalogEmission = this.catalogEmissionForRequests(selectionRequests, projectKey);
     const selectionEmission = this.selectionEmissionForRequests(selectionRequests, catalogEmission);
     this.publication.publish(new KernelPublicationPlan(
       new KernelStoreBatch(selectionEmission.records, 'configured-built-in-syntax-catalogs'),
@@ -633,12 +637,26 @@ export class ConfiguredBuiltInSyntaxCatalogMaterializer {
 
   private catalogEmissionForRequests(
     selectionRequests: readonly ConfiguredSyntaxCatalogRequest[],
+    projectKey: string,
   ): BuiltInSyntaxCatalogEmission {
     const catalogInputs = uniqueByKey(
       selectionRequests.flatMap((request) => request.catalogInputs),
       syntaxCatalogInputKey,
     );
-    return this.support.materializeSyntaxCatalogs(catalogInputs);
+    const variants = catalogInputs.filter(input => input.variantKey != null);
+    if (variants.length === 0) return this.support.materializeSyntaxCatalogs(catalogInputs);
+    const fixed = this.support.materializeSyntaxCatalogs(catalogInputs.filter(input => input.variantKey == null));
+    // A changed alias list belongs to the app publication. Fixed framework inputs remain workspace-owned.
+    const configured = new BuiltInSyntaxCatalogMaterializer(
+      this.store, this.publication, `configured:${localKeyPart(projectKey)}:`,
+    ).materialize(variants);
+    return new BuiltInSyntaxCatalogEmission(
+      [...fixed.catalogs, ...configured.catalogs],
+      [...fixed.attributePatterns, ...configured.attributePatterns],
+      [...fixed.bindingCommands, ...configured.bindingCommands],
+      [...fixed.compiledPatterns, ...configured.compiledPatterns],
+      [...fixed.records, ...configured.records],
+    );
   }
 
   private selectionEmissionForRequests(

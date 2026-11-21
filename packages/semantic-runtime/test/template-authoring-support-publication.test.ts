@@ -35,6 +35,28 @@ import { TypeSystemProjectBuilder } from '../src/type-system/project.js';
 import { TypeSystemProductDetails } from '../src/type-system/product-details.js';
 
 describe('template authoring support publication', () => {
+  test('retires an authored syntax variant with its app while another project retains the same alias', async () => {
+    const root = fileURLToPath(new URL('../fixtures/pressure/i18n-custom-translation-alias/', import.meta.url));
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: root,
+      storeKey: 'test:project-owned-syntax',
+      projects: ['first', 'second'].map(projectKey => ({ projectKey, rootDir: root })),
+    });
+    const first = await runtime.openApp({ projectKey: 'first', analysisDepth: 'runtime-topology' });
+    const second = await runtime.openApp({ projectKey: 'second', analysisDepth: 'runtime-topology' });
+    const catalog = (app: typeof first) => {
+      const variants = app.emission.appWorld.configuredSyntax.catalogEmission.catalogs.filter(row => row.variantKey != null);
+      expect(variants).toHaveLength(1);
+      return variants[0]!.productHandle;
+    };
+    const firstHandle = catalog(first), secondHandle = catalog(second);
+    expect(firstHandle).not.toBe(secondHandle);
+    expect(runtime.workspace.store.read(firstHandle)).not.toBeNull();
+    expect(first.retireGeneration()).toBe(true);
+    expect(runtime.workspace.store.read(firstHandle)).toBeNull();
+    expect(runtime.workspace.store.read(secondHandle)).not.toBeNull();
+  });
+
   test('keeps canonical support independent of the app computation that borrows it', () => {
     const store = new KernelStore('template-authoring-support-publication');
     const lifecycle = new ComputationLifecycleRegistry(store);

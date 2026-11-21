@@ -172,7 +172,7 @@ export class AureliaAppWorldComposer {
     project: ProjectBootFrame,
   ): AureliaAppWorldEmission {
     const kernelConfiguration = configuration.readConfiguration();
-    const configuredSyntax = this.configuredSyntaxMaterializer.materialize(kernelConfiguration);
+    const configuredSyntax = this.configuredSyntaxMaterializer.materialize(kernelConfiguration, project.projectKey);
     const configuredResources = this.configuredResourceMaterializer.materialize(kernelConfiguration, typeSystem);
     const configuredRenderers = this.configuredRendererMaterializer.materialize(kernelConfiguration);
     const diWorld = this.constructDiWorld(
