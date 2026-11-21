@@ -363,28 +363,16 @@ describe('hover cursor semantic carriers', () => {
     const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-completion-member-metadata');
     const templatePath = path.join(fixtureRoot, 'src/app.html');
     const scriptPath = path.join(fixtureRoot, 'src/app.ts');
-    const originalTemplateText = readFileSync(templatePath, 'utf8');
-    const originalScriptText = readFileSync(scriptPath, 'utf8');
-    const scriptText = originalScriptText
-      .replace(
-        "import { customElement } from 'aurelia';",
-        "import { customAttribute, customElement } from 'aurelia';",
-      )
-      .replace(
-        '@customElement({',
-        [
-          "@customAttribute({ name: 'multi-probe', bindables: ['missingValue'] })",
-          'class MultiProbe {}',
-          '',
-          '@customElement({',
-        ].join('\n'),
-      )
-      .replace('  template,', '  template,\n  dependencies: [MultiProbe],')
-      .replace(
-        'export class App {',
-        "export class App {\n  public mystery: unknown = 'mystery';",
-      );
-    const templateText = originalTemplateText.replace('  <p>${}</p>', [
+    const scriptText = [
+      "import { customAttribute, customElement } from 'aurelia';",
+      "import template from './app.html';",
+      "@customAttribute({ name: 'multi-probe', bindables: ['missingValue'] })",
+      'class MultiProbe {}',
+      "@customElement({ name: 'app', template, dependencies: [MultiProbe] })",
+      "export class App { public title = 'Theme preview'; public mystery: unknown = 'mystery'; }",
+    ].join('\n');
+    const templateText = [
+      '<template>',
       '  <let local-title.bind="title"></let>',
       '  <p>${localTitle}</p>',
       '  <div repeat.for="item of [title]">${item}:${$index}</div>',
@@ -394,7 +382,8 @@ describe('hover cursor semantic carriers', () => {
       '  <p>${missingLabel}</p>',
       '  <p>${mystery}</p>',
       '  <p>${title}</p>',
-    ].join('\n'));
+      '</template>',
+    ].join('\n');
     const runtime = await createSemanticRuntime({
       workspaceRoot: fixtureRoot,
       storeKey: 'hover-cursor-local-role-carriers',
@@ -695,21 +684,14 @@ describe('hover cursor semantic carriers', () => {
     const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-completion-member-metadata');
     const templatePath = path.join(fixtureRoot, 'src/app.html');
     const scriptPath = path.join(fixtureRoot, 'src/app.ts');
-    const scriptText = readFileSync(scriptPath, 'utf8')
-      .replace(
-        "import { customElement } from 'aurelia';",
-        "import { bindable, BindingMode, customElement } from 'aurelia';",
-      )
-      .replace(
-        '@customElement({',
-        [
-          "@customElement({ name: 'mode-panel', template: '<template></template>' })",
-          "class ModePanel { @bindable({ mode: BindingMode.twoWay }) public labelText = ''; }",
-          '',
-          '@customElement({',
-        ].join('\n'),
-      )
-      .replace('  template,', '  template,\n  dependencies: [ModePanel],');
+    const scriptText = [
+      "import { bindable, BindingMode, customElement } from 'aurelia';",
+      "import template from './app.html';",
+      "@customElement({ name: 'mode-panel', template: '<template></template>' })",
+      "class ModePanel { @bindable({ mode: BindingMode.twoWay }) public labelText = ''; }",
+      "@customElement({ name: 'app', template, dependencies: [ModePanel] })",
+      "export class App { public title = 'Theme preview'; }",
+    ].join('\n');
     const modeSourceStart = scriptText.indexOf('BindingMode.twoWay');
     expect(modeSourceStart).toBeGreaterThanOrEqual(0);
     const templatePrefix = '<template>\n';

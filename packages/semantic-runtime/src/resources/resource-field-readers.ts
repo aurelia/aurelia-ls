@@ -118,7 +118,9 @@ export function readDecoratorCalleeName(decorator: ts.Decorator, context: Resour
   if (symbol.declarations?.length) {
     const name = symbol.getName();
     return decoratorExports.has(name) && symbol.declarations.some(declaration =>
-      declarationMatchesFrameworkSource(declaration, emptyPathIndex, decoratorDeclarationSource)) ? name : null;
+      declarationMatchesFrameworkSource(declaration, emptyPathIndex, decoratorDeclarationSource)
+      || ts.findAncestor(declaration, parent => ts.isModuleDeclaration(parent) && ts.isStringLiteral(parent.name)
+        && decoratorModules.has(parent.name.text)) != null) ? name : null;
   }
   const direct = importedValueExportName(node, project.checker, decoratorModules);
   return direct != null && decoratorExports.has(direct) ? direct : null;
