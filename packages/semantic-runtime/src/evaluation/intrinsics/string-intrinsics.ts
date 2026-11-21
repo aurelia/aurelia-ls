@@ -30,6 +30,7 @@ export const staticStringPrototypeBoundaryMethods: ReadonlySet<string> = new Set
   'endsWith',
   'includes',
   'indexOf',
+  'lastIndexOf',
   'localeCompare',
   'padEnd',
   'padStart',

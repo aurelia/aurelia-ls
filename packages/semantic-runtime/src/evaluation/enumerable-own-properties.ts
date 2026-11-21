@@ -89,6 +89,7 @@ export function readEvaluationEnumerableOwnEntries(
         source.mayHaveUnknownProperties,
         source.shapeOpenSeams,
         source.propertyOrderOpenSeams,
+        source.kind === EvaluationValueKind.Class || source.kind === EvaluationValueKind.Instance,
       );
     case EvaluationValueKind.BoundaryObject:
       return entriesFromProperties(source.properties, true);
@@ -164,8 +165,11 @@ function entriesFromProperties(
   mayHaveUnknownProperties: boolean,
   shapeOpenSeams: readonly EvaluationOpenSeam[] = [],
   propertyOrderOpenSeams: readonly EvaluationOpenSeam[] = [],
+  classMembers = false,
 ): EvaluationEnumerableOwnEntries {
   const entries = [...properties.values()]
+    .filter(({ node }) => !classMembers || node == null || !ts.isClassLike(node.parent)
+      || !(ts.isMethodDeclaration(node) || ts.isGetAccessorDeclaration(node) || ts.isSetAccessorDeclaration(node)))
     .map((property) => new EvaluationEnumerableOwnEntry(
       property.name,
       property.value,
@@ -209,7 +213,7 @@ export function evaluationEnumerableOwnPropertyNames(
   return [...properties.keys()].sort(compareEnumerablePropertyNames);
 }
 
-function propertyValueExpression(node: ts.Node | null): ts.Expression | null {
+export function propertyValueExpression(node: ts.Node | null): ts.Expression | null {
   if (node == null) {
     return null;
   }

@@ -894,7 +894,7 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
       return argument;
     }
     const index = rightToLeft
-      ? readArrayLastIndexStart(argument.value, length)
+      ? readArrayLastIndexStart(expression.args[1] == null ? null : argument.value, length)
       : readArrayStartIndex(argument.value, length);
     const result = index == null
       ? openBindingSourceNeedsRuntimeValue(`Array.${rightToLeft ? 'lastIndexOf' : 'indexOf/includes'} start index did not close.`)

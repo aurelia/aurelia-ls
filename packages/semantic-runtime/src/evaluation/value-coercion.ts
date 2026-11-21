@@ -34,15 +34,12 @@ export function readArrayStartIndex(
   return Math.min(Math.max(integer < 0 ? length + integer : integer, 0), length);
 }
 
-/** Read the inclusive reverse start index used by Array/String lastIndexOf-like methods. */
-export function readArrayLastIndexStart(value: EvaluationValue, length: number): number | null {
-  if (value.kind === EvaluationValueKind.Undefined) {
-    return Math.max(length - 1, -1);
-  }
-  if (value.kind !== EvaluationValueKind.Number || !Number.isFinite(value.value)) {
-    return null;
-  }
-  const integer = Math.trunc(value.value);
+/** Array.lastIndexOf starts at the last element only when fromIndex is absent. */
+export function readArrayLastIndexStart(value: EvaluationValue | null, length: number): number | null {
+  if (value == null) return length - 1;
+  if (!isEvaluationPrimitiveValue(value)) return null;
+  const number = Number(readEvaluationPrimitive(value));
+  const integer = Number.isNaN(number) ? 0 : Math.trunc(number);
   return integer < 0
     ? Math.max(length + integer, -1)
     : Math.min(integer, length - 1);

@@ -7,6 +7,7 @@ import type { TypeSystemProject } from '../type-system/project.js';
 import {
   AureliaStyleRegistryCallKind,
   aureliaStyleRegistryCallKind,
+  hasAureliaStyleRegistryImports,
 } from '../resources/style-registry-call.js';
 import type {
   ApplicationStyleAssetKind,
@@ -95,7 +96,7 @@ function readSourceStyleAssetSites(
     return [];
   }
   const imports = readCssImports(source, sourceFile, sourceByPath);
-  if (imports.length === 0) {
+  if (imports.length === 0 && !hasAureliaStyleRegistryImports(sourceFile)) {
     return [];
   }
   const owner = styleOwnerForSource(source, ownersByPath);

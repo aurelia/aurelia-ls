@@ -1,4 +1,4 @@
-import type ts from 'typescript';
+import ts from 'typescript';
 import type { StaticInvocationFrame } from '../invocation.js';
 import { readEvaluationEnumerableOwnEntries } from '../enumerable-own-properties.js';
 import {
@@ -48,15 +48,21 @@ export function evaluateObjectAssign(
   if (argumentRead.kind === 'open') {
     return argumentRead.value;
   }
-  const properties = new Map<string, EvaluationObjectProperty>();
+  const target = argumentRead.evidence[0];
+  if (target?.value.kind !== EvaluationValueKind.Object || target.openSeams.length > 0) {
+    return host.unknown('Object.assign target is not a closed local object.', call, moduleKey, EvaluationOpenSeamKind.DynamicMutation);
+  }
+  const object = target.value;
+  const properties = object.properties;
   let mayHaveUnknownProperties = false;
   const shapeOpenSeams: EvaluationOpenSeam[] = [];
   const propertyOrderOpenSeams: EvaluationOpenSeam[] = [];
-  for (let index = 0; index < argumentRead.evidence.length; index += 1) {
+  for (let index = 1; index < argumentRead.evidence.length; index += 1) {
     const evidence = argumentRead.evidence[index]!;
     const argument = argumentRead.argumentList.elements[index]?.expression ?? call;
     const value = evidence.value;
     host.replayOpenSeams(evidence.openSeams);
+    if (value.kind === EvaluationValueKind.Null || value.kind === EvaluationValueKind.Undefined) continue;
     if (value.kind !== EvaluationValueKind.Object) {
       mayHaveUnknownProperties = true;
       const checkpoint = host.checkpoint();
@@ -80,18 +86,25 @@ export function evaluateObjectAssign(
       shapeOpenSeams.push(...shapePressure);
     }
     for (const [name, property] of value.properties) {
+      const targetSite = properties.get(name)?.node;
+      if (name === '__proto__' || (property.node != null && ts.isGetAccessorDeclaration(property.node))
+        || (targetSite != null && (ts.isSetAccessorDeclaration(targetSite) || ts.isGetAccessorDeclaration(targetSite)))) {
+        const checkpoint = host.checkpoint();
+        host.open(EvaluationOpenSeamKind.DynamicMutation, 'Object.assign may invoke an accessor or change the target prototype.', argument, moduleKey, []);
+        const pressure = host.openSeamsSince(checkpoint);
+        openEvaluationObjectProperties(properties, pressure);
+        object.retainShapeOpenSeams(pressure);
+        object.mayHaveUnknownProperties = true;
+        return new EvaluationUnknownValue('Object.assign property transfer is open.', call, true);
+      }
       properties.set(name, property.withState(property.state, directPressure));
     }
     mayHaveUnknownProperties ||= value.mayHaveUnknownProperties;
   }
-  return new EvaluationObjectValue(
-    properties,
-    mayHaveUnknownProperties,
-    call,
-    [],
-    compactEvaluationOpenSeams(shapeOpenSeams),
-    compactEvaluationOpenSeams(propertyOrderOpenSeams),
-  );
+  object.mayHaveUnknownProperties ||= mayHaveUnknownProperties;
+  object.retainShapeOpenSeams(shapeOpenSeams);
+  object.retainPropertyOrderOpenSeams(propertyOrderOpenSeams);
+  return object;
 }
 
 export function evaluateObjectValues(

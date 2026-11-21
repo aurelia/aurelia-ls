@@ -6,10 +6,8 @@ import { AuthoredSourceTextCache } from '../kernel/authored-source-text.js';
 import type { ProjectBootFrame } from './frames.js';
 import {
   type BootPackageManifest,
-  manifestWorkspacesIncludeProject,
+  nearestWorkspaceManifestForProject,
   readPackageManifest,
-  isHostPathWithin,
-  sameHostPath,
 } from './host-files.js';
 
 export const enum SemanticProjectShapeKind {
@@ -246,33 +244,8 @@ function isAureliaPackageSpecifier(specifier: string): boolean {
 function workspaceAureliaDependencyScopes(
   project: ProjectBootFrame,
 ): readonly SemanticProjectAureliaDependencyScopeCount[] {
-  const manifest = nearestWorkspaceManifestForProject(project);
+  const manifest = nearestWorkspaceManifestForProject(project)?.manifest ?? null;
   return aureliaDependencyScopes(manifest, SemanticProjectAureliaDependencyOrigin.WorkspaceManifest);
-}
-
-function nearestWorkspaceManifestForProject(
-  project: ProjectBootFrame,
-): BootPackageManifest | null {
-  const workspaceRoot = path.resolve(project.workspaceRootDir);
-  const projectRoot = path.resolve(project.rootDir);
-  let current = path.dirname(projectRoot);
-
-  while (isSameOrDescendantPath(workspaceRoot, current)) {
-    const manifest = readPackageManifest(project.inputGeneration.host, current);
-    if (manifest != null && manifestWorkspacesIncludeProject(manifest, current, projectRoot)) {
-      return manifest;
-    }
-    if (sameHostPath(current, workspaceRoot)) {
-      break;
-    }
-    current = path.dirname(current);
-  }
-
-  return null;
-}
-
-function isSameOrDescendantPath(parent: string, child: string): boolean {
-  return isHostPathWithin(child, parent);
 }
 
 function aureliaSourceSignals(project: ProjectBootFrame): readonly SemanticProjectAureliaSourceSignalCount[] {
@@ -389,8 +362,10 @@ function aureliaAppActivationSignal(
 }
 
 function isDirectModuleExecution(node: ts.Node): boolean {
+  if (ts.isOptionalChain(node)) return false;
   let current: ts.Node = node;
   while (!ts.isSourceFile(current.parent)) {
+    const child = current;
     current = current.parent;
     if (
       ts.isFunctionLike(current)
@@ -401,6 +376,8 @@ function isDirectModuleExecution(node: ts.Node): boolean {
       || ts.isDefaultClause(current)
       || ts.isIterationStatement(current, false)
       || ts.isConditionalExpression(current)
+      // The receiver is evaluated even on a short circuit. Arguments and computed keys may be skipped.
+      || (ts.isOptionalChain(current) && child !== current.expression)
       || (
         ts.isBinaryExpression(current)
         && (

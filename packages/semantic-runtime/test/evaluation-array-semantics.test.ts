@@ -70,6 +70,18 @@ describe('evaluation array semantics', () => {
     }));
   });
 
+  test('distinguishes a missing reverse search position from an explicit undefined', () => {
+    const result = evaluate([
+      "const array = ['offline', 'browser'];",
+      "const omitted = array.lastIndexOf('browser');",
+      "const explicit = array.lastIndexOf('browser', undefined);",
+      "const stringPosition = 'browser'.lastIndexOf('', undefined);",
+    ]);
+    for (const [name, value] of [['omitted', 1], ['explicit', -1], ['stringPosition', 7]] as const) {
+      expect(result.environment.readValue(name)).toMatchObject({ kind: EvaluationValueKind.Number, value });
+    }
+  });
+
   test('keeps independent host-boundary identities open across equality and array search', () => {
     const runtimeHost: StaticEvaluationRuntimeHost = {
       resolveIdentifier: (identifier) => identifier.text === 'external'

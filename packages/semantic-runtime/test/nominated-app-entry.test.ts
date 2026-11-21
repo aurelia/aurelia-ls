@@ -105,8 +105,26 @@ describe('nominated synchronous app entry activation', () => {
     expect(local.emission.configuration.readConfiguration().appRoots).toHaveLength(1);
   });
 
+  test('uses the config and its authored fields as they were at the app call', async () => {
+    const app = await runtime.openApp({
+      analysisDepth: 'runtime-topology',
+      nominatedEntry: {
+        sourceFilePath: 'src/helper.ts',
+        callable: { kind: 'export', name: 'namedConfigStart' },
+        arguments: [{ kind: 'host-environment', path: '#app' }],
+      },
+    });
+    const roots = app.emission.configuration.readConfiguration().appRoots;
+    expect(roots).toHaveLength(1);
+    expect(roots[0]!.component?.localName).toBe('BenchmarkApp');
+    expect(roots[0]!.hostAddressHandle).not.toBeNull();
+    expect(roots[0]!.config.strictBinding).toBe(true);
+  });
+
   test('refuses missing, noncallable, async, abrupt, and conditional entries causally', async () => {
     await expectRefusal('missing', /does not resolve to a local binding/);
+    await expectRefusal('onlyType', /does not resolve to a local binding/);
+    await expectRefusal('inlineType', /does not resolve to a local binding/);
     await expectRefusal('notCallable', /not a statically executable function/);
     await expectRefusal('asyncStart', /is async/);
     await expectRefusal('abruptStart', /completed abruptly/);
@@ -214,6 +232,12 @@ async function writeWorkspace(workspaceRoot: string): Promise<void> {
       'export function runApp(host: HTMLElement): void {',
       '  new Aurelia().app({ host, component: BenchmarkApp }).start();',
       '}',
+      'export function namedConfigStart(host: HTMLElement): void {',
+      '  const config = { host, component: BenchmarkApp, strictBinding: false };',
+      '  config.strictBinding = true;',
+      '  new Aurelia().app(config).start();',
+      '  config.strictBinding = false;',
+      '}',
     ].join('\n')),
     writeFile(path.join(workspaceRoot, 'src', 'app.ts'), [
       "import { CustomElement } from 'aurelia';",
@@ -241,6 +265,9 @@ async function writeWorkspace(workspaceRoot: string): Promise<void> {
       "import { BenchmarkApp } from './app';",
       '',
       'export const notCallable = 42;',
+      'function hiddenStart() {}',
+      'export type { hiddenStart as onlyType };',
+      'export { type hiddenStart as inlineType };',
       'export async function asyncStart(): Promise<void> {}',
       "export function abruptStart(): void { throw new Error('boom'); }",
       'export function conditionalStart(environment: { enabled: boolean }): void {',

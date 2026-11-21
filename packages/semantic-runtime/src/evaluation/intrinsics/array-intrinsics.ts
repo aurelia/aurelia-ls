@@ -48,6 +48,8 @@ import {
   EvaluationUndefined,
   EvaluationUnknownValue,
   EvaluationValueKind,
+  isEvaluationPrimitiveValue,
+  readEvaluationPrimitive,
   type EvaluationFunctionValue,
   type EvaluationValue,
 } from '../values.js';
@@ -930,21 +932,22 @@ export function evaluateArrayIndexOf(
   if (startEvidence != null && startEvidence.openSeams.length > 0) {
     return unknownFromEvidence(startEvidence, `${intrinsicName} start index retained open pressure.`, call, host);
   }
-  const start = rightToLeft
-    ? readArrayLastIndexStart(startEvidence?.value ?? EvaluationUndefined, receiverLength)
-    : startEvidence == null
-      ? 0
-      : readArrayStartIndex(startEvidence.value, receiverLength);
-  if (start == null) {
-    return host.unknown(`${intrinsicName} start index did not close statically.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
-  }
   if (receiver.kind === EvaluationValueKind.String) {
     const searchText = stringCoercionText(search);
-    return searchText == null
-      ? host.unknown(`String.${intrinsicName} search value did not reduce to a static string.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall)
-      : new EvaluationNumberValue(rightToLeft
-        ? receiver.value.lastIndexOf(searchText, start)
-        : receiver.value.indexOf(searchText, start), call);
+    const position = startEvidence?.value;
+    if (searchText == null || (position != null && !isEvaluationPrimitiveValue(position))) {
+      return host.unknown(`String.${intrinsicName} arguments did not close statically.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+    }
+    const index = position == null ? undefined : Number(readEvaluationPrimitive(position));
+    return new EvaluationNumberValue(rightToLeft
+      ? receiver.value.lastIndexOf(searchText, index)
+      : receiver.value.indexOf(searchText, index), call);
+  }
+  const start = rightToLeft
+    ? readArrayLastIndexStart(startEvidence?.value ?? null, receiverLength)
+    : startEvidence == null ? 0 : readArrayStartIndex(startEvidence.value, receiverLength);
+  if (start == null) {
+    return host.unknown(`${intrinsicName} start index did not close statically.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
   if (receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder) {
     return host.unknown(`Array.${intrinsicName} depended on unknown membership or order.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);

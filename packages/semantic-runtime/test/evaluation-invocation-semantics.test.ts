@@ -28,6 +28,51 @@ import {
 } from '../src/evaluation/values.js';
 
 describe('static evaluator invocation semantics', () => {
+  test('resolves ordinary object membership and local class ancestry', () => {
+    const result = evaluate([
+      'class Base {} class Derived extends Base {} class Unrelated {}',
+      'const instance = new Derived();',
+      'const matches = [instance instanceof Derived, instance instanceof Base, instance instanceof Unrelated];',
+      "const properties = ['toString' in {}, 'unknown' in {}, 'toString' in {__proto__: null}];",
+    ]);
+    expect(arrayPrimitiveValues(result.environment.readValue('matches'))).toEqual([true, true, false]);
+    expect(arrayPrimitiveValues(result.environment.readValue('properties'))).toEqual([true, false, false]);
+  });
+
+  test('assigns into the original object and enumerates class fields separately from methods', () => {
+    const result = evaluate([
+      'class Settings { active = true; check() { return true; } }',
+      'const target = {}; const alias = target;',
+      'const returned = Object.assign(target, {enabled:true});',
+      "const values = [returned === target, alias.enabled, Object.keys(new Settings()).includes('active'), Object.keys(new Settings()).includes('check')];",
+    ]);
+    expect(arrayPrimitiveValues(result.environment.readValue('values'))).toEqual([true, true, true, false]);
+  });
+  test('retains effects before await and stops at unproved resumption', () => {
+    const result = evaluate([
+      'const events = [];',
+      "function start() { events.push('start'); return opaque; }",
+      "try { await start(); } catch { events.push('caught'); } finally { events.push('cleanup'); }",
+      "events.push('after');",
+    ]);
+    expect(result.completion.kind).toBe(EvaluationCompletionKind.Open);
+    expect(arrayPrimitiveValues(result.environment.readValue('events'))).toEqual(['start']);
+    expect(result.invocations.filter(call => call.node.getText() === 'start()')).toHaveLength(1);
+  });
+
+  test('preserves abrupt operand evaluation and a known rejected settlement', () => {
+    for (const operand of ["rejectNow()", "Promise.reject('failed')"]) {
+      const result = evaluate([
+        'const events = [];',
+        "function rejectNow() { events.push('called'); throw 'failed'; }",
+        `await ${operand};`,
+        "events.push('after');",
+      ]);
+      expect(result.completion).toMatchObject({ kind: EvaluationCompletionKind.Throw, value: { value: 'failed' } });
+      expect(arrayPrimitiveValues(result.environment.readValue('events'))).toEqual(operand === 'rejectNow()' ? ['called'] : []);
+    }
+  });
+
   test.each([
     ['plain runtime host', {}],
     ['Aurelia runtime host', aureliaStaticEvaluationRuntimeHost],

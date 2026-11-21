@@ -81,6 +81,12 @@ export function aureliaStyleRegistryKeyName(
   }
 }
 
+/** Whether this file can name a registry call through the imports used by the topology source scan. */
+export function hasAureliaStyleRegistryImports(sourceFile: ts.SourceFile): boolean {
+  const { cssModulesNames, shadowCssNames, runtimeNamespaces } = readAureliaStyleRegistryImports(sourceFile);
+  return cssModulesNames.size > 0 || shadowCssNames.size > 0 || runtimeNamespaces.size > 0;
+}
+
 function readAureliaStyleRegistryImports(
   sourceFile: ts.SourceFile,
 ): AureliaStyleRegistryImports {

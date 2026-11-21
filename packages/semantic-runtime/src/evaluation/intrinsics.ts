@@ -271,10 +271,9 @@ function evaluateStaticIntrinsicCall(
       : argumentRead.evidence[0]?.value ?? null;
   }
   if (calleeText === 'Object.assign') {
-    // The current transfer projects a merged result, not exact target identity and setter effects.
-    host.recordMutation();
+    host.recordMutation(frame.argumentList.elements[0]?.value);
     if (host.requiresClosedSynchronousEffects?.()) {
-      return host.unknown('Object.assign target mutation, identity, and setter effects are not modeled by synchronous evaluation.', call, frame.moduleKey, EvaluationOpenSeamKind.DynamicMutation);
+      return host.unknown('Object.assign target writes require ownership and descriptor evidence in synchronous evaluation.', call, frame.moduleKey, EvaluationOpenSeamKind.DynamicMutation);
     }
     return evaluateObjectAssign(frame, host);
   }

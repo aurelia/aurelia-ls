@@ -12,6 +12,7 @@ import {
   isEvaluationPrimitiveValue,
   readEvaluationPrimitive,
   readEvaluationTruthiness,
+  type EvaluationClassValue,
   type EvaluationValue,
 } from './values.js';
 import {
@@ -177,11 +178,21 @@ function evaluateStaticInOperation(
     case EvaluationValueKind.Object:
       {
         const property = right.properties.get(key);
-        return property?.presence === EvaluationObjectPropertyPresence.Conditional
-          ? null
-          : property != null
-            ? new EvaluationBooleanValue(true, node)
-            : right.mayHaveUnknownProperties ? null : new EvaluationBooleanValue(false, node);
+        const proto = right.properties.get('__proto__');
+        const prototypeSetter = proto?.node != null && ts.isPropertyAssignment(proto.node)
+          && !ts.isComputedPropertyName(proto.node.name) && proto.node.name.text === '__proto__';
+        if (property != null && !(key === '__proto__' && prototypeSetter)) {
+          return property.presence === EvaluationObjectPropertyPresence.Conditional ? null : new EvaluationBooleanValue(true, node);
+        }
+        if (right.mayHaveUnknownProperties) return null;
+        if (prototypeSetter) {
+          return proto.value.kind === EvaluationValueKind.Null ? new EvaluationBooleanValue(false, node) : null;
+        }
+        if (Object.hasOwn(Object.prototype, key)) {
+          // Synthetic and host-produced objects need their own prototype evidence.
+          return right.node != null && ts.isObjectLiteralExpression(right.node) ? new EvaluationBooleanValue(true, node) : null;
+        }
+        return new EvaluationBooleanValue(false, node);
       }
     case EvaluationValueKind.Array:
       if (key === 'length') {
@@ -212,9 +223,17 @@ function evaluateStaticInstanceOfOperation(
   node: ts.Node | null,
 ): EvaluationBooleanValue | null {
   if (right.kind === EvaluationValueKind.Class) {
-    return left.kind === EvaluationValueKind.Instance
-      ? new EvaluationBooleanValue(left.classValue === right, node)
-      : new EvaluationBooleanValue(false, node);
+    if (right.mayHaveUnknownProperties || left.kind === EvaluationValueKind.Unknown
+      || left.kind === EvaluationValueKind.BoundaryObject || left.kind === EvaluationValueKind.BoundaryValue) return null;
+    if (left.kind === EvaluationValueKind.Instance) {
+      for (let current: EvaluationClassValue | null = left.classValue; current != null; current = current.baseClass) {
+        const relation = evaluationStrictEqualityDecision(current, right);
+        if (relation === EvaluationValueRelationKind.Match) return new EvaluationBooleanValue(true, node);
+        if (relation === EvaluationValueRelationKind.Open
+          || (current.baseClass == null && current.declaration.heritageClauses?.some(c => c.token === ts.SyntaxKind.ExtendsKeyword))) return null;
+      }
+    }
+    return new EvaluationBooleanValue(false, node);
   }
   if (
     (right.kind !== EvaluationValueKind.BoundaryObject && right.kind !== EvaluationValueKind.BoundaryValue)

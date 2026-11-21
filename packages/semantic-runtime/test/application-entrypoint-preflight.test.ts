@@ -579,6 +579,13 @@ describe('application entrypoint preflight', () => {
         `import type Aurelia from 'aurelia';`,
         `void Aurelia.app({ host: document.body, component: {} });`,
       ].join('\n'),
+      'src/optional.ts': [
+        `import Aurelia from 'aurelia';`,
+        `declare const hook: ((value: unknown) => void) | undefined;`,
+        `hook?.(Aurelia.app({ host: document.body, component: {} }));`,
+        `declare const container: Record<string, unknown> | undefined;`,
+        `container?.[String(Aurelia.app({ host: document.body, component: {} }))];`,
+      ].join('\n'),
     }, async (workspaceRoot) => {
       const runtime = await createSemanticRuntime({
         workspaceRoot,
@@ -593,6 +600,9 @@ describe('application entrypoint preflight', () => {
         .toMatchObject({ authoredDirectApplicationEntrypointCount: 0 });
       expect(syntax.find((source) => source.sourcePath.endsWith('type-only.ts')))
         .toMatchObject({ authoredDirectApplicationEntrypointCount: 0, signals: [] });
+      expect(syntax.find((source) => source.sourcePath.endsWith('optional.ts')))
+        .toMatchObject({ authoredDirectApplicationEntrypointCount: 0,
+          signals: expect.arrayContaining([expect.objectContaining({ signal: 'aurelia-app-call', count: 2 })]) });
       const projectEvaluationAcquire = vi.spyOn(runtime.projectEvaluations, 'acquire');
 
       await expect(runtime.openApp({ analysisDepth: 'runtime-topology' })).rejects.toMatchObject({

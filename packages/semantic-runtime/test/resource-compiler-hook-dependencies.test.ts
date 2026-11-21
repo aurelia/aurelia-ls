@@ -173,6 +173,10 @@ describe('component-local compiler-hook registry dependencies', () => {
       telemetry: { inquiryProfile: 'aot' },
     });
     const rootHooks = app.emission.appWorld.compilerWorlds[0]?.compilerHooks;
+    // These registries use literal payloads in a file with no CSS imports.
+    expect(app.appTopology().value.styles.map(style => style.sourceKind)).toEqual(
+      expect.arrayContaining(['shadow-css-call', 'css-module-call']),
+    );
     if (rootHooks == null) throw new Error('Expected app-root compiler hooks.');
     expect(rootHooks.membershipState).toBe(TemplateCompilerHookMembershipState.ExactList);
     expect(rootHooks.openReasons).toEqual([]);

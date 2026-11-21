@@ -125,6 +125,7 @@ import {
   EvaluationObjectProperty,
   EvaluationObjectPropertyState,
   EvaluationObjectValue,
+  EvaluationPromiseSettlementKind,
   EvaluationRegularExpressionValue,
   EvaluationStringPatternBuilder,
   EvaluationStringValue,
@@ -1031,7 +1032,7 @@ export class StaticEvaluator {
         )
       : tryCompletion;
 
-    if (statement.finallyBlock == null) {
+    if (statement.finallyBlock == null || caughtCompletion.kind === EvaluationCompletionKind.Open) {
       return caughtCompletion;
     }
 
@@ -1857,8 +1858,9 @@ export class StaticEvaluator {
       case ts.SyntaxKind.SpreadElement:
         return this.evaluateExpression((current as ts.SpreadElement).expression, environment, moduleKey, depth + 1);
       case ts.SyntaxKind.AwaitExpression:
+        return this.evaluateAwait(current as ts.AwaitExpression, environment, moduleKey, depth + 1);
       case ts.SyntaxKind.YieldExpression:
-        return this.unknown('Async and generator evaluation are outside this substrate.', current, moduleKey, EvaluationOpenSeamKind.UnsupportedExpression);
+        return this.unknown('Generator evaluation is outside this substrate.', current, moduleKey, EvaluationOpenSeamKind.UnsupportedExpression);
       default:
         return this.unknown(`Expression kind ${this.syntaxKindName(current)} is not in the evaluator expression set.`, current, moduleKey, EvaluationOpenSeamKind.UnsupportedExpression);
     }
@@ -2366,12 +2368,7 @@ export class StaticEvaluator {
     if (hosted?.kind === StaticInvocationDispatchKind.Handled) {
       this.runtimeHost.evaluationValueGraph?.reconcileEnvironmentAfterExternal(frame.environment);
       this.replayOpenSeams(hosted.openSeams);
-      return hosted.completion.kind === EvaluationCompletionKind.Normal
-        ? this.adoptExternalValue(hosted.completion.value)
-        : this.raise(new ThrowEvaluationCompletion(
-            this.adoptExternalValue(hosted.completion.value),
-            hosted.completion.openSeams,
-          ));
+      return this.consumeHostedCompletion(hosted.completion);
     }
 
     const intrinsic = evaluateKnownIntrinsic(frame, host);
@@ -2522,12 +2519,7 @@ export class StaticEvaluator {
     if (hosted?.kind === StaticInvocationDispatchKind.Handled) {
       this.runtimeHost.evaluationValueGraph?.reconcileEnvironmentAfterExternal(frame.environment);
       this.replayOpenSeams(hosted.openSeams);
-      return hosted.completion.kind === EvaluationCompletionKind.Normal
-        ? this.adoptExternalValue(hosted.completion.value)
-        : this.raise(new ThrowEvaluationCompletion(
-            this.adoptExternalValue(hosted.completion.value),
-            hosted.completion.openSeams,
-          ));
+      return this.consumeHostedCompletion(hosted.completion);
     }
     const intrinsic = evaluateKnownConstructor(frame, host);
     if (intrinsic != null) {
@@ -2703,10 +2695,7 @@ export class StaticEvaluator {
       openIterator: (source, node, moduleKey) => this.openHostedIterator(source, node, moduleKey),
       requiresClosedSynchronousEffects: () => this.options.requireClosedSynchronousEffects === true,
       guardrails: this.policy.guardrails,
-      raise: (completion) => this.raise(new ThrowEvaluationCompletion(
-        this.adoptExternalValue(completion.value),
-        completion.openSeams,
-      )),
+      raise: (completion) => this.consumeHostedCompletion(completion),
       evaluateExpression: (expression, currentEnvironment, currentModuleKey, currentDepth) => {
         this.runtimeHost.evaluationValueGraph?.retainEnvironment(currentEnvironment);
         return this.evaluateExpression(expression, currentEnvironment, currentModuleKey, currentDepth);
@@ -2715,7 +2704,7 @@ export class StaticEvaluator {
         this.runtimeHost.evaluationValueGraph?.retainEnvironment(currentEnvironment);
         return this.evaluateExpressionEvidence(expression, currentEnvironment, currentModuleKey, currentDepth);
       },
-      evaluateFunctionWithArguments: (callee, currentCall, argumentValues, currentModuleKey, currentDepth, thisValue) =>
+      evaluateFunctionWithArguments: (callee, currentCall, argumentValues, currentModuleKey, currentDepth, thisValue, resultMode) =>
         this.ownProducedValue(this.evaluateFunctionWithArguments(
           this.adoptExternalValue(callee),
           currentCall,
@@ -2723,6 +2712,7 @@ export class StaticEvaluator {
           currentModuleKey,
           currentDepth,
           thisValue == null ? null : this.adoptExternalEvidence(thisValue),
+          resultMode,
         )),
       evaluateClassInstantiation: (callee, expression, argumentValues, currentModuleKey, currentDepth) =>
         this.ownProducedValue(this.evaluateClassInstantiation(
@@ -2767,10 +2757,7 @@ export class StaticEvaluator {
         }
         return result?.abruptCompletion == null
           ? result?.value == null ? null : this.adoptExternalValue(result.value)
-          : this.raise(new ThrowEvaluationCompletion(
-              this.adoptExternalValue(result.abruptCompletion.value),
-              result.abruptCompletion.openSeams,
-            ));
+          : this.consumeHostedCompletion(result.abruptCompletion);
       },
       resolveDynamicImport: (currentModuleKey, moduleSpecifier, node) => {
         if (this.options.requireClosedSynchronousEffects) {
@@ -2803,6 +2790,7 @@ export class StaticEvaluator {
     moduleKey: string,
     depth: number,
     thisValue: EvaluationValueEvidence | null,
+    resultMode?: 'awaited',
   ): EvaluationValue {
     if (
       this.options.requireClosedSynchronousEffects
@@ -2823,6 +2811,7 @@ export class StaticEvaluator {
       depth,
       this.functionHost,
       thisValue,
+      resultMode,
     );
   }
 
@@ -3039,6 +3028,28 @@ export class StaticEvaluator {
       );
     }
     return evaluateStaticUnaryOperation('void', operand, expression) ?? new EvaluationUndefinedValue(expression);
+  }
+
+  private evaluateAwait(
+    expression: ts.AwaitExpression,
+    environment: ModuleEnvironmentRecord,
+    moduleKey: string,
+    depth: number,
+  ): EvaluationValue {
+    // JS evaluates the operand before it can suspend. Its calls, writes and synchronous throws remain observable.
+    const operand = this.evaluateExpressionEvidence(expression.expression, environment, moduleKey, depth);
+    this.replayOpenSeams(operand.openSeams);
+    if (operand.value.kind === EvaluationValueKind.Promise && operand.openSeams.length === 0
+      && operand.value.settlement.kind === EvaluationPromiseSettlementKind.Rejected
+      && !this.options.requireClosedSynchronousEffects) {
+      const reason = operand.value.settlement.evidence;
+      return this.raise(new ThrowEvaluationCompletion(reason.value, reason.openSeams));
+    }
+    // A continuation runs in a later job even for an already-fulfilled value. The synchronous world
+    // has no authority to execute those effects in its current order.
+    const reason = 'Await continuation requires asynchronous resumption.';
+    this.open(EvaluationOpenSeamKind.UnsupportedExpression, reason, expression, moduleKey, [OpenSeamReasonKind.AsyncExecutionValue]);
+    return this.raise(new OpenEvaluationCompletion(reason));
   }
 
   private evaluateConditionalExpression(
@@ -3522,9 +3533,18 @@ export class StaticEvaluator {
     this.replayOpenSeams(result.openSeams);
     return result.abruptCompletion == null
       ? this.adoptNullableExternalValue(result.value) ?? EvaluationUndefined
-      : this.raise(new ThrowEvaluationCompletion(
-          this.adoptExternalValue(result.abruptCompletion.value), result.abruptCompletion.openSeams,
-        ));
+      : this.consumeHostedCompletion(result.abruptCompletion);
+  }
+
+  private consumeHostedCompletion(completion: EvaluationExpressionAbruptCompletion): never;
+  private consumeHostedCompletion(completion: EvaluationExpressionCompletion): EvaluationValue;
+  private consumeHostedCompletion(completion: EvaluationExpressionCompletion): EvaluationValue {
+    switch (completion.kind) {
+      case EvaluationCompletionKind.Normal: return this.adoptExternalValue(completion.value);
+      case EvaluationCompletionKind.Open: return this.raise(completion);
+      case EvaluationCompletionKind.Throw:
+        return this.raise(new ThrowEvaluationCompletion(this.adoptExternalValue(completion.value), completion.openSeams));
+    }
   }
 
   private unsupportedStatement(

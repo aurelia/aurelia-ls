@@ -105,14 +105,14 @@ export type EvaluationCompletion =
 export type EvaluationAbruptCompletion = Exclude<EvaluationCompletion, NormalEvaluationCompletion>;
 
 /** Abrupt completion that can cross an expression-shaped evaluator boundary. */
-export type EvaluationExpressionAbruptCompletion = ThrowEvaluationCompletion;
+export type EvaluationExpressionAbruptCompletion = ThrowEvaluationCompletion | OpenEvaluationCompletion;
 
 /** Completion admitted by a value-returning expression boundary. */
 export type EvaluationExpressionCompletion =
   | NormalEvaluationCompletion
   | EvaluationExpressionAbruptCompletion;
 
-/** Internal bridge that carries a thrown value through value-returning expression evaluators. */
+/** Carries a throw or unresolved suspension through value-returning expression evaluators. */
 export class EvaluationAbruptCompletionSignal extends Error {
   constructor(
     readonly completion: EvaluationExpressionAbruptCompletion,

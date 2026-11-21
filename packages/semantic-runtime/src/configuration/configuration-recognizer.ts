@@ -1,10 +1,13 @@
 import ts from 'typescript';
 import { openSeamReasonKindsForEvaluationRead } from '../evaluation/boundary-open-reason.js';
 import {
+  EvaluationRead,
   readStaticSourceLiteralValue,
   readStaticStringArrayValue,
   StaticInvocationEvidenceExpressionReader,
 } from '../evaluation/expression-reader.js';
+import { propertyValueExpression } from '../evaluation/enumerable-own-properties.js';
+import { readStaticValueProperty, StaticValueMemberReadKind } from '../evaluation/property-access.js';
 import {
   isStaticInvocationOccurrence,
   StaticInvocationPreparationBoundaryKind,
@@ -936,59 +939,49 @@ function readAppRootConfig(
   }
 
   const current = unwrapExpression(expression);
-  if (!ts.isObjectLiteralExpression(current)) {
-    return appRootValueConfigObservation(context, current);
+  const argument = context.expressionReader.evaluateExpression(current);
+  if (argument.value?.kind !== EvaluationValueKind.Object && !ts.isObjectLiteralExpression(current)) {
+    return new AppRootConfigObservation(current, null,
+      new ConfigurationTargetObservation(readReferenceName(current), current, false, argument), null, null, null);
   }
 
-  const hostExpression = readObjectPropertyExpression(current, 'host');
-  const component = readAppRootComponentTarget(context, current);
-  const allowActionlessForm = readConfigurationBooleanObjectProperty(context, current, 'allowActionlessForm');
-  const strictBinding = readConfigurationBooleanObjectProperty(context, current, 'strictBinding');
-  const ssrScopeExpression = readObjectPropertyExpression(current, 'ssrScope');
+  // A named config, a spread and an inline literal all supply the object as it was at this invocation.
+  // Spend the effective field and its own authored site together; a later assignment must not retarget it.
+  function field(name: string): EvaluationRead<EvaluationValue> | null {
+    if (argument.value?.kind === EvaluationValueKind.Object) {
+      if (argument.openSeams.length > 0 || argument.abruptCompletion != null) return null;
+      const site = propertyValueExpression(argument.value.properties.get(name)?.node ?? null);
+      if (site == null || context.sourceFileAddressHandleForNode(site) == null) return null;
+      const member = readStaticValueProperty(argument.value, name, site);
+      return member.kind === StaticValueMemberReadKind.Value ? new EvaluationRead(member.value, site, member.openSeams) : null;
+    }
+    const literalField = ts.isObjectLiteralExpression(current) ? readObjectPropertyExpression(current, name) : null;
+    return literalField == null ? null : context.expressionReader.evaluateExpression(literalField);
+  }
 
+  const hostNode = field('host')?.node;
+  const hostExpression = hostNode != null && ts.isExpression(hostNode) ? hostNode : null;
+  const componentField = field('component');
+  const componentNode = componentField?.node;
+  const component = componentField != null && componentNode != null && ts.isExpression(componentNode)
+    ? new ConfigurationTargetObservation(readReferenceName(componentNode), componentNode, false, componentField)
+    : null;
+  const allowActionlessForm = field('allowActionlessForm')?.value;
+  const strictBinding = field('strictBinding')?.value;
+  const ssrScope = field('ssrScope')?.node;
   return new AppRootConfigObservation(
     current,
     hostExpression,
     component,
-    allowActionlessForm,
-    strictBinding,
-    ssrScopeExpression,
+    allowActionlessForm?.kind === EvaluationValueKind.Boolean ? allowActionlessForm.value : null,
+    strictBinding?.kind === EvaluationValueKind.Boolean ? strictBinding.value : null,
+    ssrScope != null && ts.isExpression(ssrScope) ? ssrScope : null,
     appRootConfigOpenSeams(current, hostExpression, component),
   );
 }
 
-function appRootValueConfigObservation(
-  context: ConfigurationRecognitionContext,
-  expression: ts.Expression,
-): AppRootConfigObservation {
-  const evaluation = context.expressionReader.evaluateExpression(expression);
-  return new AppRootConfigObservation(
-    expression,
-    null,
-    new ConfigurationTargetObservation(readReferenceName(expression), expression, false, evaluation),
-    null,
-    null,
-    null,
-  );
-}
-
-function readAppRootComponentTarget(
-  context: ConfigurationRecognitionContext,
-  object: ts.ObjectLiteralExpression,
-): ConfigurationTargetObservation | null {
-  const componentExpression = readObjectPropertyExpression(object, 'component');
-  return componentExpression == null
-    ? null
-    : new ConfigurationTargetObservation(
-        readReferenceName(componentExpression),
-        componentExpression,
-        false,
-        context.expressionReader.evaluateExpression(componentExpression),
-      );
-}
-
 function appRootConfigOpenSeams(
-  object: ts.ObjectLiteralExpression,
+  object: ts.Expression,
   hostExpression: ts.Expression | null,
   component: ConfigurationTargetObservation | null,
 ): readonly ConfigurationRecognitionOpen[] {
@@ -1908,19 +1901,6 @@ function optionValueObservation(
   stringValues: readonly string[] = [],
 ): ConfigurationOptionValueObservation {
   return new ConfigurationOptionValueObservation(valueKind, expression, value, stringValues, traceName);
-}
-
-function readConfigurationBooleanObjectProperty(
-  context: ConfigurationRecognitionContext,
-  object: ts.ObjectLiteralExpression,
-  propertyName: string,
-): boolean | null {
-  const expression = readObjectPropertyExpression(object, propertyName);
-  if (expression == null) {
-    return null;
-  }
-  const value = context.expressionReader.evaluateExpression(expression).value;
-  return value?.kind === EvaluationValueKind.Boolean ? value.value : null;
 }
 
 function readCallMemberName(call: ts.CallExpression): string | null {

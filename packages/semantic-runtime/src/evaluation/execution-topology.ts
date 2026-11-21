@@ -177,6 +177,7 @@ export function mapEvaluationExpressionCompletionValues(
   mapValue: (value: EvaluationValue, path: string) => EvaluationValue,
   path: string,
 ): EvaluationExpressionCompletion {
+  if (completion.kind === EvaluationCompletionKind.Open) return completion;
   return completion.kind === EvaluationCompletionKind.Normal
     ? new NormalEvaluationCompletion(mapValue(completion.value, path))
     : new ThrowEvaluationCompletion(mapValue(completion.value, path), completion.openSeams);
