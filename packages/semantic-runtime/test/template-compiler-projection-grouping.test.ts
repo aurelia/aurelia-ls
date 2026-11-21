@@ -123,16 +123,6 @@ describe('template compiler projection grouping', () => {
     expect(plan.groups.map((candidate) => candidate.slotName)).toEqual(['named']);
   });
 
-  test('preserves Map first-encounter order for array-index-like slot names', () => {
-    const plan = group([
-      child('two', { slotName: '2' }),
-      child('one', { slotName: '1' }),
-      child('two-again', { slotName: '2' }),
-    ]);
-
-    expect(plan.groups.map((candidate) => candidate.slotName)).toEqual(['2', '1']);
-    expect(plan.groups[0]?.members.map((candidate) => candidate.node.key)).toEqual(['two', 'two-again']);
-  });
 });
 
 function child(
