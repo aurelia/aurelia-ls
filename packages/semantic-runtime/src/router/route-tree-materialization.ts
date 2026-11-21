@@ -271,7 +271,6 @@ class RouteTreeMaterializationFrame {
 class RouteTreeTransitionMaterializationFrame {
   private readonly routeConfigsByIdentity: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigModel>;
   private readonly routeConfigContextsByIdentity: ReadonlyMap<RouteConfigContextModel['identityHandle'], RouteConfigContextModel>;
-  private readonly routeConfigContextsByConfigIdentity: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigContextModel>;
   private readonly routeContextsByIdentity: ReadonlyMap<RouteContextModel['identityHandle'], RouteContextModel>;
   private readonly endpointsByIdentity: ReadonlyMap<EndpointModel['identityHandle'], EndpointModel>;
   private readonly configurableRoutesByIdentity: ReadonlyMap<ConfigurableRouteModel['identityHandle'], ConfigurableRouteModel>;
@@ -293,12 +292,6 @@ class RouteTreeTransitionMaterializationFrame {
   ) {
     this.routeConfigsByIdentity = routeConfigIndex(routeConfigContexts);
     this.routeConfigContextsByIdentity = routeConfigContextIndex(routeConfigContexts);
-    this.routeConfigContextsByConfigIdentity = new Map(
-      routeConfigContexts.readRouteConfigContexts().flatMap((context) => {
-        const configIdentity = context.config.identityHandle;
-        return configIdentity == null ? [] : [[configIdentity, context] as const];
-      }),
-    );
     this.routeContextsByIdentity = new Map(
       routeRuntime.readRouteContexts().map((routeContext) => [routeContext.identityHandle, routeContext] as const),
     );
@@ -458,7 +451,9 @@ class RouteTreeTransitionMaterializationFrame {
       configurableRoute.routeConfig.identityHandle,
       `ConfigurableRoute '${configurableRoute.identityHandle}' references an unmaterialized RouteConfig.`,
     );
-    const routeConfigContext = this.routeConfigContextsByConfigIdentity.get(routeConfig.identityHandle) ?? null;
+    const routeConfigContext = this.routeConfigContexts.readConfigForRecognizer(
+      recognizedRoute.recognizer.identityHandle, routeConfig.identityHandle,
+    );
     if (routeConfigContext == null) {
       if (routeConfig.routeKind === RouteConfigKind.Redirect) {
         const hasMigrationIssue = recordRedirectMigrationIssue(

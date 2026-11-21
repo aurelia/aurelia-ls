@@ -143,6 +143,7 @@ interface ClosedRouteExpressionInstruction {
   readonly kind: 'route-expression';
   readonly site: RouterResourceInstructionSite;
   readonly value: string;
+  readonly hasDynamicParts?: boolean;
   readonly valueSourceAddressHandle: AddressHandle | null;
   readonly openSeamHandles: readonly OpenSeamHandle[];
 }
@@ -678,6 +679,7 @@ function closeRouterResourceInstruction(
         kind: 'route-expression',
         site,
         value: value.value,
+        hasDynamicParts: value.dynamicPartCount > 0,
         valueSourceAddressHandle: value.sourceAddressHandle,
         openSeamHandles,
       };
@@ -805,7 +807,8 @@ function materializeInstructionTree(
     viewportInstructionEmissions,
     routerOptions,
     site,
-    routerInstructionClosure(closed.openSeamHandles),
+    routerInstructionClosure(closed.openSeamHandles, closed.hasDynamicParts),
+    closed.hasDynamicParts === true && closed.openSeamHandles.length === 0,
   );
   return {
     records: viewportInstructionTreeRecords(
@@ -1183,6 +1186,7 @@ function viewportInstructionTreeModel(
   routerOptions: RouterOptionsMaterializationProjectResult,
   site: RouterResourceInstructionSite,
   closure: RouterClosureKind,
+  parameterShapeOnly: boolean,
 ): ViewportInstructionTreeModel {
   const effectiveOptions = routerOptions.readRouterOptionsForReference(parsed.routeContext.options);
   return new ViewportInstructionTreeModel(
@@ -1197,6 +1201,8 @@ function viewportInstructionTreeModel(
     routeQueryParameterValues(parsed.expression.queryParams),
     parsed.expression.fragment,
     site.sourceAddressHandle,
+    [],
+    parameterShapeOnly,
   );
 }
 
@@ -1479,7 +1485,7 @@ function typedNavigationInstructionForViewport(
   return new TypedNavigationInstructionModel(
     store.handles.product(typedLocal),
     store.handles.identity(typedLocal),
-    routerInstructionClosure(closed.openSeamHandles),
+    routerInstructionClosure(closed.openSeamHandles, closed.hasDynamicParts),
     NavigationInstructionKind.String,
     instruction.component,
     null,
@@ -1579,10 +1585,9 @@ function viewportInstructionProductRecords(
 
 function routerInstructionClosure(
   openSeamHandles: readonly OpenSeamHandle[],
+  hasDynamicParts = false,
 ): RouterClosureKind {
-  return openSeamHandles.length === 0
-    ? RouterClosureKind.Closed
-    : RouterClosureKind.Open;
+  return hasDynamicParts || openSeamHandles.length > 0 ? RouterClosureKind.Open : RouterClosureKind.Closed;
 }
 
 type StaticRouterResourceValue =
@@ -2906,8 +2911,8 @@ function interpolatedStringValue(
   if (expression?.$kind !== 'Interpolation') {
     return null;
   }
-  return dynamicRouteStringValue(expression.parts, expression.expressions.length, sourceAddressHandle)
-    ?? evaluatedStringValue(expression, site, bindingInstructionProductHandle, sourceValueEvaluator, sourceAddressHandle);
+  return evaluatedStringValue(expression, site, bindingInstructionProductHandle, sourceValueEvaluator, sourceAddressHandle)
+    ?? dynamicRouteStringValue(expression.parts, expression.expressions.length, sourceAddressHandle);
 }
 
 function evaluatedRouterResourceValue(
@@ -3133,6 +3138,12 @@ function dynamicRouteStringValue(
   sourceAddressHandle: AddressHandle | null,
 ): StaticStringBindingValue | null {
   if (dynamicPartCount === 0 || parts.length !== dynamicPartCount + 1 || !hasStaticRoutePrefix(parts[0] ?? '')) {
+    return null;
+  }
+  // A placeholder may stand in for a complete parameter. It cannot identify
+  // a static path segment whose spelling depends on an unknown substring.
+  if (parts.slice(0, -1).some(part => !/[/?=&]$/u.test(part))
+    || parts.slice(1).some(part => part !== '' && !/^[/?&#]/u.test(part))) {
     return null;
   }
   return {

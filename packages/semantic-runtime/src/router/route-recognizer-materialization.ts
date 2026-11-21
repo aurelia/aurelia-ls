@@ -679,7 +679,9 @@ class RouteRecognizerStateGraphBuilder {
     sourceAddressHandle: RouteConfigModel['sourceAddressHandle'],
   ): MutableRouteRecognizerState {
     let state = previous;
-    for (const ch of segment.value) {
+    // Recognition consumes one UTF-16 code unit per transition.
+    for (let index = 0; index < segment.value.length; index++) {
+      const ch = segment.value.charAt(index);
       state = this.append(
         state,
         `static:${segment.value}:${segment.caseSensitive}`,

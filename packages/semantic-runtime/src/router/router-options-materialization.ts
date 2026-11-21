@@ -419,7 +419,14 @@ function foldRouterOption(
       draft.useHref = booleanOption(contribution, draft.useHref, draft, name);
       return;
     case 'historyStrategy':
-      draft.historyStrategy = stringOption(contribution, draft.historyStrategy, draft, name);
+      if (contribution.value.valueKind === ConfigurationOptionValueKind.Callback
+        || contribution.value.valueKind === ConfigurationOptionValueKind.Unknown) {
+        // The router consults this strategy at navigation time.
+        draft.historyStrategy = null;
+        draft.winningContributions.set(name, contribution);
+      } else {
+        draft.historyStrategy = stringOption(contribution, draft.historyStrategy, draft, name);
+      }
       return;
     case 'useNavigationModel':
       draft.useNavigationModel = booleanOption(contribution, draft.useNavigationModel, draft, name);

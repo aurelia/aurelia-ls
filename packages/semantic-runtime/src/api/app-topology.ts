@@ -561,7 +561,9 @@ function applicationRootRow(
   const registrationAdmissions = uniqueProductHandles(steps.flatMap((step) => step.registrationAdmissionProductHandles)).size;
   const compiledTemplates = definition == null
     ? 0
-    : templateCompilationsForDefinition(emission, definition).reduce(
+    : templateCompilationsForDefinition(emission, definition)
+      .filter(resource => resource.compilation.compilerWorld.world.appRoot?.identityHandle === appRoot.identityHandle)
+      .reduce(
         (count, resource) => count + resource.compilation.compiledTemplate.compiledTemplates.length,
         0,
       );

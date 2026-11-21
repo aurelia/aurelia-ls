@@ -463,7 +463,13 @@ function routeContextParameterStringOption(
 ): string | null {
   const option = routeContextParameterPropertyInitializer(call, propertyName);
   if (option == null) {
-    return null;
+    const options = call.arguments[0];
+    if (options == null) return null;
+    const optionsType = checker.getTypeAtLocation(options);
+    const symbol = checkerPropertySymbol(checker, optionsType, propertyName);
+    if (symbol == null) return optionsType.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown) ? 'unknown' : null;
+    const fieldType = checkerSymbolValueType(checker, symbol, options);
+    return fieldType?.isStringLiteral() ? fieldType.value : 'unknown';
   }
   const current = unwrapExpression(option);
   if (ts.isStringLiteralLike(current)) {
@@ -481,10 +487,8 @@ function routeContextParameterPropertyInitializer(
   call: ts.CallExpression,
   propertyName: string,
 ): ts.Expression | null {
-  const options = call.arguments[0] == null ? null : unwrapExpression(call.arguments[0]!);
-  if (options == null || !ts.isObjectLiteralExpression(options)) {
-    return null;
-  }
+  const options = call.arguments[0] == null ? null : unwrapExpression(call.arguments[0]);
+  if (options == null || !ts.isObjectLiteralExpression(options)) return null;
   for (const property of options.properties) {
     if (ts.isPropertyAssignment(property) && readPropertyName(property.name) === propertyName) {
       return property.initializer;

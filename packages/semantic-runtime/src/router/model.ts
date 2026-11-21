@@ -1660,6 +1660,8 @@ export class ViewportInstructionTreeModel {
     readonly fragment: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RouterInstructionField>[] = [],
+    /** The parsed route is a parameter-shape sample; only positive recognition is evidence. */
+    readonly parameterShapeOnly = false,
   ) {}
 
   toReference(): RouterReference {

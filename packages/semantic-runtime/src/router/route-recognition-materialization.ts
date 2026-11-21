@@ -90,7 +90,7 @@ interface RouteRecognitionIndexes {
   readonly routeRuntime: RouteRuntimeTopologyProjectResult;
   readonly routeContextsByIdentity: ReadonlyMap<RouteContextModel['identityHandle'], RouteContextModel>;
   readonly routeConfigContextsByIdentity: ReadonlyMap<RouteConfigContextModel['identityHandle'], RouteConfigContextModel>;
-  readonly routeConfigContextsByConfigIdentity: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigContextModel>;
+  readonly routeConfigContexts: RouteConfigContextMaterializationProjectResult;
   readonly routeConfigsByIdentity: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigModel>;
   readonly viewportInstructionsByIdentity: ReadonlyMap<ViewportInstructionModel['identityHandle'], ViewportInstructionModel>;
   readonly typedInstructionsByIdentity: ReadonlyMap<TypedNavigationInstructionModel['identityHandle'], TypedNavigationInstructionModel>;
@@ -155,7 +155,7 @@ export class RouteRecognitionMaterializationProjectPass {
     tree: ViewportInstructionTreeModel,
     indexes: RouteRecognitionIndexes,
   ): readonly RouteRecognitionEmission[] {
-    if (tree.closure === RouterClosureKind.Open) {
+    if (tree.closure === RouterClosureKind.Open && !tree.parameterShapeOnly) {
       return [];
     }
     const routeContext = routeContextForInstructionTree(tree, indexes.routeContextsByIdentity);
@@ -210,6 +210,7 @@ export class RouteRecognitionMaterializationProjectPass {
     }
     const recognizedRoutes = recognizePath(graph, path);
     if (recognizedRoutes == null) {
+      if (tree.parameterShapeOnly) return [];
       return this.noFallbackEmission(store, routeConfigContext, routeConfig, site.instruction, path, site.instructionIndexPath);
     }
     const expanded = expandRedirectTargets(graph, recognizedRoutes, indexes.routeConfigsByIdentity);
@@ -470,12 +471,7 @@ function routeRecognitionIndexes(
     routeConfigContextsByIdentity: new Map(
       routeConfigContexts.readRouteConfigContexts().map((routeConfigContext) => [routeConfigContext.identityHandle, routeConfigContext] as const),
     ),
-    routeConfigContextsByConfigIdentity: new Map(
-      routeConfigContexts.readRouteConfigContexts().flatMap((routeConfigContext) => {
-        const identityHandle = routeConfigContext.config.identityHandle;
-        return identityHandle == null ? [] : [[identityHandle, routeConfigContext] as const];
-      }),
-    ),
+    routeConfigContexts,
     routeConfigsByIdentity: new Map(
       routeConfigContexts.readRouteConfigs().map((routeConfig) => [routeConfig.identityHandle, routeConfig] as const),
     ),
@@ -563,7 +559,7 @@ function childRecognitionContextFor(
   const routeConfig = routeConfigForEndpoint(route.endpoint, graph, indexes.routeConfigsByIdentity);
   const childRouteConfigContext = routeConfig?.identityHandle == null
     ? null
-    : indexes.routeConfigContextsByConfigIdentity.get(routeConfig.identityHandle) ?? null;
+    : indexes.routeConfigContexts.readConfigForRecognizer(graph.recognizer.identityHandle, routeConfig.identityHandle);
   const childRouteConfig = routeConfigForRouteConfigContext(childRouteConfigContext, indexes.routeConfigsByIdentity);
   const recognizerIdentity = childRouteConfigContext?.recognizer.identityHandle ?? null;
   const childGraph = recognizerIdentity == null

@@ -108,13 +108,34 @@ class RouteConfigGraph {
 
 /** RouteConfigContext products materialized for one project without running navigation. */
 export class RouteConfigContextMaterializationProjectResult {
+  private readonly configsByRecognizer = new Map<IdentityHandle, Map<IdentityHandle, RouteConfigContextModel>>();
   constructor(
     readonly project: ProjectBootFrame,
     readonly routeConfigs: readonly RouteConfigModel[],
     readonly routeConfigContexts: readonly RouteConfigContextModel[],
     readonly routeRecognizers: readonly RouteRecognizerModel[],
     readonly routerOptions: RouterOptionsMaterializationProjectResult,
-  ) {}
+  ) {
+    const configsByRoot = new Map<IdentityHandle, Map<IdentityHandle, RouteConfigContextModel>>();
+    for (const context of routeConfigContexts) {
+      const root = context.root.identityHandle;
+      const config = context.config.identityHandle;
+      const recognizer = context.recognizer.identityHandle;
+      if (root == null || config == null || recognizer == null) continue;
+      let configs = configsByRoot.get(root);
+      if (configs == null) {
+        configs = new Map();
+        configsByRoot.set(root, configs);
+      }
+      configs.set(config, context);
+      this.configsByRecognizer.set(recognizer, configs);
+    }
+  }
+
+  /** One component configuration can have a distinct context in each application's route tree. */
+  readConfigForRecognizer(recognizer: IdentityHandle | null, config: IdentityHandle): RouteConfigContextModel | null {
+    return recognizer == null ? null : this.configsByRecognizer.get(recognizer)?.get(config) ?? null;
+  }
 
   readRouteConfigs(): readonly RouteConfigModel[] {
     return this.routeConfigs;
