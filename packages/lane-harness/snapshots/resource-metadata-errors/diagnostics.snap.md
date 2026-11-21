@@ -966,7 +966,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         },
         "typeScriptDiagnosticCode": null
       },
-      "message": "@bindable cannot target a symbol or computed property name.",
+      "message": "@bindable cannot target a symbol property.",
       "range": {
         "end": {
           "character": 56,

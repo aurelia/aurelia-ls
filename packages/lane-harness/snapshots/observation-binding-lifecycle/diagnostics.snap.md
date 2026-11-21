@@ -379,11 +379,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "sourceRole": "template",
         "subject": {
           "source": {
-            "end": 2367,
+            "end": 2383,
             "kind": "source-span-address",
-            "label": "src/observation-binding-lifecycle-app.html@2350..2367",
+            "label": "src/observation-binding-lifecycle-app.html@2350..2383",
             "path": "src/observation-binding-lifecycle-app.html",
-            "role": "binding-source-assignment",
+            "role": "binding-source-expression",
             "start": 2350
           },
           "span": null,
@@ -395,7 +395,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "message": "Binding source type string is not assignable to target 'value' of type number.",
       "range": {
         "end": {
-          "character": 58,
+          "character": 74,
           "line": 30
         },
         "start": {
@@ -403,7 +403,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 30
         }
       },
-      "rangeText": "blockedChildValue",
+      "rangeText": "blockedChildValue & twoWay & self",
       "relatedInformation": [],
       "severity": "warning",
       "source": "aurelia"
