@@ -1,5 +1,5 @@
-import type { SemanticEvaluationIssuesResult, SemanticAppDiagnosticsResult } from '../src/api/contracts.js';
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import type { SemanticEvaluationIssuesResult, SemanticAppDiagnosticsResult, SemanticAppDiagnosticSummaryResult } from '../src/api/contracts.js';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -107,6 +107,28 @@ function expectExactPresentationConservation(
 }
 
 describe("app diagnostic fact conservation", () => {
+  test("includes source-selected template member failures in default app diagnostics and their summary", async () => {
+    const workspaceRoot = path.join(packageRoot, "fixtures/pressure/template-overlay-type-errors");
+    const filePath = "src/template-overlay-type-errors-app.html";
+    const markup = await readFile(path.join(workspaceRoot, filePath), "utf8");
+    const start = markup.indexOf("missingStatus");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const runtime = await createSemanticRuntime({ workspaceRoot, storeKey: "default-app-diagnostics" });
+    try {
+      const options = { sourceFile: { filePath }, page: { size: 100 } };
+      const diagnostics = await runtime.answerAppQuery({ kind: SemanticAppQueryKind.AppDiagnostics, ...options });
+      const summary = await runtime.answerAppQuery({ kind: SemanticAppQueryKind.AppDiagnosticSummary, ...options });
+      const row = (diagnostics.value as SemanticAppDiagnosticsResult).rows.find(row =>
+        row.diagnosticKind === "missing-expression-member" && row.source?.start === start);
+      expect(row?.source).toMatchObject({ path: filePath, start, end: start + "missingStatus".length });
+      expect((summary.value as SemanticAppDiagnosticSummaryResult).rows).toContainEqual(
+        expect.objectContaining({ diagnosticKind: "missing-expression-member" }),
+      );
+    } finally {
+      runtime.retireWorkspaceIncarnation();
+    }
+  }, 30_000);
+
   test("preserves closed evaluation, DI, and resource subjects through app aggregation", async () => {
     const evaluationRuntime = await createSemanticRuntime({
       workspaceRoot: path.join(packageRoot, "fixtures/pressure/kernel-api-errors"),
