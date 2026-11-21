@@ -109,21 +109,33 @@ export function readDecoratorCalleeName(decorator: ts.Decorator, context: Resour
     const bindings = readSourceImportBindings(callee.getSourceFile(), decoratorModules, decoratorExports);
     return readImportedExportName(callee, bindings, decoratorExports);
   }
+  const checker = project.checker;
   // A member of a type-only namespace can resolve to a real framework symbol while its receiver is erased.
-  if (ts.isPropertyAccessExpression(node)
-    && resolveValueAlias(project.checker, project.checker.getSymbolAtLocation(node.expression)) == null) return null;
-  const symbol = resolveValueAlias(project.checker, project.checker.getSymbolAtLocation(node));
-  if (symbol == null) return null;
+  const unresolvedReceiver = ts.isPropertyAccessExpression(node)
+    && resolveValueAlias(checker, checker.getSymbolAtLocation(node.expression)) == null;
+  const symbol = unresolvedReceiver ? null : resolveValueAlias(checker, checker.getSymbolAtLocation(node));
   // Resolved imports, including paths redirects and re-exports, are owned by the declaring module.
-  if (symbol.declarations?.length) {
+  if (symbol?.declarations?.length) {
     const name = symbol.getName();
     return decoratorExports.has(name) && symbol.declarations.some(declaration =>
       declarationMatchesFrameworkSource(declaration, emptyPathIndex, decoratorDeclarationSource)
       || ts.findAncestor(declaration, parent => ts.isModuleDeclaration(parent) && ts.isStringLiteral(parent.name)
         && decoratorModules.has(parent.name.text)) != null) ? name : null;
   }
-  const direct = importedValueExportName(node, project.checker, decoratorModules);
-  return direct != null && decoratorExports.has(direct) ? direct : null;
+  // A source-only app can lack the external declarations while its local value-import
+  // binding remains exact. A resolved module missing that export is a different case.
+  const direct = importedValueExportName(node, checker, decoratorModules);
+  if (direct == null || !decoratorExports.has(direct)) return null;
+  const receiver = ts.isPropertyAccessExpression(node) ? unwrapExpression(node.expression) : node;
+  const local = checker.getSymbolAtLocation(receiver)?.declarations?.[0];
+  const imported = local == null ? null : ts.findAncestor(local, ts.isImportDeclaration);
+  if (imported == null || checker.getSymbolAtLocation(imported.moduleSpecifier)?.declarations?.length) return null;
+  if (!ts.isStringLiteralLike(imported.moduleSpecifier)) return null;
+  const moduleName = imported.moduleSpecifier.text;
+  const compilerDecorator = direct === 'bindingCommand' || direct === 'attributePattern';
+  return moduleName === 'aurelia'
+    || (compilerDecorator ? moduleName === '@aurelia/template-compiler' : moduleName === '@aurelia/runtime-html')
+    ? direct : null;
 }
 
 export function readStaticAuInitializer(
