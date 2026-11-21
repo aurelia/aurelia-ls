@@ -113,7 +113,8 @@ export function checkerMemberStrictTrueComparisonKind(
   }
   const checker = shape?.carrier?.checker ?? member.carrier?.checker ?? null;
   const type = shape?.carrier?.type ?? member.carrier?.valueType ?? null;
-  if (checker == null || type == null || shape?.shapeKind === CheckerTypeShapeKind.Any || shape?.shapeKind === CheckerTypeShapeKind.Unknown) {
+  const shapeKind = shape?.shapeKind ?? reference.shapeKind;
+  if (checker == null || type == null || shapeKind === CheckerTypeShapeKind.Any || shapeKind === CheckerTypeShapeKind.Unknown) {
     return CheckerStrictTrueComparisonKind.MaybeTrue;
   }
   const trueType = checker.getTrueType();

@@ -11,10 +11,11 @@ import {
 import type { AddressHandle } from '../kernel/handles.js';
 import type { BindingBehaviorDefinition } from '../resources/binding-behavior-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
-import type { ValueConverterDefinition } from '../resources/value-converter-definition.js';
+import { BuiltInResourcePackage, type BuiltInResource } from '../resources/built-in-resources.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
 import {
   findVisibleTemplateResource,
+  readBuiltInVisibleTemplateResource,
   readVisibleTemplateResourceDefinition,
 } from '../template/compiler-resource-lookup.js';
 import {
@@ -109,8 +110,9 @@ export class CheckerExpressionResourceProjector {
     }
 
     const localKey = context.projectionLocalKey();
-    const definition = this.findValueConverterDefinition(expression.name.name);
-    if (definition == null) {
+    const visible = this.findVisibleResource(ResourceDefinitionKind.ValueConverter, expression.name.name);
+    const definition = readVisibleTemplateResourceDefinition(this.support.projector.publication, visible);
+    if (definition?.type !== ResourceDefinitionKind.ValueConverter) {
       return this.support.open(
         CheckerExpressionTypeOpenKind.MissingValueConverterResource,
         expression,
@@ -142,7 +144,7 @@ export class CheckerExpressionResourceProjector {
     const builtInProjection = this.evaluateKnownBuiltInValueConverterMethod(
       expression,
       methodName,
-      definition,
+      readBuiltInVisibleTemplateResource(this.support.projector.publication, visible),
       input,
       context,
     );
@@ -468,14 +470,6 @@ export class CheckerExpressionResourceProjector {
     );
   }
 
-  private findValueConverterDefinition(name: string): ValueConverterDefinition | null {
-    const resource = this.findVisibleResource(ResourceDefinitionKind.ValueConverter, name);
-    const definition = readVisibleTemplateResourceDefinition(this.support.projector.publication, resource);
-    return definition?.type === ResourceDefinitionKind.ValueConverter
-      ? definition
-      : null;
-  }
-
   private findBindingBehaviorDefinition(name: string): BindingBehaviorDefinition | null {
     const resource = this.findVisibleResource(ResourceDefinitionKind.BindingBehavior, name);
     const definition = readVisibleTemplateResourceDefinition(this.support.projector.publication, resource);
@@ -494,14 +488,14 @@ export class CheckerExpressionResourceProjector {
   private evaluateKnownBuiltInValueConverterMethod(
     expression: ValueConverterExpression,
     methodName: RuntimeValueConverterMethodName,
-    definition: ValueConverterDefinition,
+    builtIn: BuiltInResource | null,
     input: CheckerExpressionTypeEvaluation,
     context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation | null {
-    if (methodName !== VALUE_CONVERTER_TO_VIEW_METHOD) {
+    if (methodName !== VALUE_CONVERTER_TO_VIEW_METHOD || builtIn?.packageId !== BuiltInResourcePackage.I18n) {
       return null;
     }
-    switch (definition.target.localName) {
+    switch (builtIn.targetName) {
       case 'TranslationValueConverter':
         return this.inputAssignableToPrimitive(input, 'string')
           ? this.support.projectPrimitive(expression, context.scope, `${context.projectionLocalKey()}:known-translation-result`, 'string', context.sourceAddressHandle)

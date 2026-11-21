@@ -42,8 +42,9 @@ projection. This does not add lifecycle simulation or a generic Custom-expressio
 
 `translation-binding-issues.ts` owns the framework-grounded `TranslationBinding.create/bind` diagnostic lane. It consumes
 the shared groups after runtime rendering and template-scope construction, then emits runtime binding issues for missing
-translation keys (`AUR4000`), duplicate parameter binding (`AUR4001`), and non-string dynamic key expressions
-(`AUR4002`). Keep this in the i18n folder: the failure boundary is the i18n runtime binding lifecycle, while the API
+translation keys (`AUR4000`), duplicate parameter binding (`AUR4001`), and key expressions with types outside
+the accepted string and nullish values (`AUR4002`). The framework converts null and undefined keys to an empty
+string before checking the value. The failure boundary is the i18n runtime binding lifecycle, while the API
 consumes the resulting `RuntimeBindingIssue` products through the shared template diagnostic lane.
 Rendered `TranslationBinding` products remain expression-visible so cursor, overlay, and source-expression consumers can
 ask the right view-model versus parameter-scope question. Translation key bindings stay lifecycle-owned, while

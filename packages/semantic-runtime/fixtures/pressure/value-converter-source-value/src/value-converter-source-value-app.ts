@@ -15,6 +15,22 @@ export interface SourceValueProduct {
   readonly featured: boolean;
 }
 
+@valueConverter('appLength')
+export class TranslationValueConverter {
+  toView(value: string): number { return value.length; }
+}
+
+@valueConverter('contextLabel')
+export class ContextLabelValueConverter {
+  withContext: any = false;
+
+  toView(value: string, caller: ICallerContext): string;
+  toView(value: string): number;
+  toView(value: string, caller?: ICallerContext): string | number {
+    return caller === undefined ? value.length : value;
+  }
+}
+
 @valueConverter('featuredProducts')
 export class FeaturedProductsValueConverter {
   readonly signals = ['featured-refresh'];
@@ -57,6 +73,8 @@ export class OpenSignalProductsValueConverter {
   name: 'value-converter-source-value-app',
   template,
   dependencies: [
+    TranslationValueConverter,
+    ContextLabelValueConverter,
     DynamicContextProductsValueConverter,
     FeaturedProductsValueConverter,
     ImportedSignalProductsValueConverter,
@@ -65,6 +83,7 @@ export class OpenSignalProductsValueConverter {
   strict: false,
 })
 export class ValueConverterSourceValueApp {
+  label = 'Catalog';
   readonly products: readonly SourceValueProduct[] = [
     { id: 'featured', label: 'Featured', featured: true },
     { id: 'archived', label: 'Archived', featured: false },

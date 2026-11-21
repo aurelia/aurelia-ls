@@ -20,7 +20,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 4,
+  "diagnosticCount": 5,
   "diagnostics": [
     {
       "anomaly": null,
@@ -60,11 +60,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 45,
-          "line": 1
+          "line": 10
         },
         "start": {
           "character": 7,
-          "line": 1
+          "line": 10
         }
       },
       "rangeText": "t-params.bind=\"{ name: customerName }\"",
@@ -106,15 +106,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "TranslationBinding._ensureKeyExpression would reject this key expression because its TypeChecker type is not assignable to string.",
+      "message": "The translation key can evaluate to a value other than a string, null, or undefined.",
       "range": {
         "end": {
           "character": 24,
-          "line": 2
+          "line": 11
         },
         "start": {
           "character": 5,
-          "line": 2
+          "line": 11
         }
       },
       "rangeText": "t.bind=\"numericKey\"",
@@ -156,20 +156,142 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null,
         "typeScriptDiagnosticCode": null
       },
-      "message": "TranslationBinding._ensureKeyExpression would reject this key expression because its TypeChecker type is not assignable to string.",
+      "message": "The translation key can evaluate to a value other than a string, null, or undefined.",
       "range": {
         "end": {
           "character": 32,
-          "line": 3
+          "line": 12
         },
         "start": {
           "character": 5,
-          "line": 3
+          "line": 12
         }
       },
       "rangeText": "t.bind=\"numericKey & state\"",
       "relatedInformation": [],
       "severity": "error",
+      "source": "aurelia"
+    },
+    {
+      "anomaly": null,
+      "code": "missing-expression-member",
+      "data": {
+        "diagnosticAuthority": "semantic-authoring-policy",
+        "diagnosticDomain": "template",
+        "diagnosticKind": "missing-expression-member",
+        "frameworkErrorCode": null,
+        "frameworkRawErrorAuthority": null,
+        "missingInput": "expression-member:selected-member-missing",
+        "missingInputs": [
+          "expression-member:selected-member-missing"
+        ],
+        "phase": null,
+        "presentation": {
+          "contextual": [
+            {
+              "diagnostic": {
+                "diagnosticAuthority": "typescript",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "template-expression-typescript-diagnostic",
+                "frameworkErrorCode": null,
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "typescript:TS2339",
+                "missingInputs": [
+                  "typescript:TS2339"
+                ],
+                "phase": "semantic",
+                "relatedInformation": [],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "inspect-type-surface",
+                  "actionability": "manual",
+                  "changeDomain": "inspection",
+                  "planKind": "manual-inspection",
+                  "readiness": "inspection-required",
+                  "targetSourceCoverage": "all"
+                },
+                "severity": "error",
+                "sourceRole": "template",
+                "subject": {
+                  "source": {
+                    "end": 822,
+                    "kind": "source-span-address",
+                    "label": "src/i18n-translation-binding-errors-app.html@797..822",
+                    "path": "src/i18n-translation-binding-errors-app.html",
+                    "role": "template-member-access",
+                    "start": 797
+                  },
+                  "span": null,
+                  "subjectKind": "template-member-access",
+                  "uri": null
+                },
+                "typeScriptDiagnosticCode": 2339
+              },
+              "relation": "checker-evidence"
+            }
+          ],
+          "maxRawSeverity": "error",
+          "primarySeverity": "warning",
+          "rawRowCount": 2
+        },
+        "relatedInformation": [],
+        "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "declare-missing-member",
+          "actionability": "guided",
+          "changeDomain": "app-source",
+          "planKind": "source-member-declaration",
+          "readiness": "ready-to-plan",
+          "targetSourceCoverage": "all"
+        },
+        "sourceRole": "template",
+        "subject": {
+          "source": {
+            "end": 822,
+            "kind": "source-span-address",
+            "label": "src/i18n-translation-binding-errors-app.html@797..822",
+            "path": "src/i18n-translation-binding-errors-app.html",
+            "role": "template-member-access",
+            "start": 797
+          },
+          "span": null,
+          "subjectKind": "template-member-access",
+          "uri": null
+        },
+        "typeScriptDiagnosticCode": null
+      },
+      "message": "Member \"stateName\" is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
+      "range": {
+        "end": {
+          "character": 52,
+          "line": 20
+        },
+        "start": {
+          "character": 43,
+          "line": 20
+        }
+      },
+      "rangeText": "stateName",
+      "relatedInformation": [
+        {
+          "anomaly": null,
+          "file": "src/i18n-translation-binding-errors-app.html",
+          "message": "TS2339: Property 'stateName' does not exist on type '{ viewName: string; }'.",
+          "range": {
+            "end": {
+              "character": 52,
+              "line": 20
+            },
+            "start": {
+              "character": 43,
+              "line": 20
+            }
+          },
+          "rangeText": "stateName",
+          "uri": "fixtures://pressure/i18n-translation-binding-errors/src/i18n-translation-binding-errors-app.html"
+        }
+      ],
+      "severity": "warning",
       "source": "aurelia"
     },
     {
@@ -210,11 +332,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 40,
-          "line": 16
+          "line": 25
         },
         "start": {
           "character": 4,
-          "line": 16
+          "line": 25
         }
       },
       "rangeText": "t-params.bind=\"{ other: otherName }\"",

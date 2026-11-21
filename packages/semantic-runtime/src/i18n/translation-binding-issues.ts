@@ -247,7 +247,7 @@ export class I18nTranslationBindingIssueMaterializer {
           binding,
           RuntimeBindingIssuePhase.TranslationBind,
           RuntimeBindingIssueKind.TranslationKeyInvalid,
-          'TranslationBinding._ensureKeyExpression would reject this key expression because its TypeChecker type is not assignable to string.',
+          'The translation key can evaluate to a value other than a string, null, or undefined.',
           I18nTranslationBindingFrameworkErrorCode.TranslationKeyInvalid,
           source,
           records,
@@ -301,9 +301,12 @@ export class I18nTranslationBindingIssueMaterializer {
     if (carrier == null) {
       return typeReference.shapeKind === CheckerTypeShapeKind.Primitive
         && typeReference.display != null
+        && typeReference.display !== 'null'
+        && typeReference.display !== 'undefined'
         && !stringLikeDisplay(typeReference.display);
     }
-    return !checkerTypeAssignableToPrimitiveType(carrier.checker, carrier.type, 'string');
+    // TranslationBinding normalizes both nullish values to an empty string before checking the key.
+    return !checkerTypeAssignableToPrimitiveType(carrier.checker, carrier.checker.getNonNullableType(carrier.type), 'string');
   }
 
   private recordIssue(

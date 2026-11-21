@@ -36,6 +36,11 @@ const assert = (condition, message) => {
 };
 
 assert(resource != null, 'Expected the value-converter source-value fixture to compile one app resource.');
+const flows = app.ask({ kind: 'binding-data-flows', page: { size: 100 } }).value.rows;
+assert(flows.some(row => row.targetProperty === 'labelLength' && row.sourceType === 'number'),
+  'An authored converter sharing an i18n class name must keep its own toView return type.');
+assert(flows.some(row => row.targetProperty === 'contextLabel' && row.sourceType === 'string | number'),
+  'The any type for withContext must keep both legal invocation shapes.');
 assert(featuredSlot != null, 'Expected repeat local `featured` to materialize a binding-context slot.');
 assert(
   featuredValue != null,

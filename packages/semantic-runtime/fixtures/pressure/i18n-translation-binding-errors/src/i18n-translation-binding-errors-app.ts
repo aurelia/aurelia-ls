@@ -10,6 +10,8 @@ export class I18nTranslationBindingErrorsApp {
   customerName = 'Ada';
   otherName = 'Grace';
   numericKey = 123;
+  nullableKey: string | null = null;
+  optionalKey: string | undefined;
   objectKey = { viewName: 'greeting' };
   parameterName = 123;
   parameterObject = { viewName: 'VM Ada' };

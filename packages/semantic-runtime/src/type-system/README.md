@@ -811,8 +811,9 @@ callback parameter typing, object-option typing, and nested literal context do n
   runtime definition; the call projector treats the converter's input value as the first method argument, inserts a
   synthesized caller-context argument for literal `withContext = true`, unions both strict-true runtime branches when
   `withContext` may be true but is not fixed, and then spends converter arguments for overload selection. Missing
-  converter methods are identity conversions, matching runtime-html `evaluatorUseConverter(...)`,
-  while missing converter resources remain open. Call/construct projection is intentionally lazy: a single
+  converter methods are identity conversions, matching runtime-html `evaluatorUseConverter(...)`. The selected
+  compiler-visible resource header identifies the built-in i18n converters. App converters with the same class names
+  use their own checker-backed method types. Missing converter resources remain open. Call/construct projection is intentionally lazy: a single
   arity-compatible signature does not cause argument evaluation just to re-prove the same return type, while overloaded
   surfaces can spend argument assignability to narrow the return lane. Generic inference from synthetic arguments,
   custom expression plugins, and richer collection prototype semantics should stay explicit until binding direction or

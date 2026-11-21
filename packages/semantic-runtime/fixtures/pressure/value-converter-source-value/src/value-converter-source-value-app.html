@@ -17,4 +17,5 @@
   <section repeat.for="fallbackProduct of maybeCatalog.products || fallbackProducts">
     <span>${fallbackProduct.label}</span>
   </section>
+  <let label-length.bind="label | appLength" context-label.bind="label | contextLabel"></let>
 </template>
