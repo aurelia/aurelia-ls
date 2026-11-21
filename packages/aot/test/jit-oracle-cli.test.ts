@@ -26,9 +26,9 @@ describe("AOT JIT oracle CLI", () => {
       closeSync(stdoutFd);
       stdoutOpen = false;
 
-      expect(result.status).toBe(0);
-      expect(result.stderr).toBe("");
       const stdoutJson = readFileSync(stdoutPath, "utf8");
+      expect(result.status, `${stdoutJson.slice(0, 2048)}\n${result.stderr}`).toBe(0);
+      expect(result.stderr).toBe("");
       expect(stdoutJson).toBe(readFileSync(outputPath, "utf8"));
       const receipt = JSON.parse(stdoutJson) as JitOracleReceipt;
       expect(receipt.schemaVersion).toBe("aurelia-ls/aot-jit-oracle-run/v1");
