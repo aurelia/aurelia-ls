@@ -20,6 +20,7 @@ export class SelectModelPrimitivesApp {
   selectedProductId: number | null = null;
   selectedValueBoundProductId: number | null = null;
   selectedRepeatedValueProductId: number | null = null;
+  selectedText: string = 'one';
   selectedProduct: Product | null = null;
   likesTacos: boolean | null = null;
   nullableChoice: boolean | null = null;

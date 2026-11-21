@@ -18,6 +18,16 @@ const failures = [];
 
 expectValueChannel(
   'select-model-primitives',
+  'A literal option alongside a numeric model can write a number back to the string field.',
+  {
+    channelKind: 'select-single-option-value',
+    sourceName: 'selectedText',
+    targetToSourceAssignable: false,
+    sourceAssignmentReasonKinds: ['target-to-source-type-mismatch'],
+  },
+);
+expectValueChannel(
+  'select-model-primitives',
   'Boolean/null select should preserve primitive option domains.',
   {
     channelKind: 'select-single-option-value',

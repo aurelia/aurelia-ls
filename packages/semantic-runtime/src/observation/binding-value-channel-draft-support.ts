@@ -47,7 +47,7 @@ import {
   checkerCallableReturnTypesForRuntimeArguments,
 } from '../type-system/checker-signature-parameters.js';
 import {
-  CheckerTypeProjector,
+  type CheckerTypeProjector,
   type CheckerTypeProjectionRequest,
   type CheckerSyntheticTypeProjectionRequest,
 } from '../type-system/checker-projector.js';
@@ -61,10 +61,12 @@ import {
 } from '../type-system/checker-type-shape-access.js';
 import {
   checkerPrimitiveType,
+  checkerPrimitiveLiteralType,
   checkerStringLiteralTypes,
 } from '../type-system/checker-primitive-types.js';
 import {
   checkerBackedUnionTypeForReferences,
+  checkerUnionType,
 } from '../type-system/checker-type-union.js';
 import {
   CheckerTypeProjectionOrigin,
@@ -105,6 +107,7 @@ import {
 } from './runtime-binding-observation.js';
 import {
   runtimeBindingPrimitiveValueDomString,
+  runtimeBindingPrimitiveValueExpressionValue,
   runtimeBindingPrimitiveValueDomainForExpression,
   runtimeBindingPrimitiveValueTypeDisplay,
   runtimeBindingStringLiteralTypeDisplay,
@@ -372,9 +375,15 @@ export class RuntimeBindingValueChannelTypeSupport {
     local: string,
     values: readonly RuntimeBindingPrimitiveValue[],
     sourceAddressHandle: AddressHandle | null,
+    checker?: ts.TypeChecker,
   ): CheckerTypeReference | null {
     if (values.length === 0) {
       return null;
+    }
+    if (checker) {
+      const types = values.map(value => checkerPrimitiveLiteralType(checker, runtimeBindingPrimitiveValueExpressionValue(value)));
+      const union = checkerUnionType(checker, types);
+      if (union) return this.projectCheckerType(local, checker, union, sourceAddressHandle);
     }
     const shape = this.typeProjector.ensureSyntheticProjection({
       localKey: local,

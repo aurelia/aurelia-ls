@@ -1,10 +1,10 @@
 import ts from 'typescript';
 import { uniqueStrings } from '../kernel/collections.js';
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
-import { HtmlElement, normalizeHtmlTagName } from '../template/html-ir.js';
+import { type HtmlElement, normalizeHtmlTagName } from '../template/html-ir.js';
 import { nativeSelectValueBindingSemantics } from '../template/native-form-control-semantics.js';
 import {
-  PropertyBinding,
+  type PropertyBinding,
   type RuntimeBindingTargetAccess,
 } from '../template/runtime-binding.js';
 import {
@@ -26,7 +26,7 @@ import type {
   SelectMultipleMode,
 } from './binding-value-channel-draft-types.js';
 import {
-  RuntimeBindingValueChannelDraftSupport,
+  type RuntimeBindingValueChannelDraftSupport,
   isBroadTypeShape,
   stringLiteralTypesForDomain,
   withCustomMatcherCoupling,
@@ -312,7 +312,7 @@ export class SelectValueObserverChannelDrafts {
     optionValues: readonly BindingValueExpression[],
     valueDomain: readonly string[],
   ): CheckerTypeReference | null {
-    if (valueDomain.length > 0) {
+    if (valueDomain.length > 0 && optionValues.every(optionHasLiteralDomain)) {
       return this.owner.types.stringLiteralDomainType(local, valueDomain, binding.sourceAddressHandle);
     }
     return this.optionValueUnionType(local, binding, optionValues);
@@ -483,7 +483,7 @@ export class SelectValueObserverChannelDrafts {
     valueDomain: readonly string[],
     primitiveValueDomain: readonly RuntimeBindingPrimitiveValue[],
   ): CheckerTypeReference | null {
-    if (valueDomain.length > 0) {
+    if (valueDomain.length > 0 && optionValues.every(optionHasLiteralDomain)) {
       return this.owner.types.primitiveLiteralDomainType(local, primitiveValueDomain, binding.sourceAddressHandle)
         ?? this.owner.types.stringLiteralDomainType(local, valueDomain, binding.sourceAddressHandle);
     }
@@ -497,19 +497,18 @@ export class SelectValueObserverChannelDrafts {
     binding: PropertyBinding,
     optionValues: readonly BindingValueExpression[],
   ): CheckerTypeReference | null {
-    const typed = this.typedOptionValues(optionValues);
-    return typed.length === 0
-      ? null
-      : this.owner.types.unionValueType(`${local}:typed-options`, typed, binding.sourceAddressHandle);
+    const typed = optionValues.flatMap(option => option.valueType ? [option.valueType] : []);
+    const literals = uniquePrimitiveValueDomain(optionValues.filter(option => option.valueType == null));
+    const checker = typed.length > 0 ? this.owner.types.readTypeShape(typed[0]!)?.carrier?.checker : undefined;
+    const literalType = this.owner.types.primitiveLiteralDomainType(`${local}:literal-options`, literals, binding.sourceAddressHandle, checker);
+    if (literalType) typed.push(literalType);
+    return this.owner.types.unionValueType(`${local}:typed-options`, typed, binding.sourceAddressHandle);
   }
 
-  private typedOptionValues(
-    optionValues: readonly BindingValueExpression[],
-  ): readonly CheckerTypeReference[] {
-    return optionValues
-      .map((option) => option.valueType)
-      .filter((valueType): valueType is CheckerTypeReference => valueType != null);
-  }
+}
+
+function optionHasLiteralDomain(option: BindingValueExpression): boolean {
+  return option.primitiveValueDomain.length > 0 || option.valueDomain.length > 0;
 }
 
 function uniquePrimitiveValueDomain(
