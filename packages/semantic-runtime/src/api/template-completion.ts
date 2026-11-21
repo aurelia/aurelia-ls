@@ -74,8 +74,6 @@ import type { RuntimeRendererIssue } from '../template/runtime-renderer-issue.js
 import { RefBindingInstruction } from '../template/instruction-ir.js';
 import { RouterNavigationTargetKind, type RouterIssueModel } from '../router/model.js';
 import type { AttributeSyntax } from '../template/attribute-syntax.js';
-import { findUniqueBuiltInBindingCommandByName } from '../template/built-in-syntax.js';
-import { capabilityForBuiltInSyntaxGroup } from '../framework/capability-demand-materializer.js';
 import {
   FrameworkCapabilityAdmissionState,
   FrameworkCapabilityDemandSiteKind,
@@ -2625,12 +2623,6 @@ function templateCompilerIssueDiagnosticRowsForSelection(
       const relatedSource = describeAddress(store, related.sourceAddressHandle);
       return relatedSource == null ? [] : [{ message: related.message, source: relatedSource }];
     });
-    const command = syntax?.command == null ? null : findUniqueBuiltInBindingCommandByName(syntax.command);
-    const capability = command == null ? null : capabilityForBuiltInSyntaxGroup(command.group);
-    const demand = capability == null ? null : frameworkCapabilityDemandsForSelection(context.capabilityDemands, selection)
-      .find(candidate => candidate.ownerIdentityHandle === syntax?.identityHandle
-        && candidate.requiredCapability === capability.requiredCapability
-        && candidate.admissionState !== FrameworkCapabilityAdmissionState.Admitted);
     const key = templateDiagnosticRowKey(diagnostic, source);
     if (context.seenRows.has(key)) {
       return [];
@@ -2639,10 +2631,8 @@ function templateCompilerIssueDiagnosticRowsForSelection(
     return [{
       ...diagnostic,
       ...(relatedInformation.length === 0 ? {} : { relatedInformation }),
-      ...templateDiagnosticRelationFields(demand == null ? null : {
-        relationKind: SemanticDiagnosticRelationKind.DerivedConsequence,
-        relatedDiagnosticIdentityHandle: demand.identityHandle,
-      }),
+      ...templateDiagnosticRelationFields(syntax == null ? null
+        : templateDiagnosticRelations(selection, context).forUnknownBindingCommand(syntax)),
       ...templateDiagnosticOriginFields(store, context.includeHandles, {
         phase: issue.phase,
         semanticProductHandle: issue.productHandle,

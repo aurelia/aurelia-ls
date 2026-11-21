@@ -4,12 +4,15 @@ import {
 } from '../configuration/scope.js';
 import { ExpressionParseResultInspector } from '../expression/parse-result-inspection.js';
 import type { SourceSpan } from '../expression/source-span.js';
-import type { FrameworkCapabilityDemand } from '../framework/capability-demand.js';
+import { FrameworkCapabilityAdmissionState, type FrameworkCapabilityDemand } from '../framework/capability-demand.js';
+import { capabilityForBuiltInSyntaxGroup } from '../framework/capability-demand-materializer.js';
 import type { IdentityHandle, ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import { sourceSpanAddressForAddress } from '../kernel/source-address.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { RuntimeBindingDataFlow } from '../observation/runtime-binding-observation.js';
+import type { AttributeSyntax } from '../template/attribute-syntax.js';
+import { findUniqueBuiltInBindingCommandByName, parseBuiltInAttributeSyntax } from '../template/built-in-syntax.js';
 import {
   IteratorBindingScopeEffect,
 } from '../template/runtime-binding.js';
@@ -65,7 +68,7 @@ export class TemplateDiagnosticRelations {
   constructor(
     private readonly store: KernelStore,
     private readonly resource: TemplateResourceRuntimeAnalysisEmission,
-    capabilityDemands: readonly FrameworkCapabilityDemand[],
+    private readonly capabilityDemands: readonly FrameworkCapabilityDemand[],
   ) {
     const effects = new Map(resource.runtimeAnalysis.runtimeRendering.scopeEffects
       .filter((effect): effect is IteratorBindingScopeEffect => effect instanceof IteratorBindingScopeEffect)
@@ -127,6 +130,30 @@ export class TemplateDiagnosticRelations {
         this.recordFailedBindingExpression(application, demand);
       }
     }
+  }
+
+  forUnknownBindingCommand(syntax: AttributeSyntax): TemplateDiagnosticRelationOrigin | null {
+    if (syntax.command == null) return null;
+    let group = findUniqueBuiltInBindingCommandByName(syntax.command)?.group;
+    if (group == null) {
+      // The admitted dot pattern may read e.g. "dispatch:main" as the command.
+      // Only a known pattern that would produce a real command can explain that failure.
+      const known = parseBuiltInAttributeSyntax(syntax.runtimeRawName, syntax.rawValue);
+      const name = known.execution.command;
+      if (name == null || name === syntax.command || findUniqueBuiltInBindingCommandByName(name) == null) return null;
+      group = known.handler?.group;
+    }
+    const capability = group == null ? null : capabilityForBuiltInSyntaxGroup(group);
+    if (capability == null) return null;
+    const demand = this.capabilityDemands.find(candidate =>
+      candidate.ownerIdentityHandle === syntax.identityHandle
+      && candidate.requiredCapability === capability.requiredCapability
+      && (candidate.admissionState === FrameworkCapabilityAdmissionState.NotAdmitted
+        || candidate.admissionState === FrameworkCapabilityAdmissionState.ConfiguredOut));
+    return demand == null ? null : {
+      relationKind: SemanticDiagnosticRelationKind.DerivedConsequence,
+      relatedDiagnosticIdentityHandle: demand.identityHandle,
+    };
   }
 
   forBindingDataFlow(
