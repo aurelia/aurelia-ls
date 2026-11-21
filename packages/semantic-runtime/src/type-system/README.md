@@ -1048,9 +1048,8 @@ callback parameter typing, object-option typing, and nested literal context do n
   resolvers inside answer code or expression semantics. Use `memberValueAccess` when the caller needs to distinguish a
   missing member from a checker-visible member whose value type could not be projected; use `memberValueType` only when
   every non-closed access can honestly be treated as absent.
-- Missing-member diagnostic suppression for nullable unions is still a type-shape access question. Use
-  `checkerTypeShapeNullishUnionHasValueProperty(...)` when the owner is a checker-backed union and the product needs to
-  decide whether the visible issue is nullishness rather than an actually missing value member.
+- Missing-member diagnostics on a nullable union use the projected member of its non-nullable value type.
+  Keep the original union for a separate diagnostic about the nullable receiver.
 - Related checker references on projected shapes are allowed to be handleless until a consumer needs detail. Access
   helpers must not treat a handleless `indexedValueType` or member reference as a terminal result; they should fall
   through to the retained checker carrier and materialize the reached value shape at the current semantic site.

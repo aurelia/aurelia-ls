@@ -838,11 +838,6 @@ export class CheckerExpressionCallProjector {
 
 }
 
-interface CheckerSignatureParameterType {
-  readonly symbol: ts.Symbol;
-  readonly type: ts.Type;
-}
-
 function callableParameterSurface(
   shape: CheckerTypeShape,
 ): string | null {
