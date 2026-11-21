@@ -465,9 +465,9 @@
   },
   "dependencies": {
     "typescript": "6.0.3",
-    "vscode-jsonrpc": "^9.0.1",
-    "vscode-languageclient": "^10.1.0",
-    "vscode-languageserver-protocol": "^3.18.2"
+    "vscode-jsonrpc": "10.0.0",
+    "vscode-languageclient": "11.0.0",
+    "vscode-languageserver-protocol": "3.18.5"
   },
   "devDependencies": {
     "@aurelia-ls/language-server": "workspace:*",
