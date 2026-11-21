@@ -123,6 +123,7 @@ import {
 } from './template-controller-semantics.js';
 import {
   staticTemplateControllerBooleanProperty,
+  templateControllerCaseHasExactMatchDomain,
   templateControllerValueExpressionProductHandle,
   templateControllerValueProperty,
 } from './template-controller-value.js';
@@ -2022,6 +2023,7 @@ export class TemplateTypeSystemOverlayBuilder {
   ): readonly (readonly TemplateTypeSystemOverlayExpressionPart[])[] | null {
     const expressions: (readonly TemplateTypeSystemOverlayExpressionPart[])[] = [];
     for (const instruction of this.switchCaseInstructions(resource, switchInstruction)) {
+      if (!templateControllerCaseHasExactMatchDomain(this.store, instruction)) continue;
       const parts = this.templateControllerValueSource(
         resource,
         instruction,
@@ -2058,7 +2060,8 @@ export class TemplateTypeSystemOverlayBuilder {
       return null;
     }
     const values = new Map<ProductHandle, readonly TemplateTypeSystemOverlayExpressionPart[]>();
-    for (const sibling of [...branch.activeCases, ...branch.excludedCases]) {
+    const excludedCases = branch.excludedCases.filter(sibling => templateControllerCaseHasExactMatchDomain(this.store, sibling));
+    for (const sibling of [...branch.activeCases, ...excludedCases]) {
       const value = this.templateControllerValueSource(
         resource,
         sibling,
@@ -2082,7 +2085,7 @@ export class TemplateTypeSystemOverlayBuilder {
       }
       caseExpressions.push(value);
     }
-    for (const sibling of branch.excludedCases) {
+    for (const sibling of excludedCases) {
       const value = values.get(sibling.productHandle);
       if (value == null) {
         return null;

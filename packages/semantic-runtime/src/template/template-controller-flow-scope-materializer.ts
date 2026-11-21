@@ -53,7 +53,7 @@ import {
   templateControllerValuePropertyBinding,
 } from './template-controller-value.js';
 import { templateControllerRuntimeValueBinding } from './template-controller-binding.js';
-import { staticTemplateControllerBooleanProperty } from './template-controller-value.js';
+import { staticTemplateControllerBooleanProperty, templateControllerCaseHasExactMatchDomain } from './template-controller-value.js';
 import { templateControllerSwitchCaseBranch } from './template-controller-switch-branch.js';
 import type {
   TemplateScopeConstructionFrame,
@@ -399,6 +399,8 @@ export class TemplateControllerFlowScopeMaterializer {
         switchInstruction,
         controller,
         localSuffix,
+        this.switchCaseInstructions(frame, switchInstruction),
+        true,
       );
       return excludedTypes == null || excludedTypes.length === 0
         ? null
@@ -440,6 +442,7 @@ export class TemplateControllerFlowScopeMaterializer {
       controller,
       localSuffix,
       branch.excludedCases,
+      true,
     );
     if (includeTypes == null || excludeTypes == null || includeTypes.length === 0) {
       return null;
@@ -461,9 +464,12 @@ export class TemplateControllerFlowScopeMaterializer {
     switchInstruction: HydrateTemplateControllerInstruction,
     controller: RuntimeControllerFrame | null,
     localSuffix: string,
-    instructions: readonly HydrateTemplateControllerInstruction[] = this.switchCaseInstructions(frame, switchInstruction),
+    instructions: readonly HydrateTemplateControllerInstruction[],
+    exclude = false,
   ) {
-    const result = instructions.map((instruction, index) => {
+    const candidates = exclude ? instructions.filter(instruction =>
+      templateControllerCaseHasExactMatchDomain(this.scopeNarrower.projector.publication, instruction)) : instructions;
+    const result = candidates.map((instruction, index) => {
       const siblingController = controller == null
         ? null
         : frame.input.runtimeBindings.readControllerForInstructionUnderParent(

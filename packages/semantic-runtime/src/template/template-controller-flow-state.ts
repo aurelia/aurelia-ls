@@ -25,7 +25,7 @@ export const enum TemplateControllerPromiseSettlementKind {
 export class TemplateControllerFlowState {
   private readonly previousIfByParentScope = new Map<string, TemplateControllerFlowApplication>();
   private readonly promiseByChildScopeState = new Map<string, TemplateControllerPromiseState>();
-  private readonly switchByChildScopeState = new Map<string, TemplateControllerFlowApplication>();
+  private readonly switchByChildScopeState = new Map<string, TemplateControllerFlowApplication[]>();
 
   rememberIf(
     parent: BindingScope,
@@ -76,18 +76,19 @@ export class TemplateControllerFlowState {
     instruction: HydrateTemplateControllerInstruction,
     controller: RuntimeControllerFrame | null,
   ): void {
-    this.switchByChildScopeState.set(
-      childScope.productHandle,
-      new TemplateControllerFlowApplication(instruction, controller),
-    );
+    const nested = this.switchByChildScopeState.get(childScope.productHandle) ?? [];
+    nested.push(new TemplateControllerFlowApplication(instruction, controller));
+    this.switchByChildScopeState.set(childScope.productHandle, nested);
   }
 
   readSwitch(childScope: BindingScope): TemplateControllerFlowApplication | null {
-    return readFlowStateThroughPredecessors(this.switchByChildScopeState, childScope);
+    return readFlowStateThroughPredecessors(this.switchByChildScopeState, childScope)?.at(-1) ?? null;
   }
 
   forgetSwitch(childScope: BindingScope): void {
-    this.switchByChildScopeState.delete(childScope.productHandle);
+    const nested = this.switchByChildScopeState.get(childScope.productHandle);
+    nested?.pop();
+    if (nested?.length === 0) this.switchByChildScopeState.delete(childScope.productHandle);
   }
 }
 

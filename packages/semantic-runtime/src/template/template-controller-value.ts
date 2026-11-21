@@ -9,6 +9,22 @@ import {
   SetPropertyInstruction,
 } from './instruction-ir.js';
 import { TemplateProductDetails } from './product-details.js';
+import { completedTemplateExpressionAstForParse } from './expression-parse-projection.js';
+
+/** Only a known case value can exclude all its represented types from a later branch. */
+export function templateControllerCaseHasExactMatchDomain(
+  store: ProductDetailReadView,
+  instruction: HydrateTemplateControllerInstruction,
+): boolean {
+  if (templateControllerStaticValue(store, instruction) != null) return true;
+  const binding = templateControllerValuePropertyBinding(store, instruction);
+  const parse = binding?.expressionProductHandle == null ? null
+    : store.readProductDetail(TemplateProductDetails.ExpressionParse, binding.expressionProductHandle);
+  let value = parse == null ? null : completedTemplateExpressionAstForParse(parse);
+  while (value?.$kind === 'Paren') value = value.expression;
+  return value?.$kind === 'PrimitiveLiteral'
+    || (value?.$kind === 'ArrayLiteral' && value.elements.every(element => element.$kind === 'PrimitiveLiteral'));
+}
 
 export function templateControllerValueExpressionProductHandle(
   store: ProductDetailReadView,
@@ -78,19 +94,17 @@ export function staticTemplateControllerBooleanProperty(
   targetProperty: string,
   fallback: boolean,
 ): boolean | null {
-  let sawTarget = false;
   for (const productHandle of instruction.bindingInstructionProductHandles) {
     const binding = store.readProductDetail(TemplateProductDetails.Instruction, productHandle);
     if (binding instanceof SetPropertyInstruction && binding.targetProperty === targetProperty) {
-      sawTarget = true;
       return coerceTemplateControllerBoolean(binding.value);
     }
-    if (binding instanceof PropertyBindingInstruction && binding.targetProperty === targetProperty) {
-      sawTarget = true;
+    if ((binding instanceof PropertyBindingInstruction && binding.targetProperty === targetProperty)
+      || (binding instanceof InterpolationInstruction && binding.target === targetProperty)) {
       return null;
     }
   }
-  return sawTarget ? null : fallback;
+  return fallback;
 }
 
 export function templateControllerValueProperty(
