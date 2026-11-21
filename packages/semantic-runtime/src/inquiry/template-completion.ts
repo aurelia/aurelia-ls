@@ -1174,7 +1174,7 @@ class TemplateCompletionCursorContextBuilder {
     activeAttribute: HtmlAttribute | null,
   ): AttributeSyntax | null {
     const syntax = smallestContaining(
-      this.input.resource.compilation.bindingCommandLowering.attributeSyntaxes,
+      this.input.resource.compilation.bindingCommandLowering.authoredAttributeSyntaxes,
       offset,
       (syntax) => sourceSpanFor(this.store, syntax.nameSourceAddressHandle),
     );

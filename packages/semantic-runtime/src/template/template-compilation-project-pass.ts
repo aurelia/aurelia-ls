@@ -204,7 +204,7 @@ export class TemplateResourceCompilationEmission {
   ) {
     this.authoredAttributeSyntaxes = [
       ...attributeSyntax.syntaxes,
-      ...bindingCommandLowering.attributeSyntaxes,
+      ...bindingCommandLowering.authoredAttributeSyntaxes,
     ];
     this.attributeOwnerProgression = bindingCommandLowering.attributeOwnerProgression;
   }

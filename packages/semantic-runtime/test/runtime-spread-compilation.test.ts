@@ -16,6 +16,7 @@ import {
 } from '../src/kernel/project-input.js';
 import { sourceSpanAddressForAddress } from '../src/kernel/source-address.js';
 import {
+  HydrateAttributeInstruction,
   HydrateElementInstruction,
   PropertyBindingInstruction,
   SetAttributeInstruction,
@@ -48,6 +49,40 @@ import {
 } from '../src/template/template-instruction-runtime-value.js';
 
 describe('runtime captured-attribute compilation', () => {
+  test('uses the receiving custom attribute primary and inline bindables, with an exact unknown command diagnostic', async () => {
+    const fixture = path.resolve(fileURLToPath(new URL('../fixtures/pressure/template-spread-capture-semantics', import.meta.url)));
+    const template = path.join(fixture, 'src/template-spread-capture-semantics-app.html');
+    const markup = [
+      '<capture-shell input-mark="literal"></capture-shell>',
+      '<capture-shell input-mark.bind="capturedValue"></capture-shell>',
+      '<capture-shell input-mark="value.bind: capturedValue"></capture-shell>',
+      '<capture-shell input-mark="value.BIND: capturedValue"></capture-shell>',
+    ].join('\n');
+    const files = new Map([[template, markup], [path.join(fixture, 'src/capture-shell.html'), '<input ...$attrs>']]);
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixture,
+      projectInputAuthority: new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost({
+        readFile: file => files.get(path.resolve(file)), fileExists: file => files.has(path.resolve(file)) || undefined,
+      })),
+    });
+    try {
+      const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+      const owner = app.emission.templates.resources.find(resource =>
+        resource.compilation.definition.name === 'template-spread-capture-semantics-app')!;
+      const dynamic = owner.runtimeAnalysis.runtimeRendering.dynamicInstructions;
+      const props = dynamic.filter(instruction => instruction instanceof HydrateAttributeInstruction && instruction.resourceName === 'input-mark')
+        .flatMap(instruction => instruction instanceof HydrateAttributeInstruction
+          ? instruction.bindingInstructionProductHandles.map(handle => dynamic.find(item => item.productHandle === handle)) : []);
+      expect(props.filter(prop => prop instanceof SetPropertyInstruction).map(prop => prop.value)).toEqual(['literal']);
+      expect(props.filter(prop => prop instanceof PropertyBindingInstruction).map(prop => prop.targetProperty)).toEqual(['value', 'value']);
+      const diagnostics = await runtime.templateDiagnostics({ sourceFile: { filePath: template } });
+      expect(diagnostics.value.rows.filter(row => row.frameworkErrorCode === 'AUR0713').map(row =>
+        markup.slice(row.source!.start!, row.source!.end!))).toEqual(['BIND']);
+    } finally {
+      runtime.retireWorkspaceIncarnation();
+    }
+  }, 45_000);
+
   test('targets each receiving custom-element controller when unwrapping captured bindable instructions', async () => {
     const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
     const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-spread-capture-semantics');
@@ -224,7 +259,7 @@ describe('runtime captured-attribute compilation', () => {
         requestor.compilation.compilerWorld,
         new RuntimeRenderingSourceSet([], source.handle, resource.runtimeAnalysis.runtimeRendering.rootController.provenanceHandle),
         new RuntimeBindingIssuePublisher(runtime.workspace.store), null, [], bindingIssues, compilerIssues, [], [], [],
-        invalidOwner.productHandle, resource.runtimeAnalysis.runtimeRendering.rootController.productHandle),
+        invalidOwner.productHandle, resource.runtimeAnalysis.runtimeRendering.rootController.productHandle, runtime.workspace.store),
     );
     expect(compilerOnly.state).toBe(TemplateCompilerSpreadCompileState.Invalid);
     expect(compilerOnly.createdInstructions).toEqual([]);

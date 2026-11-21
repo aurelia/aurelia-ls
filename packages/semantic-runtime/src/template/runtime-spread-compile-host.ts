@@ -1,10 +1,11 @@
 import { SemanticClaim } from '../kernel/claim.js';
+import type { ComputationDomainReadProjection } from '../kernel/computation-lifecycle.js';
 import type { ProductHandle } from '../kernel/handles.js';
 import { InstructionIdentity } from '../kernel/identity.js';
 import { MaterializedProduct } from '../kernel/materialization.js';
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
-import type { KernelStore, KernelStoreRecord } from '../kernel/store.js';
-import type { KernelPublicationContext } from '../kernel/publication.js';
+import { KernelStoreBatch, type KernelStore, type KernelStoreRecord } from '../kernel/store.js';
+import { KernelPublicationPlan, publishProductDetails, type KernelPublicationContext } from '../kernel/publication.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
@@ -13,14 +14,18 @@ import type { ExpressionType } from '../expression/ast.js';
 import type { SourceSpan } from '../expression/source-span.js';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import { camelCaseAttributeName } from './attribute-mapper.js';
-import type { AttributeSyntax } from './attribute-syntax.js';
+import { AttributeClassificationKind, type AttributeSyntax } from './attribute-syntax.js';
+import { selectTemplateAttributeValueSite, TemplateAttributeEmptyValueBindingPolicy } from './attribute-value-site-selection.js';
+import { BindingCommandLoweringMaterializer } from './binding-command-lowering-materializer.js';
+import { TemplateCompilerReadView, TemplateCompilerScopeClosureState, TemplateCompilerWorldAuthority } from './compiler-read-view.js';
+import { unknownBindingCommandDecisionIssue } from './attribute-classification-decision.js';
 import {
   BindingCommandBuildInfo,
   BindingCommandInstructionAllocation,
   BindingCommandIteratorParse,
   BindingCommandLoweringState,
   type BindingCommandTailSyntax,
-  type BindingCommandBuildResult,
+  BindingCommandBuildResult,
   type BindingCommandBuildContext,
   type BindingCommandExecutable,
 } from './binding-command-execution.js';
@@ -33,7 +38,7 @@ import {
 } from './compiler-world.js';
 import type { TemplateBindableReference } from './compiler-world-reference.js';
 import { readVisibleTemplateResourceDefinition } from './compiler-resource-lookup.js';
-import { HtmlAttribute, HtmlElement, type HtmlNodeReference } from './html-ir.js';
+import { HtmlAttribute, HtmlElement, HtmlElementAttributeOwner, type HtmlNodeReference } from './html-ir.js';
 import { templateElementLookupNameFromAttributes } from './special-attribute-source.js';
 import {
   HydrateAttributeInstruction,
@@ -89,6 +94,12 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
   private readonly stagedInstructions: TemplateInstruction[] = [];
   private readonly stagedValueSites: TemplateValueSite[] = [];
   private readonly stagedExpressionParses: TemplateExpressionParse[] = [];
+  private readonly inlineBindings: {
+    local: string;
+    records: readonly KernelStoreRecord[];
+    site: TemplateValueSite;
+    result: ReturnType<BindingCommandLoweringMaterializer['lowerMultiBindingSite']>;
+  }[] = [];
   private instructionIndex = 0;
   private expressionIndex = 0;
 
@@ -108,6 +119,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     private readonly dynamicExpressionParses: TemplateExpressionParse[],
     private readonly capturedAttributeContextInstructionProductHandle: ProductHandle,
     private readonly capturedAttributeContextControllerProductHandle: ProductHandle,
+    private readonly compilerReadProjection: ComputationDomainReadProjection,
   ) {
     this.valueSitePublisher = new TemplateValueSitePublisher(publication);
     this.compilerIssuePublisher = new TemplateCompilerIssuePublisher(store);
@@ -133,6 +145,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     for (const syntax of request.capturedSyntaxes) {
       const compiled = this.compileCapturedSyntax(request, syntax, targetNode, targetDefinition);
       if (compiled instanceof TemplateCompilerSpreadCompileResult) {
+        this.publishInlineBindingProducts(false);
         return compiled;
       }
       for (const instruction of compiled.rootInstructions) {
@@ -141,6 +154,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
       }
       createdInstructions.push(...compiled.createdInstructions);
     }
+    this.publishInlineBindingProducts(true);
     this.commitStagedOutputs();
     return TemplateCompilerSpreadCompileResult.compiled(
       request,
@@ -170,6 +184,22 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     }
 
     const command = this.commandMatch(syntax);
+    if (syntax.command != null && command == null) {
+      const read = this.compilerReads().readBindingCommand(syntax.command);
+      if (read.value == null && read.observation.closure.state === TemplateCompilerScopeClosureState.Closed
+        && read.observation.validate().isCurrent) {
+        const issue = unknownBindingCommandDecisionIssue(syntax.command);
+        this.publishBindingCommandIssue(request, syntax, BindingCommandBuildResult.invalid(
+          issue.message, issue.frameworkErrorCode, issue.issueKind), syntax.commandSourceAddressHandle ?? syntax.sourceAddressHandle);
+        return TemplateCompilerSpreadCompileResult.invalid(request, issue.message);
+      }
+      return TemplateCompilerSpreadCompileResult.open(request, `Captured binding command '${syntax.command}' could not be resolved.`,
+        [OpenSeamReasonKind.BindingTargetProductMissing]);
+    }
+    if (command != null && command.executable.ignoreAttr == null) {
+      return TemplateCompilerSpreadCompileResult.open(request, `Captured binding command '${command.executable.name}' has an unresolved ignoreAttr policy.`,
+        [OpenSeamReasonKind.BindingCommandExecutableBodyOpen]);
+    }
     if (command != null && command.executable.ignoreAttr) {
       return this.commandInstructions(request, syntax, targetNode, null, null, command);
     }
@@ -200,9 +230,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
           `SpreadBinding.addChild does not allow captured template controller '${target}' to be spread onto '${targetNode.tagName}'.`,
         );
       }
-      const props = command == null
-        ? instructionSet([this.customAttributeValueInstruction(request, syntax, targetNode, attributeDefinition.defaultProperty)])
-        : this.commandInstructions(request, syntax, targetNode, null, attributeDefinition.productHandle, command);
+      const props = this.customAttributeInstructions(request, syntax, targetNode, attributeDefinition, command);
       if (props instanceof TemplateCompilerSpreadCompileResult) {
         return props;
       }
@@ -232,6 +260,71 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     }
 
     return instructionSet([this.plainAttributeInstruction(request, syntax, targetNode)]);
+  }
+
+  private customAttributeInstructions(
+    request: TemplateCompilerSpreadCompileRequest,
+    syntax: AttributeSyntax,
+    target: HtmlElement,
+    definition: CustomAttributeDefinition,
+    command: SpreadCommandMatch | null,
+  ): SpreadCompileInstructionSet | TemplateCompilerSpreadCompileResult {
+    const primary = this.world.resourceResolver.bindables(definition).primary;
+    if (command != null) return this.commandInstructions(request, syntax, target, primary, definition.productHandle, command);
+    const selection = selectTemplateAttributeValueSite({
+      classificationKind: AttributeClassificationKind.CustomAttribute, resourceKind: definition.type, definition,
+      rawValue: syntax.rawValue, target: syntax.target, hasBindingCommand: false,
+      emptyValueBindingPolicy: TemplateAttributeEmptyValueBindingPolicy.BindPrimary,
+    });
+    if (selection?.siteKind !== TemplateValueSiteKind.MultiBindingValue) {
+      return instructionSet([this.customAttributeValueInstruction(request, syntax, target, primary.definition.name)]);
+    }
+
+    // The receiver supplies bindables, commands and the DOM target. The captured value keeps its declaring source.
+    const local = `runtime-rendering:${request.localKey}:spread-multi-binding:${syntax.productHandle}`;
+    const captured = this.valueSitePublisher.publish(new TemplateValueSitePublicationRequest(
+      local, null, this.world.expressionParser, this.source.provenanceHandle, selection.siteKind,
+      syntax.rawValue, null, target.toReference(), syntax.attribute, syntax, null, null, null,
+      this.expressionSourceAddressHandle(syntax), syntax.identityHandle, 'spread:multi-binding', null, null,
+    ));
+    const attribute = syntax.attribute.productHandle == null ? null
+      : this.publication.readProductDetail(TemplateProductDetails.HtmlAttribute, syntax.attribute.productHandle);
+    const owner = new HtmlElementAttributeOwner(target, target.toReference(), this.targetAttributes(target));
+    const result = new BindingCommandLoweringMaterializer(this.publication).lowerMultiBindingSite(
+      local, this.source, this.world, this.compilerReads(),
+      captured.site, attribute, owner, owner, definition,
+    );
+    const records = [...captured.records, ...result.records, ...result.claims.filter(claim => !result.records.includes(claim))];
+    this.inlineBindings.push({ local, records, site: captured.site, result });
+    this.compilerIssues.push(...result.issues);
+    if (result.lowering.state === BindingCommandLoweringState.Invalid) {
+      return TemplateCompilerSpreadCompileResult.invalid(request, result.issues[0]?.message ?? 'Invalid captured multi-binding.');
+    }
+    if (result.lowering.state !== BindingCommandLoweringState.Complete) {
+      return TemplateCompilerSpreadCompileResult.open(request, 'Captured multi-binding lowering is incomplete.',
+        result.openSeams.flatMap(seam => seam.reasonKinds));
+    }
+    this.stagedValueSites.push(captured.site, ...result.valueSites);
+    this.stagedExpressionParses.push(...result.expressionParses);
+    for (const instruction of result.instructions) this.registerInstructionDetail(request, instruction, syntax);
+    return instructionSet(result.instructions);
+  }
+
+  private publishInlineBindingProducts(compiled: boolean): void {
+    for (const { local, records, site, result } of this.inlineBindings) {
+      // Rendering publishes committed parses and instructions. A refused spread still owns the
+      // parser/command evidence that its attempted segments reference, without executing them.
+      this.publication.publish(new KernelPublicationPlan(new KernelStoreBatch(records, local), [
+        ...publishProductDetails(TemplateProductDetails.AttributeSyntax, result.attributeSyntaxes),
+        ...publishProductDetails(TemplateProductDetails.MultiBindingSegment, result.segments),
+        ...publishProductDetails(TemplateProductDetails.BindingCommandBuildInput, result.buildInputs),
+        ...publishProductDetails(TemplateProductDetails.BindingCommandLowering, result.commandLowerings),
+        ...publishProductDetails(TemplateProductDetails.MultiBindingLowering, [result.lowering]),
+        ...(compiled ? [] : publishProductDetails(TemplateProductDetails.ValueSite, [site, ...result.valueSites])),
+        ...(compiled ? [] : publishProductDetails(TemplateProductDetails.ExpressionParse, result.expressionParses)),
+        ...(compiled ? [] : publishProductDetails(TemplateProductDetails.Instruction, result.instructions)),
+      ]));
+    }
   }
 
   private commandInstructions(
@@ -475,6 +568,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     request: TemplateCompilerSpreadCompileRequest,
     syntax: AttributeSyntax,
     result: BindingCommandBuildResult,
+    sourceAddress = syntax.sourceAddressHandle,
   ): void {
     if (result.message == null) {
       return;
@@ -487,7 +581,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
       result.issueKind ?? TemplateCompilerIssueKind.BindingCommandBuildInvalid,
       result.message,
       result.frameworkErrorCode,
-      syntax.sourceAddressHandle,
+      sourceAddress,
     );
     this.records.push(...publication.records);
     this.compilerIssues.push(publication.issue);
@@ -637,6 +731,10 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     return command == null ? null : { executable, handler: command.handler };
   }
 
+  private compilerReads(): TemplateCompilerReadView {
+    return new TemplateCompilerReadView(this.compilerReadProjection, TemplateCompilerWorldAuthority.fixed(this.world));
+  }
+
   private targetNode(request: TemplateCompilerSpreadCompileRequest): HtmlElement | null {
     if (request.origin.kind === 'composition-host') return request.origin.target;
     const productHandle = request.origin.target.htmlNode?.productHandle ?? null;
@@ -664,12 +762,15 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
   }
 
   private elementLookupName(targetNode: HtmlElement): string {
-    const attributes = targetNode.attributes
+    return templateElementLookupNameFromAttributes(targetNode.tagName, this.targetAttributes(targetNode), targetNode.namespace);
+  }
+
+  private targetAttributes(targetNode: HtmlElement): HtmlAttribute[] {
+    return targetNode.attributes
       .map((attribute) => attribute.productHandle == null
         ? null
         : this.publication.readProductDetail(TemplateProductDetails.HtmlAttribute, attribute.productHandle))
       .filter((attribute): attribute is NonNullable<typeof attribute> => attribute != null);
-    return templateElementLookupNameFromAttributes(targetNode.tagName, attributes, targetNode.namespace);
   }
 
 }

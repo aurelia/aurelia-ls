@@ -68,6 +68,10 @@ export class TemplateRuntimeAnalysisProjectContext {
     }
   }
 
+  get compilerReadProjection() {
+    return this.publication.domainReadProjection;
+  }
+
   /** Reuse compiler service authority while selecting resources from the exact runtime consulting container. */
   compilerWorldForRuntimeContainer(
     container: Container,

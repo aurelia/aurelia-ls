@@ -513,6 +513,7 @@ export class RuntimeCompositionMaterializer {
     }
     records.push(...spreads.records);
     return new RuntimeCompositionEmission(contexts, controllers, composedControllers, childContainers, openSeams, records, spreads);
+        compilerReadProjection: input.projectContext.compilerReadProjection,
   }
 
   private createContext(

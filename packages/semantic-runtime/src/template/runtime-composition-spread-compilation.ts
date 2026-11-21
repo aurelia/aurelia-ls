@@ -1,5 +1,6 @@
 import type { KernelStore, KernelStoreRecord } from '../kernel/store.js';
 import type { KernelPublicationContext } from '../kernel/publication.js';
+import type { ComputationDomainReadProjection } from '../kernel/computation-lifecycle.js';
 import { bindProductDetailEnvelope } from '../kernel/product-details.js';
 import { CompilerIdentity } from '../kernel/identity.js';
 import { MaterializationRecord, MaterializedProduct } from '../kernel/materialization.js';
@@ -40,6 +41,7 @@ export class RuntimeCompositionSpreadEmission {
 }
 
 export interface RuntimeCompositionSpreadRequest {
+  readonly compilerReadProjection: ComputationDomainReadProjection;
   readonly localKey: string;
   readonly context: CompositionContext;
   readonly controller: RuntimeControllerFrame;
@@ -98,7 +100,7 @@ export class RuntimeCompositionSpreadCompiler {
     ), new RuntimeTemplateCompilerSpreadCompileHost(
       this.store, this.publication, world, source, new RuntimeBindingIssuePublisher(this.store), null,
       output.records, output.bindingIssues, output.compilerIssues, output.instructions, output.valueSites,
-      output.expressionParses, instruction.productHandle, controller.productHandle,
+      output.expressionParses, instruction.productHandle, controller.productHandle, request.compilerReadProjection,
     )) : null;
     const state = compiled == null ? RuntimeRendererSpreadCompileState.Open
       : compiled.state === TemplateCompilerSpreadCompileState.Compiled ? RuntimeRendererSpreadCompileState.Compiled

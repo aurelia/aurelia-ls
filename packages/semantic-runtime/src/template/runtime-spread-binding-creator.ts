@@ -203,6 +203,7 @@ export class RuntimeSpreadBindingCreator {
         state.dynamicExpressionParses,
         usage.hydrationContext.instructionProductHandle!,
         usage.contextController.productHandle,
+        state.input.projectContext.compilerReadProjection,
       ),
     );
     if (result.state === TemplateCompilerSpreadCompileState.Compiled) {
