@@ -22,6 +22,7 @@ import { camelCaseAttributeName } from '../template/attribute-mapper.js';
 import { readTemplateExpressionParse } from '../template/expression-parse-product.js';
 import {
   HtmlElement,
+  HtmlNamespaceKind,
   HtmlText,
   type HtmlAttribute,
   type HtmlNodeReference,
@@ -138,6 +139,7 @@ export function readControlUseInventoryRows(
         ...valueChannelRows,
         ...containingFormSubmitButtonRows({
           definitionName: resource.compilation.definition.name,
+          rootNodes: resource.compilation.html.document.rootNodes,
           store,
           valueChannels,
           targetOperations,
@@ -644,6 +646,7 @@ function preferredElementAction(
 
 interface ContainingFormSubmitButtonRowsInput {
   readonly definitionName: string;
+  readonly rootNodes: readonly HtmlNodeReference[];
   readonly store: KernelStore;
   readonly valueChannels: readonly RuntimeBindingValueChannel[];
   readonly targetOperations: ReadonlyMap<ProductHandle, RuntimeBindingTargetOperation>;
@@ -655,6 +658,7 @@ function containingFormSubmitButtonRows(
   input: ContainingFormSubmitButtonRowsInput,
 ): readonly SemanticControlUseInventoryRow[] {
   const rows: SemanticControlUseInventoryRow[] = [];
+  let buttonsByForm: Map<ProductHandle, HtmlElement[]> | undefined;
   for (const valueChannel of input.valueChannels) {
     const targetOperation = targetOperationForValueChannel(valueChannel, input.targetOperations);
     const form = htmlElementForTarget(input.store, null, targetOperation, null);
@@ -662,7 +666,8 @@ function containingFormSubmitButtonRows(
       continue;
     }
     const dataFlow = firstDataFlowForValueChannel(valueChannel, input.dataFlowsByValueChannel);
-    for (const button of submitButtonsForForm(input.store, form)) {
+    buttonsByForm ??= indexSubmitButtonsByForm(input.store, input.rootNodes);
+    for (const button of buttonsByForm.get(form.productHandle) ?? []) {
       const attributes = readElementAttributes(input.store, button);
       rows.push(nativeButtonActionRow({
         definitionName: input.definitionName,
@@ -695,22 +700,44 @@ function isContainingFormSubmitChannel(
     && normalizeTagName(element.tagName) === 'form';
 }
 
-function submitButtonsForForm(
+function indexSubmitButtonsByForm(
   store: KernelStore,
-  form: HtmlElement,
-): readonly HtmlElement[] {
-  return descendantElements(store, form).filter((element) => {
+  roots: readonly HtmlNodeReference[],
+): Map<ProductHandle, HtmlElement[]> {
+  const firstElementById = new Map<string, HtmlElement>();
+  const submitters: { element: HtmlElement; explicitId: string | null; ancestor: HtmlElement | null }[] = [];
+  function visit(reference: HtmlNodeReference, ancestor: HtmlElement | null): void {
+    const element = htmlNodeForReference(store, reference);
+    if (!(element instanceof HtmlElement)) return;
     const attributes = readElementAttributes(store, element);
     const tagName = normalizeTagName(element.tagName);
-    if (tagName === 'button') {
-      const type = staticAttributeValue(attributes, 'type')?.toLowerCase() ?? 'submit';
-      return type === 'submit';
+    const id = staticAttributeValue(attributes, 'id');
+    if (id && !firstElementById.has(id)) firstElementById.set(id, element);
+    if (element.namespace === HtmlNamespaceKind.Html) {
+      if (tagName === 'form') ancestor = element;
+      const type = staticAttributeValue(attributes, 'type')?.toLowerCase();
+      if ((tagName === 'button' && (type == null || type === 'submit')) ||
+          (tagName === 'input' && (type === 'submit' || type === 'image'))) {
+        // A bound owner cannot be inferred from the enclosing form.
+        if (!attributes.some(attribute => attribute.rawName.toLowerCase().startsWith('form.'))) {
+          submitters.push({ element, explicitId: staticAttributeValue(attributes, 'form'), ancestor });
+        }
+      }
     }
-    if (tagName !== 'input') {
-      return false;
+    for (const child of element.children) visit(child, ancestor);
+  }
+  for (const root of roots) visit(root, null);
+
+  const buttons = new Map<ProductHandle, HtmlElement[]>();
+  for (const { element, explicitId, ancestor } of submitters) {
+    const owner = explicitId === null ? ancestor : firstElementById.get(explicitId);
+    if (owner?.namespace === HtmlNamespaceKind.Html && normalizeTagName(owner.tagName) === 'form') {
+      const group = buttons.get(owner.productHandle);
+      if (group) group.push(element);
+      else buttons.set(owner.productHandle, [element]);
     }
-    return staticAttributeValue(attributes, 'type')?.toLowerCase() === 'submit';
-  });
+  }
+  return buttons;
 }
 
 function elementsForNodeReferences(
