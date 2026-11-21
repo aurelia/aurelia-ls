@@ -28,11 +28,10 @@ export function appBuilderSourceLoweringRequestFieldRegistryCoverageRowsInSummar
 ): readonly AppBuilderSourceLoweringRequestFieldRegistryCoverageRow[] {
   const summarizedRegistryOwnerKinds = options.summarizedRegistryOwnerKinds ?? APP_BUILDER_SOURCE_LOWERING_REQUEST_FIELD_REGISTRY_OWNER_KINDS;
   const summarizedSurfaceKinds = options.summarizedSurfaceKinds ?? APP_BUILDER_SOURCE_LOWERING_SURFACE_KINDS;
-  return coverageRows.filter((row) =>
-    row.registryOwnerKinds.length === 0
-    || row.registryOwnerKinds.some((ownerKind) => summarizedRegistryOwnerKinds.includes(ownerKind))
-    && row.registeredSurfaceKinds.some((surfaceKind) => summarizedSurfaceKinds.includes(surfaceKind))
-  );
+  const registeredFields = new Set(appBuilderSourceLoweringRequestFieldRegistryRows()
+    .filter(entry => summarizedRegistryOwnerKinds.includes(entry.ownerKind) && summarizedSurfaceKinds.includes(entry.surfaceKind))
+    .map(entry => entry.fieldId));
+  return coverageRows.filter(row => row.registryOwnerKinds.length === 0 || registeredFields.has(row.fieldId));
 }
 
 
