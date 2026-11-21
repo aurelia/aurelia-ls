@@ -126,7 +126,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         {
           "anomaly": null,
           "file": "src/app.html",
-          "message": "TS2339: Property 'label' does not exist on type 'string'.",
+          "message": "TS2339: Property 'label' does not exist on type '\"ticket-shell\"'.",
           "range": {
             "end": {
               "character": 24,
