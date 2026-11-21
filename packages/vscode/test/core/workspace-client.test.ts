@@ -2462,7 +2462,6 @@ describe("LspFacade workspace routing", () => {
     await vi.waitFor(() => expect(harness.clients[0]?.sendRequest).toHaveBeenCalledWith(
       "aurelia/resourceInventory",
       {},
-      undefined,
     ));
     vscode.workspace.workspaceFolders?.splice(0, 1);
     await manager.reconcile({ reconfirmExisting: true });
@@ -2656,7 +2655,6 @@ describe("LspFacade workspace routing", () => {
       expect(sharedClient.sendRequest).toHaveBeenCalledExactlyOnceWith(
         "aurelia/resourceAvailabilityExplanation",
         params,
-        undefined,
       );
     } finally {
       facade.dispose();
@@ -2686,7 +2684,7 @@ describe("LspFacade workspace routing", () => {
       const inventory = facade.getResourceInventory({ workspaceKey: workspaceUri });
 
       expect(client.sendRequest).toHaveBeenCalledTimes(1);
-      expect(client.sendRequest).toHaveBeenCalledWith("aurelia/resourceInventory", {}, undefined);
+      expect(client.sendRequest).toHaveBeenCalledWith("aurelia/resourceInventory", {});
       await expect(inventory).resolves.toEqual(expect.objectContaining({
         workspaces: [expect.objectContaining({ status: "ready" })],
       }));
@@ -2719,7 +2717,6 @@ describe("LspFacade workspace routing", () => {
     expect(harness.clients[1]?.sendRequest).toHaveBeenCalledWith(
       "aurelia/getRelatedFiles",
       { uri: "file:///work/b/src/card.ts" },
-      undefined,
     );
 
     const ownership = await facade.getSourceOwnership("file:///work/b/src/card.ts");
@@ -2732,7 +2729,6 @@ describe("LspFacade workspace routing", () => {
     expect(harness.clients[1]?.sendRequest).toHaveBeenCalledWith(
       "aurelia/sourceOwnership",
       { uri: "file:///work/b/src/card.ts" },
-      undefined,
     );
 
     const explanationParams = {
@@ -2754,7 +2750,6 @@ describe("LspFacade workspace routing", () => {
     expect(harness.clients[1]?.sendRequest).toHaveBeenCalledWith(
       "aurelia/frameworkCapabilityExplanation",
       explanationParams,
-      undefined,
     );
 
     const bindingExplanationParams = {
@@ -2775,7 +2770,6 @@ describe("LspFacade workspace routing", () => {
     expect(harness.clients[1]?.sendRequest).toHaveBeenCalledWith(
       "aurelia/bindingUncertaintyExplanation",
       bindingExplanationParams,
-      undefined,
     );
 
     const attributeExplanationParams = {
@@ -2796,7 +2790,6 @@ describe("LspFacade workspace routing", () => {
     expect(harness.clients[1]?.sendRequest).toHaveBeenCalledWith(
       "aurelia/attributeInterpretationExplanation",
       attributeExplanationParams,
-      undefined,
     );
 
     const resourceAvailabilityExplanationParams = {
@@ -2818,7 +2811,6 @@ describe("LspFacade workspace routing", () => {
     expect(harness.clients[1]?.sendRequest).toHaveBeenCalledWith(
       "aurelia/resourceAvailabilityExplanation",
       resourceAvailabilityExplanationParams,
-      undefined,
     );
 
     const prototypePosition = Object.assign(Object.create({
@@ -2841,7 +2833,6 @@ describe("LspFacade workspace routing", () => {
         projectKey: "file:///work/b:app",
         templateResourceScopeIdentityKey: "template:my-app",
       },
-      undefined,
     );
 
     await facade.renameFromTs(
@@ -2856,7 +2847,6 @@ describe("LspFacade workspace routing", () => {
         position: { line: 28, character: 15 },
         newName: "renamedCard",
       },
-      undefined,
     );
 
     const inventory = await facade.getResourceInventory();
@@ -2869,12 +2859,10 @@ describe("LspFacade workspace routing", () => {
     expect(harness.clients[0]?.sendRequest).toHaveBeenCalledWith(
       "aurelia/resourceInventory",
       {},
-      undefined,
     );
     expect(harness.clients[1]?.sendRequest).toHaveBeenCalledWith(
       "aurelia/resourceInventory",
       {},
-      undefined,
     );
 
     const limitations = await facade.getAnalysisLimitations();
@@ -2885,11 +2873,9 @@ describe("LspFacade workspace routing", () => {
     expect(harness.clients[0]?.sendRequest).toHaveBeenCalledWith(
       "aurelia/analysisLimitations",
       undefined,
-      undefined,
     );
     expect(harness.clients[1]?.sendRequest).toHaveBeenCalledWith(
       "aurelia/analysisLimitations",
-      undefined,
       undefined,
     );
 
@@ -2900,7 +2886,6 @@ describe("LspFacade workspace routing", () => {
     expect(harness.clients[1]?.sendRequest).toHaveBeenLastCalledWith(
       "aurelia/resourceInventory",
       { projectSelection: "default-app" },
-      undefined,
     );
     await facade.getResourceInventory({
       workspaceKey: "file:///work/b",
@@ -2909,7 +2894,6 @@ describe("LspFacade workspace routing", () => {
     expect(harness.clients[1]?.sendRequest).toHaveBeenLastCalledWith(
       "aurelia/resourceInventory",
       { projectKey: "secondary-app" },
-      undefined,
     );
     await facade.getAnalysisLimitations({
       workspaceKey: "file:///work/b",
@@ -2918,7 +2902,6 @@ describe("LspFacade workspace routing", () => {
     expect(harness.clients[1]?.sendRequest).toHaveBeenLastCalledWith(
       "aurelia/analysisLimitations",
       { projectSelection: "default-app" },
-      undefined,
     );
 
     const workspaceAInventoryCalls = harness.clients[0]!.sendRequest.mock.calls
@@ -2936,7 +2919,6 @@ describe("LspFacade workspace routing", () => {
     expect(harness.clients[1]?.sendRequest).toHaveBeenLastCalledWith(
       "aurelia/resourceInventory",
       { includeTypeSurfaces: true },
-      undefined,
     );
 
     const missingInventory = await facade.getResourceInventory({ workspaceKey: "file:///work/missing" });
@@ -3097,6 +3079,243 @@ describe("LspFacade workspace routing", () => {
 
     facade.dispose();
     await manager.stop();
+  });
+
+  test("deduplicates only consecutive unchanged successful inventory issues across edit fingerprints", async () => {
+    const workspaceUri = "file:///work/a";
+    const { vscode, recorded } = twoWorkspaceApi();
+    const base = resourceResponse(workspaceUri);
+    const issueProject = {
+      ...base.projects[0]!,
+      answer: { ...base.projects[0]!.answer, coverage: "open", summary: "known resources with unresolved imports" },
+      completeness: { ...base.projects[0]!.completeness, unresolvedModules: 2 },
+    };
+    let currentInventory = { ...base, projects: [issueProject] };
+    const harness = createClientHarness(new Map([
+      [workspaceUri, workspaceStatus("app-world")],
+      ["file:///work/b", workspaceStatus("app-world")],
+    ]), { resourceResponse: () => currentInventory });
+    const manager = createManager(vscode, harness);
+    await manager.start(stubExtensionContext(vscode));
+    const { logger } = createTestServices(vscode as unknown as VscodeApi);
+    const facade = new LspFacade(manager, logger);
+    const issueLogs = () => recorded.outputLogs.filter((line) => line.includes("resource-inventory.project.issue"));
+    const refresh = () => facade.getResourceInventory({ workspaceKey: workspaceUri });
+
+    try {
+      for (let edit = 0; edit < 84; edit += 1) {
+        currentInventory = { ...currentInventory, fingerprint: `edit:${edit}` };
+        await refresh();
+      }
+      expect(harness.clients[0]!.sendRequest.mock.calls.filter(([method]) => method === "aurelia/resourceInventory"))
+        .toHaveLength(84);
+      expect(issueLogs()).toHaveLength(1);
+      expect(issueLogs()[0]).toContain('summary="known resources with unresolved imports"');
+      expect(issueLogs()[0]).toContain('unresolvedModules":2');
+
+      currentInventory = {
+        ...base,
+        projects: [{ ...issueProject, completeness: { ...issueProject.completeness, unresolvedModules: 3 } }],
+      };
+      await refresh();
+      expect(issueLogs()).toHaveLength(2);
+      currentInventory = {
+        ...base,
+        projects: [{ ...issueProject, answer: { ...issueProject.answer, coverage: "complete" } }],
+      };
+      await refresh();
+      expect(issueLogs()).toHaveLength(3);
+      currentInventory = {
+        ...base,
+        projects: [{ ...issueProject, answer: { ...issueProject.answer, summary: "different incomplete cause" } }],
+      };
+      await refresh();
+      expect(issueLogs()).toHaveLength(4);
+
+      currentInventory = base;
+      await refresh();
+      expect(issueLogs()).toHaveLength(4);
+      currentInventory = { ...base, projects: [issueProject] };
+      await refresh();
+      expect(issueLogs()).toHaveLength(5);
+
+      // A partial project query is a new observation, not proof that any omitted
+      // project's issue recovered. It must not hide a distinct project's issue.
+      const otherProject = {
+        ...issueProject,
+        project: { ...issueProject.project, projectKey: `${workspaceUri}:other` },
+      };
+      currentInventory = { ...base, projects: [otherProject] };
+      await facade.getResourceInventory({ workspaceKey: workspaceUri, projectKey: otherProject.project.projectKey });
+      expect(issueLogs()).toHaveLength(6);
+      expect(issueLogs()[5]).toContain(`project=${workspaceUri}:other`);
+      currentInventory = { ...base, projects: [issueProject] };
+      await facade.getResourceInventory({ workspaceKey: workspaceUri, projectKey: issueProject.project.projectKey });
+      expect(issueLogs()).toHaveLength(7);
+      await refresh();
+      expect(issueLogs()).toHaveLength(7);
+
+      // Conservatively forget the last observation after a healthy partial
+      // query, so recurrence of an omitted project's warning remains visible.
+      currentInventory = { ...base, projects: [{ ...base.projects[0]!, project: otherProject.project }] };
+      await facade.getResourceInventory({ workspaceKey: workspaceUri, projectKey: otherProject.project.projectKey });
+      currentInventory = { ...base, projects: [issueProject] };
+      await refresh();
+      expect(issueLogs()).toHaveLength(8);
+    } finally {
+      facade.dispose();
+      await manager.stop();
+    }
+  });
+
+  test("keeps every inventory failure visible and resets successful warning suppression", async () => {
+    const workspaceUri = "file:///work/a";
+    const { vscode, recorded } = twoWorkspaceApi();
+    const base = resourceResponse(workspaceUri);
+    const issueProject = {
+      ...base.projects[0]!,
+      completeness: { ...base.projects[0]!.completeness, unresolvedModules: 2 },
+    };
+    const successfulIssue = { ...base, projects: [issueProject] };
+    let currentInventory: unknown = successfulIssue;
+    let transportFailure = false;
+    const harness = createClientHarness(new Map([
+      [workspaceUri, workspaceStatus("app-world")],
+      ["file:///work/b", workspaceStatus("app-world")],
+    ]), {
+      resourceResponse: () => {
+        if (transportFailure) throw new Error("inventory transport failed");
+        return currentInventory;
+      },
+    });
+    const manager = createManager(vscode, harness);
+    await manager.start(stubExtensionContext(vscode));
+    const { logger } = createTestServices(vscode as unknown as VscodeApi);
+    const facade = new LspFacade(manager, logger);
+    const issueLogs = () => recorded.outputLogs.filter((line) => line.includes("resource-inventory.project.issue"));
+    const refresh = () => facade.getResourceInventory({ workspaceKey: workspaceUri });
+
+    try {
+      await refresh();
+      await refresh();
+      expect(issueLogs()).toHaveLength(1);
+      for (const result of ["failed", "invalid", "unsupported"] as const) {
+        currentInventory = {
+          ...base,
+          projects: [{ ...issueProject, answer: { ...issueProject.answer, result } }],
+        };
+        await refresh();
+        await refresh();
+        expect(issueLogs().filter((line) => line.includes(`result=${result}`))).toHaveLength(2);
+        const priorCount = issueLogs().length;
+        currentInventory = successfulIssue;
+        await refresh();
+        await refresh();
+        expect(issueLogs()).toHaveLength(priorCount + 1);
+      }
+
+      currentInventory = {
+        ...base,
+        projects: [{ status: "error", project: issueProject.project, message: "project admission failed" }],
+      };
+      await refresh();
+      await refresh();
+      expect(issueLogs().filter((line) => line.includes('message="project admission failed"'))).toHaveLength(2);
+      const priorCount = issueLogs().length;
+      currentInventory = successfulIssue;
+      await refresh();
+      await refresh();
+      expect(issueLogs()).toHaveLength(priorCount + 1);
+
+      transportFailure = true;
+      await refresh();
+      await refresh();
+      expect(recorded.outputLogs.filter((line) => line.includes("request.failed")
+        && line.includes("method=aurelia/resourceInventory"))).toHaveLength(2);
+      transportFailure = false;
+      await refresh();
+      await refresh();
+      expect(issueLogs()).toHaveLength(priorCount + 2);
+    } finally {
+      facade.dispose();
+      await manager.stop();
+    }
+  });
+
+  test("scopes inventory warning suppression to each active client incarnation", async () => {
+    const workspaceA = "file:///work/a";
+    const workspaceB = "file:///work/b";
+    const { vscode, recorded } = twoWorkspaceApi();
+    let healthyA = false;
+    const harness = createClientHarness(new Map([
+      [workspaceA, workspaceStatus("app-world")],
+      [workspaceB, workspaceStatus("app-world")],
+    ]), {
+      resourceResponse: (workspaceUri) => {
+        const base = resourceResponse(workspaceUri);
+        if (workspaceUri !== workspaceA || !healthyA) base.projects[0]!.completeness.unresolvedModules = 2;
+        return base;
+      },
+    });
+    const manager = createManager(vscode, harness);
+    await manager.start(stubExtensionContext(vscode));
+    const { logger } = createTestServices(vscode as unknown as VscodeApi);
+    const facade = new LspFacade(manager, logger);
+    const issueLogs = (workspaceUri: string) => recorded.outputLogs.filter((line) =>
+      line.includes("resource-inventory.project.issue") && line.includes(`workspace=${workspaceUri}`));
+
+    try {
+      await facade.getResourceInventory();
+      await facade.getResourceInventory({ workspaceKey: workspaceA });
+      await facade.getResourceInventory({ workspaceKey: workspaceB });
+      expect(issueLogs(workspaceA)).toHaveLength(1);
+      expect(issueLogs(workspaceB)).toHaveLength(1);
+
+      healthyA = true;
+      await facade.getResourceInventory();
+      healthyA = false;
+      await facade.getResourceInventory();
+      expect(issueLogs(workspaceA)).toHaveLength(2);
+      expect(issueLogs(workspaceB)).toHaveLength(1);
+
+      // Notification rebinding and retained-session publication are not restarts.
+      facade.onAnalysisChanged(vi.fn()).dispose();
+      await manager.reconcile({ reconfirmExisting: true });
+      await facade.getResourceInventory();
+      expect(issueLogs(workspaceA)).toHaveLength(2);
+      expect(issueLogs(workspaceB)).toHaveLength(1);
+
+      const firstClient = harness.clients[0]!;
+      const firstIncarnation = manager.sessions.find((session) => session.workspace.key === workspaceA)!.incarnation;
+      firstClient.transitionState(CLIENT_STATE.Stopped);
+      await facade.getResourceInventory({ workspaceKey: workspaceB });
+      firstClient.transitionState(CLIENT_STATE.Starting);
+      firstClient.transitionState(CLIENT_STATE.Running);
+      expect(manager.sessions.find((session) => session.workspace.key === workspaceA)).toMatchObject({
+        client: firstClient.raw,
+        incarnation: firstIncarnation + 1,
+      });
+      await facade.getResourceInventory();
+      await facade.getResourceInventory();
+      expect(issueLogs(workspaceA)).toHaveLength(3);
+      expect(issueLogs(workspaceB)).toHaveLength(1);
+
+      const [removedFolder] = vscode.workspace.workspaceFolders!.splice(0, 1);
+      await manager.reconcile({ reconfirmExisting: true });
+      await expect(facade.getResourceInventory({ workspaceKey: workspaceA })).resolves.toBeNull();
+      await facade.getResourceInventory();
+      expect(issueLogs(workspaceB)).toHaveLength(1);
+      vscode.workspace.workspaceFolders!.unshift(removedFolder!);
+      await manager.reconcile({ reconfirmExisting: true });
+      expect(manager.sessions.find((session) => session.workspace.key === workspaceA)?.client).not.toBe(firstClient.raw);
+      await facade.getResourceInventory();
+      await facade.getResourceInventory();
+      expect(issueLogs(workspaceA)).toHaveLength(4);
+      expect(issueLogs(workspaceB)).toHaveLength(1);
+    } finally {
+      facade.dispose();
+      await manager.stop();
+    }
   });
 
   test("multicasts one raw notification and rebinds when workspace ownership changes", async () => {

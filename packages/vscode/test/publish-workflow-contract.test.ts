@@ -159,6 +159,11 @@ describe("VS Code publish workflow contract", () => {
     expect(upload["continue-on-error"]).not.toBe(true);
     expect(upload.with).toMatchObject({ "if-no-files-found": "error", "include-hidden-files": true, "compression-level": 0, "retention-days": 30 });
     expect(String(upload.with?.path ?? "").trim().split(/\r?\n/u)).toEqual(["${{ steps.release.outputs.vsix_path }}", "${{ steps.release.outputs.receipt_path }}", "${{ steps.release.outputs.checksum_path }}"]);
+    const symbols = step(candidate, "Retain the packaged language server source map for support");
+    expect(symbols.with?.name).toBe("${{ steps.release.outputs.vsix_name }}-server-source-map");
+    expect(String(symbols.with?.path).trim().split(/\r?\n/u)).toEqual([
+      "packages/vscode/dist/server/main.cjs.map", "${{ steps.release.outputs.receipt_path }}",
+    ]);
     expect(candidate?.outputs).toMatchObject({ candidate_artifact_id: "${{ steps.candidate_packet.outputs.artifact-id }}", candidate_artifact_digest: "${{ steps.candidate_packet.outputs.artifact-digest }}" });
     for (const [job, name] of [[host, "Download the exact candidate packet"], [release, "Download the accepted candidate packet"]] as const) {
       const download = step(job, name);
@@ -314,8 +319,8 @@ describe("VS Code publish workflow contract", () => {
     expect(text(workflow)).not.toMatch(/\bnpx\b|(?:^|\s)npm version|vsce package|--skip-duplicate|git (?:commit|tag|push)\b/u);
   });
 
-  test("binds live 0.5.3 artifact commands and release contracts", () => {
-    expect(extensionPackage.version).toBe("0.5.3");
+  test("binds live 0.5.4 artifact commands and release contracts", () => {
+    expect(extensionPackage.version).toBe("0.5.4");
     expect(rootPackage.scripts["package:ide:vsix"]).toBe("tsc -b --force packages/semantic-runtime packages/language-server packages/vscode && pnpm --filter aurelia-2 run release:pack");
     expect(rootPackage.scripts["verify:ide:vsix"]).toBe("pnpm --filter aurelia-2 run release:verify");
     expect(rootPackage.scripts["verify:ide:vsix:installed"]).toBe("pnpm --filter aurelia-2 run release:verify-installed");

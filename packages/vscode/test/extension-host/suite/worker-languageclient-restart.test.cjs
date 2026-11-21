@@ -281,6 +281,69 @@ suite("Worker LanguageClient restart", () => {
       }
     }
   });
+
+  test("pulls fresh diagnostics after an ordinary request failure in a still-open editor", async function() {
+    this.timeout(180_000);
+    const target = await vscode.workspace.openTextDocument(path.join(aureliaWorkspace, "src/my-app.html"));
+    const neighbor = await vscode.workspace.openTextDocument(path.join(aureliaWorkspace, "src/components/product-card.html"));
+    await vscode.window.showTextDocument(neighbor, { viewColumn: vscode.ViewColumn.Two, preview: false });
+    await vscode.window.showTextDocument(target, { viewColumn: vscode.ViewColumn.One, preview: false });
+    assert(!target.isDirty && !neighbor.isDirty);
+    const replaceMember = (edit, document, from, to) => {
+      const offset = document.getText().indexOf("${" + from + "}");
+      assert.notStrictEqual(offset, -1, `Expected interpolation for ${from} in ${document.fileName}`);
+      const range = new vscode.Range(document.positionAt(offset + 2), document.positionAt(offset + 2 + from.length));
+      edit.replace(document.uri, range, to);
+    };
+    const hasProblem = (document, token) => aureliaDiagnostics(document).some(diagnostic =>
+      diagnosticCode(diagnostic) === "missing-expression-member" && document.getText(diagnostic.range) === token
+      && diagnostic.message.includes(token));
+    const send = Worker.prototype.postMessage;
+    let injected = false;
+    try {
+      const baseline = new vscode.WorkspaceEdit();
+      replaceMember(baseline, target, "heading", "baselineDiagnosticMember");
+      assert(await vscode.workspace.applyEdit(baseline));
+      await waitFor(() => hasProblem(target, "baselineDiagnosticMember"), "initial authored diagnostic", 60_000);
+
+      // Deliver one ordinary JSON-RPC error to the real language client. Limit the
+      // intervention to this document and restore the genuine transport immediately.
+      Worker.prototype.postMessage = function(message, ...rest) {
+        if (message?.method === "textDocument/diagnostic" && message.params?.identifier === "aurelia"
+          && vscode.Uri.parse(message.params.textDocument.uri).toString() === target.uri.toString()) {
+          Worker.prototype.postMessage = send;
+          setImmediate(() => {
+            this.emit("message", {
+              jsonrpc: "2.0", id: message.id, error: { code: -32603, message: "Diagnostic recovery test" },
+            });
+            injected = true;
+          });
+          return;
+        }
+        return send.call(this, message, ...rest);
+      };
+      const failed = new vscode.WorkspaceEdit();
+      replaceMember(failed, target, "baselineDiagnosticMember", "failedDiagnosticMember");
+      assert(await vscode.workspace.applyEdit(failed));
+      await waitFor(() => injected, "one failed Aurelia diagnostic pull", 30_000);
+
+      const recovery = new vscode.WorkspaceEdit();
+      replaceMember(recovery, target, "failedDiagnosticMember", "recoveredDiagnosticMember");
+      replaceMember(recovery, neighbor, "labelText", "neighborDiagnosticMember");
+      assert(await vscode.workspace.applyEdit(recovery));
+      await waitFor(() => hasProblem(neighbor, "neighborDiagnosticMember"), "healthy neighboring editor", 30_000);
+      await waitFor(() => hasProblem(target, "recoveredDiagnosticMember"), "fresh authored diagnostic after failure", 30_000);
+      assert(target.isDirty && neighbor.isDirty && !target.isClosed);
+    } finally {
+      Worker.prototype.postMessage = send;
+      for (const document of [target, neighbor]) {
+        if (document.isDirty) {
+          await vscode.window.showTextDocument(document);
+          await vscode.commands.executeCommand("workbench.action.files.revert");
+        }
+      }
+    }
+  });
 });
 
 function isOwnedTemplateContext(event, workspaceKey, incarnation) {

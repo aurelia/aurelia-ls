@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 export * from "./worker-progress-protocol.js";
+export * from "./diagnostic-failure-protocol.js";
+import type { AureliaSupportDiagnosticFailure } from "./diagnostic-failure-protocol.js";
 import type {
   ApplicationFileRole,
   SemanticAttributeInterpretationExplanation,
@@ -110,6 +112,8 @@ export interface AureliaSupportInFlightRequest {
 }
 
 export interface AureliaSupportRequestSnapshot {
+  /** First unexpected diagnostic failure to finish in this server session. Older servers omit this field. */
+  readonly firstDiagnosticFailure?: AureliaSupportDiagnosticFailure | null;
   readonly aggregateCount: number;
   readonly aggregates: readonly AureliaSupportRequestAggregate[];
   readonly omittedAggregateCount: number;

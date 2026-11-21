@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.4
+
+### Fixes
+
+- Fixed resource navigation errors while project files are changing.
+- New resource navigation cancels older pending navigation.
+- Reduced repeated warnings for unchanged resource analysis results.
+
 ## 0.5.3
 
 ### Fixes

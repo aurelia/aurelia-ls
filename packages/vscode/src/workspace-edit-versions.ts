@@ -18,7 +18,7 @@ import {
  * LSP `TextDocumentEdit` carries `textDocument.version`; VS Code's public
  * `WorkspaceEdit` does not retain it after protocol conversion.
  *
- * vscode-languageclient 10.1 validates standard rename responses after
+ * vscode-languageclient validates standard rename responses after
  * conversion and validates server-initiated `workspace/applyEdit` immediately
  * before application. Custom edit composition and code-action resolution must
  * perform the same check themselves, after their final asynchronous conversion
@@ -30,7 +30,7 @@ import {
  *   https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocumentEdit
  * - VS Code `TextDocument.version`, `CodeAction`, and `WorkspaceEdit`
  *   https://code.visualstudio.com/api/references/vscode-api
- * - vscode-languageclient 10.1 `RenameFeature`, `CodeActionFeature`, and
+ * - vscode-languageclient `RenameFeature`, `CodeActionFeature`, and
  *   `BaseLanguageClient.validateWorkspaceEdit`
  *   https://github.com/microsoft/vscode-languageserver-node
  */

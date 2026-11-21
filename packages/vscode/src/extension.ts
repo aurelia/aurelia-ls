@@ -34,6 +34,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(supportReport.registerCommand());
   const languageClient = new AureliaLanguageClient(logger, vscode, {
     createClient: createLanguageClient(logger.child("worker-transport"), supportReport),
+    supportReport,
   });
   supportReport.attachLanguageClient(languageClient);
   app = new ClientApp(context, {

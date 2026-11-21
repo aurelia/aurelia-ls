@@ -2,7 +2,8 @@ import type {
   ResourceInventoryItem,
   ResourceNavigationTarget,
 } from "@aurelia-ls/language-server/protocol";
-import type { LspFacade } from "../../core/lsp-facade.js";
+import type { CancellationToken, CancellationTokenSource } from "vscode";
+import { isRequestCancelledError, type LspFacade } from "../../core/lsp-facade.js";
 import type { ClientLogger } from "../../log.js";
 import type { ResourceNavigationRequest } from "../../types.js";
 import type { VscodeApi } from "../../vscode-api.js";
@@ -33,11 +34,36 @@ export function isResourceNavigationSnapshotChangedError(
   return error instanceof ResourceNavigationSnapshotChangedError;
 }
 
+// All resource navigation entry points share one editor-focus intent. A later
+// choice supersedes the earlier one, including choices in another workspace or pane.
+// This holds only active work; it never shares or caches semantic answers.
+const activeResourceNavigations = new WeakMap<LspFacade, CancellationTokenSource>();
+
 export async function openResourceNavigation(
   vscode: VscodeApi,
   lsp: LspFacade,
   logger: ClientLogger,
   request: ResourceNavigationRequest,
+): Promise<boolean> {
+  activeResourceNavigations.get(lsp)?.cancel();
+  const cancellation = new vscode.CancellationTokenSource();
+  activeResourceNavigations.set(lsp, cancellation);
+  try {
+    return await openCurrentResourceNavigation(vscode, lsp, logger, request, cancellation.token);
+  } finally {
+    if (activeResourceNavigations.get(lsp) === cancellation) {
+      activeResourceNavigations.delete(lsp);
+    }
+    cancellation.dispose();
+  }
+}
+
+async function openCurrentResourceNavigation(
+  vscode: VscodeApi,
+  lsp: LspFacade,
+  logger: ClientLogger,
+  request: ResourceNavigationRequest,
+  token: CancellationToken,
 ): Promise<boolean> {
   const observationId = nextResourceDiscoveryHostObservationId("resource-navigation");
   const editorBefore = prepareNavigationObservation(observationId, () => activeEditorFact(vscode));
@@ -81,10 +107,18 @@ export async function openResourceNavigation(
     inventory = await lsp.getResourceInventory({
       workspaceKey: request.workspaceKey,
       projectKey: request.projectKey,
-    });
+    }, token);
   } catch (error) {
+    if (isRequestCancelledError(error)) {
+      refuse("cancelled", () => null);
+      return false;
+    }
     refuse("inventory-request-failed", () => null);
     throw error;
+  }
+  if (token.isCancellationRequested) {
+    refuse("cancelled", () => null);
+    return false;
   }
   const workspace = inventory?.workspaces.find((candidate) => candidate.key === request.workspaceKey);
   if (workspace == null) {
@@ -197,6 +231,10 @@ export async function openResourceNavigation(
   const location = navigation.location;
   try {
     const document = await vscode.workspace.openTextDocument(vscode.Uri.parse(location.uri));
+    if (token.isCancellationRequested) {
+      refuse("cancelled", () => workspace.response.fingerprint);
+      return false;
+    }
     await vscode.window.showTextDocument(document, {
       preview: true,
       ...(request.placement === "beside" ? { viewColumn: vscode.ViewColumn.Beside } : {}),

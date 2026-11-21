@@ -8,6 +8,12 @@ preserve the repository's earlier package line.
 
 ---
 
+## VS Code 0.5.4
+
+- Fixed VS Code request cancellation and resource navigation during concurrent edits, and reduced repeated inventory warnings.
+
+---
+
 ## VS Code 0.5.3 and MCP 0.3.3
 
 - Reduced evaluator memory use through shared data snapshots and lazy analysis copies.

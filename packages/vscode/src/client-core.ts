@@ -32,6 +32,7 @@ import type {
 import type { AureliaWorkspaceIdentity } from "./types.js";
 import { createMiddleware } from "./client-middleware.js";
 import { type ClientLogger } from "./log.js";
+import type { SupportReportService } from "./support-report.js";
 import type { VscodeApi } from "./vscode-api.js";
 import {
   AureliaActivationMode,
@@ -171,6 +172,7 @@ class AureliaLanguageClientStartError extends Error {
 
 export interface AureliaLanguageClientOptions {
   readonly createClient: LanguageClientFactory;
+  readonly supportReport?: SupportReportService;
 }
 
 interface ReconcileOptions {
@@ -242,7 +244,7 @@ const LANGUAGE_CLIENT_CIRCUIT_RETRY_THROTTLE_MS = 10_000;
 const WORKSPACE_STATUS_STALE_RETRY_LIMIT = 2;
 // Keep the runtime module free of a vscode-languageclient value import so the
 // client core remains testable outside the Extension Host. These are the
-// stable public State enum values from vscode-languageclient 10.x.
+// stable public State enum values from vscode-languageclient.
 const LANGUAGE_CLIENT_STATE_STOPPED: State = 1;
 const LANGUAGE_CLIENT_STATE_RUNNING: State = 2;
 const LANGUAGE_CLIENT_STATE_STARTING: State = 3;
@@ -301,6 +303,7 @@ export class AureliaLanguageClient {
   #logger: ClientLogger;
   #vscode: VscodeApi;
   readonly #createClient: LanguageClientFactory;
+  readonly #supportReport: SupportReportService | undefined;
   #context: ExtensionContext | null = null;
   #serverModule: Promise<string> | null = null;
   #lifecycle: Disposable | null = null;
@@ -335,6 +338,7 @@ export class AureliaLanguageClient {
     this.#logger = logger;
     this.#vscode = vscode;
     this.#createClient = options.createClient;
+    this.#supportReport = options.supportReport;
     this.#sessionsChanged = new vscode.EventEmitter<readonly AureliaLanguageClientSession[]>();
     this.onDidChangeSessions = this.#sessionsChanged.event;
   }
@@ -1208,11 +1212,16 @@ export class AureliaLanguageClient {
       // diagnostic collection itself.
       diagnosticPullOptions: { onChange: false, onFocus: true },
       errorHandler: restartControl.handler,
-      middleware: createMiddleware(
-        this.#vscode,
-        this.#logger,
-        middlewareClient,
-      ),
+      middleware: {
+        ...createMiddleware(this.#vscode, this.#logger, middlewareClient),
+        ...(this.#supportReport == null ? {} : {
+          sendRequest: this.#supportReport.diagnosticRequestMiddleware(
+            admission.folder.uri.toString(),
+            () => client == null ? null : middlewareClient.currentIncarnation(client),
+            this.#logger,
+          ),
+        }),
+      },
     };
     const workspace: AureliaWorkspaceIdentity = {
       key,
