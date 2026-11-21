@@ -73,7 +73,7 @@ export function resolveCheckerDomNodeType(
     };
   }
 
-  const fallbackType = globalDeclaredType(typeSystem, fallbackElementTypeName(namespace), location);
+  const fallbackType = globalDeclaredType(typeSystem, fallbackElementTypeName(namespace));
   if (fallbackType == null) {
     return null;
   }
@@ -94,7 +94,7 @@ export function resolveCheckerDomNodeTypeFromTagNameMap(
 ): ts.Type | null {
   const localName = runtimeLocalName(tagName, namespace);
   for (const mapName of tagNameMapNames(namespace)) {
-    const mapType = globalDeclaredType(typeSystem, mapName, location);
+    const mapType = globalDeclaredType(typeSystem, mapName);
     const tagSymbol = mapType == null
       ? null
       : typeSystem.checker.getPropertyOfType(mapType, localName) ?? null;
@@ -111,11 +111,10 @@ export function resolveCheckerDomNodeTypeFromTagNameMap(
 export function globalDeclaredType(
   typeSystem: TypeSystemProject,
   name: string,
-  location: ts.Node,
 ): ts.Type | null {
   const symbol = typeSystem.checker.resolveName(
     name,
-    location,
+    undefined, // Resolve the merged global interface outside any individual module's lexical scope.
     ts.SymbolFlags.Interface,
     false,
   ) ?? null;
@@ -138,7 +137,7 @@ export function resolveCheckerDomEventType(
     }
   }
   for (const fallbackName of CHECKER_DOM_EVENT_FALLBACK_TYPE_NAMES) {
-    const fallbackType = checkerDomEventFallbackType(typeSystem, fallbackName, location);
+    const fallbackType = checkerDomEventFallbackType(typeSystem, fallbackName);
     if (fallbackType != null) {
       return fallbackType;
     }
@@ -149,12 +148,11 @@ export function resolveCheckerDomEventType(
 function checkerDomEventFallbackType(
   typeSystem: TypeSystemProject,
   fallbackName: typeof CHECKER_DOM_EVENT_FALLBACK_TYPE_NAMES[number],
-  location: ts.Node,
 ): ts.Type | null {
   if (fallbackName !== 'CustomEvent') {
-    return globalDeclaredType(typeSystem, fallbackName, location);
+    return globalDeclaredType(typeSystem, fallbackName);
   }
-  if (globalDeclaredType(typeSystem, fallbackName, location) == null) {
+  if (globalDeclaredType(typeSystem, fallbackName) == null) {
     return null;
   }
   const witness = typeSystem.readOverlayTypeAlias(
@@ -176,7 +174,7 @@ export function projectCheckerDomEventMapTypes(
     return [];
   }
   return CHECKER_DOM_EVENT_MAP_TYPE_NAMES.flatMap((mapName) => {
-    const type = globalDeclaredType(typeSystem, mapName, location);
+    const type = globalDeclaredType(typeSystem, mapName);
     return type == null
       ? []
       : [projector.ensureProjection({
@@ -228,7 +226,7 @@ function eventMapPropertyType(
   eventName: string,
 ): ts.Type | null {
   const checker = typeSystem.checker;
-  const mapType = globalDeclaredType(typeSystem, mapName, location);
+  const mapType = globalDeclaredType(typeSystem, mapName);
   const property = mapType == null ? null : checkerPropertySymbol(checker, mapType, eventName);
   return property == null
     ? null

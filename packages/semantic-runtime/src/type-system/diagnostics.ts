@@ -75,31 +75,37 @@ export function readTypeSystemProjectDiagnostics(
   if (cached != null) {
     return cached;
   }
-  const diagnostics: TypeSystemDiagnostic[] = [
+  const diagnostics = projectWideDiagnostics(typeSystem);
+  for (const sourceFile of typeSystem.readProjectDiagnosticProgramSourceFiles()) {
+    diagnostics.push(...programSourceDiagnostics(typeSystem, sourceFile));
+  }
+  const result = [...deduplicateTypeSystemDiagnostics(diagnostics)].sort(compareTypeSystemDiagnostics);
+  diagnosticsByProject.set(typeSystem, result);
+  return result;
+}
+
+function projectWideDiagnostics(typeSystem: TypeSystemProject): TypeSystemDiagnostic[] {
+  return [
     ...typeSystem.configDiagnostics.map((diagnostic) =>
       typeSystemDiagnostic('config', diagnostic, typeSystem.configFilePath)
     ),
     ...typeSystem.program.getGlobalDiagnostics().map((diagnostic) => typeSystemDiagnostic('global', diagnostic)),
     ...typeSystem.program.getOptionsDiagnostics().map((diagnostic) => typeSystemDiagnostic('options', diagnostic)),
   ];
+}
 
-  for (const sourceFile of typeSystem.readProjectDiagnosticProgramSourceFiles()) {
-    diagnostics.push(
-      ...typeSystem.program.getSyntacticDiagnostics(sourceFile).map((diagnostic) =>
-        typeSystemDiagnostic('syntactic', diagnostic)
-      ),
-      ...typeSystem.program.getSemanticDiagnostics(sourceFile).map((diagnostic) =>
-        typeSystemDiagnostic('semantic', diagnostic)
-      ),
-      ...typeSystem.program.getDeclarationDiagnostics(sourceFile).map((diagnostic) =>
-        typeSystemDiagnostic('declaration', diagnostic)
-      ),
-    );
-  }
-
-  const result = [...deduplicateTypeSystemDiagnostics(diagnostics)].sort(compareTypeSystemDiagnostics);
-  diagnosticsByProject.set(typeSystem, result);
-  return result;
+function programSourceDiagnostics(typeSystem: TypeSystemProject, sourceFile: ts.SourceFile): TypeSystemDiagnostic[] {
+  return [
+    ...typeSystem.program.getSyntacticDiagnostics(sourceFile).map((diagnostic) =>
+      typeSystemDiagnostic('syntactic', diagnostic)
+    ),
+    ...typeSystem.program.getSemanticDiagnostics(sourceFile).map((diagnostic) =>
+      typeSystemDiagnostic('semantic', diagnostic)
+    ),
+    ...typeSystem.program.getDeclarationDiagnostics(sourceFile).map((diagnostic) =>
+      typeSystemDiagnostic('declaration', diagnostic)
+    ),
+  ];
 }
 
 /** Read ordinary TypeScript diagnostics for one source/config file without spending every project source file. */
@@ -130,22 +136,12 @@ export function readTypeSystemProjectSourceDiagnostics(
     return result;
   }
 
-  const diagnostics: TypeSystemDiagnostic[] = typeSystem.configDiagnostics
-    .map((diagnostic) => typeSystemDiagnostic('config', diagnostic, typeSystem.configFilePath))
+  const diagnostics = projectWideDiagnostics(typeSystem)
     .filter((diagnostic) => typeSystemDiagnosticMatchesSource(diagnostic, hostFileName));
 
-  if (sourceFile != null) {
-    diagnostics.push(
-      ...typeSystem.program.getSyntacticDiagnostics(sourceFile).map((diagnostic) =>
-        typeSystemDiagnostic('syntactic', diagnostic)
-      ),
-      ...typeSystem.program.getSemanticDiagnostics(sourceFile).map((diagnostic) =>
-        typeSystemDiagnostic('semantic', diagnostic)
-      ),
-      ...typeSystem.program.getDeclarationDiagnostics(sourceFile).map((diagnostic) =>
-        typeSystemDiagnostic('declaration', diagnostic)
-      ),
-    );
+  if (sourceFile != null && typeSystem.isProjectDiagnosticSourceFile(sourceFile)) {
+    diagnostics.push(...programSourceDiagnostics(typeSystem, sourceFile)
+      .filter((diagnostic) => typeSystemDiagnosticMatchesSource(diagnostic, hostFileName)));
   }
 
   const result = [...deduplicateTypeSystemDiagnostics(diagnostics)].sort(compareTypeSystemDiagnostics);

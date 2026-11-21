@@ -15,6 +15,12 @@ const runtime = await createSemanticRuntime({
 const app = await runtime.openApp({
   analysisDepth: 'binding-observation',
 });
+const excludedFileQuery = {
+  kind: SemanticAppQueryKind.TypeScriptDiagnostics,
+  sourceFile: { filePath: 'src/excluded-diagnostics.ts' },
+  page: { size: 20 },
+};
+const excludedBeforeProject = app.ask(excludedFileQuery);
 const profile = app.cacheSummary(8, false).profile;
 const overview = app.ask({
   kind: SemanticAppQueryKind.AppOverview,
@@ -30,6 +36,7 @@ const diagnostics = app.ask({
   kind: SemanticAppQueryKind.TypeScriptDiagnostics,
   page: { size: 20 },
 }).value;
+const excludedAfterProject = app.ask(excludedFileQuery);
 const sourceFileDiagnostics = app.ask({
   kind: SemanticAppQueryKind.TypeScriptDiagnostics,
   sourceFile: { filePath: 'src/typescript-project-diagnostics-state.ts' },
@@ -62,6 +69,11 @@ const availableProductsSummary = app.ask({
 }).value;
 
 const failures = [];
+for (const result of [excludedBeforeProject, excludedAfterProject]) {
+  if (result.result !== 'answered' || result.coverage !== 'complete' || result.value.rows.length !== 0) {
+    failures.push('File-scoped project diagnostics must respect tsconfig exclusion before and after a project-wide query.');
+  }
+}
 const ts2322Diagnostic = diagnostics.rows.find((row) =>
   row.diagnosticKind === 'TS2322'
   && row.source?.path.endsWith('typescript-project-diagnostics-state.ts') === true

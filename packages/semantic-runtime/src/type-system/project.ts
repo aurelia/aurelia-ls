@@ -377,13 +377,18 @@ export class TypeSystemProject {
   /** Read project-root TS/JS sources selected by the tsconfig diagnostic policy. */
   readProjectDiagnosticProgramSourceFiles(): readonly ts.SourceFile[] {
     return [...this.programSourceFilesByPath.values()]
-      .filter((sourceFile) => typeSystemProjectProgramDiagnosticSourceFile(
-        sourceFile.fileName,
-        this.project.authoredSources,
-        this.overlaySourcePaths,
-        this.diagnosticSourcePaths,
-      ))
+      .filter((sourceFile) => this.isProjectDiagnosticSourceFile(sourceFile))
       .sort((left, right) => left.fileName.localeCompare(right.fileName));
+  }
+
+  isProjectDiagnosticSourceFile(sourceFile: ts.SourceFile): boolean {
+    const normalized = canonicalTypeSystemPath(sourceFile.fileName);
+    return this.project.authoredSources.contains(normalized)
+      && !this.overlaySourcePaths.has(normalized)
+      && !normalized.includes('/node_modules/')
+      && !isDefaultLibrarySourceFile(normalized)
+      && isTypeSystemProgramRootSourceFile(normalized)
+      && (this.diagnosticSourcePaths == null || this.diagnosticSourcePaths.has(normalized));
   }
 
   /** Read authored app source that this project owns and may safely edit. */
@@ -1456,21 +1461,6 @@ function isTypeSystemProgramRootAdmission(
   )
     && isStaticEvaluationSource(admission.language)
     && isTypeSystemProgramRootSourceFile(admission.path);
-}
-
-function typeSystemProjectProgramDiagnosticSourceFile(
-  fileName: string,
-  authoredSources: AuthoredSourceBoundary,
-  overlaySourcePaths: ReadonlySet<string>,
-  diagnosticSourcePaths: ReadonlySet<string> | null,
-): boolean {
-  const normalized = canonicalTypeSystemPath(fileName);
-  return authoredSources.contains(normalized)
-    && !overlaySourcePaths.has(normalized)
-    && !normalized.includes('/node_modules/')
-    && !isDefaultLibrarySourceFile(normalized)
-    && isTypeSystemProgramRootSourceFile(normalized)
-    && (diagnosticSourcePaths == null || diagnosticSourcePaths.has(normalized));
 }
 
 function createTypeSystemCompilerHost(
