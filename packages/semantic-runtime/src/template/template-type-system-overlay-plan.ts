@@ -1,4 +1,5 @@
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
+import type { DecodedExpressionSpan } from '../expression/source-span.js';
 import { BindingContextSlotAssignmentAccessKind } from '../configuration/scope.js';
 import { isJavaScriptIdentifierName } from '../javascript/identifier.js';
 import { TypeSystemOverlaySourceBuilder } from '../type-system/overlay.js';
@@ -6,6 +7,7 @@ import { LetBindingTargetContext } from './runtime-binding.js';
 
 export interface TemplateTypeSystemOverlaySourceSlice {
   readonly text: string;
+  readonly decodedSpan?: DecodedExpressionSpan;
   readonly semanticProductHandle: ProductHandle | null;
   readonly sourceAddressHandle: AddressHandle | null;
   readonly sourceStart: number;
@@ -546,14 +548,32 @@ export function appendTemplateTypeSystemOverlayExpressionParts(
       builder.append(part.text);
       continue;
     }
-    builder.appendSegment(part.source.text, {
+    const { source } = part;
+    const options = {
       role: 'semantic-surface',
-      semanticProductHandle: part.source.semanticProductHandle,
-      sourceAddressHandle: part.source.sourceAddressHandle,
-      sourceStart: part.source.sourceStart,
-      sourceEnd: part.source.sourceEnd,
+      semanticProductHandle: source.semanticProductHandle,
+      sourceAddressHandle: source.sourceAddressHandle,
+      sourceStart: source.sourceStart,
+      sourceEnd: source.sourceEnd,
       label: part.label.length === 0 ? label : part.label,
-    });
+    } as const;
+    const mapped = source.decodedSpan;
+    if (mapped == null) {
+      builder.appendSegment(source.text, options);
+      continue;
+    }
+    // A complete encoded scalar/entity is one source segment, including multiple decoded UTF-16 units.
+    for (let start = 0; start < source.text.length;) {
+      let end = start + 1;
+      const sourceStart = mapped.sourceOffset(start);
+      if (mapped.sourceOffset(end) === sourceStart + 1) {
+        while (end < source.text.length && mapped.sourceOffset(end + 1) === mapped.sourceOffset(end) + 1) end++;
+      } else {
+        while (end < source.text.length && mapped.sourceOffset(end) === sourceStart) end++;
+      }
+      builder.appendSegment(source.text.slice(start, end), { ...options, sourceStart, sourceEnd: mapped.sourceOffset(end) });
+      start = end;
+    }
   }
 }
 

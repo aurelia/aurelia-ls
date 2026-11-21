@@ -1,6 +1,7 @@
 import { SourceSpanAddress, SourceSpanRole } from '../kernel/address.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import {
+  decodedSubspanSite,
   sourceSpanAddressForAddress,
   sourceSpanAddressForSite,
   type SourceSpanAddressPublication,
@@ -43,10 +44,19 @@ export function attributeSyntaxPartSources(
   if (nameSourceAddress == null) {
     return new AttributeSyntaxPartSources(null, null, [], [], []);
   }
-  if (nameSourceAddress.end - nameSourceAddress.start !== authoredRawName.length) {
+  const nameLength = nameSourceAddress.decodedOffsets == null
+    ? nameSourceAddress.end - nameSourceAddress.start : nameSourceAddress.decodedOffsets.length - 1;
+  if (nameLength !== authoredRawName.length) {
     return new AttributeSyntaxPartSources(null, null, [], [], []);
   }
   const records: KernelStoreRecord[] = [];
+  const publish = (suffix: string, start: number, end: number): SourceSpanAddressPublication | null => {
+    const site = decodedSubspanSite(nameSourceAddress, start, end);
+    if (site == null) return null;
+    const source = sourceSpanAddressForSite(store, `${local}:${suffix}`, site, SourceSpanRole.Name);
+    records.push(...source.records);
+    return source;
+  };
   const transformedRefTarget = parse.execution.command === 'ref' && parse.execution.target === 'component'
     ? parse.interpretation?.partOccurrences.find((occurrence) => occurrence.value === 'view-model') ?? null
     : null;
@@ -54,57 +64,25 @@ export function attributeSyntaxPartSources(
   const targetLength = transformedRefTarget == null
     ? parse.execution.target.length
     : transformedRefTarget.end - transformedRefTarget.start;
-  const targetSource = targetStart < 0
-    ? null
-    : sourceSpanAddressForSite(store, `${local}:target`, {
-      sourceFileAddressHandle: nameSourceAddress.fileHandle,
-      start: nameSourceAddress.start + targetStart,
-      end: nameSourceAddress.start + targetStart + targetLength,
-    }, SourceSpanRole.Name);
-  if (targetSource != null) {
-    records.push(...targetSource.records);
-  }
-  const targetAbsoluteStart = targetStart < 0 ? null : nameSourceAddress.start + targetStart;
-  const targetAbsoluteEnd = targetAbsoluteStart == null ? null : targetAbsoluteStart + targetLength;
+  const targetSource = publish('target', targetStart, targetStart + targetLength);
   const commandStart = parse.execution.command == null
     ? -1
     : parse.execution.rawName.lastIndexOf(parse.execution.command);
   const commandSource = commandStart < 0 || parse.execution.command == null
     ? null
-    : sourceSpanAddressForSite(store, `${local}:command`, {
-      sourceFileAddressHandle: nameSourceAddress.fileHandle,
-      start: nameSourceAddress.start + commandStart,
-      end: nameSourceAddress.start + commandStart + parse.execution.command.length,
-    }, SourceSpanRole.Name);
-  if (commandSource != null) {
-    records.push(...commandSource.records);
-  }
-  const commandAbsoluteStart = commandStart < 0 ? null : nameSourceAddress.start + commandStart;
-  const commandAbsoluteEnd = commandAbsoluteStart == null || parse.execution.command == null
-    ? null
-    : commandAbsoluteStart + parse.execution.command.length;
+    : publish('command', commandStart, commandStart + parse.execution.command.length);
   const sourceForOccurrence = (
     suffix: string,
     start: number,
     end: number,
   ): SourceSpanAddressPublication | null => {
-    const absoluteStart = nameSourceAddress.start + start;
-    const absoluteEnd = nameSourceAddress.start + end;
-    if (targetAbsoluteStart === absoluteStart && targetAbsoluteEnd === absoluteEnd) {
+    if (start === targetStart && end === targetStart + targetLength) {
       return targetSource;
     }
-    if (commandAbsoluteStart === absoluteStart && commandAbsoluteEnd === absoluteEnd) {
+    if (start === commandStart && end === commandStart + (parse.execution.command?.length ?? 0)) {
       return commandSource;
     }
-    const source = sourceSpanAddressForSite(store, `${local}:${suffix}`, {
-      sourceFileAddressHandle: nameSourceAddress.fileHandle,
-      start: absoluteStart,
-      end: absoluteEnd,
-    }, SourceSpanRole.Name);
-    if (source != null) {
-      records.push(...source.records);
-    }
-    return source;
+    return publish(suffix, start, end);
   };
   const patternParts = (parse.interpretation?.partOccurrences ?? []).flatMap((occurrence) => {
     const source = sourceForOccurrence(`pattern-part:${occurrence.partIndex}`, occurrence.start, occurrence.end);

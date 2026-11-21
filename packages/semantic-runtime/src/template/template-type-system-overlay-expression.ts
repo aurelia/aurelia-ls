@@ -3,7 +3,7 @@ import {
   scopeExpressionWasAuthoredFromCurrentBindingContext,
   type ExpressionAstNode,
 } from '../expression/ast.js';
-import type { SourceSpan } from '../expression/source-span.js';
+import { DecodedExpressionSpan, type SourceSpan } from '../expression/source-span.js';
 import type { ProductHandle } from '../kernel/handles.js';
 import { AuthoredSourceTextCache } from '../kernel/authored-source-text.js';
 import type { SemanticRuntimeProjectInputHost } from '../kernel/project-input.js';
@@ -258,7 +258,8 @@ export class TemplateTypeSystemOverlayExpressionProjector {
       return null;
     }
     return {
-      text: source.text.slice(span.start, span.end),
+      text: span instanceof DecodedExpressionSpan ? span.text : source.text.slice(span.start, span.end),
+      ...(span instanceof DecodedExpressionSpan ? { decodedSpan: span } : {}),
       semanticProductHandle,
       sourceAddressHandle: sourceAddressHandleForRuntimeExpressionSpan(span),
       sourceStart: span.start,
@@ -1087,12 +1088,13 @@ function appendSourceSegment(
   if (start >= end) {
     return;
   }
-  const relativeStart = start - parent.sourceStart;
-  const relativeEnd = end - parent.sourceStart;
+  const relativeStart = parent.decodedSpan?.localOffset(start) ?? start - parent.sourceStart;
+  const relativeEnd = parent.decodedSpan?.localOffset(end) ?? end - parent.sourceStart;
   parts.push({
     kind: 'source',
     source: {
       text: parent.text.slice(relativeStart, relativeEnd),
+      ...(parent.decodedSpan == null ? {} : { decodedSpan: parent.decodedSpan.subspan(relativeStart, relativeEnd) }),
       semanticProductHandle: parent.semanticProductHandle,
       sourceAddressHandle: parent.sourceAddressHandle,
       sourceStart: start,

@@ -1,3 +1,4 @@
+import { decodedSubspanSite } from '../kernel/source-address.js';
 import {
   SourceSpanRole,
   SourceSpanAddress,
@@ -451,20 +452,19 @@ export class BindingCommandLoweringPublisher {
 
   publishMultiBindingAttributeSyntax(
     local: string,
-    site: TemplateValueSite,
+    parentIdentityHandle: IdentityHandle,
+    valueAddressHandle: AddressHandle | null,
     source: BindingCommandLoweringSourceSet,
     attribute: HtmlAttribute,
     parse: AttributeParserParseResult,
-    syntaxSourceAddressHandle: AddressHandle | null,
-    nameSource: AddressHandle | SourceSpanAddress | null,
+    parsed: ParsedMultiBindingSegment,
   ): PublishedMultiBindingAttributeSyntax {
-    const nameSourceAddressHandle = nameSource instanceof SourceSpanAddress
-      ? nameSource.handle
-      : nameSource;
+    const syntaxAddress = this.segmentSyntaxSourceAddress(local, valueAddressHandle, parsed);
+    const nameAddress = this.segmentNameSourceAddress(local, valueAddressHandle, parsed);
     const partSources = attributeSyntaxPartSources(
       this.store,
       local,
-      nameSource,
+      nameAddress.record ?? nameAddress.handle,
       parse.execution.rawName,
       parse,
     );
@@ -473,15 +473,19 @@ export class BindingCommandLoweringPublisher {
       source,
       attribute,
       parse,
-      syntaxSourceAddressHandle,
-      nameSourceAddressHandle,
+      syntaxAddress.handle,
+      nameAddress.handle,
       partSources,
     );
     return new PublishedMultiBindingAttributeSyntax(
       syntax,
       [
+        ...(syntaxAddress.record == null ? [] : [syntaxAddress.record]),
+        ...(nameAddress.record == null ? [] : [nameAddress.record]),
         ...partSources.records,
-        ...this.recordsForMultiBindingAttributeSyntax(site, syntax, syntaxSourceAddressHandle),
+        new CompilerIdentity(syntax.identityHandle, KernelVocabulary.Template.AttributeSyntax.key,
+          parentIdentityHandle, syntaxAddress.handle, syntax.rawName),
+        requireProductDetailEnvelope(syntax, 'template.attribute-syntax'),
       ],
       [],
     );
@@ -667,17 +671,10 @@ export class BindingCommandLoweringPublisher {
     if (!(address instanceof SourceSpanAddress)) {
       return { handle: addressHandle, record: null };
     }
+    const site = decodedSubspanSite(address, start, end);
+    if (site == null) return { handle: null, record: null };
     const handle = this.store.handles.address(`${local}:source`);
-    return {
-      handle,
-      record: new SourceSpanAddress(
-        handle,
-        address.fileHandle,
-        address.start + start,
-        address.start + end,
-        role,
-      ),
-    };
+    return { handle, record: new SourceSpanAddress(handle, address.fileHandle, site.start, site.end, role, site.decodedOffsets) };
   }
 
   claimsForMultiBindingLowering(
@@ -808,17 +805,9 @@ export class BindingCommandLoweringPublisher {
     claims: readonly SemanticClaim[],
   ): readonly KernelStoreRecord[] {
     return [
-      ...this.recordsForMultiBindingAttributeSyntaxProduct(source, syntax),
       ...this.recordsForMultiBindingSegmentProduct(site, source, syntax, segment, targetSourceAddressHandle, sourceAddressHandle),
       ...multiBindingSegmentPublicationClaims(claims),
     ];
-  }
-
-  private recordsForMultiBindingAttributeSyntaxProduct(
-    source: BindingCommandLoweringSourceSet,
-    syntax: AttributeSyntax,
-  ): readonly KernelStoreRecord[] {
-    return [requireProductDetailEnvelope(syntax, 'template.attribute-syntax')];
   }
 
   private recordsForMultiBindingSegmentProduct(
@@ -888,22 +877,6 @@ export class BindingCommandLoweringPublisher {
       syntaxSourceAddressHandle,
       source.provenanceHandle,
     ));
-  }
-
-  private recordsForMultiBindingAttributeSyntax(
-    site: TemplateValueSite,
-    syntax: AttributeSyntax,
-    sourceAddressHandle: AddressHandle | null,
-  ): readonly KernelStoreRecord[] {
-    return [
-      new CompilerIdentity(
-        syntax.identityHandle,
-        KernelVocabulary.Template.AttributeSyntax.key,
-        site.identityHandle,
-        sourceAddressHandle,
-        syntax.rawName,
-      ),
-    ];
   }
 
   private multiBindingCommandBuildInputHandles(local: string): {

@@ -1,5 +1,6 @@
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import { SourceSpanRole, type SourceSpanAddress } from '../kernel/address.js';
+import { decodedSubspanSite } from '../kernel/source-address.js';
 import {
   AttributeSyntaxKind,
   type AttributeClassification,
@@ -587,19 +588,19 @@ export class TemplateCompilerNormalizedMultiBindingGraphValidator {
       ? null
       : this.context.sourceSpansByHandle.get(segment.sourceAddressHandle) ?? null;
     if (base == null) return true;
-    return syntaxSource != null
+    const syntaxSite = decodedSubspanSite(base, parsed.start, parsed.end);
+    const valueSite = decodedSubspanSite(base, parsed.valueStart, parsed.valueEnd);
+    return syntaxSite != null && valueSite != null
+      && syntaxSource != null
       && valueSource != null
-      && (
-      syntaxSource.fileHandle === base.fileHandle
-      && syntaxSource.start === base.start + parsed.start
-      && syntaxSource.end === base.start + parsed.end
+      && syntaxSource.fileHandle === base.fileHandle
+      && syntaxSource.start === syntaxSite.start
+      && syntaxSource.end === syntaxSite.end
       && syntaxSource.role === SourceSpanRole.Range
-      ) && (
-      valueSource.fileHandle === base.fileHandle
-      && valueSource.start === base.start + parsed.valueStart
-      && valueSource.end === base.start + parsed.valueEnd
-      && valueSource.role === SourceSpanRole.Value
-      );
+      && valueSource.fileHandle === base.fileHandle
+      && valueSource.start === valueSite.start
+      && valueSource.end === valueSite.end
+      && valueSource.role === SourceSpanRole.Value;
   }
 
   private validateSegmentSiteSelection(site: TemplateValueSite, segment: MultiBindingSegment): void {

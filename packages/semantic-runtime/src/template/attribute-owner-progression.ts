@@ -66,7 +66,7 @@ export class TemplateCompilerAttributeOwnerSiteView implements TemplateAttribute
   }
 
   getAttribute(name: string): string | null {
-    return this.elementState.attributeAt(name, this.version)?.rawValue ?? null;
+    return this.elementState.attributeAt(name, this.version)?.value ?? null;
   }
 }
 

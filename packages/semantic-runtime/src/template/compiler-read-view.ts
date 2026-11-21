@@ -745,6 +745,7 @@ function compilerScopeRevision(world: TemplateCompilerWorldEmission): string {
     ]),
     ...world.attributeParserMachine.compiledPatterns.flatMap(compiledPatternResultParts),
     ...world.bindingCommandResolver.commands.flatMap((command) => commandResultParts(command)),
+    ...[...world.bindingCommandResolver.selectedByKey].flatMap(([key, command]) => [key, command?.productHandle ?? '']),
   ]);
 }
 
@@ -1228,7 +1229,7 @@ function attributeMapperReadKey(
     attributeName,
     ...(node.attributes ?? []).flatMap((attribute) => [
       attribute.rawName ?? '',
-      attribute.rawValue ?? '',
+      attribute.value ?? attribute.rawValue ?? '',
     ]),
   ]);
 }

@@ -96,7 +96,7 @@ export class TemplateCompilerSiteCursorSemanticResolver extends TemplateCompiler
         && authoredAttribute != null
         && authoredAttribute === expectedAtPosition
         && scalar.qualifiedName === runtimeAttributeName(authoredAttribute.rawName, expectedOwner!.namespace)
-        && scalar.currentValue === authoredAttribute.rawValue;
+        && scalar.currentValue === authoredAttribute.value;
     }
     return new TemplateCompilerCursorElementOwnerRelation(exact, authoredElement, receipts);
   }
@@ -213,7 +213,7 @@ export class TemplateCompilerSiteCursorSemanticResolver extends TemplateCompiler
       && scalar.liveOrdinal === originalForestOrdinal
       && scalar.qualifiedName === bundle.syntax.runtimeRawName
       && scalar.inputReference?.name === scalar.qualifiedName
-      && scalar.currentValue === bundle.attribute.rawValue
+      && scalar.currentValue === bundle.attribute.value
       && scalar.namespaceUri == null
       && scalar.prefix == null;
   }

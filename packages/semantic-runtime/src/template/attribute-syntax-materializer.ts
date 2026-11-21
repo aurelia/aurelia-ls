@@ -144,7 +144,7 @@ export class AttributeSyntaxLoweringSession {
       this.input.compilerReads,
       AttributeSyntaxSiteParseInput.authored(
         input.attribute.rawName,
-        input.attribute.rawValue,
+        input.attribute.value,
         input.namespace,
       ),
     ).parse;
@@ -205,7 +205,7 @@ export class AttributeSyntaxLoweringSession {
       input.attribute.rawName,
       parse.execution.rawName,
       input.attribute.nameAddressHandle,
-      input.attribute.rawValue,
+      input.attribute.value,
       parse.execution.target,
       partSources.targetSourceAddressHandle,
       parse.execution.command,

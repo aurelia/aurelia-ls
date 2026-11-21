@@ -541,7 +541,7 @@ export class AttributeSyntax {
     readonly runtimeRawName: string,
     /** Exact authored source for the raw syntax name. */
     readonly nameSourceAddressHandle: AddressHandle | null,
-    /** Raw authored attribute value, before expression parsing. */
+    /** DOM attribute value, before Aurelia expression parsing. The linked HTML attribute retains the source spelling. */
     readonly rawValue: string,
     /** Attribute parser target part such as `value` in `value.bind`. */
     readonly target: string,

@@ -231,7 +231,7 @@ function inlineTemplateSourceMap(
   markup: string,
   contentStart: number,
 ): TemplateSourceOffsetMap | null | undefined {
-  return rawContent.length === markup.length
+  return rawContent === markup
     ? null
     : decodedStringSourceMap(rawContent, markup, contentStart) ?? undefined;
 }
@@ -282,8 +282,9 @@ function decodedStringSourceMap(
     const char = rawContent[rawIndex] ?? '';
     if (char !== '\\') {
       offsets.push(sourceOffset);
-      decodedText += char;
-      rawIndex++;
+      // An unescaped CR or CRLF inside a template literal cooks to one LF.
+      decodedText += char === '\r' ? '\n' : char;
+      rawIndex += char === '\r' && rawContent[rawIndex + 1] === '\n' ? 2 : 1;
       continue;
     }
 
@@ -324,18 +325,14 @@ function readStringEscape(
     case 'v':
       return { decoded: '\v', rawLength: 2 };
     case '0':
-      return { decoded: '\0', rawLength: 2 };
-    case '\\':
-    case '"':
-    case "'":
-    case '`':
-    case '$':
-      return { decoded: next, rawLength: 2 };
+      return /[0-9]/u.test(rawContent[slashIndex + 2] ?? '') ? null : { decoded: '\0', rawLength: 2 };
     case '\r': {
       const rawLength = rawContent[slashIndex + 2] === '\n' ? 3 : 2;
       return { decoded: '', rawLength };
     }
     case '\n':
+    case '\u2028':
+    case '\u2029':
       return { decoded: '', rawLength: 2 };
     case 'x': {
       const text = rawContent.slice(slashIndex + 2, slashIndex + 4);
@@ -346,7 +343,9 @@ function readStringEscape(
     case 'u':
       return readUnicodeEscape(rawContent, slashIndex);
     default:
-      return null;
+      // SingleEscapeCharacter and NonEscapeCharacter both denote the character itself here.
+      // Decimal escapes and a trailing backslash do not have that meaning in a module.
+      return next === '' || /[0-9]/u.test(next) ? null : { decoded: next, rawLength: 2 };
   }
 }
 

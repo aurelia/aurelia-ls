@@ -13,6 +13,10 @@
     "./browser-template": {
       "import": "./out/template/browser-template.js",
       "types": "./out/template/browser-template.d.ts"
+    },
+    "./source-text": {
+      "import": "./out/kernel/source-text.js",
+      "types": "./out/kernel/source-text.d.ts"
     }
   },
   "engines": {
@@ -138,6 +142,8 @@
     "@jridgewell/trace-mapping": "^0.3.31",
     "@rollup/pluginutils": "5.0.2",
     "css-selector-parser": "3.3.0",
+    "entities": "8.0.0",
+    "minimatch": "9.0.9",
     "parse5": "8.0.1",
     "typescript": "6.0.3"
   },

@@ -1,4 +1,5 @@
 import { SourceSpanAddress } from '../kernel/address.js';
+import { sliceDecodedSourceOffsets } from '../kernel/decoded-source-offsets.js';
 import type { SourceSpanSite } from '../kernel/source-address.js';
 import type { KernelStoreReadView } from '../kernel/store.js';
 import type { TemplateSourceOffsetMap } from '../resources/custom-element-definition.js';
@@ -44,6 +45,8 @@ export function sourceSpanSiteForDecodedTemplateRange(
   source: Pick<TemplateSource, 'markup' | 'sourceAddressHandle' | 'sourceMap'>,
   start: number,
   end: number,
+  /** Preserve a leaf parser's interior coordinates. A table maps decoded HTML value boundaries to raw offsets in the leaf. */
+  leafOffsets?: true | readonly number[],
 ): SourceSpanSite | null {
   if (source.sourceAddressHandle == null) {
     return null;
@@ -64,24 +67,27 @@ export function sourceSpanSiteForDecodedTemplateRange(
   if (!validDecodedRange(start, end, source.markup.length)) {
     return null;
   }
-  if (source.sourceMap == null) {
-    return {
-      sourceFileAddressHandle: sourceAddress.fileHandle,
-      start: sourceAddress.start + start,
-      end: sourceAddress.start + end,
-    };
+  const templateMap = source.sourceMap;
+  if (templateMap == null && (leafOffsets == null || leafOffsets === true)) {
+    return { sourceFileAddressHandle: sourceAddress.fileHandle, start: sourceAddress.start + start, end: sourceAddress.start + end };
   }
-  if (source.sourceMap.decodedLength !== source.markup.length) {
+  if (templateMap != null && templateMap.decodedLength !== source.markup.length) {
     return null;
   }
-  const mapped = mapDecodedTemplateSourceRange(source.sourceMap, start, end);
-  return mapped == null
-    ? null
-    : {
-        sourceFileAddressHandle: sourceAddress.fileHandle,
-        start: mapped.start,
-        end: mapped.end,
-      };
+  const range = templateMap == null
+    ? { start: sourceAddress.start + start, end: sourceAddress.start + end }
+    : mapDecodedTemplateSourceRange(templateMap, start, end);
+  if (range == null) return null;
+
+  let decodedOffsets: readonly number[] | undefined;
+  if (leafOffsets === true) {
+    decodedOffsets = sliceDecodedSourceOffsets(templateMap?.decodedToSourceOffsets, start, end);
+  } else if (leafOffsets != null) {
+    decodedOffsets = leafOffsets.map(local => templateMap == null
+      ? range.start + local
+      : templateMap.decodedToSourceOffsets[start + local]!);
+  }
+  return { sourceFileAddressHandle: sourceAddress.fileHandle, ...range, decodedOffsets };
 }
 
 function validDecodedRange(start: number, end: number, length: number): boolean {

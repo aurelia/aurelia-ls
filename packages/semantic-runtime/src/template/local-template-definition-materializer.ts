@@ -75,6 +75,7 @@ import {
   HtmlRecoveryKind,
 } from './html-ir.js';
 import { TemplateRecoveryPolicy } from './parse-context.js';
+import { authoredRootTemplateElement } from './compiler-root-template.js';
 import { TemplateProductDetails } from './product-details.js';
 import { runtimeAttributeName, runtimeElementResourceName } from './runtime-dom-name.js';
 import {
@@ -918,7 +919,7 @@ function readLocalTemplateSyntaxes(markup: string): readonly LocalTemplateSyntax
   )) {
     return [];
   }
-  const rootTemplate = effectiveRootTemplate(document.rootNodes);
+  const rootTemplate = authoredRootTemplateElement(document.rootNodes);
   if (rootTemplate != null && attributeForDraft(rootTemplate, 'as-custom-element') != null) {
     return [];
   }
@@ -970,17 +971,6 @@ function readLocalTemplateSyntaxes(markup: string): readonly LocalTemplateSyntax
     syntaxes.push(new LocalTemplateSyntax(template, nameAttribute, bindables));
   }
   return syntaxes;
-}
-
-function effectiveRootTemplate(
-  roots: readonly ParsedHtmlNodeDraft[],
-): ParsedHtmlNodeDraft | null {
-  const elements = roots.filter(isHtmlElementDraft);
-  return roots.every((node) => isHtmlElementDraft(node) || (node.nodeKind === HtmlIrNodeKind.Text && node.text?.trim().length === 0))
-    && elements.length === 1
-    && elements[0]?.tagName?.toLowerCase() === 'template'
-    ? elements[0]
-    : null;
 }
 
 function compilerVisibleElements(

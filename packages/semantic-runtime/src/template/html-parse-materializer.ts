@@ -34,7 +34,6 @@ import {
 import {
   sourceSpanAddressForSite,
   sourceSpanEvidenceForSite,
-  type SourceSpanSite,
   type SourceSpanEvidencePublication,
 } from '../kernel/source-address.js';
 import {
@@ -57,6 +56,7 @@ import type {
 } from './compilation-unit.js';
 import { isHtmlVoidElement } from './html-elements.js';
 import { htmlAsciiLowercase } from './html-ascii.js';
+import { decodeHtmlCharacterData, type DecodedHtmlCharacterData } from './html-character-data.js';
 import { sourceSpanSiteForDecodedTemplateRange } from './template-source-coordinate.js';
 import {
   HtmlAttribute,
@@ -138,7 +138,10 @@ export class ParsedHtmlAttributeDraft {
     readonly valueStart: number | null,
     readonly valueEnd: number | null,
     readonly recoveries: readonly HtmlRecoveryDraft[],
+    readonly decoded: DecodedHtmlCharacterData | null = decodeHtmlCharacterData(rawValue, 'attribute'),
   ) {}
+
+  get value(): string { return this.decoded?.value ?? this.rawValue; }
 }
 
 export class ParsedHtmlNodeDraft {
@@ -155,6 +158,7 @@ export class ParsedHtmlNodeDraft {
     readonly text: string | null,
     readonly recoveries: readonly HtmlRecoveryDraft[],
     readonly tagNames: ParsedHtmlElementTagNamesDraft | null = null,
+    readonly decodedText: DecodedHtmlCharacterData | null = null,
   ) {}
 }
 
@@ -468,7 +472,10 @@ class HtmlParseTreeMaterializer {
   ): HtmlNodeMaterializationFrame {
     const pathKey = draft.path.join('.');
     const local = `html-node:${input.localKey}:${pathKey}`;
-    const sourceAddressHandle = this.sourceSpanAddress(state, `${local}:source`, draft.start, draft.end, SourceSpanRole.Range);
+    const sourceAddressHandle = this.sourceSpanAddress(
+      state, `${local}:source`, draft.start, draft.end, SourceSpanRole.Range,
+      draft.nodeKind === HtmlIrNodeKind.Text ? draft.decodedText?.offsets ?? true : undefined,
+    );
     const productHandle = this.store.handles.product(local);
     const identityHandle = this.store.handles.identity(local);
     const recoveries = draft.recoveries.map((recovery, index) =>
@@ -508,6 +515,7 @@ class HtmlParseTreeMaterializer {
           draft.text ?? '',
           frame.recoveries,
           [],
+          draft.decodedText?.value ?? draft.text ?? '',
         ), state, frame);
     }
   }
@@ -651,6 +659,7 @@ class HtmlParseTreeMaterializer {
       draft.nameEnd,
       SourceSpanRole.Name,
       'Authored HTML attribute name.',
+      true,
     );
     const valueSource = draft.valueStart == null || draft.valueEnd == null
       ? null
@@ -661,6 +670,7 @@ class HtmlParseTreeMaterializer {
           draft.valueEnd,
           SourceSpanRole.Value,
           'Authored HTML attribute value.',
+          draft.decoded?.offsets ?? true,
         );
     return new HtmlAttributeMaterializationFrame(
       local,
@@ -694,6 +704,7 @@ class HtmlParseTreeMaterializer {
           ? null
           : new FieldProvenance('value', frame.valueProvenanceHandle),
       ]),
+      draft.value,
     ), new MaterializedProduct(
       frame.productHandle,
       KernelVocabulary.Template.HtmlAttribute.key,
@@ -783,8 +794,9 @@ class HtmlParseTreeMaterializer {
     start: number,
     end: number,
     role: SourceSpanRole,
+    leafOffsets?: true | readonly number[],
   ): AddressHandle | null {
-    const site = this.sourceSpanSite(state, start, end);
+    const site = sourceSpanSiteForDecodedTemplateRange(this.store, state.templateSource, start, end, leafOffsets);
     if (site == null) return null;
     const publication = sourceSpanAddressForSite(this.store, local, site, role);
     state.records.push(...publication.records);
@@ -798,8 +810,9 @@ class HtmlParseTreeMaterializer {
     end: number,
     role: SourceSpanRole,
     summary: string,
+    leafOffsets?: true | readonly number[],
   ): SourceSpanEvidencePublication | null {
-    const site = this.sourceSpanSite(state, start, end);
+    const site = sourceSpanSiteForDecodedTemplateRange(this.store, state.templateSource, start, end, leafOffsets);
     if (site == null) return null;
     const publication = sourceSpanEvidenceForSite(
       this.store,
@@ -811,14 +824,6 @@ class HtmlParseTreeMaterializer {
     );
     state.records.push(...publication.records);
     return publication;
-  }
-
-  private sourceSpanSite(
-    state: HtmlMaterializationState,
-    start: number,
-    end: number,
-  ): SourceSpanSite | null {
-    return sourceSpanSiteForDecodedTemplateRange(this.store, state.templateSource, start, end);
   }
 
   private templateNodeAddress(
@@ -918,29 +923,32 @@ class HtmlScanner {
         nodes.push(element);
         continue;
       }
-      nodes.push(this.parseText(path));
+      nodes.push(this.parseText(path, namespace));
     }
 
     return new ParsedHtmlNodeSequenceDraft(nodes, null);
   }
 
-  private parseText(path: readonly number[]): ParsedHtmlNodeDraft {
+  private parseText(path: readonly number[], namespace: HtmlNamespaceKind): ParsedHtmlNodeDraft {
     const start = this.pos;
     while (!this.eof() && !this.startsMarkupToken()) {
       this.pos++;
     }
+    const text = this.text.slice(start, this.pos);
     return new ParsedHtmlNodeDraft(
       HtmlIrNodeKind.Text,
       start,
       this.pos,
       path,
       null,
-      HtmlNamespaceKind.Html,
+      namespace,
       [],
       [],
       false,
-      this.text.slice(start, this.pos),
+      text,
       [],
+      null,
+      decodeHtmlCharacterData(text, namespace === HtmlNamespaceKind.Html ? 'text' : 'foreign-text'),
     );
   }
 
@@ -1228,6 +1236,8 @@ class HtmlScanner {
     const start = this.pos;
     const closingStart = this.findRawTextEndTag(tagName);
     const end = closingStart < 0 ? this.text.length : closingStart;
+    const text = this.text.slice(start, end);
+    const name = htmlAsciiLowercase(tagName);
     const nodes = end === start
       ? []
       : [new ParsedHtmlNodeDraft(
@@ -1240,8 +1250,10 @@ class HtmlScanner {
           [],
           [],
           false,
-          this.text.slice(start, end),
+          text,
           [],
+          null,
+          decodeHtmlCharacterData(text, name === 'textarea' || name === 'title' ? 'rcdata' : 'raw-text'),
         )];
     this.pos = end;
     if (closingStart < 0) {
@@ -1252,15 +1264,16 @@ class HtmlScanner {
   }
 
   private findRawTextEndTag(tagName: string): number {
-    const lowerText = this.text.toLowerCase();
-    const needle = `</${tagName.toLowerCase()}`;
-    let candidate = lowerText.indexOf(needle, this.pos);
+    const name = htmlAsciiLowercase(tagName);
+    let candidate = this.text.indexOf('</', this.pos);
     while (candidate >= 0) {
-      const delimiter = this.text[candidate + needle.length] ?? '';
-      if (delimiter === '' || delimiter === '>' || delimiter === '/' || isHtmlSpaceCharacter(delimiter)) {
+      const nameEnd = candidate + 2 + name.length;
+      const delimiter = this.text[nameEnd] ?? '';
+      if (htmlAsciiLowercase(this.text.slice(candidate + 2, nameEnd)) === name
+        && (delimiter === '' || delimiter === '>' || delimiter === '/' || isHtmlSpaceCharacter(delimiter))) {
         return candidate;
       }
-      candidate = lowerText.indexOf(needle, candidate + needle.length);
+      candidate = this.text.indexOf('</', candidate + 2);
     }
     return -1;
   }
@@ -1511,25 +1524,9 @@ function parsesChildInHtmlNamespace(
   if (parentName !== 'annotation-xml') {
     return false;
   }
-  const encoding = parentAttributes.find((attribute) => htmlAsciiLowercase(attribute.rawName) === 'encoding')?.rawValue;
-  return encoding != null
-    && isHtmlIntegrationEncoding(encoding);
-}
-
-function isHtmlIntegrationEncoding(rawValue: string): boolean {
-  const decoded = rawValue.replace(
-    /&#(?:[xX]([0-9a-fA-F]+)|([0-9]+));?|&(sol|plus);/gu,
-    (reference, hexadecimal: string | undefined, decimal: string | undefined, named: string | undefined) => {
-      if (named != null) {
-        return named === 'sol' ? '/' : '+';
-      }
-      const codePoint = Number.parseInt(hexadecimal ?? decimal ?? '', hexadecimal == null ? 10 : 16);
-      return Number.isSafeInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10_FFFF
-        ? String.fromCodePoint(codePoint)
-        : reference;
-    },
-  );
-  const normalized = htmlAsciiLowercase(decoded);
+  const encoding = parentAttributes.find((attribute) => htmlAsciiLowercase(attribute.rawName) === 'encoding');
+  if (encoding == null) return false;
+  const normalized = htmlAsciiLowercase(encoding.value);
   return normalized === 'text/html' || normalized === 'application/xhtml+xml';
 }
 

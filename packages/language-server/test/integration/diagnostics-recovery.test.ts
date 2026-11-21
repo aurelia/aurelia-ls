@@ -121,6 +121,15 @@ test('inline TypeScript templates keep Aurelia recovery because no native HTML v
       message: 'Missing closing tag </span>.',
       range: rangeFor(source, '\\x73pan'),
     });
+    const multiline = source.replace(
+      "'<template><div><\\x73pan></div></template>'",
+      "`<template>\r\n\\q<div><\\x73pan></div></template>`",
+    );
+    changeDocument(connection, uri, multiline, 2);
+    expect(onlyRecovery(await diagnostics.wait(uri, 10_000))).toMatchObject({
+      message: 'Missing closing tag </span>.',
+      range: rangeFor(multiline, '\\x73pan'),
+    });
   } finally {
     diagnostics.dispose();
     dispose();
@@ -129,6 +138,66 @@ test('inline TypeScript templates keep Aurelia recovery because no native HTML v
     fs.rmSync(fixture, { recursive: true, force: true });
   }
 }, 30_000);
+
+test('HTML character references preserve diagnostic and hover ranges across template edits', async () => {
+  const markup = (expression: string) => [
+    '<template>',
+    '  <input value.bind="' + expression + '">',
+    '  <span>${' + expression + '}</span>',
+    '  <span>${title}</span>',
+    '</template>',
+  ].join('\n');
+  const plain = 'count + title';
+  const encoded = 'count &#43; title';
+  const malformed = 'count &#43; ';
+  const fixture = createAureliaAppFixture({
+    'src/app.ts': [
+      "import { customElement } from 'aurelia';",
+      "import template from './app.html';",
+      "@customElement({name: 'app-root', template})",
+      "export class AppRoot { count = 1; title = 'hello'; }",
+    ].join('\n'),
+    'src/app.html': markup(plain),
+  });
+  const uri = fileUri(fixture, 'src/app.html');
+  const { connection, child, dispose, getStderr } = startServer(fixture);
+  const diagnostics = createDiagnosticsRecorder(connection, child, getStderr);
+  try {
+    await initialize(connection, child, getStderr, fixture);
+    for (const [index, expression] of [plain, encoded, malformed, plain].entries()) {
+      const text = markup(expression);
+      if (index === 0) openDocument(connection, uri, 'html', text, 1);
+      else changeDocument(connection, uri, text, index + 1);
+      const rows = await diagnostics.wait(uri, 10_000) as LspDiagnosticLike[];
+      if (expression === malformed) {
+        expect(rows.map(row => row.code)).toEqual(['AUR0155', 'AUR0155']);
+      } else {
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({
+          code: 'binding-source-assignment-runtime-noop',
+          range: rangeFor(text, expression),
+        });
+      }
+      for (const [line, content] of text.split('\n').entries()) {
+        const start = content.indexOf('title');
+        if (start < 0) continue;
+        const hover = await connection.sendRequest('textDocument/hover', {
+          textDocument: { uri }, position: { line, character: start + 1 },
+        });
+        expect(hover).toMatchObject({
+          contents: { value: expect.stringContaining('title: string') },
+          range: { start: { line, character: start }, end: { line, character: start + 'title'.length } },
+        });
+      }
+    }
+  } finally {
+    diagnostics.dispose();
+    dispose();
+    child.kill('SIGKILL');
+    await waitForExit(child);
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+}, 60_000);
 
 function onlyRecovery(rows: readonly unknown[]): LspDiagnosticLike {
   const recoveries = (rows as LspDiagnosticLike[]).filter(isHtmlRecoveryDiagnostic);

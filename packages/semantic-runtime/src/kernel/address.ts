@@ -114,6 +114,8 @@ export interface SourceSpanLocus {
 
 /** Address for a meaningful source range inside one file. */
 export class SourceSpanAddress implements SourceSpanLocus {
+  /** Present on a parser input whose decoded boundaries diverge from this authored span. */
+  declare readonly decodedOffsets?: readonly number[];
   /** String discriminator for serialized source-span address records. */
   readonly kind = 'source-span-address' as const;
 
@@ -128,7 +130,10 @@ export class SourceSpanAddress implements SourceSpanLocus {
     readonly end: number,
     /** Intended use of the span, such as rename target, value range, or explanation range. */
     readonly role: SourceSpanRole = SourceSpanRole.Primary,
-  ) {}
+    decodedOffsets?: readonly number[],
+  ) {
+    if (decodedOffsets != null) this.decodedOffsets = Object.freeze(decodedOffsets);
+  }
 }
 
 export function sourceSpanContains(

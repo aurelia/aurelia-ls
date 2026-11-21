@@ -1,6 +1,7 @@
 import { Scanner, type Token } from './expression-scanner.js';
 import {
   absoluteTextSpan,
+  DecodedExpressionSpan,
   normalizeSpan,
   spanFromBounds,
   sourceSpanFromBounds,
@@ -93,6 +94,7 @@ export class CompletedInputParserState {
   }
 
   toLocal(offset: number): number {
+    if (this.baseSpan instanceof DecodedExpressionSpan) return this.baseSpan.localOffset(offset);
     return this.baseSpan ? offset - this.baseSpan.start : offset;
   }
 

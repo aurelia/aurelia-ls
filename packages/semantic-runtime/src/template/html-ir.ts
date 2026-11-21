@@ -85,6 +85,7 @@ export type HtmlTextField =
 export interface HtmlAttributeLike {
   readonly rawName: string | null;
   readonly rawValue?: string;
+  readonly value?: string;
 }
 
 export interface HtmlAttributeOwnerLike {
@@ -106,7 +107,8 @@ export function htmlAttributeValue(
   name: string,
 ): string | null {
   if (owner?.getAttribute != null) return owner.getAttribute(name);
-  return owner?.attributes?.find((attribute) => attribute.rawName?.toLowerCase() === name)?.rawValue ?? null;
+  const attribute = owner?.attributes?.find((attribute) => attribute.rawName?.toLowerCase() === name);
+  return attribute?.value ?? attribute?.rawValue ?? null;
 }
 
 export function hasHtmlAttribute(
@@ -285,6 +287,8 @@ export class HtmlAttribute {
     readonly valueAddressHandle: AddressHandle | null,
     readonly recoveries: readonly HtmlRecovery[] = [],
     readonly fieldProvenance: readonly FieldProvenance<HtmlAttributeField>[] = [],
+    /** The value a DOM Attr supplies to Aurelia's attribute parser. */
+    readonly value: string = rawValue,
   ) {}
 
   get productHandle(): ProductHandle {
@@ -316,6 +320,8 @@ export class HtmlText {
     readonly text: string,
     readonly recoveries: readonly HtmlRecovery[] = [],
     readonly fieldProvenance: readonly FieldProvenance<HtmlTextField>[] = [],
+    /** DOM text data consumed by the interpolation parser. */
+    readonly data: string = text,
   ) {}
 
   get productHandle(): ProductHandle {

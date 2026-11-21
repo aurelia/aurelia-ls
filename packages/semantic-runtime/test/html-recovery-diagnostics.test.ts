@@ -25,6 +25,7 @@ import { KernelVocabulary } from '../src/kernel/vocabulary.js';
 import { KernelPublicationSurface } from '../src/kernel/publication-surface.js';
 import { TemplateProductDetails } from '../src/template/product-details.js';
 import { TemplateRecoveryPolicy } from '../src/template/parse-context.js';
+import { authoredRootTemplateElement } from '../src/template/compiler-root-template.js';
 
 const repoRoot = path.resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 const helloWorldFixture = path.join(repoRoot, 'fixtures/hello-world');
@@ -59,12 +60,12 @@ describe('HTML recovery diagnostics', () => {
 
   test.each([
     ['script', "if(a<b){run('<fake>')}"] as const,
-    ['style', '.a{--probe:<fake>}'] as const,
+    ['style', '.a{--probe:"İ</style-suffix><fake>"}'] as const,
     ['title', 'before <fake> after'] as const,
     ['textarea', 'before <fake> after'] as const,
   ])('keeps <%s> raw text in one child and preserves the following sibling', (tagName, content) => {
     const draft = parseHtmlDocumentDraft(
-      `<${tagName}>${content}</${tagName}><div></div>`,
+      `<${tagName}>${content}</${tagName.toUpperCase()}><div></div>`,
       TemplateRecoveryPolicy.Strict,
     );
 
@@ -76,6 +77,34 @@ describe('HTML recovery diagnostics', () => {
       children: [{ text: content, recoveries: [] }],
     });
     expect(draft.rootNodes[1]).toMatchObject({ tagName: 'div', recoveries: [] });
+  });
+
+  test.each([
+    ['<!--header--><template></template>', true],
+    ['text<!--header--><template></template>', true],
+    ['<!--header-->text<template></template>', false],
+    ['<template></template>text', false],
+    ['<!--header--><template></template><div></div>', false],
+  ] as const)('selects the authored template carrier in %s', (markup, selected) => {
+    const draft = parseHtmlDocumentDraft(markup, TemplateRecoveryPolicy.Strict);
+    expect(authoredRootTemplateElement(draft.rootNodes)?.tagName ?? null)
+      .toBe(selected ? 'template' : null);
+  });
+
+  test('decodes browser attribute and text values while retaining their lexical UTF-16 boundaries', () => {
+    const markup = '<p value.bind="a &#43; b" title="&copycat &amp;copy;">x&#x1f600;\r\ny</p>'
+      + '<textarea>&copycat</textarea><script>&amp;</script><style>&amp;</style>';
+    const [p, textarea, script, style] = parseHtmlDocumentDraft(markup, TemplateRecoveryPolicy.Strict).rootNodes;
+    expect(p!.attributes[0]).toMatchObject({
+      rawValue: 'a &#43; b', decoded: { value: 'a + b', offsets: [0, 1, 2, 7, 8, 9] },
+    });
+    expect(p!.attributes[1]!.value).toBe('&copycat &copy;');
+    expect(p!.children[0]).toMatchObject({
+      text: 'x&#x1f600;\r\ny', decodedText: { value: 'x😀\ny', offsets: [0, 1, 1, 10, 12, 13] },
+    });
+    expect(textarea!.children[0]!.decodedText?.value).toBe('©cat');
+    expect(script!.children[0]).toMatchObject({ text: '&amp;', decodedText: null });
+    expect(style!.children[0]).toMatchObject({ text: '&amp;', decodedText: null });
   });
 
   test('bounds pathological element nesting as one source-backed recovery', async () => {

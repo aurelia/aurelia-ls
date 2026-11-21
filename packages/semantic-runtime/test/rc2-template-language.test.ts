@@ -71,5 +71,7 @@ describe('RC2 template language alignment', () => {
     expect(normalizeLetBindingTarget('_first-name')).toBe('_firstName');
     expect(normalizeLetBindingTarget('my_prop-2')).toBe('my_prop2');
     expect(normalizeLetBindingTarget('plain-name')).toBe('plainName');
+    expect(normalizeLetBindingTarget('data--item')).toBe('dataItem');
+    expect(normalizeLetBindingTarget('data---2')).toBe('data2');
   });
 });

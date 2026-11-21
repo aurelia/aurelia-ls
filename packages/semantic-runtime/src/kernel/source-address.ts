@@ -22,6 +22,7 @@ import type {
   KernelStoreRecord,
 } from './store.js';
 import { canonicalTypeSystemSourcePath } from '../type-system/source-file-path.js';
+import { sliceDecodedSourceOffsets } from './decoded-source-offsets.js';
 
 export type SourceAnchorHandle = AddressHandle | IdentityHandle;
 export type SourceAnchorRecord = SemanticAddress | SemanticIdentity;
@@ -30,6 +31,20 @@ export interface SourceSpanSite {
   readonly sourceFileAddressHandle: AddressHandle;
   readonly start: number;
   readonly end: number;
+  readonly decodedOffsets?: readonly number[];
+}
+
+/** Locate a decoded subrange inside an already mapped parser input. */
+export function decodedSubspanSite(source: SourceSpanAddress, start: number, end: number): SourceSpanSite | null {
+  const offsets = source.decodedOffsets;
+  const decodedLength = offsets == null ? source.end - source.start : offsets.length - 1;
+  if (start < 0 || end < start || end > decodedLength) return null;
+  return {
+    sourceFileAddressHandle: source.fileHandle,
+    start: offsets?.[start] ?? source.start + start,
+    end: offsets?.[end] ?? source.start + end,
+    ...(offsets == null ? {} : { decodedOffsets: sliceDecodedSourceOffsets(offsets, start, end) }),
+  };
 }
 
 export interface SourcePathSpanSite {
@@ -84,6 +99,7 @@ export function sourceSpanAddressForSite(
       site.start,
       site.end,
       role,
+      site.decodedOffsets,
     ),
   );
 }

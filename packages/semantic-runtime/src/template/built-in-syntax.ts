@@ -5,7 +5,7 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { ExpressionType } from '../expression/ast.js';
-import { sourceSpanFromBounds } from '../expression/source-span.js';
+import { absoluteTextSpan } from '../expression/source-span.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { FrameworkRegistrationKind } from '../registration/registration-reference.js';
 import { AttributePatternDefinitionEntry } from '../resources/attribute-pattern-definition.js';
@@ -134,11 +134,7 @@ function buildIteratorBinding(
 
       const valueSpan = iterator.tailSpan == null
         ? null
-        : sourceSpanFromBounds(
-            iterator.tailSpan.start + segment.valueStart,
-            iterator.tailSpan.start + segment.valueStart + rawValue.length,
-            iterator.tailSpan.file ?? null,
-          );
+        : absoluteTextSpan({ start: segment.valueStart, end: segment.valueStart + rawValue.length }, iterator.tailSpan);
       const expressionProductHandle = tailSyntax.command === 'bind'
         && (tailSyntax.target === 'key' || tailSyntax.target === 'contextual')
         ? context.parsePropertyExpression(rawValue, info, valueSpan)

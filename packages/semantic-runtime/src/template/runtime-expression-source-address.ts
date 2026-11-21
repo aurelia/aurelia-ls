@@ -1,6 +1,7 @@
 import type { ExpressionParseContext } from '../expression/expression-parse-support.js';
 import {
   SourceFileRef,
+  DecodedExpressionSpan,
   type SourceSpan,
   sourceSpanFromBounds,
 } from '../expression/source-span.js';
@@ -54,6 +55,7 @@ export function runtimeExpressionParseContextForSourceSpanAddress(
     : new SourceFileRef(fileAddress.handle, fileAddress.path);
   return {
     baseSpan: sourceSpanFromBounds(sourceSpan.start, sourceSpan.end, file),
+    decodedOffsets: sourceSpan.decodedOffsets,
   };
 }
 
@@ -134,6 +136,7 @@ export function sourceAddressForRuntimeExpressionSpan(
       sourceFileAddressHandle,
       start: span.start,
       end: span.end,
+      ...(span instanceof DecodedExpressionSpan ? { decodedOffsets: span.retainedOffsets() } : {}),
     },
     role,
   );

@@ -6,6 +6,8 @@
  * navigation should translate parser spans into kernel `SourceSpanAddress` records at the materializer boundary.
  */
 
+import { decodedOffsetAtSource, sliceDecodedSourceOffsets } from '../kernel/decoded-source-offsets.js';
+
 export class SourceFileRef {
   constructor(
     readonly id: string,
@@ -28,6 +30,42 @@ export class SourceSpan {
     readonly end: number,
     readonly file?: SourceFileRef | null,
   ) {}
+}
+
+/** A parser span over decoded text. Nested AST nodes share the same text and boundary table. */
+export class DecodedExpressionSpan extends SourceSpan {
+  readonly #text: string;
+  readonly #offsets: readonly number[];
+  readonly #from: number;
+  readonly #to: number;
+
+  constructor(text: string, offsets: readonly number[], file: SourceFileRef | null, from = 0, to = text.length) {
+    super(offsets[from]!, offsets[to]!, file);
+    this.#text = text;
+    this.#offsets = offsets;
+    this.#from = from;
+    this.#to = to;
+  }
+
+  get text(): string { return this.#text.slice(this.#from, this.#to); }
+
+  retainedOffsets(): readonly number[] | undefined {
+    return sliceDecodedSourceOffsets(this.#offsets, this.#from, this.#to);
+  }
+
+  sourceOffset(local: number): number {
+    return this.#offsets[this.#from + local]!;
+  }
+
+  localOffset(authored: number): number {
+    return decodedOffsetAtSource(this.#offsets, authored, this.#from, this.#to) - this.#from;
+  }
+
+  subspan(start: number, end: number): DecodedExpressionSpan {
+    const from = Math.min(this.#to, this.#from + Math.max(0, start));
+    const to = Math.min(this.#to, this.#from + Math.max(start, end, 0));
+    return new DecodedExpressionSpan(this.#text, this.#offsets, this.file ?? null, from, to);
+  }
 }
 
 export type SpanLike = TextSpan | SourceSpan;
@@ -114,18 +152,16 @@ export function absoluteSpan(
     return null;
   }
 
-  const start = base.start + relative.start;
-  const end = base.start + relative.end;
-  return sourceSpanFromBounds(start, end, base.file ?? null);
+  return absoluteTextSpan(relative, base);
 }
 
 export function absoluteTextSpan(
   relative: TextSpan,
   base: SourceSpan,
 ): SourceSpan {
-  const start = base.start + relative.start;
-  const end = base.start + relative.end;
-  return sourceSpanFromBounds(start, end, base.file ?? null);
+  return base instanceof DecodedExpressionSpan
+    ? base.subspan(relative.start, relative.end)
+    : sourceSpanFromBounds(base.start + relative.start, base.start + relative.end, base.file ?? null);
 }
 
 export function ensureSpanFile(

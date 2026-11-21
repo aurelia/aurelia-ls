@@ -7,6 +7,7 @@ import {
 import type { ProductHandle, ProvenanceHandle } from '../kernel/handles.js';
 import { SourceSpanRole } from '../kernel/address.js';
 import {
+  decodedSubspanSite,
   sourceSpanAddressForAddress,
   sourceSpanAddressForSite,
   type SourceSpanAddressPublication,
@@ -257,11 +258,8 @@ export class TemplateValueSiteMaterializer {
     if (targetSource == null || !syntax.target.startsWith('...') || expression.length === 0) {
       return null;
     }
-    return sourceSpanAddressForSite(this.store, `${siteLocal}:spread-expression`, {
-      sourceFileAddressHandle: targetSource.fileHandle,
-      start: targetSource.start + 3,
-      end: targetSource.start + 3 + expression.length,
-    }, SourceSpanRole.Value);
+    const site = decodedSubspanSite(targetSource, 3, 3 + expression.length);
+    return site == null ? null : sourceSpanAddressForSite(this.store, `${siteLocal}:spread-expression`, site, SourceSpanRole.Value);
   }
 
   private recordsForSource(input: TemplateValueSiteRequest): TemplateValueSiteSourceSet {
@@ -312,10 +310,10 @@ function textValueSiteExpectationDecisions(
 export function templateTextValueSiteExpectation(
   node: HtmlText,
 ): TemplateValueSiteExpectation | null {
-  return hasInterpolationOpener(node.text)
+  return hasInterpolationOpener(node.data)
     ? new TemplateValueSiteExpectation(
       TemplateValueSiteKind.TextInterpolation,
-      node.text,
+      node.data,
       'Interpolation',
       node.toReference(),
       null,

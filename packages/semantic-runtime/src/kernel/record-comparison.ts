@@ -40,7 +40,10 @@ export function compareKernelRecords(
       const candidate = next as typeof previous;
       return semanticThenWitness(
         sameValues([previous.fileHandle, previous.role], [candidate.fileHandle, candidate.role]),
-        sameValues([previous.start, previous.end], [candidate.start, candidate.end]),
+        previous.start === candidate.start && previous.end === candidate.end
+          && (previous.decodedOffsets === candidate.decodedOffsets
+            || sameArrays(previous.decodedOffsets ?? [], candidate.decodedOffsets ?? []))
+          ? KernelPublicationDecisionKind.Retain : KernelPublicationDecisionKind.Replace,
       );
     }
     case 'template-address': {
@@ -206,7 +209,7 @@ export function compareKernelRecords(
     case 'evidence-record': {
       const candidate = next as typeof previous;
       return semanticThenWitness(
-        sameValues(
+        sameArrays(
           [previous.evidenceKind, previous.summary, previous.identityHandle],
           [candidate.evidenceKind, candidate.summary, candidate.identityHandle],
         ) && sameArrays(previous.roles, candidate.roles)

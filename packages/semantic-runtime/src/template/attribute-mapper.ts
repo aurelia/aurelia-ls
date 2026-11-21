@@ -21,6 +21,7 @@ import {
   EvaluationValueKind,
 } from '../evaluation/values.js';
 import { isStandardSvgAttribute } from '../observation/svg-analyzer-data.generated.js';
+import { camelCase } from '../strings.js';
 import {
   hasHtmlAttribute,
   htmlAttributeValue,
@@ -214,15 +215,13 @@ export function mapAttribute(
     ?? (isDataAttribute(element, attr) ? runtimeAttributeName(attr, element.namespace) : null);
 }
 
-export function camelCaseAttributeName(value: string): string {
-  return value.replace(/-([a-z])/g, (_match, char: string) => char.toUpperCase());
-}
+export { camelCase as camelCaseAttributeName };
 
 /** RC2 `<let>` target normalization preserves underscores as authored. */
 export function normalizeLetBindingTarget(target: string): string {
   return target.includes('_')
     ? target.replace(/-+([A-Za-z0-9])/g, (_match, char: string) => char.toUpperCase())
-    : camelCaseAttributeName(target);
+    : camelCase(target);
 }
 
 export function shouldDefaultToTwoWay(

@@ -1091,13 +1091,13 @@ class TemplateCompilerNormalizedSiteGraphValidator {
       && owner != null
       && (
         syntax.rawName !== attribute.rawName
-        || syntax.rawValue !== attribute.rawValue
+        || syntax.rawValue !== attribute.value
         || syntax.runtimeRawName !== runtimeAttributeName(attribute.rawName, owner.namespace)
       )
     ) {
       this.crossReference(
         'top-level-syntax/scalars',
-        'Top-level syntax does not retain the authored name/value and browser-normalized runtime name.',
+        'Top-level syntax does not retain the authored name and browser-normalized attribute name/value.',
         [syntax.productHandle, attribute.productHandle],
       );
     }

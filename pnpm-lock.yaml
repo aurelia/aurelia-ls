@@ -292,6 +292,12 @@ importers:
       css-selector-parser:
         specifier: 3.3.0
         version: 3.3.0
+      entities:
+        specifier: 8.0.0
+        version: 8.0.0
+      minimatch:
+        specifier: 9.0.9
+        version: 9.0.9
       parse5:
         specifier: 8.0.1
         version: 8.0.1
