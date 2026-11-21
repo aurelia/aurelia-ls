@@ -36,6 +36,8 @@ interface ContractRoot {
   physicalProductType: typeof PhysicalProduct;
   overloadedProductType: { new (label: string): PhysicalProduct; new (id: number): DigitalProduct; };
   currentPrimitive: string | number;
+  nullableText: string | null;
+  numbers: number[];
   bookOnly(value: BookItem): 'book';
   notBookOnly(value: ServiceItem | ArchivedItem): 'other';
   stringOnly(value: string): 'string';
@@ -94,6 +96,17 @@ const scope = new BindingScopeMaterializer(store, projector).construct(new Bindi
 
 const evaluator = new CheckerExpressionTypeWorld(store, projector).evaluator();
 const parser = new ExpressionParser();
+
+assertExpressionType('nullableText ? 1 : nullableText', '"" | 1 | null');
+assertExpressionType("nullableText ?? 'fallback'", 'string');
+assertExpressionType("currentPrimitive !== 'stop' ? currentPrimitive : 77", 'string | number');
+assertExpressionType("currentPrimitive === 'stop' ? currentPrimitive : 77", '"stop" | 77');
+assertExpressionType('[[1]].flat(0)[0]', 'Array<1>');
+assertExpressionType('[[1]].flat(1)[0]', '1');
+assertExpressionType('[[[1]]].flat(2)[0]', '1');
+assertExpressionType('[[1]].flat(-1)[0]', 'Array<1>');
+assertExpressionType('[1].concat(numbers)[1]', 'number');
+assertExpressionType('numbers.concat(numbers)[1]', 'number');
 
 assertExpressionType(
   "currentItem.kind === 'book' ? bookOnly(currentItem) : notBookOnly(currentItem)",

@@ -46,6 +46,7 @@ import {
   CheckerTypeMemberKind,
   CheckerTypeReference,
   CheckerTypeShape,
+  CheckerTypeShapeKind,
   checkerTypeShapeIsPrimitiveDisplay,
   sameCheckerTypeReference,
 } from './type-shape.js';
@@ -1149,17 +1150,27 @@ export class CheckerExpressionTypeEvaluator {
     if (left.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return left;
     }
+    let leftResult = left;
+    const coalescing = expression.operation === '??';
+    const definitelyNullish = coalescing && checkerTypeShapeNullishPresence(left.typeShape) === CheckerTypeNullishPresence.Definitely;
+    if (coalescing && !definitelyNullish) {
+      const value = this.typeAccess.nonNullishTypeShape(left.typeShape, `${localKey}:non-nullish-left`, sourceAddressHandle);
+      if (value != null) {
+        if (value === left.typeShape && value.shapeKind !== CheckerTypeShapeKind.Any && value.shapeKind !== CheckerTypeShapeKind.Unknown) return left;
+        leftResult = this.support.type(value, 'Non-nullish left operand of ??', sourceAddressHandle);
+      }
+    }
     const rightScope = this.branchScopes.shortCircuitRightScope(expression, scope, `${localKey}:right-scope`, sourceAddressHandle);
     const right = this.evaluateNode(context.childInScope(expression.right, rightScope, 'right'));
-    if (right.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
+    if (definitelyNullish || right.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return right;
     }
-    if (sameCheckerTypeReference(left.typeReference, right.typeReference)) {
-      return left;
+    if (sameCheckerTypeReference(leftResult.typeReference, right.typeReference)) {
+      return leftResult;
     }
 
     return this.support.evaluateTypeUnion(
-      [left, right],
+      [leftResult, right],
       `${localKey}:short-circuit:${expression.operation}`,
       sourceAddressHandle,
       `Binary operator '${expression.operation}' can produce either operand type by runtime short-circuit semantics.`,

@@ -747,7 +747,8 @@ export class CheckerExpressionScopeNarrower {
       return source;
     }
     const excludeType = checkerUnionTypeOrNever(sourceCarrier.checker, excludeCarriers.map((carrier) => carrier.type));
-    const retained = sourceParts.filter((part) => !typeOverlaps(sourceCarrier.checker, part, excludeType));
+    // An excluded literal removes only a constituent wholly contained in its domain.
+    const retained = sourceParts.filter((part) => !checkerRawTypeAssignable(sourceCarrier.checker, part, excludeType));
     return this.projectType(
       sourceCarrier,
       checkerUnionTypeOrNever(sourceCarrier.checker, retained),
@@ -784,12 +785,19 @@ export class CheckerExpressionScopeNarrower {
       return null;
     }
 
-    const boolean = booleanKind(carrier.checker, carrier.type);
-    if (boolean === BooleanTypeKind.Boolean || boolean === BooleanTypeKind.False) {
-      return this.projectType(carrier, carrier.checker.getFalseType(), localKey, sourceAddressHandle);
-    }
-
-    return this.nullishTypeReference(reference, localKey, sourceAddressHandle);
+    const checker = carrier.checker;
+    const falsy = unionConstituents(carrier.type).flatMap(part => {
+      if (part.isStringLiteral()) return part.value === '' ? [part] : [];
+      if (part.isNumberLiteral()) return part.value === 0 ? [part] : [];
+      if ((part.flags & ts.TypeFlags.String) !== 0) return [checker.getStringLiteralType('')];
+      if ((part.flags & ts.TypeFlags.BooleanLike) !== 0) {
+        return booleanKind(checker, part) === BooleanTypeKind.True ? [] : [checker.getFalseType()];
+      }
+      if ((part.flags & (ts.TypeFlags.Object | ts.TypeFlags.ESSymbolLike | ts.TypeFlags.Never)) !== 0) return [];
+      // Broad numbers can be NaN as well as zero. Keep a conservative constituent when necessary.
+      return [part];
+    });
+    return this.projectType(carrier, checkerUnionTypeOrNever(checker, falsy), localKey, sourceAddressHandle);
   }
 
   private nullishTypeReference(

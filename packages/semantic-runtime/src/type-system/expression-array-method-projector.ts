@@ -29,6 +29,7 @@ import {
   type CheckerTypeShape,
 } from './type-shape.js';
 import { checkerTypeShapeIsSyntheticRuntimeArray } from './synthetic-array-type-surface.js';
+import { checkerArrayOrTupleType } from './checker-related-types.js';
 
 export interface CheckerExpressionArrayMethodProjectorHost {
   evaluateNode(context: CheckerExpressionTypeEvaluationContext): CheckerExpressionTypeEvaluation;
@@ -145,31 +146,17 @@ export class CheckerExpressionArrayMethodProjector {
           (callback) => this.arrayOf(
             expression,
             context,
-            this.flattenedElementTypeReference(
+            this.arrayElementTypeReference(
               callback.typeShape,
-              callback.typeReference,
               context,
               `${method}:callback-return:flat-element`,
-            ),
+            ) ?? callback.typeReference,
             `${method}:array`,
             'Synthetic Array.flatMap returns an array of the callback result or its iterated element type.',
           ),
         );
-      case AureliaArrayMethodTypeProjectionKind.FlattenedReceiverElementArray: {
-        const element = this.support.typeShapeForReference(elementType);
-        return this.arrayOf(
-          expression,
-          context,
-          this.flattenedElementTypeReference(
-            element,
-            elementType,
-            context,
-            `${method}:receiver-element:flat-element`,
-          ),
-          `${method}:array`,
-          'Synthetic Array.flat returns an array of the element or nested element type.',
-        );
-      }
+      case AureliaArrayMethodTypeProjectionKind.FlattenedReceiverElementArray:
+        return this.evaluateFlat(expression, context, elementType);
       case AureliaArrayMethodTypeProjectionKind.ReceiverElementArray:
         return this.arrayOf(expression, context, elementType, `${method}:array`, `Synthetic Array.${method} returns an array of the receiver element type.`);
       case AureliaArrayMethodTypeProjectionKind.ReceiverElementArrayWithComparator:
@@ -325,15 +312,11 @@ export class CheckerExpressionArrayMethodProjector {
       if (argumentType.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
         return argumentType;
       }
-      if (checkerTypeShapeIsSyntheticRuntimeArray(argumentType.typeShape) && argumentType.typeShape.iteratedValueType != null) {
+      const spreadElement = this.arrayElementTypeReference(argumentType.typeShape, context, `${method}:argument:${index}:iterated-element`);
+      if (spreadElement != null) {
         const argumentElement = this.resolveElement(
           argument,
-          this.flattenedElementTypeReference(
-            argumentType.typeShape,
-            argumentType.typeShape.iteratedValueType,
-            context,
-            `${method}:argument:${index}:iterated-element`,
-          ),
+          spreadElement,
           context,
           `${method}:argument:${index}:element`,
         );
@@ -483,15 +466,50 @@ export class CheckerExpressionArrayMethodProjector {
     return this.support.type(typeShape, summary, context.sourceAddressHandle);
   }
 
-  private flattenedElementTypeReference(
+  private evaluateFlat(
+    expression: CallMemberExpression,
+    context: CheckerExpressionTypeEvaluationContext,
+    element: CheckerTypeReference,
+  ): CheckerExpressionTypeEvaluation {
+    const argument = expression.args[0];
+    let depth = 1;
+    if (argument != null) {
+      if (argument.$kind === 'PrimitiveLiteral') {
+        if (argument.value !== undefined) depth = Math.trunc(Number(argument.value)) || 0;
+      } else if (argument.$kind === 'Unary' && argument.operation === '-' && argument.expression.$kind === 'PrimitiveLiteral'
+        && typeof argument.expression.value === 'number') {
+        depth = Math.trunc(-argument.expression.value);
+      } else {
+        return this.support.open(CheckerExpressionTypeOpenKind.UnsupportedExpression, expression,
+          'The nesting returned by Array.flat depends on its runtime depth argument.');
+      }
+    }
+    const seen = new Set<object>();
+    for (let level = 0; level < depth; level++) {
+      const shape = this.support.typeShapeForReference(element);
+      if (shape == null) break;
+      const next = this.arrayElementTypeReference(shape, context, `flat:element:${level}`);
+      if (next == null) break;
+      const identity = shape.carrier?.type ?? shape;
+      if (seen.has(identity)) {
+        return this.support.open(CheckerExpressionTypeOpenKind.UnsupportedExpression, expression,
+          'The Array.flat result has recursive array element types.');
+      }
+      seen.add(identity);
+      element = next;
+    }
+    return this.arrayOf(expression, context, element, 'flat:array', 'Array.flat unwraps nested arrays up to its requested depth.');
+  }
+
+  private arrayElementTypeReference(
     ownerType: CheckerTypeShape | null,
-    fallback: CheckerTypeReference,
     context: CheckerExpressionTypeEvaluationContext,
     localKey: string,
-  ): CheckerTypeReference {
-    if (ownerType == null || ownerType.iteratedValueType == null) {
-      return fallback;
-    }
+  ): CheckerTypeReference | null {
+    if (ownerType == null) return null;
+    const carrier = ownerType.carrier;
+    if (!checkerTypeShapeIsSyntheticRuntimeArray(ownerType)
+      && (carrier == null || !checkerArrayOrTupleType(carrier.checker, carrier.type))) return null;
     const hydrated = this.support.typeAccess.iteratedValueType(
       ownerType,
       `${context.projectionLocalKey()}:${localKey}`,
