@@ -425,14 +425,8 @@ function activationTargetForCarrier(
   readonly activate: ts.Symbol | null;
   readonly declarations: readonly ts.Declaration[];
 } {
-  const direct = activateSymbolForType(carrier.checker, carrier.type);
-  if (direct != null) {
-    return {
-      activate: direct,
-      declarations: carrier.declarations,
-    };
-  }
-  for (const signature of carrier.type.getConstructSignatures()) {
+  const constructors = carrier.type.getConstructSignatures();
+  for (const signature of constructors) {
     const instanceType = signature.getReturnType();
     const instanceActivate = activateSymbolForType(carrier.checker, instanceType);
     if (instanceActivate != null) {
@@ -443,7 +437,7 @@ function activationTargetForCarrier(
     }
   }
   return {
-    activate: null,
+    activate: constructors.length === 0 ? activateSymbolForType(carrier.checker, carrier.type) : null,
     declarations: carrier.declarations,
   };
 }

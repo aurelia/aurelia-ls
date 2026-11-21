@@ -11,11 +11,15 @@ import { FrameworkIntrinsicDiKey } from '../di/framework-intrinsic-di-key.js';
 import type { Container } from '../di/container.js';
 import {
   EvaluationPromiseSettlementKind,
+  EvaluationPromiseValue,
   EvaluationStringValue,
   EvaluationValueKind,
   closedEvaluationPromiseFulfillment,
+  readEvaluationCallability,
   type EvaluationValue,
 } from '../evaluation/values.js';
+import { readStaticValueProperty, StaticValueMemberReadKind } from '../evaluation/property-access.js';
+import { EvaluationValueEvidence } from '../evaluation/value-pressure.js';
 import {
   openSeamReasonKindsForEvaluationValue,
 } from '../evaluation/boundary-open-reason.js';
@@ -374,8 +378,8 @@ export class RuntimeCompositionMaterializer {
       const local = `${input.localKey}:composition:${index}`;
       const bindings = auComposeBindings(input.controllerBind, controller, bindingsByProduct);
       const staticInputs = staticAuComposeInputs(this.publication, controller);
-      const template = this.evaluateBinding(input, bindings.template, sourceExpressionContexts);
-      const component = this.evaluateBinding(input, bindings.component, sourceExpressionContexts);
+      const template = awaitCompositionInput(this.evaluateBinding(input, bindings.template, sourceExpressionContexts));
+      const component = awaitCompositionInput(this.evaluateBinding(input, bindings.component, sourceExpressionContexts));
       const model = this.evaluateModelInput(input, bindings.model, sourceExpressionContexts, staticInputs.model);
       const scopeBehavior = this.evaluateBinding(input, bindings.scopeBehavior, sourceExpressionContexts);
       const tag = this.evaluateBinding(input, bindings.tag, sourceExpressionContexts);
@@ -509,11 +513,11 @@ export class RuntimeCompositionMaterializer {
         controller.containerFrame, sourceResource.compilerWorld, localKey, context.sourceAddressHandle,
       );
       this.spreadCompiler.compile({ localKey, context, controller, instruction, definition, world,
+        compilerReadProjection: input.projectContext.compilerReadProjection,
         source: new RuntimeRenderingSourceSet([], source.evidenceHandle, source.provenanceHandle) }, spreads);
     }
     records.push(...spreads.records);
     return new RuntimeCompositionEmission(contexts, controllers, composedControllers, childContainers, openSeams, records, spreads);
-        compilerReadProjection: input.projectContext.compilerReadProjection,
   }
 
   private createContext(
@@ -1442,6 +1446,18 @@ function valueIsObjectViewModelComponent(value: EvaluationValue): boolean {
     || value.kind === EvaluationValueKind.BoundaryObject
     || value.kind === EvaluationValueKind.Class
     || value.kind === EvaluationValueKind.Function;
+}
+
+/** ChangeInfo.load assimilates user-defined thenables along with native promises. */
+function awaitCompositionInput(evaluated: EvaluatedBinding): EvaluatedBinding {
+  const value = evaluated.value;
+  if (value == null || evaluated.isOpen || (value.kind !== EvaluationValueKind.Object
+    && value.kind !== EvaluationValueKind.Instance && value.kind !== EvaluationValueKind.Class
+    && value.kind !== EvaluationValueKind.Function && value.kind !== EvaluationValueKind.BoundaryObject)) return evaluated;
+  const then = readStaticValueProperty(value, 'then', null);
+  if (then.kind !== StaticValueMemberReadKind.Value || readEvaluationCallability(then.value) !== true) return evaluated;
+  const pending = EvaluationPromiseValue.open(new EvaluationValueEvidence(value, evaluated.evaluation?.openSeams ?? []));
+  return new EvaluatedBinding(evaluated.binding, RuntimeBindingSourceValueEvaluation.value(pending), evaluated.sourceType);
 }
 
 function awaitedCompositionInputType(
