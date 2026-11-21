@@ -13,13 +13,15 @@ export type NullishExpressionKind =
 /** Literal-level nullish recognition shared by source API diagnostics. */
 export function nullishExpressionKind(
   expression: ts.Expression,
+  checker?: ts.TypeChecker,
 ): NullishExpressionKind | null {
   const current = unwrapExpression(expression);
   if (current.kind === ts.SyntaxKind.NullKeyword) {
     return 'null';
   }
   if (ts.isIdentifier(current) && current.text === 'undefined') {
-    return 'undefined';
+    const symbol = checker?.getSymbolAtLocation(current);
+    return checker == null || (symbol != null && checker.isUndefinedSymbol(symbol)) ? 'undefined' : null;
   }
   if (ts.isVoidExpression(current)) {
     return 'undefined';

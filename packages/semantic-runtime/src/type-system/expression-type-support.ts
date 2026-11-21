@@ -168,19 +168,8 @@ export class CheckerExpressionTypeSupport {
         return { checker, type: checker.getNumberType() };
     }
 
-    const scopedSymbol = location == null
-      ? null
-      : checker.getSymbolsInScope(location, ts.SymbolFlags.Value).find((symbol) => symbol.getName() === name) ?? null;
-    const symbol = scopedSymbol ?? checker.resolveName(name, location ?? undefined, ts.SymbolFlags.Value, false);
-    const symbolType = symbol == null ? null : checkerSymbolValueType(checker, symbol, location);
-    if (symbolType != null) {
-      return {
-        checker,
-        type: symbolType,
-      };
-    }
-
-    const globalThis = checker.resolveName('globalThis', location ?? undefined, ts.SymbolFlags.Value, false);
+    // Aurelia evaluates AccessGlobal against globalThis, including when a component module shadows the name.
+    const globalThis = checker.resolveName('globalThis', undefined, ts.SymbolFlags.Value, false);
     const globalType = globalThis == null ? null : checkerSymbolValueType(checker, globalThis, location);
     if (globalType != null) {
       const property = checkerPropertySymbol(checker, globalType, name);

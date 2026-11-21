@@ -1,10 +1,7 @@
 import ts from 'typescript';
 
 import type { ProjectBootFrame } from '../boot/frames.js';
-import {
-  readImportedExportName,
-  readSourceImportBindings,
-} from '../evaluation/import-bindings.js';
+import { isImportedValue } from '../evaluation/import-bindings.js';
 import {
   nullishExpressionKind,
   type NullishExpressionKind,
@@ -61,9 +58,6 @@ const AURELIA_SCOPE_MODULES = new Set([
   '@aurelia/runtime',
 ]);
 
-const AURELIA_SCOPE_EXPORTS = new Set([
-  'Scope',
-]);
 
 const enum ScopeApiMethodKind {
   Create = 'create',
@@ -180,10 +174,9 @@ function readSourceFileScopeApiCallSites(
   typeSystem: TypeSystemProject,
   sourcePathByFileName: ReadonlyMap<string, string>,
 ): readonly ScopeApiCallSite[] {
-  const bindings = readSourceImportBindings(context.sourceFile, AURELIA_SCOPE_MODULES, AURELIA_SCOPE_EXPORTS);
   const sites: ScopeApiCallSite[] = [];
   const visit = (node: ts.Node): void => {
-    recordScopeApiCallSite(sites, context, typeSystem, sourcePathByFileName, bindings, node);
+    recordScopeApiCallSite(sites, context, typeSystem, sourcePathByFileName, node);
     ts.forEachChild(node, visit);
   };
   visit(context.sourceFile);
@@ -195,7 +188,6 @@ function recordScopeApiCallSite(
   context: TypeScriptSourceSiteContext,
   typeSystem: TypeSystemProject,
   sourcePathByFileName: ReadonlyMap<string, string>,
-  bindings: ReturnType<typeof readSourceImportBindings>,
   node: ts.Node,
 ): void {
   if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(unwrapExpression(node.expression))) {
@@ -205,7 +197,7 @@ function recordScopeApiCallSite(
   const methodKind = scopeApiMethodKind(access.name.text);
   if (
     methodKind == null
-    || !isAureliaScopeReceiver(typeSystem, access.expression, methodKind, bindings, sourcePathByFileName)
+    || !isAureliaScopeReceiver(typeSystem, access.expression, methodKind, sourcePathByFileName)
   ) {
     return;
   }
@@ -249,7 +241,7 @@ function scopeApiNullishArgument(
   if (argument == null) {
     return { index: argumentIndex, kind: 'missing', text: null };
   }
-  const literalKind = nullishExpressionKind(argument);
+  const literalKind = nullishExpressionKind(argument, typeSystem.checker);
   if (literalKind != null) {
     return { index: argumentIndex, kind: literalKind, text: argument.getText(sourceFile) };
   }
@@ -264,10 +256,9 @@ function isAureliaScopeReceiver(
   typeSystem: TypeSystemProject,
   receiver: ts.Expression,
   methodKind: ScopeApiMethodKind,
-  bindings: ReturnType<typeof readSourceImportBindings>,
   sourcePathByFileName: ReadonlyMap<string, string>,
 ): boolean {
-  if (readImportedExportName(receiver, bindings, AURELIA_SCOPE_EXPORTS) === 'Scope') {
+  if (isImportedValue(receiver, typeSystem.checker, AURELIA_SCOPE_MODULES, 'Scope')) {
     return true;
   }
 

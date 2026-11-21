@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import { isImportedValue } from './import-bindings.js';
 
 import type { ProjectBootFrame } from '../boot/frames.js';
 import {
@@ -55,13 +56,6 @@ const METADATA_API_MODULES = new Set([
   '@aurelia/metadata',
 ]);
 
-class FrameworkApiImportedBindings {
-  readonly firstDefinedIdentifiers = new Set<string>();
-  readonly kernelNamespaces = new Set<string>();
-  readonly metadataIdentifiers = new Set<string>();
-  readonly metadataNamespaces = new Set<string>();
-}
-
 class FrameworkApiIssueSite {
   constructor(
     readonly phase: EvaluationIssuePhase,
@@ -116,8 +110,7 @@ export class FrameworkApiIssueMaterializer {
     sourceFile: ts.SourceFile,
     typeSystem: TypeSystemProject,
   ): readonly EvaluationIssuePublication[] {
-    const bindings = readFrameworkApiImportedBindings(sourceFile);
-    return readFrameworkApiIssueSites(sourceFile, typeSystem, bindings)
+    return readFrameworkApiIssueSites(sourceFile, typeSystem)
       .map((site, index) =>
         this.publicationForSite(project, sourcePath, sourceFileAddressHandle, sourceFile, site, index)
       );
@@ -170,12 +163,11 @@ export class FrameworkApiIssueMaterializer {
 function readFrameworkApiIssueSites(
   sourceFile: ts.SourceFile,
   typeSystem: TypeSystemProject,
-  bindings: FrameworkApiImportedBindings,
 ): readonly FrameworkApiIssueSite[] {
   const sites: FrameworkApiIssueSite[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {
-      const site = frameworkApiIssueSiteForCall(typeSystem, bindings, node);
+      const site = frameworkApiIssueSiteForCall(typeSystem, node);
       if (site != null) {
         sites.push(site);
       }
@@ -188,18 +180,18 @@ function readFrameworkApiIssueSites(
 
 function frameworkApiIssueSiteForCall(
   typeSystem: TypeSystemProject,
-  bindings: FrameworkApiImportedBindings,
   call: ts.CallExpression,
 ): FrameworkApiIssueSite | null {
-  if (isFirstDefinedCall(call, bindings)) {
-    return firstDefinedIssueSite(call);
+  if (isImportedValue(call.expression, typeSystem.checker, KERNEL_API_MODULES, 'firstDefined')) {
+    return firstDefinedIssueSite(call, typeSystem.checker);
   }
   return eventAggregatorIssueSiteForCall(typeSystem, call)
-    ?? metadataDefineIssueSiteForCall(bindings, call);
+    ?? metadataDefineIssueSiteForCall(typeSystem.checker, call);
 }
 
 function firstDefinedIssueSite(
   call: ts.CallExpression,
+  checker: ts.TypeChecker,
 ): FrameworkApiIssueSite | null {
   if (call.arguments.some(ts.isSpreadElement)) {
     return null;
@@ -216,7 +208,7 @@ function firstDefinedIssueSite(
       null,
     );
   }
-  const rejected = call.arguments.every((argument) => nullishExpressionKind(argument) === 'undefined')
+  const rejected = call.arguments.every((argument) => nullishExpressionKind(argument, checker) === 'undefined')
     ? call.arguments[0] ?? null
     : null;
   return rejected == null
@@ -249,9 +241,10 @@ function eventAggregatorIssueSiteForCall(
     return null;
   }
   const first = call.arguments[0] ?? null;
-  const actualValueKind = first == null || ts.isSpreadElement(first)
+  if (first != null && ts.isSpreadElement(first)) return null;
+  const actualValueKind = first == null
     ? EvaluationValueKind.Undefined
-    : falsyExpressionValueKind(first);
+    : falsyExpressionValueKind(first, typeSystem.checker);
   if (actualValueKind == null) {
     return null;
   }
@@ -263,7 +256,7 @@ function eventAggregatorIssueSiteForCall(
       EvaluationFrameworkErrorCode.EventAggregatorPublishInvalidEventName,
       null,
       call,
-      first != null && !ts.isSpreadElement(first) ? first : null,
+      first,
       actualValueKind,
     )
     : new FrameworkApiIssueSite(
@@ -273,20 +266,20 @@ function eventAggregatorIssueSiteForCall(
       EvaluationFrameworkErrorCode.EventAggregatorSubscribeInvalidEventName,
       null,
       call,
-      first != null && !ts.isSpreadElement(first) ? first : null,
+      first,
       actualValueKind,
     );
 }
 
 function metadataDefineIssueSiteForCall(
-  bindings: FrameworkApiImportedBindings,
+  checker: ts.TypeChecker,
   call: ts.CallExpression,
 ): FrameworkApiIssueSite | null {
   const callee = unwrapExpression(call.expression);
   if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'define') {
     return null;
   }
-  if (!isMetadataObjectExpression(callee.expression, bindings)) {
+  if (!isImportedValue(callee.expression, checker, METADATA_API_MODULES, 'Metadata')) {
     return null;
   }
   if (!metadataDefineHasStaticallyEmptyKeys(call)) {
@@ -319,21 +312,6 @@ function metadataDefineHasStaticallyEmptyKeys(
   return ts.isArrayLiteralExpression(spreadExpression) && spreadExpression.elements.length === 0;
 }
 
-function isMetadataObjectExpression(
-  expression: ts.Expression,
-  bindings: FrameworkApiImportedBindings,
-): boolean {
-  const current = unwrapExpression(expression);
-  if (ts.isIdentifier(current)) {
-    return bindings.metadataIdentifiers.has(current.text);
-  }
-  if (!ts.isPropertyAccessExpression(current) || current.name.text !== 'Metadata') {
-    return false;
-  }
-  const receiver = unwrapExpression(current.expression);
-  return ts.isIdentifier(receiver) && bindings.metadataNamespaces.has(receiver.text);
-}
-
 function isAureliaEventAggregatorMethod(
   typeSystem: TypeSystemProject,
   receiver: ts.Expression,
@@ -360,9 +338,10 @@ function isAureliaEventAggregatorMethodDeclaration(
 
 function falsyExpressionValueKind(
   expression: ts.Expression,
+  checker: ts.TypeChecker,
 ): EvaluationValueKind | null {
   const current = unwrapExpression(expression);
-  const nullishKind = nullishExpressionKind(current);
+  const nullishKind = nullishExpressionKind(current, checker);
   if (nullishKind === 'undefined') {
     return EvaluationValueKind.Undefined;
   }
@@ -382,57 +361,6 @@ function falsyExpressionValueKind(
     return EvaluationValueKind.BigInt;
   }
   return null;
-}
-
-function readFrameworkApiImportedBindings(
-  sourceFile: ts.SourceFile,
-): FrameworkApiImportedBindings {
-  const bindings = new FrameworkApiImportedBindings();
-  for (const statement of sourceFile.statements) {
-    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier)) {
-      continue;
-    }
-    const moduleName = statement.moduleSpecifier.text;
-    if (!KERNEL_API_MODULES.has(moduleName) && !METADATA_API_MODULES.has(moduleName)) {
-      continue;
-    }
-    const namedBindings = statement.importClause?.namedBindings;
-    if (namedBindings == null) {
-      continue;
-    }
-    if (ts.isNamespaceImport(namedBindings)) {
-      if (KERNEL_API_MODULES.has(moduleName)) {
-        bindings.kernelNamespaces.add(namedBindings.name.text);
-      } else {
-        bindings.metadataNamespaces.add(namedBindings.name.text);
-      }
-      continue;
-    }
-    for (const element of namedBindings.elements) {
-      const importedName = (element.propertyName ?? element.name).text;
-      if (KERNEL_API_MODULES.has(moduleName) && importedName === 'firstDefined') {
-        bindings.firstDefinedIdentifiers.add(element.name.text);
-      }
-      if (METADATA_API_MODULES.has(moduleName) && importedName === 'Metadata') {
-        bindings.metadataIdentifiers.add(element.name.text);
-      }
-    }
-  }
-  return bindings;
-}
-
-function isFirstDefinedCall(
-  call: ts.CallExpression,
-  bindings: FrameworkApiImportedBindings,
-): boolean {
-  const callee = unwrapExpression(call.expression);
-  if (ts.isIdentifier(callee)) {
-    return bindings.firstDefinedIdentifiers.has(callee.text);
-  }
-  return ts.isPropertyAccessExpression(callee)
-    && callee.name.text === 'firstDefined'
-    && ts.isIdentifier(unwrapExpression(callee.expression))
-    && bindings.kernelNamespaces.has((unwrapExpression(callee.expression) as ts.Identifier).text);
 }
 
 function frameworkApiIssueLocalKey(

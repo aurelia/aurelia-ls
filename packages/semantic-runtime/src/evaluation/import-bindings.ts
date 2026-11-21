@@ -9,6 +9,33 @@ export interface SourceImportBindings {
   readonly namespaces: ReadonlySet<string>;
 }
 
+/** Resolve a value use by the import declaration visible at the use site, including namespace imports. */
+export function isImportedValue(
+  expression: ts.Expression,
+  checker: ts.TypeChecker,
+  modules: ReadonlySet<string>,
+  exportName: string,
+): boolean {
+  const value = unwrapExpression(expression);
+  const namespace = ts.isPropertyAccessExpression(value) && value.name.text === exportName;
+  const identifier = namespace ? unwrapExpression(value.expression) : value;
+  if (!ts.isIdentifier(identifier)) return false;
+  return checker.getSymbolAtLocation(identifier)?.declarations?.some(declaration => {
+    if (namespace ? !ts.isNamespaceImport(declaration) : !ts.isImportSpecifier(declaration)) return false;
+    let clause: ts.ImportClause;
+    if (ts.isImportSpecifier(declaration)) {
+      if (declaration.isTypeOnly || (declaration.propertyName ?? declaration.name).text !== exportName) return false;
+      clause = declaration.parent.parent;
+    } else if (ts.isNamespaceImport(declaration)) {
+      clause = declaration.parent;
+    } else {
+      return false;
+    }
+    const source = clause.parent.moduleSpecifier;
+    return !clause.isTypeOnly && ts.isStringLiteralLike(source) && modules.has(source.text);
+  }) ?? false;
+}
+
 /** Read named and namespace imports for a bounded module/export set. */
 export function readSourceImportBindings(
   sourceFile: ts.SourceFile,
