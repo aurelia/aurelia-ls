@@ -452,32 +452,6 @@ export class BindingDataFlowAssignabilityEvaluator {
     return keyAssignable && this.isBooleanObservableFromMapValue(sourceCarrier.checker, sourceCarrier.type);
   }
 
-  private isStringDomainAssignableToSourceMutation(
-    values: readonly string[],
-    sourceType: CheckerTypeReference | null,
-    valueChannel: RuntimeBindingValueChannel | null,
-  ): boolean | null {
-    const sourceShape = this.typeAccess.readTypeShape(sourceType);
-    const sourceCarrier = sourceShape?.carrier ?? null;
-    if (sourceCarrier == null) {
-      return null;
-    }
-    const elementType = valueChannelUsesMapMutation(valueChannel, sourceCarrier.checker, sourceCarrier.type)
-      ? mutableMapKeyTypeFor(sourceCarrier.checker, sourceCarrier.type)
-      : mutableCollectionElementTypeFor(sourceCarrier.checker, sourceCarrier.type);
-    if (elementType == null) {
-      return this.hasReadonlyCollectionSource(sourceCarrier.checker, sourceCarrier.type, valueChannel)
-        ? false
-        : null;
-    }
-    const keyAssignable = values.every((value) =>
-      checkerStringLiteralAssignableToType(sourceCarrier.checker, value, elementType)
-    );
-    return valueChannelUsesMapMutation(valueChannel, sourceCarrier.checker, sourceCarrier.type)
-      ? keyAssignable && this.isBooleanAssignableToMapValue(sourceCarrier.checker, sourceCarrier.type)
-      : keyAssignable;
-  }
-
   private isPrimitiveDomainAssignableToSourceMutation(
     values: readonly RuntimeBindingPrimitiveValue[],
     sourceType: CheckerTypeReference | null,

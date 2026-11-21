@@ -1036,20 +1036,6 @@ export function appendTemplateTypeSystemOverlayExpressionProjection(
   appendTemplateTypeSystemOverlayExpressionParts(builder, projection.parts, label);
 }
 
-function expressionSourceText(
-  expression: ExpressionAstNode,
-  rootSource: TemplateTypeSystemOverlaySourceSlice | null,
-): string | null {
-  if (rootSource == null) {
-    return null;
-  }
-  const relativeStart = expression.span.start - rootSource.sourceStart;
-  const relativeEnd = expression.span.end - rootSource.sourceStart;
-  return relativeStart < 0 || relativeEnd < relativeStart || relativeEnd > rootSource.text.length
-    ? null
-    : rootSource.text.slice(relativeStart, relativeEnd);
-}
-
 function generatedParentExpressionParts(
   parent: TemplateTypeSystemOverlaySourceSlice,
   children: readonly ProjectedOverlayExpressionChild[],

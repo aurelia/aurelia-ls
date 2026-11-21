@@ -441,22 +441,6 @@ function classifyDetailString(
   };
 }
 
-function emptyDetailStringClassification(): DetailStringClassification {
-  return {
-    stringCharacters: 0,
-    stringValues: [],
-    kernelHandleCount: 0,
-    kernelHandleCharacters: 0,
-    kernelHandleKinds: emptyDetailFieldCounts(),
-    kernelHandleKindCharacters: emptyDetailFieldCounts(),
-    envelopeHandleEchoCount: 0,
-    envelopeHandleEchoCharacters: 0,
-    envelopeHandleEchoKinds: emptyDetailFieldCounts(),
-    envelopeHandleEchoKindCharacters: emptyDetailFieldCounts(),
-    localKeyCharacters: 0,
-  };
-}
-
 function kernelHandleKindOf(value: string): string | null {
   if (!value.startsWith('kernel:')) {
     return null;

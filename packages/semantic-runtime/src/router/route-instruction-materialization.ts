@@ -3382,14 +3382,6 @@ function hostAttribute(
   return null;
 }
 
-function hostAttributeValue(
-  store: KernelPublicationContext,
-  host: HtmlElement | null,
-  attributeName: string,
-): string | null {
-  return hostAttribute(store, host, attributeName)?.rawValue ?? null;
-}
-
 function recordOpenSeam(
   store: KernelPublicationContext,
   site: RouterResourceInstructionSite,
