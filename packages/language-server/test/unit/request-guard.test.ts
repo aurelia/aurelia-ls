@@ -15,6 +15,8 @@ import {
 } from "../../src/handlers/request-guard.js";
 import { SemanticRuntimeLspRequestAbortedError } from "../../src/runtime/semantic-runtime-session.js";
 import { LanguageServerSupportLedger } from "../../src/support-snapshot.js";
+import { diagnosticBundleFrames } from "../../src/diagnostic-failure.js";
+import { readAureliaDiagnosticFailureData, readAureliaSupportDiagnosticFailure } from "../../src/protocol.js";
 
 function context() {
   const generation = {
@@ -418,6 +420,90 @@ describe("semantic-runtime request boundary", () => {
     );
 
     await expect(request).rejects.toMatchObject({ code: LSPErrorCodes.RequestCancelled });
+    expect(ctx.supportLedger.snapshot(new Uint8Array(32)).firstDiagnosticFailure).toBeNull();
+    expect(ctx.logger.error).not.toHaveBeenCalled();
+  });
+
+  test("retains the first unexpected pull with its local cause after successful and failed retries evict its terminal", async () => {
+    const ctx = context();
+    const cause = Object.assign(new TypeError("private-project-value"), { code: "ENOENT" });
+    const result = await runSemanticRuntimeDiagnosticRequest(
+      ctx as never, token as never, diagnosticRequest, (_operation, setStage) => {
+        setStage("analysis");
+        throw new Error("local wrapper", { cause });
+      },
+    ).catch((error: ResponseError<unknown>) => error);
+    expect(result).toBeInstanceOf(ResponseError);
+    const data = readAureliaDiagnosticFailureData((result as ResponseError<unknown>).data);
+    expect(data).toMatchObject({
+      stage: "analysis", failureKind: "exception", errorType: "TypeError", systemCode: "ENOENT",
+      frames: [], serverBundleSha256: null,
+    });
+    const identity = { stage: data!.stage, failureKind: data!.failureKind, incidentId: data!.incidentId };
+    expect(readAureliaDiagnosticFailureData({ aureliaDiagnosticFailure: identity })).toEqual(identity);
+    expect(readAureliaDiagnosticFailureData({ aureliaDiagnosticFailure: { ...data, frames: [{ line: "/private", column: 2 }] } })).toBeNull();
+    const log = ctx.logger.error.mock.calls[0]?.[0] as string;
+    expect(log).toContain(data!.incidentId);
+    expect(log).toContain("private-project-value");
+    expect(log).toContain("local wrapper");
+    const salt = new Uint8Array(32);
+    const first = ctx.supportLedger.snapshot(salt).firstDiagnosticFailure;
+    expect(first).toMatchObject({
+      ...data, sequence: 1, errorType: "TypeError", code: LSPErrorCodes.RequestFailed,
+      systemCode: "ENOENT", documentId: expect.stringMatching(/^document:[a-f\d]{20}$/u), serverBundleSha256: null,
+    });
+    expect(readAureliaSupportDiagnosticFailure(first)).toEqual(first);
+    const hash = "1234567890abcdef".repeat(4);
+    expect(readAureliaSupportDiagnosticFailure({ ...first, serverBundleSha256: hash })?.serverBundleSha256).toBe(hash);
+    const legacy = { ...first };
+    delete legacy.serverBundleSha256;
+    expect(readAureliaSupportDiagnosticFailure(legacy)).toEqual(first);
+    for (const malformed of [hash.toUpperCase(), hash.slice(1), "../server/main.cjs", 123]) {
+      expect(readAureliaSupportDiagnosticFailure({ ...first, serverBundleSha256: malformed })).toBeNull();
+    }
+    expect(readAureliaSupportDiagnosticFailure({ ...first, errorType: "/private" })).toBeNull();
+    expect(readAureliaSupportDiagnosticFailure({ ...first, systemCode: "PRIVATE_VALUE" })).toBeNull();
+    expect(JSON.stringify(first)).not.toMatch(/file:|private-project-value|local wrapper/u);
+    const otherSalt = new Uint8Array(32).fill(1);
+    expect(ctx.supportLedger.snapshot(otherSalt).firstDiagnosticFailure?.documentId).not.toBe(first?.documentId);
+    await expect(runSemanticRuntimeDiagnosticRequest(ctx as never, token as never, diagnosticRequest, () => {
+      throw new ResponseError(-32603, "second failure");
+    })).rejects.toMatchObject({ code: -32603 });
+    for (let i = 0; i < 130; i++) {
+      await runSemanticRuntimeDiagnosticRequest(ctx as never, token as never, diagnosticRequest, () => []);
+    }
+    const after = ctx.supportLedger.snapshot(salt);
+    expect(after.firstDiagnosticFailure).toEqual(first);
+    expect(after.recentTerminals.every((event) => event.outcome === "succeeded")).toBe(true);
+  });
+
+  test("records an authored protocol refusal and keeps its message, code and existing data", async () => {
+    const ctx = context();
+    const refusal = new ResponseError(-32602, "local mapping detail", { owner: true });
+    const failure = await runSemanticRuntimeDiagnosticRequest(ctx as never, token as never, diagnosticRequest, (_op, setStage) => {
+      setStage("mapping");
+      throw refusal;
+    }).catch((error: ResponseError<unknown>) => error);
+    expect(failure).toMatchObject({ code: -32602, message: refusal.message, data: { owner: true } });
+    const details = readAureliaDiagnosticFailureData((failure as ResponseError<unknown>).data);
+    expect(details).toMatchObject({ stage: "mapping", failureKind: "response-error" });
+    expect(ctx.supportLedger.snapshot(new Uint8Array(32)).firstDiagnosticFailure).toMatchObject({
+      ...details, code: -32602, errorType: "ResponseError",
+    });
+    expect(ctx.logger.error).toHaveBeenCalledWith(expect.stringContaining(refusal.message));
+    const scalar = new ResponseError(-32602, "scalar payload", "original");
+    await expect(runSemanticRuntimeDiagnosticRequest(ctx as never, token as never, diagnosticRequest, () => { throw scalar; }))
+      .rejects.toBe(scalar);
+  });
+
+  test("extracts only exact packaged server frame coordinates", () => {
+    const bundle = "/installed extension/dist/server/main.cjs";
+    const stack = [
+      "TypeError: private source", "    at private (/other/main.cjs:88:4)",
+      `    at alias (${bundle}:21:9)`, `    at ${bundle}:12:5`, `    at alias (/untrusted${bundle}:1:6)`,
+    ].join("\n");
+    expect(diagnosticBundleFrames(stack, bundle)).toEqual([{ line: 21, column: 9 }, { line: 12, column: 5 }]);
+    expect(diagnosticBundleFrames(stack, null)).toEqual([]);
   });
 
   test("gives live client cancellation precedence over concurrent managed staleness", async () => {

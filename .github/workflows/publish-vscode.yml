@@ -229,7 +229,8 @@ jobs:
           foreach ($entry in @(
             @{ Label = 'VSIX'; Path = $env:VSIX_PATH },
             @{ Label = 'receipt'; Path = $env:RECEIPT_PATH },
-            @{ Label = 'checksum'; Path = $env:CHECKSUM_PATH }
+            @{ Label = 'checksum'; Path = $env:CHECKSUM_PATH },
+            @{ Label = 'server source map'; Path = (Join-Path $env:GITHUB_WORKSPACE 'packages/vscode/dist/server/main.cjs.map') }
           )) {
             if (-not (Test-Path -LiteralPath $entry.Path -PathType Leaf)) {
               throw "Exact $($entry.Label) is missing: $($entry.Path)"
@@ -252,6 +253,17 @@ jobs:
           include-hidden-files: true
           compression-level: 0
           retention-days: 30
+
+      - name: Retain the packaged language server source map for support
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ steps.release.outputs.vsix_name }}-server-source-map
+          path: |
+            packages/vscode/dist/server/main.cjs.map
+            ${{ steps.release.outputs.receipt_path }}
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
 
   host:
     name: Accept exact VSIX (Windows, ${{ matrix.label }})

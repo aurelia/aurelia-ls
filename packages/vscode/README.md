@@ -307,15 +307,31 @@ commands remain unbound unless you assign them.
 | Aurelia: Open Related File | `Alt+R` | Open a component class or file-backed template, prompting when topology proves multiple counterparts |
 | Aurelia: Go to Resource Available to Active Template... | — | Search resources reported for the active template cursor's current compiler scope, prompting when scope is ambiguous |
 | Aurelia: Refresh | — | Refresh the Aurelia Resources view |
+| Aurelia: Create Support Report | — | Open a local JSON report with extension, workspace, request, and Worker information |
 
 ## Troubleshooting
 
-If a feature is unavailable:
+If VS Code shows `Request textDocument/diagnostic failed`, or an Aurelia Problem still names text you changed,
+keep the affected file active and run **Aurelia: Create Support Report** from the Command Palette **before reloading
+the window**. Reloading starts a new session and clears in-memory evidence.
 
-1. Check **Aurelia LS (Client)** and the active root's **Aurelia Language Server (`<workspace-folder-name>`)** channel for errors
-2. Check that relevant source files are included by the project's TypeScript or JavaScript configuration, when one is present
-3. Confirm automatic activation has Aurelia dependency, source, or native-configuration evidence; use `aurelia.activationMode: on` for unusual layouts
-4. Try reloading the VS Code window
+The command opens a local JSON document with extension and VS Code versions, session and Worker status,
+and recent log excerpts. It keeps the first diagnostic request error since the extension started, including
+a short excerpt of its message and any server incident ID. It also records the next successful diagnostic
+request for the same file, if one has completed. Workspace and document identities are masked. Error messages
+and logs can still contain project names or snippets. Review the document and remove private text before
+attaching it to an issue.
+
+For the original error, open **View → Output** and select **Aurelia Language Server (`<workspace-folder-name>`)**
+for the affected folder. Look for the request, message, and code around the time of the failure.
+**Aurelia LS (Client)** shows extension activation, server starts, and Worker failures. If you report an issue,
+include the reviewed report and the action just before the failure, such as opening the folder or editing an
+unsaved template. If the report is unavailable, include the relevant Output lines after reviewing them.
+
+After capturing the evidence, check whether Problems updates on your next edit to the same file. If it stays
+stale, try **Developer: Reload Window**. If a workspace never activates, check its
+[activation settings](#workspace-activation) and whether the project's TypeScript or JavaScript configuration
+includes the affected source.
 
 The extension normally runs one language-server Worker per admitted workspace root. To diagnose a Worker-specific
 startup or lifecycle problem, launch VS Code with `AURELIA_LS_FORCE_IPC_TRANSPORT=1`; Extension Development Host

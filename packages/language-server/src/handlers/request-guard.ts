@@ -9,6 +9,8 @@ import {
   type CancellationToken,
 } from "vscode-languageserver/node";
 import type { ServerContext } from "../context.js";
+import { diagnosticRequestFailure } from "../diagnostic-failure.js";
+import type { AureliaDiagnosticStage } from "../diagnostic-failure-protocol.js";
 import {
   isSemanticRuntimeLspRequestAborted,
   SemanticRuntimeLspRequestAbortedError,
@@ -119,22 +121,39 @@ export async function runSemanticRuntimeDiagnosticRequest<TItem>(
   ctx: ServerContext,
   token: CancellationToken,
   request: SemanticRuntimeLspDiagnosticRequest,
-  render: SemanticRuntimeLspDiagnosticRenderer<TItem>,
+  render: (
+    operation: SemanticRuntimeLspOperation,
+    setStage: (stage: AureliaDiagnosticStage) => void,
+  ) => ReturnType<SemanticRuntimeLspDiagnosticRenderer<TItem>>,
 ): Promise<SemanticRuntimeLspDiagnosticReport<TItem>> {
   const observation = beginSupportObservation(ctx, "diagnostics", request.uri);
+  let stage: AureliaDiagnosticStage = "session";
   try {
     const result = await runServerOperation(ctx, () =>
       ctx.semanticRuntime.runDiagnosticRequest(
         semanticRuntimeCancellationProbe(token),
         request,
-        render,
+        async (operation) => {
+          stage = "document";
+          const result = await render(operation, (next) => { stage = next; });
+          // Receipt validation, cache commit and other post-render work belong to the session.
+          stage = "session";
+          return result;
+        },
       ));
     observation.finish({ outcome: "succeeded" });
     return result;
   } catch (error) {
     scheduleAnalysisRefreshForRequestCurrentness(ctx, error);
     const failure = cancellationPrecedence(error, token);
-    observation.finish(supportTerminalFacts(error, failure, token));
+    const terminal = supportTerminalFacts(error, failure, token);
+    if (terminal.outcome === "failed") {
+      const incident = diagnosticRequestFailure(failure, stage);
+      observation.finish({ ...terminal, diagnosticFailure: incident.facts });
+      ctx.logger.error(`[diagnostics] incident ${incident.facts.incidentId} (${stage}, code ${incident.facts.code}) for ${request.uri}: ${incident.localDetail}`);
+      throw incident.response;
+    }
+    observation.finish(terminal);
     if (isSemanticRuntimeRequestStale(failure)) {
       ctx.logger.log(
         `[diagnostics] stale semantic-runtime request for ${request.uri}${semanticRuntimeStaleFacts(failure)}`,

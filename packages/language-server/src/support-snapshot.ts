@@ -21,6 +21,7 @@ import {
   type AureliaSupportSnapshotResponse,
 } from "./protocol.js";
 import type { ServerContext } from "./context.js";
+import type { DiagnosticFailureFacts } from "./diagnostic-failure.js";
 import { readLifecycleSupportSnapshot } from "./handlers/lifecycle.js";
 
 export const SUPPORT_SNAPSHOT_MAXIMUM_FEATURE_AGGREGATES = 64;
@@ -65,6 +66,7 @@ interface InternalInFlightRequest {
 
 export interface LanguageServerRequestTerminalFacts {
   readonly outcome: AureliaSupportRequestOutcome;
+  readonly diagnosticFailure?: DiagnosticFailureFacts;
   readonly clientCancellationRequested?: boolean;
   readonly underlyingStale?: boolean;
   readonly staleFacts?: AureliaSupportRequestStaleFacts | null;
@@ -79,13 +81,14 @@ export interface LanguageServerSupportLedgerOptions {
 }
 
 /**
- * Process-local, bounded operational evidence. Raw document identities are HMACed at ingress and are never retained.
+ * Process-local, bounded operational evidence. Document URIs are HMACed with the report salt at snapshot time.
  */
 export class LanguageServerSupportLedger {
   readonly #monotonicNow: () => number;
   readonly #aggregates = new Map<string, MutableRequestAggregate>();
   readonly #recentTerminals: InternalTerminalEvent[] = [];
   readonly #inFlight = new Map<number, InternalInFlightRequest>();
+  #firstDiagnosticFailure: { sequence: number; documentUri: string | null; facts: DiagnosticFailureFacts } | null = null;
   #nextSequence = 1;
   readonly #omittedFeatures = new Set<string>();
   #omittedRecentTerminalCount = 0;
@@ -132,6 +135,9 @@ export class LanguageServerSupportLedger {
         }
         const durationMilliseconds = boundedMilliseconds(finishedAt - startedAt);
         recordOutcome(aggregate, facts.outcome);
+        if (this.#firstDiagnosticFailure === null && facts.outcome === "failed" && facts.diagnosticFailure) {
+          this.#firstDiagnosticFailure = { sequence, documentUri: retainedDocumentUri, facts: facts.diagnosticFailure };
+        }
         if (facts.outcome === "client-cancelled" && facts.underlyingStale === true) {
           aggregate.clientCancelledWithUnderlyingStale += 1;
         }
@@ -187,6 +193,11 @@ export class LanguageServerSupportLedger {
       .map((aggregate) => Object.freeze({ ...aggregate }));
     return Object.freeze({
       aggregateCount: aggregates.length,
+      firstDiagnosticFailure: this.#firstDiagnosticFailure == null ? null : {
+        ...this.#firstDiagnosticFailure.facts,
+        sequence: this.#firstDiagnosticFailure.sequence,
+        documentId: identifyDocument(this.#firstDiagnosticFailure.documentUri),
+      },
       aggregates: Object.freeze(aggregates),
       omittedAggregateCount: this.#omittedFeatures.size,
       recentTerminalCount: this.#recentTerminals.length,

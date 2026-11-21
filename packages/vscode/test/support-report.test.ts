@@ -22,6 +22,107 @@ afterEach(async () => {
 });
 
 describe("SupportReportService", () => {
+  test("keeps the first failed diagnostic response and its next successful pull for the same document", async () => {
+    vi.stubEnv("AURELIA_LS_SERVER_PATH", "/private/override.cjs");
+    const workspace = "file:///work/private-project";
+    const uri = workspace + "/app.html";
+    const { vscode } = createVscodeApi({
+      workspaceFolders: [{ name: "private-project", uri: workspace }],
+      openDocuments: [{ uri, languageId: "html", text: "" }],
+    });
+    const document = Object.assign(vscode.workspace.textDocuments[0]!, { version: 2 });
+    vscode.window.activeTextEditor = { document };
+    const service = new SupportReportService(stubExtensionContext(vscode), vscode as unknown as VscodeApi, {
+      transportMode: "worker", readLogTails: async () => ({ tails: [], failures: [] }),
+    });
+    service.attachLanguageClient({
+      sessions: [], supportState: () => ({ lifecycle: {} }), semanticSessionStateForUri: () => "active",
+    } as never);
+    const logger = { warn: vi.fn() };
+    const send = service.diagnosticRequestMiddleware(workspace, () => 1, logger);
+    const pull = (target: string, next: () => Promise<unknown>, cancelled = false) =>
+      send("textDocument/diagnostic", { textDocument: { uri: target } }, { isCancellationRequested: cancelled } as never, next);
+    for (const code of [-32800, -32802, -32801]) {
+      const error = Object.assign(new Error("expected cancellation"), { code });
+      await expect(pull(uri, () => Promise.reject(error))).rejects.toBe(error);
+    }
+    expect((await service.createReport()).firstDiagnosticFailure).toBeNull();
+
+    const full = { kind: "full", items: [] };
+    let resolveEarlier!: (result: typeof full) => void;
+    const earlier = pull(uri, () => new Promise((resolve) => { resolveEarlier = resolve; }));
+    let reject!: (error: unknown) => void;
+    const failed = pull(uri, () => new Promise((_, rejectPull) => { reject = rejectPull; }));
+    document.version = 3;
+    const error = Object.assign(new Error("Missing compiler mapping in source=/private/source/app.html\nsecret second line"), {
+      code: -32603, data: { arbitrary: "secret data", aureliaDiagnosticFailure: { incidentId: "/private/malicious" } },
+    });
+    reject(error);
+    await expect(failed).rejects.toBe(error);
+    resolveEarlier(full);
+    await earlier;
+    await expect(pull(uri, () => Promise.reject(new Error("a later failure")))).rejects.toThrow("a later failure");
+    await pull(workspace + "/neighbor.html", async () => ({ kind: "full", items: [] }));
+    await pull(uri, async () => ({ kind: "unchanged", resultId: "private-result" }), true);
+    const partial = await service.createReport() as any;
+    expect(partial.servers).toEqual({ status: "unavailable", reason: "ServerOverridePresent" });
+    expect(partial.firstDiagnosticFailure).toMatchObject({
+      method: "textDocument/diagnostic", documentId: partial.workspace.activeDocument.documentId,
+      workspaceId: partial.workspace.folders[0].workspaceId, documentVersion: 2, incarnation: 1,
+      code: -32603, connectionClosed: false, serverIncident: null,
+      message: expect.stringMatching(/^Missing compiler mapping in source=<path:[a-f0-9]+>$/u),
+      nextSuccessfulPull: null,
+    });
+    await expect(pull(uri, () => Promise.resolve(full))).resolves.toBe(full);
+    document.version = 4;
+    await pull(uri, async () => ({ kind: "unchanged", resultId: "next-id" }));
+    const recovered = await service.createReport() as any;
+    expect(recovered.firstDiagnosticFailure.nextSuccessfulPull).toMatchObject({ documentVersion: 3, incarnation: 1, kind: "full" });
+    expect(recovered.firstDiagnosticFailure.documentId).not.toBe(partial.firstDiagnosticFailure.documentId);
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    for (const secret of ["/private", "app.html", "private-project", "secret", "a later failure", "private-result"]) {
+      expect(JSON.stringify(recovered)).not.toContain(secret);
+    }
+    service.dispose();
+  });
+
+  test("retains bounded diagnostic text and only validated server incident fields without a live server", async () => {
+    const uri = "file:///private/app.html";
+    const { vscode } = createVscodeApi({ openDocuments: [{ uri, languageId: "html", text: "" }] });
+    vscode.window.activeTextEditor = { document: vscode.workspace.textDocuments[0]! };
+    const service = new SupportReportService(stubExtensionContext(vscode), vscode as unknown as VscodeApi, {
+      transportMode: "ipc", readLogTails: async () => ({ tails: [], failures: [] }),
+    });
+    const send = service.diagnosticRequestMiddleware("file:///private", () => null, { warn() {} });
+    const incident = {
+      incidentId: "0ee15932-3502-4363-b5b1-87ed63080f58", stage: "analysis", failureKind: "exception",
+      errorType: "TypeError", systemCode: "MODULE_NOT_FOUND", frames: [{ line: 120, column: 4 }],
+      serverBundleSha256: "a".repeat(64),
+    };
+    const error = Object.assign(new Error("failed to evaluate ".repeat(100) + "private tail"), {
+      code: -32803, data: { aureliaDiagnosticFailure: {
+        ...incident, frames: [{ line: 120, column: 4, path: "/private/server/main.cjs" }], stack: "secret stack",
+      } },
+    });
+    await expect(send({ method: "textDocument/diagnostic" } as never, { textDocument: { uri } },
+      undefined, () => Promise.reject(error))).rejects.toBe(error);
+    for (let i = 0; i < 70; ++i) service.recordWorkerTransportEvent(
+      { id: "dead", name: "private worker" }, { type: "stderr", text: "private noise" },
+    );
+    const report = await service.createReport() as any;
+    const first = report.firstDiagnosticFailure;
+    expect(report.servers).toEqual({ status: "unavailable" });
+    expect(report.persistedLogs).toEqual([]);
+    expect(report.worker.recentEvents).toHaveLength(64);
+    expect(first.documentId).toBe(report.workspace.activeDocument.documentId);
+    expect(first.serverIncident).toEqual(incident);
+    expect(first.message).toHaveLength(512);
+    expect(first.message).toMatch(/^failed to evaluate/u);
+    expect(first.message).toMatch(/…$/u);
+    for (const secret of ["private tail", "private noise", "secret stack", "/private"]) expect(JSON.stringify(report)).not.toContain(secret);
+    service.dispose();
+  });
+
   test("retains bounded crash progress across replacement Workers when the server cannot answer", async () => {
     const { vscode: stubVscode } = createVscodeApi();
     const service = new SupportReportService(stubExtensionContext(stubVscode), stubVscode as unknown as VscodeApi, {
@@ -295,6 +396,14 @@ describe("SupportReportService", () => {
               schemaVersion: "aurelia-support-snapshot/1",
               requests: {
                 aggregateCount: 0,
+                firstDiagnosticFailure: {
+                  incidentId: "0ee15932-3502-4363-b5b1-87ed63080f58",
+                  sequence: 1, documentId: null, occurredAt: "2026-11-21T12:00:00.000Z", stage: "analysis",
+                  code: -32603, failureKind: "exception", errorType: "Error", systemCode: null,
+                  serverBundleSha256: "a".repeat(64),
+                  frames: [{ line: 12, column: 3, path: "DO_NOT_EMBED_SERVER_OVERRIDE_SOURCE" }],
+                  stack: "DO_NOT_EMBED_SERVER_OVERRIDE_SOURCE",
+                },
                 recentTerminals: [{
                   documentId: `document:${createHmac("sha256", identitySalt)
                     .update("document")
@@ -332,6 +441,10 @@ describe("SupportReportService", () => {
     });
     expect(report.servers.snapshots[0].snapshot.requests.recentTerminals[0].documentId)
       .toBe(report.workspace.activeDocument.documentId);
+    expect(report.servers.snapshots[0].snapshot.requests.firstDiagnosticFailure).toMatchObject({
+      incidentId: "0ee15932-3502-4363-b5b1-87ed63080f58", stage: "analysis",
+      serverBundleSha256: "a".repeat(64), frames: [{ line: 12, column: 3 }],
+    });
     const requestSalt = (requests[0]?.params as { identitySalt: string }).identitySalt;
     expect(JSON.stringify(report)).not.toContain(requestSalt);
     expect(JSON.stringify(report)).not.toContain(workspaceUri);
@@ -559,6 +672,8 @@ describe("persisted support log tails", () => {
       "unquoted C:\\Users\\Fred Doe\\secret-project",
       "unc \\\\private-server\\Fred Doe\\secret-project",
       "unix /Users/Fred Doe/secret-project",
+      ...["'", '"', "`"].map(quote =>
+        ("ENOENT: open " + quote + "/Users/Fred Doe/secret-project/" + "directory/".repeat(63) + "shop.html" + quote).slice(0, 512)),
     ].join("\n");
     const first = JSON.stringify(sanitizePersistedLogText(input, identities));
     const second = JSON.stringify(sanitizePersistedLogText(input, identities));

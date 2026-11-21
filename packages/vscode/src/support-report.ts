@@ -2,16 +2,22 @@ import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { open, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import type { CancellationToken, Disposable, Event, ExtensionContext, Uri } from "vscode";
+import type { Middleware } from "vscode-languageclient/node";
+import { DocumentDiagnosticRequest, ErrorCodes, LSPErrorCodes } from "vscode-languageserver-protocol";
 import type {
   AureliaLanguageClient,
   AureliaLanguageClientSupportState,
 } from "./client-core.js";
 import {
   AureliaProtocolRequest,
+  readAureliaDiagnosticFailureData,
+  readAureliaSupportDiagnosticFailure,
   readAureliaWorkerProgressSnapshot,
+  type AureliaDiagnosticFailureData,
   type AureliaSupportSnapshotResponse,
 } from "@aurelia-ls/language-server/protocol";
 import { AureliaCommand } from "./product-contract.js";
+import type { ClientLogger } from "./log.js";
 import type { VscodeApi } from "./vscode-api.js";
 import type { WorkerProgressEvidence, WorkerTransportEvent } from "./worker-transport.js";
 import {
@@ -28,11 +34,29 @@ const MAX_LOG_BYTES_PER_FILE = 64 * 1_024;
 const MAX_TOTAL_LOG_BYTES = 256 * 1_024;
 const MAX_LOG_LINES_PER_FILE = 240;
 const MAX_LOG_LINE_CHARACTERS = 1_000;
+const MAX_DIAGNOSTIC_MESSAGE_CHARACTERS = 512;
 const MAX_SERVER_SNAPSHOTS = 8;
 const DEFAULT_SERVER_SNAPSHOT_DEADLINE_MS = 2_500;
 const MAX_TOTAL_SERVER_SNAPSHOT_BYTES = 512 * 1_024;
 
 type SupportTransportMode = "worker" | "ipc";
+
+interface DiagnosticFailureRecord {
+  readonly workspaceUri: string;
+  readonly documentUri: string;
+  readonly documentVersion: number | null;
+  readonly incarnation: number | null;
+  readonly recordedAt: string;
+  readonly code: number | null;
+  readonly message: string;
+  readonly serverIncident: AureliaDiagnosticFailureData | null;
+  nextSuccessfulPull: {
+    readonly recordedAt: string;
+    readonly documentVersion: number | null;
+    readonly incarnation: number | null;
+    readonly kind: "full" | "unchanged";
+  } | null;
+}
 
 export interface ResourceExplorerProviderSupportState {
   readonly phase: "empty" | "loading" | "current" | "failed";
@@ -127,6 +151,7 @@ export class SupportReportService implements Disposable {
   readonly #workerEvents: WorkerEventRecord[] = [];
   readonly #workerProgress: WorkerEventRecord[] = [];
   #omittedWorkerProgressSamples = 0;
+  #firstDiagnosticFailure: DiagnosticFailureRecord | null = null;
   readonly #workerIdentityKey = randomBytes(32);
   #languageClient: AureliaLanguageClient | null = null;
   #resourceExplorerState: (() => ResourceExplorerSupportState) | null = null;
@@ -151,6 +176,57 @@ export class SupportReportService implements Disposable {
   attachLanguageClient(languageClient: AureliaLanguageClient): void {
     if (this.#disposed) return;
     this.#languageClient = languageClient;
+  }
+
+  /** Observe the wire result before the SDK maps cancellation and lost connections to provider fallbacks. */
+  diagnosticRequestMiddleware(
+    workspaceUri: string,
+    currentIncarnation: () => number | null,
+    logger: Pick<ClientLogger, "warn">,
+  ): NonNullable<Middleware["sendRequest"]> {
+    return (type, params, token, next) => {
+      const method = typeof type === "string" ? type : type.method;
+      // A pull already in flight when the failure arrives cannot establish subsequent recovery.
+      const first = this.#firstDiagnosticFailure;
+      if (method !== DocumentDiagnosticRequest.method || this.#disposed || first?.nextSuccessfulPull != null) {
+        return next(type, params, token);
+      }
+      const uri = (params as { textDocument?: { uri?: string } } | undefined)?.textDocument?.uri;
+      if (typeof uri !== "string" || (first != null && (first.workspaceUri !== workspaceUri || first.documentUri !== uri))) {
+        return next(type, params, token);
+      }
+      const version = this.#vscode.workspace.textDocuments.find((doc) => doc.uri.toString() === uri)?.version;
+      const documentVersion = version != null && Number.isSafeInteger(version) ? version : null;
+      const incarnation = currentIncarnation();
+      return next(type, params, token).then((result) => {
+        if (first != null && first.nextSuccessfulPull == null && !token?.isCancellationRequested) {
+          const report = result as { kind?: unknown; items?: unknown; resultId?: unknown } | null;
+          if ((report?.kind === "full" && Array.isArray(report.items)) || (report?.kind === "unchanged" && typeof report.resultId === "string")) {
+            first.nextSuccessfulPull = { recordedAt: this.#now().toISOString(), documentVersion, incarnation, kind: report.kind };
+          }
+        }
+        return result;
+      }, (error: unknown) => {
+        const code = errorCode(error);
+        if (!this.#disposed && this.#firstDiagnosticFailure == null
+          && code !== LSPErrorCodes.RequestCancelled && code !== LSPErrorCodes.ServerCancelled && code !== LSPErrorCodes.ContentModified) {
+          const message = typeof error === "string" ? error : error instanceof Error ? error.message : "";
+          const excerpt = boundedText(message, MAX_DIAGNOSTIC_MESSAGE_CHARACTERS).split(/[\r\n]/u, 1)[0]!.replaceAll("\u0000", "");
+          const serverIncident = readAureliaDiagnosticFailureData(
+            error != null && typeof error === "object" && "data" in error ? error.data : null,
+          );
+          this.#firstDiagnosticFailure = {
+            workspaceUri, documentUri: uri, documentVersion, incarnation, recordedAt: this.#now().toISOString(),
+            code: typeof code === "number" && Number.isSafeInteger(code) ? code : null,
+            message: excerpt, serverIncident, nextSuccessfulPull: null,
+          };
+          logger.warn("Diagnostic pull failed. Run Aurelia: Create Support Report for the first error.", {
+            code: this.#firstDiagnosticFailure.code, incidentId: serverIncident?.incidentId, message: excerpt,
+          });
+        }
+        throw error;
+      });
+    };
   }
 
   registerResourceExplorerState(
@@ -206,6 +282,7 @@ export class SupportReportService implements Disposable {
     const identities = new SupportReportIdentities(this.#randomSalt());
     const failures: Array<{ readonly section: string; readonly reason: string }> = [];
     const client = this.#readClientState(identities, failures);
+    const first = this.#firstDiagnosticFailure;
     const explorer = this.#readResourceExplorerState(failures);
     const [servers, logs] = await Promise.all([
       this.#readServerSnapshots(identities, failures),
@@ -222,16 +299,30 @@ export class SupportReportService implements Disposable {
         packageManifestsRead: false,
         identityPolicy: "fresh per-report HMAC pseudonyms",
         liveServerSnapshots:
-          "bounded schema-projected counters only; collection is skipped for explicit server overrides",
+          "Bounded counters and classified diagnostic failure details, including the server bundle hash and frame coordinates. Collection is skipped for explicit server overrides.",
         workerProgress: "bounded phase labels and heap counters retained across Worker failures",
         persistedLogs: "bounded tails with paths, URIs, and source-like file names pseudonymized",
         persistedLogCaveat:
           "Log messages are not source files, but may still contain authored identifiers or short text emitted by an error. Review the report before sharing.",
+        diagnosticFailure: "First diagnostic error of this extension activation, with at most 512 characters from its first message line. Paths are pseudonymized. Review the excerpt for authored text before sharing.",
         reviewBeforeSharing: true,
       },
       product: this.#productState(),
       workspace: this.#workspaceState(identities),
       client,
+      firstDiagnosticFailure: first == null ? null : {
+        method: DocumentDiagnosticRequest.method,
+        recordedAt: first.recordedAt,
+        workspaceId: identities.id("workspace", first.workspaceUri),
+        documentId: identities.id("document", first.documentUri),
+        documentVersion: first.documentVersion,
+        incarnation: first.incarnation,
+        code: first.code,
+        connectionClosed: first.code === ErrorCodes.PendingResponseRejected || first.code === ErrorCodes.ConnectionInactive,
+        message: boundedText(sanitizeLogLine(first.message, identities), MAX_DIAGNOSTIC_MESSAGE_CHARACTERS),
+        serverIncident: first.serverIncident,
+        nextSuccessfulPull: first.nextSuccessfulPull,
+      },
       worker: {
         transportMode: this.#transportMode,
         serverOverridePresent: process.env.AURELIA_LS_SERVER_PATH != null,
@@ -254,6 +345,7 @@ export class SupportReportService implements Disposable {
 
   dispose(): void {
     this.#disposed = true;
+    this.#firstDiagnosticFailure = null;
     this.#languageClient = null;
     this.#resourceExplorerState = null;
     this.#workerEvents.splice(0);
@@ -638,13 +730,13 @@ function projectServerSnapshot(value: unknown): AureliaSupportSnapshotResponse |
   }
   // A server override can return arbitrary JSON. Re-serialize through the exact v1 property catalog so unknown fields
   // cannot bypass the support report's privacy or payload assumptions merely by spoofing the schema version.
-  const projected = JSON.parse(JSON.stringify(value, [...SERVER_SUPPORT_PROPERTY_ALLOWLIST])) as unknown;
-  return projected != null
-    && typeof projected === "object"
-    && !Array.isArray(projected)
-    && (projected as Record<string, unknown>)["schemaVersion"] === "aurelia-support-snapshot/1"
-    ? projected as AureliaSupportSnapshotResponse
-    : null;
+  const projected = JSON.parse(JSON.stringify(value, [...SERVER_SUPPORT_PROPERTY_ALLOWLIST])) as AureliaSupportSnapshotResponse;
+  if (projected?.schemaVersion !== "aurelia-support-snapshot/1") return null;
+  const requests = "requests" in value ? value.requests : null;
+  if (requests != null && typeof requests === "object" && "firstDiagnosticFailure" in requests) {
+    return { ...projected, requests: { ...projected.requests, firstDiagnosticFailure: readAureliaSupportDiagnosticFailure(requests.firstDiagnosticFailure) } };
+  }
+  return projected;
 }
 
 const SERVER_SUPPORT_PROPERTY_ALLOWLIST = [
@@ -965,7 +1057,7 @@ function sanitizeLogLine(line: string, identities: SupportReportIdentities): str
     (value) => `<${identities.id("path", value)}>`,
   );
   result = result.replace(
-    /(^|[\s(])\/(?!\/)[^\r\n]*?\.(?:html?|tsx?|jsx?|mts|cts|mjs|cjs|jsonc?|css|less|scss)\b/giu,
+    /(^|[\s(=:[{"'`])\/(?!\/)[^\r\n]*?\.(?:html?|tsx?|jsx?|mts|cts|mjs|cjs|jsonc?|css|less|scss)\b/giu,
     (_value, prefix: string) => `${prefix}<${identities.id("path", _value.slice(prefix.length))}>`,
   );
   result = result.replace(
@@ -981,7 +1073,7 @@ function sanitizeLogLine(line: string, identities: SupportReportIdentities): str
     (value) => `<${identities.id("path", value)}>`,
   );
   result = result.replace(
-    /(^|[\s(])\/(?!\/)[^\r\n"'`<>|]*/gu,
+    /(^|[\s(=:[{"'`])\/(?!\/)[^\r\n"'`<>|]*/gu,
     (_value, prefix: string) => `${prefix}<${identities.id("path", _value.slice(prefix.length))}>`,
   );
   result = result.replace(

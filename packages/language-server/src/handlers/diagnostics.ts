@@ -32,14 +32,16 @@ async function documentDiagnostics(
     identifier: params.identifier ?? null,
     previousResultId: params.previousResultId ?? null,
     projectionKey: DIAGNOSTIC_PRESENTATION_SCHEMA,
-  }, async (operation) => {
+  }, async (operation, setStage) => {
     const document = operation.documents.ensureProgramDocument(params.textDocument.uri);
     if (document == null) {
       return [];
     }
 
     if (isNativeProjectConfiguration(ctx, document.uri)) {
+      setStage("configuration");
       const answer = await operation.projectConfigurationDiagnostics(document.uri);
+      setStage("mapping");
       const visibleAnswer = ctx.projectConfigurationParserDiagnostics === "client"
         ? {
             ...answer,
@@ -69,6 +71,7 @@ async function documentDiagnostics(
       return [];
     }
 
+    setStage("ownership");
     const ownership = await operation.authoredSourceOwnership(document.uri);
     // A document diagnostic pull has no project selector. Publishing either owner's rows would make Problems depend
     // on arbitrary project order, so overlap stays explicitly clear while project-aware discovery exposes candidates.
@@ -76,7 +79,9 @@ async function documentDiagnostics(
       return [];
     }
 
+    setStage("analysis");
     const answer = await operation.appDiagnostics(document);
+    setStage("mapping");
     const mapped = mapSemanticRuntimeAppDiagnostics(
       answer,
       document,

@@ -159,6 +159,19 @@ CI runs the two lanes in parallel. The release workflow additionally installs
 the single packaged VSIX into isolated current/minimum hosts and publishes that
 same artifact after both lanes pass.
 
+For a support report that includes a bundled server stack location, download
+the `<vsix-name>-server-source-map` artifact from that release's packaging run.
+It includes the packaging receipt. Match the report's `serverBundleSha256` to
+the receipt entry for `extension/dist/server/main.cjs` before mapping a frame.
+The artifact name includes the extension version and commit. Release CI retains
+it for 90 days. For a local candidate, use its own receipt and
+`packages/vscode/dist/server/main.cjs.map`. The following command looks up a
+reported one-based line and column.
+
+```sh
+node -e "const [map,l,c]=process.argv.slice(1); const sm=new (require('node:module').SourceMap)(JSON.parse(require('node:fs').readFileSync(map,'utf8'))); console.log(sm.findOrigin(Number(l),Number(c)))" main.cjs.map 803 12345
+```
+
 ## Developing the Extension Locally
 
 1. Open the repository in VS Code.
