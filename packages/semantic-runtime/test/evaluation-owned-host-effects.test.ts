@@ -61,7 +61,7 @@ describe('consumer-owned synchronous evaluator host operations', () => {
     const fixture = new OwnedHost();
     const result = fixture.evaluate('function hook(node) { node.fail; return false; }');
     expect(result.kind).toBe(StaticCallableCompletionKind.Abrupt);
-    expect(result.evaluation?.abruptCompletion?.value).toMatchObject({ value: 'InvalidStateError' });
+    expect(result.evaluation?.abruptCompletion).toMatchObject({ kind: 'throw', value: { value: 'InvalidStateError' } });
   });
 
   test('does not require capabilities for unreachable operations', () => {

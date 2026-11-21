@@ -1,3 +1,4 @@
+import type { SemanticEvaluationIssuesResult, SemanticAppDiagnosticsResult } from '../src/api/contracts.js';
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -112,11 +113,11 @@ describe("app diagnostic fact conservation", () => {
       storeKey: "app-diagnostic-fact-conservation-evaluation-subject",
     });
     const evaluationApp = await evaluationRuntime.openApp({ analysisDepth: "binding-observation" });
-    const evaluationRows = evaluationApp.ask({
+    const { rows: evaluationRows } = evaluationApp.ask({
       kind: SemanticAppQueryKind.EvaluationIssues,
       detail: SemanticRuntimeDetail.Handles,
       page: { size: 100 },
-    }).value.rows;
+    }).value as SemanticEvaluationIssuesResult;
     expect(evaluationRows.map(row => row.frameworkErrorCode).sort()).toEqual(["AUR0018", "AUR0019", "AUR0020", "AUR0020"]);
     const evaluationOwning = evaluationRows.find(row => row.issueKind === "event-aggregator-publish-invalid-event-name");
     const evaluationDiagnostic = evaluationApp.ask({
@@ -381,7 +382,7 @@ describe("app diagnostic fact conservation", () => {
       diagnosticProjection: "type-projection",
       detail: SemanticRuntimeDetail.Handles,
       page: { size: 100 },
-    }).value;
+    }).value as SemanticAppDiagnosticsResult;
     const compactRows = app.ask({
       kind: SemanticAppQueryKind.AppDiagnostics,
       sourceFile: { filePath: sourceFile },

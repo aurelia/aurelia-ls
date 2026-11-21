@@ -361,7 +361,8 @@ describe('static evaluator invocation semantics', () => {
 
     expect(objectStringProperty(reader.evaluateExpression(receiver).value, 'marker')).toBe('before');
     expect(invocationRead.value).toBeNull();
-    expect(objectStringProperty(invocationRead.abruptCompletion?.value ?? null, 'marker')).toBe('during');
+    const thrown = invocationRead.abruptCompletion;
+    expect(objectStringProperty(thrown?.kind === EvaluationCompletionKind.Throw ? thrown.value : null, 'marker')).toBe('during');
     expect(objectStringProperty(result.environment.readValue('target'), 'marker')).toBe('after');
   });
 

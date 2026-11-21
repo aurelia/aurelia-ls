@@ -461,6 +461,7 @@ export function compiledTemplateEmission(
     compiled.issues,
     compiled.openSeams,
     compiled.records,
+    compiled.rejectedAttributeParses,
   );
 }
 

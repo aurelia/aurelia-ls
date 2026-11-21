@@ -220,7 +220,7 @@ describe('static evaluator abrupt completion', () => {
       session.moduleKey,
       [],
     );
-    const thrown = result.abruptCompletion?.value ?? null;
+    const thrown = result.abruptCompletion?.kind === EvaluationCompletionKind.Throw ? result.abruptCompletion.value : null;
     expect(thrown?.kind).toBe(EvaluationValueKind.Object);
     expect(thrown).not.toBe(sharedThrown);
     if (thrown?.kind !== EvaluationValueKind.Object) {
@@ -268,7 +268,7 @@ describe('static evaluator abrupt completion', () => {
       session.moduleKey,
       [],
     );
-    const thrown = result.abruptCompletion?.value ?? null;
+    const thrown = result.abruptCompletion?.kind === EvaluationCompletionKind.Throw ? result.abruptCompletion.value : null;
     expect(thrown).toEqual(expect.objectContaining({ kind: EvaluationValueKind.Object }));
     expect(thrown).not.toBe(sharedThrown);
   });

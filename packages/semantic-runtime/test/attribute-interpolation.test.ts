@@ -1,3 +1,4 @@
+import type { SemanticTemplateDiagnosticsResult, SemanticTemplateSemanticTokensResult } from '../src/api/contracts.js';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { expect, test } from 'vitest';
@@ -37,7 +38,7 @@ test('reports rejected attribute holes at reached sites and preserves native-acc
   const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
   const diagnostics = app.ask({ kind: SemanticAppQueryKind.TemplateDiagnostics, sourceFile: { filePath: file }, page: { size: 100 } });
   expect(diagnostics.result).toBe('answered');
-  const rows = diagnostics.value.rows.filter(row => row.diagnosticKind === 'expression-parse-error');
+  const rows = (diagnostics.value as SemanticTemplateDiagnosticsResult).rows.filter(row => row.diagnosticKind === 'expression-parse-error');
   expect(rows.map(row => [
     text.slice(0, row.source!.start!).split('\n').length,
     row.frameworkErrorCode,
@@ -47,7 +48,7 @@ test('reports rejected attribute holes at reached sites and preserves native-acc
 
   const tokens = app.ask({ kind: SemanticAppQueryKind.TemplateSemanticTokens, sourceFile: { filePath: file }, page: { size: 200 } });
   const start = text.indexOf(lines[4]!);
-  expect(tokens.value.rows.filter(row => row.tokenType === 'aureliaExpression' && row.source.start! >= start
+  expect((tokens.value as SemanticTemplateSemanticTokensResult).rows.filter(row => row.tokenType === 'aureliaExpression' && row.source.start! >= start
     && row.source.start! < start + lines[4]!.length).map(row => text.slice(row.source.start!, row.source.end!)))
     .toEqual(['${', '}', '${', '}']);
 }, 60_000);
@@ -61,6 +62,6 @@ test('maps the delimiters of an escaped inline interpolation to the authored Typ
   const tokens = await runtime.answerAppQuery({
     kind: SemanticAppQueryKind.TemplateSemanticTokens, sourceFile: { filePath: file }, page: { size: 200 },
   });
-  expect(tokens.value.rows.filter(row => row.tokenType === 'aureliaExpression')
+  expect((tokens.value as SemanticTemplateSemanticTokensResult).rows.filter(row => row.tokenType === 'aureliaExpression')
     .map(row => text.slice(row.source.start!, row.source.end!))).toEqual(['\\u0024{', '}']);
 }, 60_000);

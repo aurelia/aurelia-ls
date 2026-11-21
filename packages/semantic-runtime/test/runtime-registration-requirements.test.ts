@@ -483,7 +483,8 @@ describe('runtime registration requirements', () => {
       'Aurelia.app(MyApp).start();',
     ].join('\n'));
     const requirements = await readRequirements(minimalRoot, overlay, 'compiler-heritage');
-    expect(requirements.resources.reasons.some(reason =>
+    expect(requirements.resources.selectionKind === RuntimeRegistrationRequirementSelectionKind.ConservativeGroup
+      && requirements.resources.reasons.some(reason =>
       reason.reasonKind === RuntimeRegistrationRequirementReasonKind.RuntimeTemplateCompilationRequired)).toBe(runtimeUse);
   }, 20_000);
 

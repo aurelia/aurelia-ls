@@ -1,3 +1,4 @@
+import type { SemanticControlUseInventoryResult, SemanticConfigurationIssuesResult, SemanticAppSummary } from '../src/api/contracts.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,12 +30,13 @@ test('attributes submitters to their nominated form and counts only genuine fram
     })),
   });
   const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
-  const buttons = app.ask({ kind: SemanticAppQueryKind.ControlUseInventory, page: { size: 100 } }).value.rows
-    .filter(row => row.buttonText != null);
+  const inventory = app.ask({ kind: SemanticAppQueryKind.ControlUseInventory, page: { size: 100 } }).value as SemanticControlUseInventoryResult;
+  const buttons = inventory.rows.filter(row => row.buttonText != null);
   expect(Object.fromEntries(buttons.map(row => [row.buttonText, row.handlerExpression]))).toEqual({
     Enclosed: 'save()', Moved: 'cancel()', Neighbor: 'cancel()', External: 'save()',
   });
-  const issues = app.ask({ kind: SemanticAppQueryKind.ConfigurationIssues }).value.rows;
+  const { rows: issues } = app.ask({ kind: SemanticAppQueryKind.ConfigurationIssues }).value as SemanticConfigurationIssuesResult;
   expect(issues.map(issue => issue.frameworkErrorCode)).toEqual(['AUR0204']);
-  expect(app.ask({ kind: SemanticAppQueryKind.Summary }).value.configurationIssues).toBe(issues.length);
+  const summary = app.ask({ kind: SemanticAppQueryKind.Summary }).value as SemanticAppSummary;
+  expect(summary.configurationIssues).toBe(issues.length);
 });

@@ -2,6 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
 import { createSemanticRuntime, SemanticAppQueryKind } from '../src/index.js';
+import type { SemanticTemplateCursorInfoResult } from '../src/api/contracts.js';
 import { NodeSemanticRuntimeProjectInputHost, SemanticRuntimeProjectInputAuthority } from '../src/kernel/project-input.js';
 
 test('narrows switch branches only for the owning switch and definite case exclusions', async () => {
@@ -38,7 +39,7 @@ test('narrows switch branches only for the owning switch and definite case exclu
       const character = lines[line]!.lastIndexOf('(mode)') + 2;
       const offset = lines.slice(0, line).reduce((sum, text) => sum + text.length + 1, character);
       const answer = app.ask({ kind: SemanticAppQueryKind.TemplateCursorInfo, cursor: { filePath: file, offset, line, character } });
-      return answer.value.selectedMember?.typeDisplay;
+      return (answer.value as SemanticTemplateCursorInfoResult).selectedMember?.typeDisplay;
     });
     expect(argumentTypes[0]).toBe('"detail"');
     expect(argumentTypes[1]).toContain('"list"');

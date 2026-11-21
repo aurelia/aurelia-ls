@@ -1,3 +1,4 @@
+import type { SemanticTemplateCodeActionsResult, SemanticTemplateDiagnosticsResult } from '../src/api/contracts.js';
 import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -40,7 +41,7 @@ test.each(['js', 'ts'])('applies the missing-member fix to the selected .%s clas
       kind: SemanticAppQueryKind.TemplateCodeActions,
       cursor: { filePath: file, offset, line: 0, character: offset },
     });
-    const fix = result.value.rows.find(row => row.title === "Declare member 'missingTitle' on App");
+    const fix = (result.value as SemanticTemplateCodeActionsResult).rows.find(row => row.title === "Declare member 'missingTitle' on App");
     expect(fix?.edits).toHaveLength(1);
     const edit = fix!.edits[0]!;
     expect(path.resolve(workspaceRoot, edit.source.path!)).toBe(modelPath);
@@ -54,7 +55,7 @@ test.each(['js', 'ts'])('applies the missing-member fix to the selected .%s clas
       sourceFile: { filePath: file },
     });
     expect(diagnostics.result).toBe('answered');
-    expect(diagnostics.value.rows.filter(row => row.diagnosticKind === 'missing-expression-member')).toEqual([]);
+    expect((diagnostics.value as SemanticTemplateDiagnosticsResult).rows.filter(row => row.diagnosticKind === 'missing-expression-member')).toEqual([]);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
   }

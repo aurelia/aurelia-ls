@@ -374,7 +374,7 @@ function expectCompiledClass(app: SemanticApp, expected: string): void {
 function expectFamilyTransition(
   runtime: SemanticRuntime,
   app: SemanticApp,
-  ownerHandle: string,
+  ownerHandle: TemplateCompilationLocus['ownerHandle'],
   expected: ComputationChildTransitionKind,
 ): void {
   const locus = new TemplateCompilationLocus(app.project.projectKey, ownerHandle);

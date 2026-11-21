@@ -1,3 +1,4 @@
+import type { SemanticTemplateRenameResult } from '../src/api/contracts.js';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -169,13 +170,14 @@ describe('template rename candidates', () => {
         cursor: cursorInside(html, filePath, selected, selected),
         newName: 'renamed',
       });
-      expect(result.value.status).toBe('available');
-      expect(result.value.edits).toHaveLength(2);
+      const plan = result.value as SemanticTemplateRenameResult;
+      expect(plan.status).toBe('available');
+      expect(plan.edits).toHaveLength(2);
       for (const [filename, source, original] of [
         [path.basename(filePath), html, selected],
         ['resources.ts', resources, "'" + selected + "'"],
       ]) {
-        const edit = result.value.edits.find(row => path.basename(row.source.path!) === filename)!;
+        const edit = plan.edits.find(row => path.basename(row.source.path!) === filename)!;
         expect(source.slice(edit.source.start!, edit.source.end!)).toBe(selected);
         const applied = source.slice(0, edit.source.start!) + edit.newText + source.slice(edit.source.end!);
         expect(applied).toBe(source.replace(original, original.replace(selected, 'renamed')));
