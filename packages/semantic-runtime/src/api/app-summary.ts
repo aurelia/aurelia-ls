@@ -5,6 +5,7 @@ import { i18nTranslationBindingGroups } from '../i18n/translation-binding-groups
 import type { KernelStore } from '../kernel/store.js';
 import type { TemplateCompilerWorldEmission } from '../template/compiler-world-materializer.js';
 import { readAppOpenSeams } from './open-seam-projections.js';
+import { readProjectConfigurationIssues } from './configuration-projections.js';
 import { readRouterIssues } from './route-projections.js';
 import type { SemanticAppSummary, SemanticSourceRoleCount } from './contracts.js';
 import {
@@ -128,7 +129,7 @@ export function readSemanticAppSummary(
     ...evaluationSummaryCounts(emission),
     resourceDefinitions: emission.resources.readDefinitions().length,
     ...routerSummaryCounts(emission),
-    ...configurationSummaryCounts(emission),
+    ...configurationSummaryCounts(emission, store),
     computedObservationDefinitions: emission.computedObservation.readDefinitions().length,
     computedObserverSources: emission.computedObserverSources.readComputedObservers().length,
     computedObserverObservedDependencies: emission.computedObserverSources.readObservedDependencies().length,
@@ -202,14 +203,14 @@ function appTaskSummaryCount(emission: AureliaAppWorldProjectEmission): number {
   ].map((task) => task.productHandle)).size;
 }
 
-function configurationSummaryCounts(emission: AureliaAppWorldProjectEmission): AppSummaryConfigurationCounts {
+function configurationSummaryCounts(emission: AureliaAppWorldProjectEmission, store: KernelStore): AppSummaryConfigurationCounts {
   const configuration = emission.configuration.readConfiguration();
   return {
     configurationSequences: configuration.sequences.length,
     configurationSteps: configuration.steps.length,
     appRoots: configuration.appRoots.length,
     registrationAdmissions: configuration.registrationAdmissions.length,
-    configurationIssues: emission.appWorld.frameworkServiceCustomizations.issues.length,
+    configurationIssues: readProjectConfigurationIssues(emission, store).length,
     stateStores: emission.state.readStores().length,
     stateIssues: emission.state.readIssues().length,
   };

@@ -1010,7 +1010,7 @@ function addNextPageContinuation(
       page: {
         ...(query.page ?? {}),
         cursor: result.page.nextCursor,
-        size: result.page.size,
+        size: result.page.size === 0 ? 50 : result.page.size,
       },
     },
     intents: [InquiryContinuationIntent.Inspect],

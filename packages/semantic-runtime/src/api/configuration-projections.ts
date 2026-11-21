@@ -23,7 +23,7 @@ export function readConfigurationIssueRows(
     );
 }
 
-function readProjectConfigurationIssues(
+export function readProjectConfigurationIssues(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
 ): readonly ConfigurationIssue[] {
