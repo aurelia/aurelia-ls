@@ -137,10 +137,10 @@ export class TemplateCompilerProjectionGroupingInput<TNode, TAttribute> {
 export function groupTemplateCompilerProjectionChildren<TNode, TAttribute>(
   input: TemplateCompilerProjectionGroupingInput<TNode, TAttribute>,
 ): TemplateCompilerProjectionGroupingPlan<TNode, TAttribute> {
-  const groups = new Map<string, {
+  const groups: Record<string, {
     readonly members: TemplateCompilerProjectionContributorPlan<TNode, TAttribute>[];
     readonly sourceAddressHandle: AddressHandle | null;
-  }>();
+  }> = Object.create(null);
   const extractedContributors: TemplateCompilerProjectionContributorPlan<TNode, TAttribute>[] = [];
   const residualChildren: TemplateCompilerProjectionChildSnapshot<TNode, TAttribute>[] = [];
 
@@ -157,21 +157,21 @@ export function groupTemplateCompilerProjectionChildren<TNode, TAttribute>(
         : HydrateElementProjectionContributorDisposition.RetainedNode;
     const contributor = new TemplateCompilerProjectionContributorPlan(child, slotName, disposition);
     extractedContributors.push(contributor);
-    const existing = groups.get(slotName);
+    const existing = groups[slotName];
     if (existing == null) {
-      groups.set(slotName, {
+      groups[slotName] = {
         members: [contributor],
         sourceAddressHandle: child.sourceAddressHandle
           ?? child.slotAttributeSourceAddressHandle
           ?? input.hostSourceAddressHandle,
-      });
+      };
     } else {
       existing.members.push(contributor);
     }
   }
 
   return new TemplateCompilerProjectionGroupingPlan(
-    [...groups.entries()].map(([slotName, group]) => new TemplateCompilerProjectionGroupPlan(
+    Object.entries(groups).map(([slotName, group]) => new TemplateCompilerProjectionGroupPlan(
       slotName,
       group.members,
       group.sourceAddressHandle,

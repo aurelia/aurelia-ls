@@ -23,6 +23,15 @@ interface ChildOptions {
 }
 
 describe('template compiler projection grouping', () => {
+  test('orders integer slot groups like the framework lookup while retaining authored children within a group', () => {
+    const children = ['2', 'name', '1', '__proto__', '02', '2'].map((slotName, index) =>
+      child(String(index), { slotName }));
+    const plan = group(children);
+    expect(plan.groups.map(slot => slot.slotName)).toEqual(['1', '2', 'name', '__proto__', '02']);
+    expect(plan.groups[1]!.members.map(member => member.node.key)).toEqual(['0', '5']);
+    expect(plan.extractedContributors.map(member => member.node.key)).toEqual(['0', '1', '2', '3', '4', '5']);
+  });
+
   test('groups implicit default and repeated named contributors in direct-child order', () => {
     const children = [
       child('default-a'),

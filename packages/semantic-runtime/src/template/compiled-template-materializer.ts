@@ -1267,7 +1267,7 @@ class CompiledTemplateInstructionTraversal {
         return [new TemplateCompilerProjectionChildSnapshot(
           childReference,
           auSlotAttribute,
-          auSlotAttribute?.rawValue ?? null,
+          auSlotAttribute?.value ?? null,
           auSlotAttribute?.sourceAddressHandle ?? null,
           auSlotAttribute?.valueAddressHandle ?? null,
           child?.sourceAddressHandle ?? null,
@@ -1364,7 +1364,7 @@ class CompiledTemplateInstructionTraversal {
     return (owner?.attributes ?? []).map((attribute) => new AuSlotCompilerAttributeSnapshot(
       attribute,
       runtimeAttributeName(attribute.rawName, element.namespace),
-      attribute.rawValue,
+      attribute.value,
       null,
     ));
   }
@@ -1442,7 +1442,7 @@ class CompiledTemplateInstructionTraversal {
         : this.indexes.attributesByProduct.get(dynamicNameAttributeHandle) ?? null;
       const nameDecision = decideTemplateCompilerNativeSlotName(new TemplateCompilerNativeSlotNameInput(
         nameAttribute != null && !hasDynamicName,
-        hasDynamicName ? null : nameAttribute?.rawValue ?? null,
+        hasDynamicName ? null : nameAttribute?.value ?? null,
         hasDynamicName,
         hasDynamicName
           ? dynamicNameAttribute?.valueAddressHandle

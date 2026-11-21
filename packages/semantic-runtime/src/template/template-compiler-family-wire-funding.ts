@@ -331,7 +331,7 @@ export function prepareTemplateCompilerFamilyWireFunding(
     expectedOrigin: TemplateCompilerProjectionLogicalOriginReceipt | null = null,
     expectedWire: HtmlAttributeReference | null = null,
     valueSpanRequired = false,
-    expectedRawValue: string | null = null,
+    expectedValue: string | null = null,
   ): void => {
     const resolved = resolveAttribute(assembly, basis, occurrence, expectedOrigin);
     const browserOriginState = expectedOrigin?.browserOriginState ?? occurrenceOriginState(assembly, occurrence);
@@ -348,8 +348,8 @@ export function prepareTemplateCompilerFamilyWireFunding(
       summary = `Recovered attribute wire for '${occurrence.occurrenceKey}' diverges from retained staging.`;
     } else if (
       resolution === TemplateCompilerFamilyWireResolution.ExactAuthored
-      && expectedRawValue != null
-      && authored?.rawValue !== expectedRawValue
+      && expectedValue != null
+      && authored?.value !== expectedValue
     ) {
       resolution = TemplateCompilerFamilyWireResolution.InvariantMismatch;
       summary = `Recovered attribute scalar for '${occurrence.occurrenceKey}' diverges from projection grouping.`;
