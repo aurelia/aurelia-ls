@@ -2542,6 +2542,7 @@ function cursorFocusedExpressionResult(
     site.entryFamily,
     {
       baseOffset: span.start,
+      decodedOffsets: span.decodedOffsets,
       activeOffset: offset,
     },
   );
