@@ -31,7 +31,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/inquiry/template-completion.ts",
           "symbolName": "TemplateCompletionCursorContextBuilder",
-          "line": 335,
           "summary": "Template cursor-to-completion-query context builder."
         },
         {
@@ -68,7 +67,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-31"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "intent:lsp-edit-affordance-substrate",
@@ -83,21 +82,13 @@
         "type-system",
         "template"
       ],
-      "summary": "IDE/MCP affordances need one semantic reference and edit-plan algebra for definition, references, hover, diagnostics, rename, code actions, organize imports, file rename edits, and future workspace edits.",
-      "rationale": "Atlas can already ask TypeScript LanguageService questions, but semantic-runtime must eventually serve the same semantic affordances to human IDE users and AI MCP users across TypeScript and Aurelia semantics. Navigation can tolerate partial reference confidence, while editing is the strictest consumer: it has to combine TypeScript references with template, resource, route, i18n, binding, and generated-source constraints, then produce previewable source edits with exact provenance and invalidation. A tiny rename wrapper would create an attractive shortcut that scales poorly.",
+      "summary": "Semantic-runtime owns source-grounded references, rename and code-action plans. The LSP maps verified entries onto editor operations and accounts for unverified candidates and mapping failures.",
+      "rationale": "A single operation can join a TypeScript declaration to exact Aurelia template sites. The semantic query can distinguish verified locations, unproved same-name candidates and refusal. A WorkspaceEdit or flat location array requires the adapter to preserve that distinction when it presents the result.",
       "guidance": [
-        "Treat MCP and IDE/LSP as clients of the same semantic-runtime affordance API. MCP should expose the same information and operations a developer IDE would use, with transport/display differences only.",
-        "Design around a Semantic IDE Affordance Algebra first: locus, semantic subject, reference role, affordance kind, editability, completeness, source precision, and invalidation epoch.",
-        "Do not implement semantic-runtime rename as a direct TypeScript LanguageService pass-through. Treat TypeScript rename as one reference source inside a broader definition/reference/edit-plan algebra.",
-        "Start with editing constraints because edits are the strictest consumer. If exact reference coverage and editability are sufficient for rename/code actions, read-only go-to-definition, find-all-references, hover, and highlights can share the same substrate with weaker completeness requirements.",
-        "Start from TypeSystemProject for Program/checker facts, but decide deliberately whether a future LanguageService can share the same epoch or needs an explicitly modeled companion lifetime.",
-        "Use Atlas `ts.type` rename, references, code-fixes, refactors, organize-imports, and file-rename-edits as pressure and implementation precedent, not as a semantic-runtime API dependency.",
-        "Cross-language edits must join Aurelia semantic references: template bindings, resource names, bindables, route parameters, translation keys, value converters, binding behaviors, and source-level configuration can all participate in edit reachability.",
-        "Edit ranges must use exact authored source references. A broad carrier span is a blocker for edit application, not a range to patch.",
-        "Custom edit-affordance transports must distinguish not-applicable/no-op, refused, and blocked mapping-failure states. Never encode blocked cross-language edit propagation as `null` or an empty edit set; clients may treat that as safe TS-only work and silently lose template/resource edits.",
-        "Grow this toward a Roslyn-like workspace operation model: previewable, multi-file, transactional, explainable, and able to separate read-only navigation, edit preview, and edit application.",
-        "Route edit-plan answers through QueryClaimGraph or an adjacent inquiry-owned lifetime so source/project epoch invalidation, retained previews, and answer-local TypeChecker products stay explicit.",
-        "If implementing the first slice, prefer a read-only edit-plan or rename-feasibility projection that reports missing semantic reference families over a small mutating MCP tool."
+        "Begin with SemanticAppTemplateQueries and the LSP feature handlers for current navigation, completion, rename and code-action paths. The TypeSystemProject provides checker evidence and exact authored references supply edit ranges.",
+        "Keep candidateRows, refusal and blocked mapping failures visible to clients. The standard Location list and WorkspaceEdit contain verified locations or operations. Omitted and unmappable sites have separate user-facing consequences.",
+        "Use existing lane-harness and extension-host witnesses when an edit crosses a TS declaration and a template. Verify the intended file, token range and applied result.",
+        "Check the public MCP tool contract separately when evaluating parity with an editor command. Prospective organize-imports, file moves and other workspace edits need their own source and transport evidence."
       ],
       "anchors": [
         {
@@ -145,6 +136,16 @@
           "lensId": "ts.type",
           "projection": "code-fixes",
           "summary": "Atlas TypeScript code-fix precedent."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts",
+          "summary": "App-level verified references, candidate rows and rename or code-action construction."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/language-server/src/handlers/features.ts",
+          "summary": "Maps references and edit plans into LSP operations and reports omitted or unmappable rows."
         }
       ],
       "liveChecks": [
@@ -180,7 +181,7 @@
         }
       ],
       "createdAt": "2026-05-22",
-      "updatedAt": "2026-07-08"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "reuse:app-builder-generated-fixture-contracts",
@@ -705,9 +706,8 @@
         "When a continuation needs local evaluation, decide whether it belongs to the global static evaluator, a formal TypeScript projection, or a named Aurelia-specific environment such as template scope, binding scope, DI world, controller branch, or route context.",
         "Treat the initial public app-query continuation surface as covered, but keep improving family-specific evidence precision when a diagnostic, template, router, observation, binding, or MCP lane exposes a sharper source/provenance/type requirement.",
         "Use `continuationIntents` to narrow public app-query answer continuations without changing query identity or materialization policy. If filtered answers still produce a large list, improve evidence grouping before adding heuristic score sorting.",
-        "Interpret enum-usage audits against intent documents before deleting or promoting primitives. For example, `InquiryContinuationIntent.Author` is currently vocabulary-only in code, but the continuation scope map and API docs say authoring continuations are intentionally deferred until app-builder replaces the fixture-like recipe surface; that makes it reserved pressure, not automatically dead code.",
-        "`InquiryContinuationIntent.Verify` and `InquiryContinuationIntent.Profile` are also vocabulary-list-only today. Treat them as parked contract/telemetry intent pressure until semantic contract verification or app-telemetry query families emit concrete public continuation rows; do not present them as spent next-move lanes merely because the enum contains them.",
-        "`InquiryContinuationCost.Deep` is currently unspent. Keep it parked for future broad semantic-substrate continuations unless a concrete query family needs it; current app-query continuations derive cost from runtime boundary and query-type-projection policy.",
+        "Separate public app-query continuations from the internal app-builder query family. The app-builder seed constructors spend Author and Verify, and a generated SourcePlan has Deep cost. An internal producer establishes a vocabulary use; public availability requires a public, followable target.",
+        "For Profile, inspect current producers and independently validate a public target before describing an executable profiling continuation. Listing the intent in the vocabulary establishes only its declaration.",
         "Use package enum usage to keep continuation action vocabulary canonical. `InquiryContinuationKind` now owns both lower-level inquiry continuations and public app-query row actions; concrete app-query ownership belongs in `targetQueryKind`, shaped `targetQuery`, intent, and evidence metadata rather than target-specific kind members.",
         "Use enum coupling `type-surface-cooccurrence` before treating continuation-related enums as islands. `SemanticRuntimeContinuationRow` intentionally couples the canonical continuation action, target app-query kind, continuation intent, and cost in one DTO surface; evidence-gate enums couple through `SemanticContinuationEvidenceGate`.",
         "Continuation `kind` values should not duplicate product ownership already carried by `targetQueryKind`. If a row-table follow-up is observation-, state-, rendering-, i18n-, router-, resource-, binding-, or diagnostic-owned, keep that ownership in the shaped target query and evidence metadata instead of minting another action value.",
@@ -747,12 +747,6 @@
           "filePath": "packages/semantic-runtime/src/api/contracts.ts",
           "symbolName": "SemanticRuntimeContinuationRow",
           "summary": "Public continuation DTO that carries the canonical action kind beside target query, intent, cost, and evidence gates."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/semantic-runtime/src/api/contracts.ts",
-          "symbolName": "SemanticRuntimeContinuationRow",
-          "summary": "Public DTO shape for continuation rows and followable target app queries."
         },
         {
           "kind": "script",
@@ -844,6 +838,16 @@
             "coverageDimension": "intent-aware-continuations"
           },
           "summary": "Coverage-discovery lane for adjacent routes that still need intent-aware continuation threading."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-builder-continuations.ts",
+          "summary": "Internal author and verify seeds and Deep cost for generated SourcePlan targets."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/app-builder/README.md",
+          "summary": "Boundary between internal generated-source research and public Aurelia Patterns."
         }
       ],
       "liveChecks": [
@@ -851,11 +855,6 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/inquiry/continuation-intent.ts",
           "symbolName": "InquiryContinuationApplicability"
-        },
-        {
-          "kind": "source-declaration-exists",
-          "filePath": "packages/semantic-runtime/src/api/contracts.ts",
-          "symbolName": "SemanticRuntimeContinuationRow"
         },
         {
           "kind": "source-declaration-exists",
@@ -917,7 +916,7 @@
         }
       ],
       "createdAt": "2026-05-23",
-      "updatedAt": "2026-07-31"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "decision:diagnostic-repair-affordance-vs-edit-plan",

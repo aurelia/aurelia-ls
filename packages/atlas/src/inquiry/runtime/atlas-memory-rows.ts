@@ -510,6 +510,7 @@ function statusRank(status: AtlasMemoryComputedStatus | "untracked" | "storage-i
       return 30;
     case "reference":
       return 20;
+    case "out-of-scope":
     case "resolved":
       return 10;
     case "untracked":

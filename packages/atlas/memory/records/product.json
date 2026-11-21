@@ -19,7 +19,8 @@
         "Treat .temp notes and autonomous ledgers as scratch/review material; promote their essence before relying on them after a commit boundary.",
         "Do not encode transient autonomous-loop protocol in durable memory.",
         "When a note can become resolved or stale, give it a liveCheck instead of prose-only status.",
-        "Use memory:write for record creation, upsert, removal, and shard selection instead of hand-maintaining duplicate ids across shard JSON."
+        "Use memory:write for record creation, upsert, removal, and shard selection instead of hand-maintaining duplicate ids across shard JSON.",
+        "Persist the decision a future reader would otherwise have to reconstruct, with its current owner and a discriminating check. A source anchor confirms a location. Use the owning test or consumer to establish present behavior, and retire obsolete directions when that evidence changes."
       ],
       "anchors": [
         {
@@ -70,7 +71,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-13"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "decision:vscode-exact-vsix-release",
@@ -87,7 +88,7 @@
       "guidance": [
         "Build from a clean full Git HEAD and the committed extension version, then run `pnpm package:ide:vsix` exactly once through the pinned package-local VSCE. The commit-addressed VSIX, immutable manifest, and SHA-256 sidecar are one release packet.",
         "Use `pnpm verify:ide:vsix` to consume and revalidate the current-HEAD packet; verification must never rebuild or repackage it.",
-        "Use `pnpm verify:ide:vsix:installed` to install that exact VSIX once in an isolated clean host and retain immutable acceptance evidence. Never retry or overwrite a failed same-HEAD run; diagnose it, commit the repair, and produce a new artifact identity.",
+        "The candidate packet feeds the installed current-stable and minimum host lanes. Final release acceptance independently consumes the same exact bytes via verify:ide:vsix:installed and records immutable evidence for that run.",
         "Marketplace publication is opt-in and allowed only from the exact `vscode-v<version>` tag. Invoke the pinned local VSCE with `publish --packagePath`; the workflow must not bump versions, repackage, or mutate Git state.",
         "Upload the exact VSIX, manifest, checksum, and installed evidence. Attest the exact VSIX before optional Marketplace publication, then reverify the packet after the publish-or-ready boundary."
       ],
@@ -126,6 +127,11 @@
           "kind": "script",
           "command": "pnpm verify:ide:vsix:installed",
           "summary": "Exact-artifact installed-product acceptance and evidence command."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/vscode/test/publish-workflow-contract.test.ts",
+          "summary": "Checks candidate artifact IDs, stable/minimum installed lanes, final acceptance and exact-byte publication ordering."
         }
       ],
       "liveChecks": [
@@ -147,7 +153,7 @@
         }
       ],
       "createdAt": "2026-08-09",
-      "updatedAt": "2026-08-09"
+      "updatedAt": "2026-11-21"
     }
   ]
 }

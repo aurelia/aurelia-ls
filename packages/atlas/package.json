@@ -8,6 +8,7 @@
   },
   "exports": {
     ".": "./dist/index.js",
+    "./analysis": "./dist/analysis.js",
     "./evaluation": "./dist/evaluation/index.js",
     "./framework": "./dist/framework/index.js",
     "./inquiry": "./dist/inquiry/index.js",
@@ -20,6 +21,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "build:analysis": "tsc -p tsconfig.analysis.json",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "orient": "pnpm build && node dist/scripts/orient.js",
     "orient:json": "pnpm build && node dist/scripts/orient.js --json",

@@ -1,4 +1,5 @@
 import type { SourceRange } from "../locus.js";
+import type { OpenSeam } from "../evidence.js";
 import type {
   ProductArchitectureClassSurfaceRoleId,
   ProductArchitectureClassSurfaceRow,
@@ -65,6 +66,7 @@ export type AtlasMemoryComputedStatus =
   | "intentional-live"
   | "reference"
   | "resolved"
+  | "out-of-scope"
   | "stale-source"
   | "stale-check";
 
@@ -418,7 +420,7 @@ export interface AtlasMemoryLiveCheckResult {
   /** Original live check. */
   readonly check: AtlasMemoryLiveCheck;
   /** Check-local status before record-level reduction. */
-  readonly status: "active" | "present" | "resolved" | "stale-source" | "stale-check";
+  readonly status: "active" | "present" | "resolved" | "out-of-scope" | "stale-source" | "stale-check";
   /** Grounded summary of the observed live fact. */
   readonly summary: string;
   /** Product class source when available. */
@@ -519,6 +521,8 @@ export interface AtlasMemoryAnalysis {
   readonly storageExists: boolean;
   /** Durable records joined to live checks. */
   readonly records: readonly AtlasMemoryRecordRow[];
+  /** Incomplete anchor checks, qualified by their backing record for paged answers. */
+  readonly scopeGaps: readonly (OpenSeam & { readonly recordId: string })[];
   /** Live product class frontiers not covered by durable records. */
   readonly untrackedProductClassFrontiers: readonly AtlasMemoryUntrackedProductClassFrontier[];
   /** Rollup counts. */

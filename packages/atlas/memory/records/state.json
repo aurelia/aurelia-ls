@@ -171,7 +171,7 @@
         "runtime-lifecycle",
         "api"
       ],
-      "summary": "State store definitions now retain admitted registration-container ownership and one DI-backed visibility projection selects stores for compiler and controller consumers; only per-controller @fromState application remains open.",
+      "summary": "Store configuration retains the registering container. Compiler and controller consumers resolve visibility through DI. Applying a source-level @fromState definition to each controller remains open.",
       "rationale": "The ownership gate confirmed that the necessary model already existed in configuration evaluator lineage, admitted registration operations, DI resolver-owner lookup, compiler resource scopes, and runtime controller containers. The former state path dropped those joins, scanned mutable builder steps project-wide, grouped duplicate names project-wide, and fed one store pool to every consumer. Reconnecting the existing carriers eliminated sibling-root leakage, preserved inheritance and shadowing, and made custom registries honestly open. No new configuration-origin field or state execution emulator was needed. Authored @fromState sites remain source definitions because recognition does not yet attach them to declaring resource definitions; a shared definition now stays open across multiple registry worlds instead of selecting an arbitrary store.",
       "guidance": [
         "Treat project-wide StateStores as definition enumeration, never as effective visibility. Container admission, nearest-provider inheritance, and shadowing determine the stores visible to a compiler scope or runtime controller.",
@@ -251,7 +251,7 @@
         }
       ],
       "createdAt": "2026-07-25",
-      "updatedAt": "2026-07-26"
+      "updatedAt": "2026-11-21"
     }
   ]
 }

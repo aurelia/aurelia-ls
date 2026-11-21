@@ -70,11 +70,11 @@
         "rendering",
         "controller"
       ],
-      "summary": "CompiledTemplateMaterializer is the current pressure point for template lowering, render-target publication, and controller-facing products.",
+      "summary": "CompiledTemplateMaterializer assembles the authored template products consumed by semantic runtime analysis. Detached compiler handoffs compile a browser-effective context family.",
       "rationale": "Template features often look like vertical slice work, but the durable shape should remain grounded in Aurelia compiler, rendering, controller, and binding runtime concepts. The factory and traversal companions in the same module are part of this materialization frontier rather than separate untracked work.",
       "guidance": [
         "Before adding a new template product, inspect whether framework.compiler, framework.rendering, or framework.observation already names the runtime concept.",
-        "Treat CompiledTemplateInstructionFactory and CompiledTemplateInstructionTraversal as companions of the compiled-template materializer unless framework grounding suggests a cleaner Aurelia-shaped split.",
+        "Use CompiledTemplateInstructionFactory and CompiledTemplateInstructionTraversal for authored-tree assembly. For an AOT value follow materializeSemanticAppTemplateCompilerHandoffs into compileTemplateCompilerContextFamily and preserve its refusal conditions.",
         "If recursive rendering or controller semantics are involved, keep the controller and view-factory materializers in the loop.",
         "Root `<template>` surrogate failures, `<slot>` shadow-DOM failures, and local-template shape failures that match Aurelia template-compiler throws publish compiler issues in this phase; do not reintroduce generic open seams for those framework-rejected cases.",
         "Custom-element child content projection is a compiler DOM transform: HydrateElementInstruction carries default/named generated projection definitions with definition-local rows and static structure, direct parent rows skip extracted children, and `compiler.open-content-projection` should not appear for ordinary slot extraction.",
@@ -86,28 +86,24 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/compiled-template-materializer.ts",
           "symbolName": "CompiledTemplateMaterializer",
-          "line": 2038,
           "summary": "Compiled template materialization class."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/compiled-template-materializer.ts",
           "symbolName": "CompiledTemplateInstructionFactory",
-          "line": 481,
           "summary": "Instruction factory companion for compiled template materialization."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/compiled-template-materializer.ts",
           "symbolName": "CompiledTemplateInstructionTraversal",
-          "line": 820,
           "summary": "Instruction traversal companion for compiled template materialization."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/compiled-template-materializer.ts",
           "symbolName": "CompiledTemplateAssemblyState",
-          "line": 360,
           "summary": "Compiled-template assembly work frame."
         },
         {
@@ -132,6 +128,18 @@
           "lensId": "framework.compiler",
           "projection": "summary",
           "summary": "Framework compiler instruction-production graph."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/semantic-app-template-compiler-handoff.ts",
+          "symbolName": "materializeSemanticAppTemplateCompilerHandoffs",
+          "summary": "App selection and detached compiler handoff."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-compiler-context-family-compilation.ts",
+          "symbolName": "compileTemplateCompilerContextFamily",
+          "summary": "Generation-bound compiler for the browser-effective family."
         }
       ],
       "liveChecks": [
@@ -170,7 +178,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-08-26"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:template-compiler-world-materializer",
@@ -195,7 +203,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/compiler-world-materializer.ts",
           "symbolName": "TemplateCompilerWorldMaterializer",
-          "line": 207,
           "summary": "Template compiler-world materializer."
         },
         {
@@ -221,7 +228,8 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-11-21",
+      "nextActionPolicy": "when-touched"
     },
     {
       "id": "frontier:built-in-syntax-catalog-materializer",
@@ -450,35 +458,30 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-compilation-project-pass.ts",
           "symbolName": "TemplateCompilationProjectPass",
-          "line": 196,
           "summary": "Template compilation project front-door pass."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-compilation-project-pass.ts",
           "symbolName": "TemplateResourceCompilationEmission",
-          "line": 95,
           "summary": "Compiler-front-door emission shape for one resource."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-runtime-analysis.ts",
           "symbolName": "TemplateRuntimeAnalysisFrame",
-          "line": 192,
           "summary": "Template runtime-analysis work frame."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-runtime-analysis-context.ts",
           "symbolName": "TemplateRuntimeAnalysisProjectContext",
-          "line": 6,
           "summary": "Project-level compiled-template context used by recursive runtime/checker analysis."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-rendering-materializer.ts",
           "symbolName": "RuntimeRenderingMaterializer",
-          "line": 266,
           "summary": "Runtime Rendering emulation, including child custom-element aggregate render passes."
         }
       ],
@@ -506,7 +509,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-17"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:template-compilation-unit-materializer",
@@ -523,21 +526,20 @@
       "guidance": [
         "Start here when a feature needs template source identity, source maps, recovery policy, parse frontier, owner metadata, or root compilation context.",
         "Keep compilation-unit product construction distinct from project orchestration, HTML parse-tree materialization, and compiled-template assembly.",
-        "If new provenance or source-address pressure appears, improve this phase before adding local parser or renderer shortcuts."
+        "If new provenance or source-address pressure appears, improve this phase before adding local parser or renderer shortcuts.",
+        "For browser-effective compilation, prepare the unit through TemplateCompilerOccurrenceCompilationIngressMaterializer. Its ingress test compares the authored and browser parses and checks that superseded preparation cannot publish."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/compilation-unit-materializer.ts",
           "symbolName": "TemplateCompilationUnitMaterializer",
-          "line": 326,
           "summary": "Template compilation-unit product materializer."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/compilation-unit-materializer.ts",
           "symbolName": "TemplateCompilationClaimMaterializer",
-          "line": 173,
           "summary": "Claim publication companion for compilation-unit products."
         },
         {
@@ -545,6 +547,11 @@
           "lensId": "framework.compiler",
           "projection": "compile-flow",
           "summary": "Framework compiler phase grounding."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/test/compilation-unit-ingress.test.ts",
+          "summary": "Preparation, completion and supersession checks for the two parses."
         }
       ],
       "liveChecks": [
@@ -564,7 +571,8 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-11-21",
+      "nextActionPolicy": "when-touched"
     },
     {
       "id": "frontier:html-parse-materializer",
@@ -579,7 +587,7 @@
       "summary": "HtmlParseMaterializer, HtmlParseTreeMaterializer, and HtmlScanner form the template HTML parse/recovery frontier.",
       "rationale": "Fixture and external-template pressure can expose complex but valid Aurelia markup. Parser gaps should deepen the HTML parse substrate and source-span model rather than creating feature-local scans or accepting broad carrier provenance.",
       "guidance": [
-        "Start here when template markup, recovery, element/text/comment spans, source maps, or malformed-looking-but-valid HTML/interpolation cases are involved.",
+        "Use HtmlParseMaterializer for authored markup, recovery and spans. Use BrowserEffectiveTemplateMaterializer for the browser tree, factory carriers and authored correspondence. Parser success alone does not prove an exact browser correspondence.",
         "Keep raw HTML scanning and parse-tree materialization distinct from attribute syntax parsing, expression parsing, and compiled-template assembly.",
         "Treat broad source spans from this phase as accidental until exact provenance has been checked."
       ],
@@ -588,21 +596,18 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/html-parse-materializer.ts",
           "symbolName": "HtmlParseMaterializer",
-          "line": 184,
           "summary": "Template HTML parse front door."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/html-parse-materializer.ts",
           "symbolName": "HtmlParseTreeMaterializer",
-          "line": 337,
           "summary": "HTML parse tree materialization companion."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/html-parse-materializer.ts",
           "symbolName": "HtmlScanner",
-          "line": 684,
           "summary": "HTML scanner companion."
         },
         {
@@ -610,6 +615,11 @@
           "lensId": "framework.compiler",
           "projection": "attribute-classification",
           "summary": "Framework compiler attribute-classification grounding after HTML parsing."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/test/browser-effective-template-materializer.test.ts",
+          "summary": "Browser structure, derivations and correspondence over recovered markup."
         }
       ],
       "liveChecks": [
@@ -636,7 +646,8 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-11-21",
+      "nextActionPolicy": "when-touched"
     },
     {
       "id": "frontier:binding-scope-materializer",
@@ -662,7 +673,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/scope-materializer.ts",
           "symbolName": "BindingScopeMaterializer",
-          "line": 93,
           "summary": "Runtime binding scope materializer."
         },
         {
@@ -674,7 +684,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/scope.ts",
           "symbolName": "BindingScopeLocatedLookup",
-          "line": 287,
           "summary": "Concrete Scope lookup result for materializers that need the resolved modeled Scope/context."
         }
       ],
@@ -688,7 +697,8 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-11-21",
+      "nextActionPolicy": "when-touched"
     },
     {
       "id": "frontier:runtime-controller-bind-materializer",
@@ -712,14 +722,12 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-controller-bind-materializer.ts",
           "symbolName": "RuntimeControllerBindMaterializer",
-          "line": 215,
           "summary": "Runtime controller bind materializer."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-controller-bind-publication.ts",
           "symbolName": "RuntimeControllerBindPublisher",
-          "line": 106,
           "summary": "Bind-phase publication companion."
         },
         {
@@ -752,7 +760,8 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-11-21",
+      "nextActionPolicy": "when-touched"
     },
     {
       "id": "reuse:template-pipeline-world-to-controller",
@@ -769,7 +778,7 @@
       "guidance": [
         "Start with compiler-world, compilation-unit, compiled-template, runtime-rendering, view-factory, and controller-bind materializers as a chain.",
         "Use framework.compiler for instruction production and framework.rendering for renderer/controller consumption.",
-        "If the product question only needs one phase, expose that phase as an inquiry depth/scope rather than rebuilding the whole chain locally."
+        "For detached compiler artifacts, follow materializeSemanticAppTemplateCompilerHandoffs through browser-effective compilation before interpreting renderer or AOT results. Source selection may be unmatched or compilation may stop before producing a detached value."
       ],
       "anchors": [
         {
@@ -786,10 +795,15 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-controller-bind-materializer.ts",
           "summary": "Controller bind handoff."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/test/semantic-app-template-compiler-handoff.test.ts",
+          "summary": "Paired-file and unmatched-source controls at the detached boundary."
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:runtime-value-converter-materializer",
@@ -816,7 +830,8 @@
         "Retain unresolved applications with resource: null and publish ast_converter_not_found / AUR0103 during bind. Source application and issue products to the exact converter-name span when possible.",
         "Template overlays should call checker-visible converter toView methods directly so TypeScript owns overload resolution; dynamic withContext emits both runtime call branches. Keep this paired with direct checker expression projection.",
         "SanitizeValueConverter.toView claims runtime-html method_not_implemented / AUR0099 only when the selected resource has built-in lineage and the active container has no app ISanitizer resolver.",
-        "Before adding another converter-owned framework code, inspect framework.errors and framework.resources to confirm the owning runtime concept."
+        "Before adding another converter-owned framework code, inspect framework.errors and framework.resources to confirm the owning runtime concept.",
+        "A planned from-view phase alone cannot determine the assigned type. The checker writeback projection spends the target channel and the selected converter method. The converter-writeback-spends-from-view-shape case compares a toView-only converter with one implementing fromView."
       ],
       "anchors": [
         {
@@ -870,6 +885,12 @@
             "query": "method_not_implemented"
           },
           "summary": "Exact runtime-html AUR0099 authority for the sanitize path."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/value-converter-writeback.ts",
+          "symbolName": "projectRuntimeAssignmentValueConverterWriteback",
+          "summary": "Outer-to-inner checker projection of assignment values."
         }
       ],
       "liveChecks": [
@@ -892,7 +913,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-07-22"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:binding-command-lowering-materializer",
@@ -911,42 +932,38 @@
         "Use MultiBindingSegmentLoweringFrame for secondary inline custom-attribute segment accumulation; do not add parallel arrays in the materializer when a segment-local product needs records, claims, issues, value sites, parses, or open seams.",
         "Keep product publication concerns in BindingCommandLoweringPublisher and orchestration/data-flow concerns in BindingCommandLoweringMaterializer unless the framework suggests a sharper split.",
         "Empty command values infer source expressions from the authored target before DOM target-property mapping; `implicit-binding-expression-inference` preserves cases such as `minlength.bind` flowing from `minlength` into target `minLength`.",
-        "Cross-check framework.compiler and framework.rendering before adding a new binding-command product or target operation."
+        "Cross-check framework.compiler and framework.rendering before adding a new binding-command product or target operation.",
+        "The browser-effective compiler executes built-ins through executeTemplateCompilerLiveBindingCommand at the reached attribute. A recognized custom command can still yield Open. Verify the owner, attribute order and emitted value on the path under investigation."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/binding-command-lowering-materializer.ts",
           "symbolName": "BindingCommandLoweringMaterializer",
-          "line": 556,
           "summary": "Binding command lowering orchestration class."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/binding-command-lowering-publication.ts",
           "symbolName": "BindingCommandLoweringPublisher",
-          "line": 365,
           "summary": "Publication companion that owns product envelopes and kernel records."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/binding-command-lowering-materializer.ts",
           "symbolName": "BindingCommandLoweringFrame",
-          "line": 147,
           "summary": "Binding-command lowering work frame."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/binding-command-lowering-materializer.ts",
           "symbolName": "MultiBindingSegmentLoweringFrame",
-          "line": 358,
           "summary": "Inline multi-binding segment lowering work frame."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/binding-command-lowering-materializer.ts",
           "symbolName": "CommandLoweringExecutionContext",
-          "line": 424,
           "summary": "Binding-command execution context frame."
         },
         {
@@ -954,6 +971,11 @@
           "path": "packages/semantic-runtime/fixtures/pressure/implicit-binding-expression-inference",
           "scenario": "empty binding command value source inference",
           "summary": "Pressure fixture for empty `.bind`, `.two-way`, and `.from-view` values where authored source inference stays distinct from target-property mapping."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/test/template-compiler-live-binding-command.test.ts",
+          "summary": "Browser-current command input, built-in output and an open custom body."
         }
       ],
       "liveChecks": [
@@ -987,7 +1009,8 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-11-21",
+      "nextActionPolicy": "when-touched"
     },
     {
       "id": "frontier:binding-command-lowering-publisher",
@@ -1010,14 +1033,12 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/binding-command-lowering-publication.ts",
           "symbolName": "BindingCommandLoweringPublisher",
-          "line": 365,
           "summary": "Binding command lowering publication class."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/binding-command-lowering-publication.ts",
           "symbolName": "BindingCommandProductPublisher",
-          "line": 162,
           "summary": "Binding-command product publication companion."
         },
         {
@@ -1047,7 +1068,8 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-11-21",
+      "nextActionPolicy": "when-touched"
     },
     {
       "id": "reuse:evaluator-and-speculative-context",
@@ -1179,7 +1201,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-controller-scope-materializer.ts",
           "symbolName": "TemplateControllerScopeMaterializer",
-          "line": 239,
           "summary": "Template-controller scope materializer."
         },
         {
@@ -1228,14 +1249,12 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-controller-flow-scope-materializer.ts",
           "symbolName": "TemplateControllerFlowScopeMaterializer",
-          "line": 45,
           "summary": "Template-controller flow scope materializer."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-controller-scope-materializer.ts",
           "symbolName": "TemplateScopeConstructionFrame",
-          "line": 148,
           "summary": "Template-scope construction work frame."
         },
         {
@@ -1269,7 +1288,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-29"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:runtime-rendering-materializer",
@@ -1300,7 +1319,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-rendering-materializer.ts",
           "symbolName": "RuntimeRenderingMaterializer",
-          "line": 243,
           "summary": "Runtime rendering materializer."
         },
         {
@@ -1318,14 +1336,12 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-controller-publication.ts",
           "symbolName": "RuntimeControllerPublicationMaterializer",
-          "line": 40,
           "summary": "Adjacent controller-publication materializer."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-rendering-materializer.ts",
           "symbolName": "RuntimeRenderingEmission",
-          "line": 121,
           "summary": "Runtime rendering emission carrier."
         },
         {
@@ -1342,14 +1358,12 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-renderer.ts",
           "symbolName": "RuntimeRendererInvocation",
-          "line": 272,
           "summary": "Runtime renderer invocation frame."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/compiler-world.ts",
           "symbolName": "TemplateRenderingRun",
-          "line": 673,
           "summary": "Template rendering run frame."
         },
         {
@@ -1420,7 +1434,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-23"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:runtime-controller-frame",
@@ -1444,7 +1458,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-controller.ts",
           "symbolName": "RuntimeControllerFrame",
-          "line": 152,
           "summary": "Mutable semantic-runtime controller frame."
         },
         {
@@ -1470,7 +1483,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:runtime-view-factory-materializer",
@@ -1487,14 +1500,14 @@
       "guidance": [
         "Start here when template controllers, generated compiled-template definitions, synthetic views, or IViewFactory products are involved.",
         "Keep view-factory product publication distinct from renderer dispatch and controller bind effects.",
-        "Use framework.rendering render-consequences before changing view-factory claims or synthetic-view controller creation."
+        "Use framework.rendering render-consequences before changing view-factory claims or synthetic-view controller creation.",
+        "The size check concerns this class alone. RuntimeRenderingMaterializer still calls ensureForController for an embedded view even when the class is below the pressure threshold."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-view-factory-materializer.ts",
           "symbolName": "RuntimeViewFactoryMaterializer",
-          "line": 84,
           "summary": "Runtime IViewFactory product materializer."
         },
         {
@@ -1514,7 +1527,8 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-11-21",
+      "nextActionPolicy": "when-touched"
     },
     {
       "id": "frontier:runtime-template-spread-compile-host",
@@ -1543,21 +1557,18 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-spread-binding-creator.ts",
           "symbolName": "RuntimeSpreadBindingCreator",
-          "line": 47,
           "summary": "Semantic SpreadBinding.create counterpart."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-spread-compile-host.ts",
           "symbolName": "RuntimeTemplateCompilerSpreadCompileHost",
-          "line": 63,
           "summary": "Runtime compileSpread host."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/compiler-world.ts",
           "symbolName": "TemplateCompilerSpreadCompileHost",
-          "line": 381,
           "summary": "Compiler-world interface for spread compilation."
         },
         {
@@ -1584,7 +1595,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-13"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:runtime-rendered-instruction-recorder",
@@ -1608,7 +1619,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-rendered-instruction-recorder.ts",
           "symbolName": "RuntimeRenderedInstructionRecorder",
-          "line": 87,
           "summary": "Rendered instruction consequence recorder."
         },
         {
@@ -1628,7 +1638,8 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-11-21",
+      "nextActionPolicy": "when-touched"
     },
     {
       "id": "frontier:runtime-renderer-catalog-materializer",
@@ -1652,14 +1663,12 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-renderer-catalog-materializer.ts",
           "symbolName": "BuiltInRuntimeRendererCatalogMaterializer",
-          "line": 134,
           "summary": "Materializes framework-owned runtime renderer catalogs."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-renderer-catalog-materializer.ts",
           "symbolName": "ConfiguredBuiltInRuntimeRendererCatalogMaterializer",
-          "line": 385,
           "summary": "Selects runtime renderer catalogs admitted by framework registrations."
         },
         {
@@ -1691,7 +1700,8 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-11-21",
+      "nextActionPolicy": "when-touched"
     },
     {
       "id": "frontier:template-authoring-compiler-world-materializer",
@@ -1719,7 +1729,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-authoring-world.ts",
           "symbolName": "TemplateAuthoringCompilerWorldMaterializer",
-          "line": 57,
           "summary": "Authoring-time RuntimeHtml compiler-world materializer."
         },
         {
@@ -1743,7 +1752,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-14"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:template-value-site-materializer",
@@ -1768,14 +1777,12 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/value-site-materializer.ts",
           "symbolName": "TemplateValueSiteMaterializer",
-          "line": 105,
           "summary": "Template value-site selection materializer."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/value-site-publication.ts",
           "symbolName": "TemplateValueSitePublisher",
-          "line": 108,
           "summary": "Template value-site product publication companion."
         },
         {
@@ -1802,7 +1809,8 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-17"
+      "updatedAt": "2026-11-21",
+      "nextActionPolicy": "when-touched"
     },
     {
       "id": "frontier:attribute-syntax-and-classification-materializers",
@@ -1819,28 +1827,26 @@
       "guidance": [
         "Start here when work touches attribute commands, attribute patterns, syntax parsing, bindable classification, custom attributes, or class/style binding forms.",
         "Check framework.compiler attribute-classification rows before changing syntax or classification semantics.",
-        "Keep syntax parsing, classification, and value-site materialization as adjacent but distinct phases."
+        "Keep syntax parsing, classification, and value-site materialization as adjacent but distinct phases.",
+        "At a live compiler site spend the browser-current raw name exactly once. The legacy batch/direct-site control compares syntax, handles, reads and claims for the same attribute."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/attribute-syntax-materializer.ts",
           "symbolName": "AttributeSyntaxMaterializer",
-          "line": 71,
           "summary": "Attribute syntax parse materializer."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/attribute-classification-materializer.ts",
           "symbolName": "AttributeClassificationMaterializer",
-          "line": 102,
           "summary": "Attribute classification materializer."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/attribute-syntax.ts",
           "symbolName": "AttributeParserService",
-          "line": 528,
           "summary": "Runtime-shaped attribute parser service."
         },
         {
@@ -1848,6 +1854,11 @@
           "lensId": "framework.compiler",
           "projection": "attribute-classification",
           "summary": "Framework compiler attribute classification grounding."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/test/attribute-syntax-site-lowering.test.ts",
+          "summary": "Checks normalization and parity with a reached runtime attribute name."
         }
       ],
       "liveChecks": [
@@ -1874,7 +1885,8 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-11-21",
+      "nextActionPolicy": "when-touched"
     },
     {
       "id": "frontier:template-scope-type-projector",
@@ -1898,7 +1910,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-scope-type-projector.ts",
           "symbolName": "TemplateScopeTypeProjector",
-          "line": 47,
           "summary": "Template scope TypeChecker projection service."
         },
         {
@@ -1927,7 +1938,8 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-11-21",
+      "nextActionPolicy": "when-touched"
     },
     {
       "id": "frontier:interpolation-parser",
@@ -1939,11 +1951,11 @@
         "interpolation",
         "template"
       ],
-      "summary": "Interpolation parsing is a live substrate frontier because Aurelia supports multiple interpolation holes and template expressions inside holes.",
+      "summary": "InterpolationParser retains ordered hole expressions and exact ranges through template lowering.",
       "rationale": "The user clarified that apparent nested interpolation from external app sampling can be valid Aurelia syntax. This record keeps future parser work grounded in that behavior instead of treating those cases as malformed input.",
       "guidance": [
         "Do not classify multiple interpolation holes or template expressions inside interpolation as malformed without checking Aurelia parser semantics.",
-        "If interpolation mode accepts hole expressions until EOF, reassess whether the parser needs stronger hole-boundary lookahead.",
+        "Use the multi-hole staging test to compare parser order, handles and ranges. Check unterminated or suppressed holes against their parser result before changing recovery.",
         "Keep interpolation provenance exact: broad carrier/header spans are accidental until proven intentional."
       ],
       "anchors": [
@@ -1951,14 +1963,12 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/expression/interpolation-parser.ts",
           "symbolName": "InterpolationParser",
-          "line": 76,
           "summary": "Interpolation parser."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/expression/interpolation-parser.ts",
           "symbolName": "InterpolationPublicationFrame",
-          "line": 209,
           "summary": "Interpolation publication frame."
         },
         {
@@ -1966,6 +1976,11 @@
           "lensId": "framework.compiler",
           "projection": "compile-flow",
           "summary": "Framework compiler flow for expression/parser grounding."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/test/template-compiler-text-instruction-staging.test.ts",
+          "summary": "Checks parser order and distinct ranges for multi-hole instructions."
         }
       ],
       "liveChecks": [
@@ -1985,7 +2000,8 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-11-21",
+      "nextActionPolicy": "when-touched"
     },
     {
       "id": "frontier:runtime-binding-behavior-materializer",
@@ -2476,8 +2492,6 @@
       "rationale": "Overlay expression projection sits between Aurelia expression parsing and TypeScript checker overlays. It should not rediscover ownership from raw syntax. The support matrix names which AST kinds are TypeScript-shaped, scope-alias-backed, resource-lowered, runtime-expression-lowered, transparent wrappers, owner-handled, statement-frontier, or opaque owner surfaces. Generated child expressions can now be spliced into TypeScript-shaped parent source while preserving authored source segments. The prelude table contains only reusable emitted helper declarations; promise-result locals, scope aliases, and temporary locals belong to overlay layer planning rather than empty helper rows. Treat template-controller semantics, binding/value flow, observer flow, checker projection, and framework resource admission as overlay substrate, not adjacent feature work: overlays should spend those products instead of rebuilding local TypeScript-only approximations.",
       "guidance": [
         "Start with template-type-system-overlay-expression-support.ts before adding or removing an UnsupportedSyntax lane.",
-        "The old unsupportedOverlayExpressionSyntax helper was retired; if that symbol still appears as the next work item, treat it as Atlas/Work Router hygiene and route to the support matrix rather than rebuilding a blacklist.",
-        "Keep the overlay thread centered even when the immediate work is in template controllers, bindings, observers, resources, or checker projection. Those layers are dependencies that must be connected before overlays can stay faithful without split-brain.",
         "Keep value-converter syntax lowered through RuntimeValueConverterMaterializer, direct checker-visible `toView(...)` calls, and the overlay prelude identity fallback; do not treat value converters as arbitrary JavaScript child expressions in authored templates. Dynamic checker-visible `withContext` must model both runtime strict-true branches rather than choosing one arity locally, and the generated overlay should agree with CheckerExpressionTypeEvaluator on the branch return union.",
         "Copied source expressions must consume the runtime binding projection's `strictBinding` axis. Strict-false read/call sites lower to optional-chain-shaped TypeScript so overlay diagnostics agree with Aurelia non-strict nullish `astEvaluate`; assignment targets opt out because writeability and assignability belong to binding data-flow/source assignment policy.",
         "Keep binding behaviors value-transparent in expression overlays; bind-time behavior effects and diagnostics belong to RuntimeBindingBehaviorMaterializer.",
@@ -2529,7 +2543,7 @@
         }
       ],
       "createdAt": "2026-05-23",
-      "updatedAt": "2026-05-25"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:ui-virtualization-runtime-semantics",
@@ -2549,7 +2563,8 @@
         "Dispatch renderers by exact framework instruction type through the shared identity helper, not semantic iterator kind: type15 creates PropertyBinding while type200 creates IterateBinding. Keep the shared iterator scope effect, but do not invent ordinary property target access for the plugin callback binding. Renderer catalogs use Rendering's root-container authority, independently of syntax/resource visibility.",
         "Treat live IterateBinding execution and inner collection observation, scroller lookup, horizontal/table policy, runtime sizing/gap behavior, near-top/near-bottom events, and collection-strategy behavior as deeper runtime/plugin semantics, not as static syntax or template-controller scope facts. Native plugin configuration supplies its package-internal renderer; no new public export is required for this shared-model correction.",
         "Do not reopen DefaultVirtualizationConfiguration merely because CollectionStrategyLocator and DefaultDomRenderer are services: semantic-runtime spends those as framework resolver effects; further work should target their runtime behavior and diagnostics.",
-        "Use Atlas framework error and DI lenses against the ui-virtualization package before adding diagnostics for virtualization errors; the current template-controller contract does not prove renderer/scroller/strategy error authority."
+        "Use Atlas framework error and DI lenses against the ui-virtualization package before adding diagnostics for virtualization errors; the current template-controller contract does not prove renderer/scroller/strategy error authority.",
+        "Unsupported virtual-repeat destructuring already has an authored diagnostic in template-diagnostic-policy.ts. A plugin runtime error claim needs separate evidence from the framework error site."
       ],
       "nextActionPolicy": "when-touched",
       "anchors": [
@@ -2628,7 +2643,7 @@
         }
       ],
       "createdAt": "2026-05-23",
-      "updatedAt": "2026-09-26"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:template-overlay-integration-hardening",
@@ -2649,7 +2664,6 @@
       "guidance": [
         "Start here when asking whether overlays are complete for diagnostics, typechecking, rename, MCP, or LSP readiness.",
         "Template overlays consume source-value facts indirectly through materialized BindingScope slots and bound-controller/runtime-composition products. Do not make generated TypeScript call RuntimeBindingSourceValueEvaluator locally; fix the upstream binding-flow/source-value path if a slot or value fact is missing.",
-        "Use retired-symbol queries such as unsupportedOverlayExpressionSyntax as route hygiene canaries: they should point at the overlay expression support matrix and integration route, not at fresh evaluator/parser implementation work.",
         "Keep template-controller, binding/data-flow, observer, i18n, router, resource, and evaluator work framed as overlay substrate when the overlay needs those facts; do not add TypeScript-only overlay approximations. Overlay-local `$this`/`$parent` state should stay in the alias replay cursor, while scope facts still come from materialized BindingScope products.",
         "When overlay replay projects a source expression that creates a child scope, use the expression's runtime source scope rather than the final leaf scope. Repeat iterable sources, let sources, with.bind values, promise sources, and switch/case values should see the parent/source scope aliases that Aurelia would have used at evaluation time. Same-level template-controller conditions can read prior same-level scope effects that have already been replayed into the aggregate synthetic scope, but runtime scope effects must not read the local they are creating.",
         "Runtime-binding overlay source reads should enter through RuntimeBindingSourceExpressionContextProjector rather than a behavior-name precheck. For source-scope-changing binding behaviors, wrap the copied source expression instead of mutating the generated child-view scope. `& state` changes the binding source evaluation scope through framework binding.useScope(...), while a template-controller child view such as repeat still keeps the original view-model parent for `$parent`.",
@@ -2681,9 +2695,8 @@
         "Keep repeat unknown slot preservation shared below overlays: TypeChecker iterator projection should use the common checker-union helper and materialize unknown locals so semantic cursor diagnostics expose no-members rather than missing-slot-type.",
         "Generated overlay context-slot locals should spend materialized BindingScope target types when present and degrade to `unknown` when absent; `contract:type-system-overlays` checks generated overlay text for accidental `undefined as any` holes across current canaries.",
         "Keep synthetic Array.flat/flatMap repeat locals on the shared iterated-type hydration substrate. A compact checker related reference from an inner array must be hydrated before scope construction, otherwise cursor diagnostics regress to missing-slot-type even though the checker can prove the element type.",
-        "Future rename/edit work must join overlay source segments with TypeScript references and Aurelia semantic references; overlay provenance alone is not a complete edit reachability model.",
-        "This frontier is nextActionPolicy=when-touched after common app-builder-facing overlay, binding-flow, observer, value-channel, component-object-boundary, computed/getter, and runtime-effect contracts stayed green. Keep it as integration grounding while app-builder discovers concrete generated-code patterns; do not let pixel-perfect rare expression narrowing or abstract overlay completeness block authoring/app-builder work.",
-        "If Work Router misses overlay/typechecking/diagnostic/provenance phrases, improve the template-overlay-integration route before continuing product work."
+        "For rename, join authored segments to the TypeScript member family and the Aurelia resource relation. The rename-candidates test exercises refusal when unresolved sites would make an edit partial.",
+        "This frontier is nextActionPolicy=when-touched after common app-builder-facing overlay, binding-flow, observer, value-channel, component-object-boundary, computed/getter, and runtime-effect contracts stayed green. Keep it as integration grounding while app-builder discovers concrete generated-code patterns; do not let pixel-perfect rare expression narrowing or abstract overlay completeness block authoring/app-builder work."
       ],
       "nextActionPolicy": "when-touched",
       "anchors": [
@@ -2889,6 +2902,11 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/test/app-diagnostic-fact-conservation.test.ts",
           "summary": "Executable product/identity/source/origin and semantic/checker agreement conservation witnesses."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/test/template-rename-candidates.test.ts",
+          "summary": "Checks refusal of partial member migrations and alias separation."
         }
       ],
       "liveChecks": [
@@ -2983,7 +3001,7 @@
         }
       ],
       "createdAt": "2026-05-23",
-      "updatedAt": "2026-07-18"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "decision:attribute-pattern-part-loci-and-ref-listener-closure",
@@ -3003,7 +3021,7 @@
         "Ref and listener instructions/runtime bindings carry exact ref target, event name, and modifier sources. Controller-bind publication must spend the request sourceAddressHandle rather than the enclosing binding source.",
         "BindingTargetOperations joins the retained ListenerBinding product to expose trigger/capture strategy, modifier text, and the exact modifier source; do not infer those facts from affectedNames in API consumers.",
         "Resolve named ref resource identity from the existing controller-bind relation. References, rename, cursor selection, and semantic tokens consume that relation; element, controller, component, and view remain language targets.",
-        "Completion for ref targets, event names, and event modifiers requires explicit inquiry site/candidate vocabulary backed by runtime relations and DOM/service catalogs. Do not append syntax strings in an adapter.",
+        "The ref-target, listener-event and listener-modifier completion domains dispatch in inquiry/template-completion.ts. They consume the same-node resource instructions, DOM event surface and runtime modifier catalog.",
         "Unknown custom events should instantiate the generic CustomEvent payload as unknown; never expose the declaration-local T or widen it to any."
       ],
       "anchors": [
@@ -3057,7 +3075,7 @@
         }
       ],
       "createdAt": "2026-07-13",
-      "updatedAt": "2026-07-13"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "decision:template-compilation-cohort-authority",
@@ -3174,7 +3192,7 @@
         "Keep one AureliaAppWorldProjectComputationService and one ComputationLifecycleRegistry per SemanticRuntime/KernelStore. Do not add feature-local registries or independently committing family producers.",
         "Selective activation is a technical child-plan decision, not a second public generation. Carry only after exact rebase and Retain preview; open closure, RefreshWitness, nontrivial SCCs, and incomplete dependencies rerun conservatively.",
         "A generation-local execution emission may carry fresh live infrastructure while equal semantic product candidates resolve to retained canonical details. Do not use JavaScript object identity as an epoch boundary.",
-        "IDE, MCP, and future AOT consume the same coherent generation contract. Consumer cancellation, paging, cache budgets, and persistence may prioritize or retain generations but may not weaken no-mixed-generation truth."
+        "IDE and MCP operations and the AOT compiler handoff must respect the pinned generation. The paired-file handoff test detaches values while the run is current and reads them after its compiler world retires."
       ],
       "anchors": [
         {
@@ -3205,6 +3223,11 @@
           "kind": "doc",
           "path": "packages/semantic-runtime/src/kernel/README.md",
           "summary": "Atomic lifecycle, child carry, and comparison doctrine."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/test/semantic-app-template-compiler-handoff.test.ts",
+          "summary": "Generation lifetime at the detached AOT input."
         }
       ],
       "liveChecks": [
@@ -3220,7 +3243,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-22"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "decision:runtime-composition-static-boundary",
@@ -3236,7 +3259,7 @@
         "api"
       ],
       "summary": "Semantic-runtime models closed composition inputs and declarative view topology, while lifecycle scheduling and DOM mutation remain runtime boundaries.",
-      "rationale": "Aurelia composition spans compiler projection, runtime view/controller/container ownership, dynamic AuCompose inputs, user lifecycle execution, Promise scheduling, and DOM replacement. IDE, MCP, and future AOT need the first three as shared semantic facts, but replaying user lifecycle bodies or the async Controller state machine would create a second runtime with no finite fidelity boundary. The static model is complete only when every recursively rendered binding retains its exact source controller, compiler resource scope, active DI container, and honest settlement/candidate closure.",
+      "rationale": "Aurelia composition spans compiler projection, runtime view/controller/container ownership, dynamic AuCompose inputs, user lifecycle execution, Promise scheduling, and DOM replacement. Compiler and authoring consumers need the first three as shared semantic facts, but replaying user lifecycle bodies or the async Controller state machine would create a second runtime with no finite fidelity boundary. The static model is complete only when every recursively rendered binding retains its exact source controller, compiler resource scope, active DI container, and honest settlement/candidate closure.",
       "guidance": [
         "Treat compiler-owned content projection, realized projection-view topology, dynamic AuCompose input/candidate analysis, and Controller execution as separate domains.",
         "Only AuCompose component and template inputs use await-thenable consumption. Model, scopeBehavior, tag, and flushMode are direct inputs even when their values are Promises; preserve consumption and settlement as separate axes.",
@@ -3359,7 +3382,7 @@
         }
       ],
       "createdAt": "2026-07-23",
-      "updatedAt": "2026-07-23"
+      "updatedAt": "2026-11-21"
     }
   ]
 }

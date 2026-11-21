@@ -46,22 +46,26 @@ export function atlasMemoryRepoPathExists(
   );
 }
 
-/** True when the admitted TypeScript source project exposes one declaration at a path. */
-export function atlasMemorySourceProjectHasDeclaration(
+/** Check a declaration against the same owned files used to build the declaration index. */
+export function atlasMemoryDeclarationStatus(
   sources: AtlasMemorySources,
   filePath: string,
   symbolName: string,
-): boolean {
+): "present" | "stale-check" | "out-of-scope" {
   const normalizedFilePath = normalizeAtlasMemoryRepoPath(filePath);
   const rows = sources.declarationsByFile.get(normalizedFilePath) ?? [];
   if (rows.some((row) => row.name === symbolName)) {
-    return true;
+    return "present";
   }
   const dot = symbolName.lastIndexOf(".");
-  if (dot <= 0 || dot >= symbolName.length - 1) return false;
   const file = sources.project.readSourceFile(normalizedFilePath);
-  if (!file) return false;
-  return dottedClassMemberExists(file, symbolName.slice(0, dot), symbolName.slice(dot + 1));
+  if (file && dot > 0 && dot < symbolName.length - 1 &&
+    dottedClassMemberExists(file, symbolName.slice(0, dot), symbolName.slice(dot + 1))) {
+    return "present";
+  }
+  return file && sources.project.requiredSourceFileIdentity(file).packageId !== null
+    ? "stale-check"
+    : "out-of-scope";
 }
 
 function dottedClassMemberExists(

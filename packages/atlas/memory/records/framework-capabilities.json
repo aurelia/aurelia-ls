@@ -12,10 +12,10 @@
         "semantic-runtime",
         "mcp"
       ],
-      "summary": "Atlas owns a framework.capabilities terrain that answers what Aurelia can do, how app authors express it, and where each framework capability is selected or admitted.",
+      "summary": "The framework.capabilities catalog records curated Aurelia capabilities, authored forms, localities, prerequisites and links to their framework evidence.",
       "rationale": "App-builder lowering exposed a granularity error by treating convention, decorator metadata, and inline/local custom elements as co-equal choices. The raw evidence already exists across framework resources, corpus, router, observation, discovery, and auLink, and the curated framework.capabilities lens now gives future consumer projections a compact starting terrain without encoding app-builder policy, MCP guidance, or semantic-runtime coverage as row data.",
       "guidance": [
-        "Use `framework.capabilities` before further durable app-builder lowering-axis expansion. It starts curated and source-backed, then points at existing framework/resource/router/observation/corpus/auLink evidence rather than using broad text heuristics as row identity.",
+        "Consult framework.capabilities for a named framework question and follow the owner evidence. Public app-building examples and their admission policy live in packages/patterns.",
         "Each capability row should distinguish framework concept, app-author source form, locality, resource kind/source support when resource-scoped, framework effect, typed prerequisites, consequences, framework-local constraints, and evidence.",
         "Use locality as a first-class dimension: app-global, package/global registration, resource-local, template-local, area-local, binding-site, and route-local are not interchangeable.",
         "Do not use a single policy-nature enum for capability rows. Resource declaration carriers, framework effects, and requirements are separate axes because resource source support, runtime effect, and prerequisite shape are not co-equal.",
@@ -38,7 +38,7 @@
         "State plugin capability rows should distinguish store admission from `& state`, `.state`, `.dispatch`, and `@fromState`. App-builder may use those rows, but the rows themselves should stay grounded in the framework plugin registrations, command lowering, binding scopes, and store lookup behavior.",
         "Do not use framework bundles such as StandardConfiguration as the ontology. Bundles are discovery and admission conveniences; the capabilities carried by bundles should remain visible independently."
       ],
-      "nextActionPolicy": "proactive",
+      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -179,7 +179,7 @@
         }
       ],
       "createdAt": "2026-05-26",
-      "updatedAt": "2026-06-04"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:source-derived-capability-map",
@@ -193,7 +193,7 @@
       "summary": "Source-derived framework inventory, clusters, coverage, and reverse-coverage are Atlas evidence lanes for auditing framework.capabilities, not capability identity by themselves.",
       "rationale": "The curated capability rows remain the conceptual capability terrain. Source-derived inventory and clusters are valuable review handles because they put framework resources, compiler instructions, renderer products, expression entities, observation entities, and relation facets on the table. They should not be treated as forced ontology: source-file co-location and instruction targets can suggest groupings, but a framework capability may span files, one file may contain several capabilities, and some inventory constructs are implementation details rather than app-author capabilities. auLink reverse coverage is a semantic-runtime mirror signal, not a completeness criterion.",
       "guidance": [
-        "DONE: framework.capabilities exposes curated projections (summary/catalog/matrix/evidence/evidence-trace/grounding) and source-derived evidence projections (inventory/coverage/reverse-coverage/clusters), backed by framework-capability-territory.ts.",
+        "framework.capabilities provides the curated summary, catalog, matrix, evidence, evidence-trace and grounding projections. Its inventory, coverage, reverse-coverage and clusters projections read source-derived evidence.",
         "Treat `inventory` as concrete framework evidence, not as a list of user-facing capabilities. It currently joins catalog-shaped families (resources, expression, observation, compiler, rendering) and relation-graph families (router, DI, admission) into one typed stream.",
         "Treat `clusters` as candidate grouping evidence. Source-file co-location and binding-command instruction target are useful for resource/compiler/rendering review, but they are not enough to declare a capability boundary without human/model review against framework semantics.",
         "Current cluster gap: expression and observation families each collapse to one `unfiled` cluster because their source rows do not carry declaration source spans. Fix the source/projection substrate before using those clusters for ontology accounting.",
@@ -202,7 +202,7 @@
         "A future accounting view should keep five dimensions separate: curated capability row, source-derived construct, reviewed cluster/evidence membership, auLink mirror status, and downstream consumer readiness. Do not collapse those dimensions into one completeness score.",
         "Tool-time-only surfaces such as evaluation mini-VM, type-system, inquiry, API, app-builder, and fixture-verification are product substrates or consumers. They are not missing framework capabilities merely because they appear in semantic-runtime or Atlas.",
         "Collection observers and dirty checking should be treated as capability/mirror/accounting questions, not as permanent 80/20 exclusions unless a later reviewed policy says so.",
-        "Remaining tooling: wire orient to advertise inventory/coverage/reverse-coverage/clusters; collapse standalone framework:territory/capability-coverage/reverse-coverage scripts into thin wrappers only if the unified framework.capabilities script remains ergonomic."
+        "Use the existing framework:capabilities script with a projection before introducing a new command. Treat a cluster as a hypothesis; compare its selected members with a separately known framework construct or consumer."
       ],
       "nextActionPolicy": "when-touched",
       "anchors": [
@@ -244,7 +244,7 @@
         }
       ],
       "createdAt": "2026-05-29",
-      "updatedAt": "2026-05-30"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "reuse:framework-service-root-substrate",

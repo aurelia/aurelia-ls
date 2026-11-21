@@ -19,14 +19,20 @@
         "Do not route new public pattern work through `aurelia_app_builder_catalog`, `aurelia_app_builder_query`, caller-authored domain models, policy menus, target catalogs, input-readiness, source-lowering preflight, or SourcePlan request envelopes.",
         "Pattern examples are opinionated curated bundles with assumptions, handoff notes, source files, optional stable official docs refs, and compact `support.followUp` hints; publication is the admission decision and no public status grammar is exposed.",
         "Verification is asynchronous: after a consuming agent adapts a pattern into a real app, use semantic-runtime diagnostics/app queries to inspect the adapted project rather than baking verification stamps or fixer wrappers into the pattern response.",
-        "`packages/patterns` owns the clean-slate public pattern contract, admitted catalog, evidence-review loop, and future GitBook-aware corpus parser. It must not depend on Atlas, and Atlas must not become a runtime dependency for patterns.",
+        "packages/patterns owns the admitted examples, evidence review, and GitBook-aware Markdown parser. The MCP package consumes the public patterns contract.",
         "`packages/patterns` also owns the Aurelia user-docs snapshot writer and manifest contract used by MCP release packaging; release tarballs should bundle docs for offline grounding rather than performing runtime web requests.",
         "Use `pnpm --filter @aurelia-ls/patterns corpus:review` for the package-owned semantic corpus candidate review. It groups source companion examples, multi-section recipe example sets, evidence dispositions, candidate buckets, and explicit cautions such as excluded router-direct or capability-only EventAggregator evidence.",
         "Atlas framework.corpus remains prior art and navigation pressure only. It may help find docs/tests/examples, but `packages/patterns` should own any product-quality semantic parser or curation model.",
         "Official docs are capability/reference evidence, not automatic recommendation order. For cross-component behavior, prefer injected state/service classes for shared feature state and commands; use bindables for local parent-to-child input; use bubbling CustomEvent only for narrow visible parent-child UI output; keep EventAggregator and callback bindables as exceptional or deliberate interface choices, not public defaults.",
-        "Router-direct is permanently excluded from the public Aurelia Patterns surface. Validation and i18n guidance should appear only through curated admitted patterns or docs-first handoffs; `@aurelia/state`, plugin-store state, broad advanced router workflows, and rich design-system policy remain non-default/deferred unless explicitly admitted by a later pattern loop."
+        "Use the public menu to determine current admission. Examples include form.validation-submit, localization.i18n-locale-service and router.auth-session-guard. The package contract separately checks that router-direct stays excluded."
       ],
       "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/patterns/src/corpus/markdown-parser.ts",
+          "symbolName": "parseMarkdownDocument",
+          "summary": "Reads GitBook directives, sections and code fences from the local docs corpus."
+        },
         {
           "kind": "source",
           "filePath": "packages/mcp/src/tools.ts",
@@ -57,7 +63,7 @@
         {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/patterns report -- component.local-collection",
-          "summary": "Pattern evidence report runner; use representative admitted pattern ids for catalog/evidence review while the package source remains untracked."
+          "summary": "Evidence report for the selected pattern and its admitted sources."
         },
         {
           "kind": "script",
@@ -91,7 +97,7 @@
         }
       ],
       "createdAt": "2026-06-15",
-      "updatedAt": "2026-06-17"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "reuse:aurelia-patterns-public-surface",
@@ -106,13 +112,19 @@
       "rationale": "Atlas memory next-action ranking favors reuse guides. This companion keeps future high-compaction sessions from seeing legacy app-builder reuse rows as the only actionable pattern guidance.",
       "guidance": [
         "Start public app-building source guidance with `aurelia_pattern_menu` and `aurelia_pattern_example`; after adaptation, use the example's `support.followUp` rows as compact hints to existing semantic-runtime tools.",
-        "Use `packages/patterns` reports/tests to review admitted examples and evidence. While the package is untracked during the long workstream, prefer script anchors over durable source anchors in Atlas memory.",
+        "Look up the admitted pattern in packages/patterns/src/pattern-catalog.ts. The package contract checks its menu, example, sources and follow-up shape.",
         "Use `packages/patterns` corpus review before adding more admitted patterns so docs volume, example-set grouping, and non-default/excluded evidence are visible before hand-authoring metadata.",
         "Apply the canon lens before admitting docs-backed communication examples: docs that show EventAggregator, callback bindables, or event bubbling prove capability, but shared feature state should route to injected state/service patterns before those mechanisms become public guidance.",
         "For offline docs grounding or release packaging questions, use the patterns docs snapshot script plus the MCP release pack/probe scripts; do not route through Atlas corpus APIs or runtime web requests.",
         "Route internal SourcePlan/source-lowering and generated fixture questions to legacy app-builder routes only after deciding the task is substrate evidence rather than public pattern guidance."
       ],
       "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/patterns/src/pattern-catalog.ts",
+          "symbolName": "getAureliaPatternExample",
+          "summary": "Tracked owner of example lookup by stable pattern ID."
+        },
         {
           "kind": "source",
           "filePath": "packages/mcp/src/tools.ts",
@@ -151,7 +163,7 @@
         }
       ],
       "createdAt": "2026-06-15",
-      "updatedAt": "2026-06-17"
+      "updatedAt": "2026-11-21"
     }
   ]
 }

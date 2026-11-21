@@ -22,7 +22,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/configuration-step-materializer.ts",
           "symbolName": "ConfigurationStepMaterializer",
-          "line": 184,
           "summary": "Per-step configuration materializer."
         },
         {
@@ -41,7 +40,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-19"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:configuration-option-shape-issues",
@@ -119,7 +118,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/app-world-project-pass.ts",
           "symbolName": "AureliaAppWorldProjectConstructionFrame",
-          "line": 190,
           "summary": "App-world construction phase frame."
         },
         {
@@ -142,7 +140,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:configuration-kernel-publication",
@@ -166,7 +164,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/configuration-publication.ts",
           "symbolName": "ConfigurationKernelPublication",
-          "line": 100,
           "summary": "Configuration-owned kernel publication primitive."
         },
         {
@@ -191,7 +188,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:configuration-kernel-emitter",
@@ -215,7 +212,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/configuration-kernel-emitter.ts",
           "symbolName": "ConfigurationKernelEmitter",
-          "line": 143,
           "summary": "Configuration sequence emitter."
         },
         {
@@ -234,7 +230,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-20"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:binding-scope-semantic-model",
@@ -269,7 +265,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/scope.ts",
           "symbolName": "BindingScope",
-          "line": 280,
           "summary": "Runtime Scope semantic model."
         },
         {
@@ -288,21 +283,18 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/scope.ts",
           "symbolName": "BindingContext",
-          "line": 191,
           "summary": "Runtime BindingContext semantic model."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/scope.ts",
           "symbolName": "OverrideContext",
-          "line": 230,
           "summary": "Runtime IOverrideContext semantic model."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/scope-api-issues.ts",
           "symbolName": "ScopeApiIssueMaterializer",
-          "line": 110,
           "summary": "Source/API materializer for direct runtime Scope nullish-argument diagnostics."
         },
         {
@@ -349,7 +341,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-18"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:app-world-resource-visibility",
@@ -373,14 +365,12 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/app-world-resource-visibility.ts",
           "symbolName": "AppWorldResourceVisibilityComposer",
-          "line": 25,
           "summary": "Public resource visibility composer."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/app-world-resource-visibility.ts",
           "symbolName": "AppWorldResourceVisibilityFrame",
-          "line": 55,
           "summary": "Visibility projection work frame."
         },
         {
@@ -399,7 +389,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:framework-service-customization",
@@ -600,7 +590,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/app-world-composer.ts",
           "symbolName": "AureliaAppWorldComposer",
-          "line": 100,
           "summary": "Configuration-to-app-world orchestration."
         },
         {
@@ -629,7 +618,7 @@
         }
       ],
       "createdAt": "2026-05-14",
-      "updatedAt": "2026-05-14"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "decision:aurelia-facade-container-evaluation-identity",

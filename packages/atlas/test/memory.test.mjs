@@ -89,6 +89,15 @@ test("a measured class stays tracked after its pressure resolves, and qualified 
   assert.equal(answer.value.records[0].liveChecks[0].productClass.name, "Outer");
   assert.equal(answer.value.rollup.untrackedProductClassFrontierCount, 0);
   assert.deepEqual(answer.value.issues.map(row => row.id), ["atlas.memory:record:frontier:outer:anchor:1:missing-symbol"]);
+  const excluded = createSourceProject({ repoRoot: root, packages: [] });
+  t.after(() => excluded.dispose());
+  const partial = await createInMemoryApi({ sourceProject: excluded }).ask({
+    lens: "atlas.memory", locus: { kind: "repo" }, projection: "next",
+  });
+  assert.equal(partial.value.rollup.byStatus["out-of-scope"], 1);
+  assert.deepEqual(partial.value.nextActions, []);
+  assert.deepEqual(partial.value.issues, []);
+  assert.equal(partial.basis.find(basis => basis.kind === "typescript-program").closure, "partial");
 });
 
 test("file-exists memory checks see working tree removal and newly staged paths on the same client", async t => {
@@ -109,6 +118,52 @@ test("file-exists memory checks see working tree removal and newly staged paths 
   writeFileSync(path.join(root, "new.md"), "new");
   execFileSync("git", ["add", "new.md"], { cwd: root });
   assert.deepEqual(await statuses(), [["original.md", "stale-source"], ["new.md", "present"]]);
+});
+
+test("memory distinguishes excluded files from resolved pressure and stale anchors", async t => {
+  const root = fixture(t);
+  const base = "packages/atlas";
+  const file = base + "/src/subject.ts";
+  const other = base + "/src/other.ts";
+  mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+  writeFileSync(path.join(root, other), "export {};");
+  writeFileSync(path.join(root, file), "export class Subject {}");
+  execFileSync("git", ["add", other, file], { cwd: root });
+  const records = {
+    pressure: [{ kind: "atlas-self-source-file", filePath: file, minLineCount: 1 }],
+    resolved: [{ kind: "atlas-self-class", className: "Subject", filePath: file, minLineCount: 500 }],
+    retired: [{ kind: "atlas-self-class", className: "Retired", filePath: file }],
+    mixed: [{ kind: "source-file-exists", filePath: other },
+      { kind: "source-declaration-exists", filePath: file, symbolName: "Subject" }],
+    live: [{ kind: "atlas-self-source-file", filePath: other },
+      { kind: "atlas-self-source-file", filePath: file }],
+    missing: [{ kind: "atlas-self-source-file", filePath: base + "/src/deleted.ts" }],
+  };
+  writeFileSync(path.join(root, shard("first")), document("records", Object.entries(records).map(([id, liveChecks]) => ({
+    ...decision(id), kind: "intentional-shape", liveChecks,
+    anchors: id === "mixed" ? [{ kind: "source", filePath: file, symbolName: "Subject" }] : [],
+  }))));
+  const definition = { id: "atlas", packageName: "@aurelia-ls/atlas", rootPath: base, tsconfigPath: base + "/tsconfig.json" };
+  for (const include of [false, true]) {
+    writeFileSync(path.join(root, definition.tsconfigPath), JSON.stringify({ files: include ? ["src/other.ts", "src/subject.ts"] : ["src/other.ts"] }));
+    const project = createSourceProject({ repoRoot: root, packages: [definition] });
+    t.after(() => project.dispose());
+    const api = createInMemoryApi({ sourceProject: project });
+    const ask = (projection, filters) => api.ask({ lens: "atlas.memory", locus: { kind: "repo" }, projection, filters });
+    const result = await ask("records");
+    const byId = new Map(result.value.records.map(row => [row.id, row]));
+    assert.equal(byId.get("pressure").status, include ? "intentional-live" : "out-of-scope");
+    assert.equal(byId.get("resolved").status, include ? "resolved" : "out-of-scope");
+    assert.equal(byId.get("retired").status, include ? "resolved" : "out-of-scope");
+    assert.equal(byId.get("mixed").status, include ? "intentional-live" : "out-of-scope");
+    assert.equal(byId.get("live").status, "intentional-live");
+    assert.equal(byId.get("missing").status, "stale-source");
+    assert.deepEqual(result.value.issues, []);
+    assert.equal(result.openSeams.some(seam => seam.kind === "insufficient-basis" && seam.summary.includes(file)), !include);
+    assert.deepEqual((await ask("records", { recordId: "pressure" })).openSeams, []);
+    assert.equal((await ask("records", { status: "out-of-scope" })).value.records.length, include ? 0 : 4);
+    assert.deepEqual((await ask("stale")).value.records.map(row => row.id).sort(), include ? ["missing", "resolved", "retired"] : ["missing"]);
+  }
 });
 
 test("the writer validates drafts and preserves neighboring data and creation date across a move", t => {

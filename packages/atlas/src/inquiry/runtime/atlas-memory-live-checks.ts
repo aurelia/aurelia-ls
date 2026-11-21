@@ -4,7 +4,7 @@ import {
   readAtlasSelfAnalysis,
   type AtlasSelfAnalysis,
 } from "./self-analysis.js";
-import type { ProductArchitectureClassSurfaceRow } from "./product-architecture-analysis.js";
+import type { ProductArchitectureAnalysis } from "./product-architecture-analysis.js";
 import type { ProductArchitectureSourceReference } from "./product-architecture-source.js";
 import type {
   AtlasMemoryAtlasSelfClassCheck,
@@ -22,7 +22,7 @@ import type {
 import {
   type AtlasMemorySources,
   atlasMemoryRepoPathExists,
-  atlasMemorySourceProjectHasDeclaration,
+  atlasMemoryDeclarationStatus,
 } from "./atlas-memory-source-helpers.js";
 
 /** Default line threshold for durable semantic-runtime product class pressure. */
@@ -43,13 +43,13 @@ export function readAtlasMemorySelfAnalysisIfNeeded(
 /** Evaluate one durable memory live check against the current source project. */
 export function evaluateAtlasMemoryLiveCheck(
   sources: AtlasMemorySources,
-  productClasses: readonly ProductArchitectureClassSurfaceRow[],
+  product: ProductArchitectureAnalysis,
   atlasSelfAnalysis: AtlasSelfAnalysis | undefined,
   check: AtlasMemoryLiveCheck,
 ): AtlasMemoryLiveCheckResult {
   switch (check.kind) {
     case "product-large-class":
-      return evaluateProductLargeClassCheck(sources, productClasses, check);
+      return evaluateProductLargeClassCheck(sources, product, check);
     case "source-file-exists":
       return evaluateSourceFileExistsCheck(sources, check);
     case "source-declaration-exists":
@@ -63,7 +63,7 @@ export function evaluateAtlasMemoryLiveCheck(
     case "atlas-self-variable":
       return evaluateAtlasSelfVariableCheck(sources, atlasSelfAnalysis, check);
     case "auLink-exists":
-      return evaluateAuLinkExistsCheck(sources, productClasses, check);
+      return evaluateAuLinkExistsCheck(sources, product, check);
   }
 }
 
@@ -82,10 +82,10 @@ function memoryNeedsAtlasSelfAnalysis(
 
 function evaluateProductLargeClassCheck(
   sources: AtlasMemorySources,
-  productClasses: readonly ProductArchitectureClassSurfaceRow[],
+  product: ProductArchitectureAnalysis,
   check: AtlasMemoryProductLargeClassCheck,
 ): AtlasMemoryLiveCheckResult {
-  const matches = productClasses.filter((entry) =>
+  const matches = product.classSurfaces.filter((entry) =>
     entry.name === check.className &&
     (check.filePath === undefined || entry.filePath === check.filePath),
   );
@@ -98,7 +98,7 @@ function evaluateProductLargeClassCheck(
   }
   const row = matches[0];
   if (row === undefined) {
-    return missingProductClassCheck(sources, check);
+    return missingSurfaceCheck(sources, check, check.className, "product.architecture", product.modules, "resolved");
   }
   const lineThreshold =
     check.minLineCount ?? ATLAS_MEMORY_PRODUCT_LARGE_CLASS_LINE_THRESHOLD;
@@ -113,27 +113,6 @@ function evaluateProductLargeClassCheck(
       : `${check.className} is below live pressure thresholds at ${row.lineCount} line(s) and ${row.methodCount} method(s).`,
     source: row.source,
     productClass: row,
-  };
-}
-
-function missingProductClassCheck(
-  sources: AtlasMemorySources,
-  check: AtlasMemoryProductLargeClassCheck,
-): AtlasMemoryLiveCheckResult {
-  if (
-    check.filePath !== undefined &&
-    !atlasMemoryRepoPathExists(sources, check.filePath)
-  ) {
-    return {
-      check,
-      status: "stale-source",
-      summary: `${check.className} source file is missing at ${check.filePath}.`,
-    };
-  }
-  return {
-    check,
-    status: "resolved",
-    summary: `${check.className} is no longer present in product.architecture class surfaces.`,
   };
 }
 
@@ -162,17 +141,19 @@ function evaluateSourceDeclarationExistsCheck(
       summary: `${check.filePath} is missing in the current checkout.`,
     };
   }
-  const exists = atlasMemorySourceProjectHasDeclaration(
+  const status = atlasMemoryDeclarationStatus(
     sources,
     check.filePath,
     check.symbolName,
   );
   return {
     check,
-    status: exists ? "present" : "stale-check",
-    summary: exists
-      ? `${check.symbolName} exists in ${check.filePath}.`
-      : `${check.symbolName} was not found in ${check.filePath}.`,
+    status,
+    summary: status === "out-of-scope"
+      ? `${check.filePath} is outside the declaration index for this source project.`
+      : status === "present"
+        ? `${check.symbolName} exists in ${check.filePath}.`
+        : `${check.symbolName} was not found in ${check.filePath}.`,
   };
 }
 
@@ -192,7 +173,7 @@ function evaluateAtlasSelfSourceFileCheck(
     entry.filePath === check.filePath,
   );
   if (row === undefined) {
-    return missingAtlasSelfCheck(sources, check, check.filePath, "Atlas source file");
+    return missingSurfaceCheck(sources, check, check.filePath, "atlas.self", atlasSelfAnalysis.sourceFileSurfaces, "resolved");
   }
   const active =
     row.lineCount >= (check.minLineCount ?? 0) &&
@@ -228,12 +209,7 @@ function evaluateAtlasSelfClassCheck(
     (check.filePath === undefined || entry.filePath === check.filePath),
   );
   if (row === undefined) {
-    return missingAtlasSelfCheck(
-      sources,
-      check,
-      check.filePath,
-      `Atlas class ${check.className}`,
-    );
+    return missingSurfaceCheck(sources, check, check.className, "atlas.self", atlasSelfAnalysis.sourceFileSurfaces, "resolved");
   }
   const active =
     row.lineCount >= (check.minLineCount ?? 0) &&
@@ -266,12 +242,7 @@ function evaluateAtlasSelfFunctionCheck(
     (check.filePath === undefined || entry.filePath === check.filePath),
   );
   if (row === undefined) {
-    return missingAtlasSelfCheck(
-      sources,
-      check,
-      check.filePath,
-      `Atlas function ${check.functionName}`,
-    );
+    return missingSurfaceCheck(sources, check, check.functionName, "atlas.self", atlasSelfAnalysis.sourceFileSurfaces, "resolved");
   }
   const active =
     row.lineCount >= (check.minLineCount ?? 0) &&
@@ -304,12 +275,7 @@ function evaluateAtlasSelfVariableCheck(
     (check.filePath === undefined || entry.filePath === check.filePath),
   );
   if (row === undefined) {
-    return missingAtlasSelfCheck(
-      sources,
-      check,
-      check.filePath,
-      `Atlas variable ${check.variableName}`,
-    );
+    return missingSurfaceCheck(sources, check, check.variableName, "atlas.self", atlasSelfAnalysis.sourceFileSurfaces, "resolved");
   }
   const active =
     row.lineCount >= (check.minLineCount ?? 0) &&
@@ -330,10 +296,10 @@ function evaluateAtlasSelfVariableCheck(
 
 function evaluateAuLinkExistsCheck(
   sources: AtlasMemorySources,
-  productClasses: readonly ProductArchitectureClassSurfaceRow[],
+  product: ProductArchitectureAnalysis,
   check: AtlasMemoryAuLinkExistsCheck,
 ): AtlasMemoryLiveCheckResult {
-  const row = productClasses.find((entry) =>
+  const row = product.classSurfaces.find((entry) =>
     entry.auLinkIds.includes(check.linkId) &&
     (check.symbolName === undefined || entry.name === check.symbolName) &&
     (check.filePath === undefined || entry.filePath === check.filePath),
@@ -347,47 +313,44 @@ function evaluateAuLinkExistsCheck(
       productClass: row,
     };
   }
-  if (
-    check.filePath !== undefined &&
-    !atlasMemoryRepoPathExists(sources, check.filePath)
-  ) {
-    return {
-      check,
-      status: "stale-source",
-      summary: `${check.linkId} source file is missing at ${check.filePath}.`,
-    };
-  }
-  return {
-    check,
-    status: "stale-check",
-    summary: `${check.linkId} was not found in semantic-runtime auLink class surfaces.`,
-  };
+  return missingSurfaceCheck(sources, check, check.linkId, "product.architecture", product.modules, "stale-check");
 }
 
-function missingAtlasSelfCheck(
+/** Only the owner analysis knows which files actually contributed rows to its surfaces. */
+function missingSurfaceCheck(
   sources: AtlasMemorySources,
-  check:
-    | AtlasMemoryAtlasSelfSourceFileCheck
-    | AtlasMemoryAtlasSelfClassCheck
-    | AtlasMemoryAtlasSelfFunctionCheck
-    | AtlasMemoryAtlasSelfVariableCheck,
-  filePath: string | undefined,
+  check: AtlasMemoryLiveCheck,
   label: string,
+  analysis: "atlas.self" | "product.architecture",
+  files: readonly { readonly filePath: string }[],
+  missingStatus: "resolved" | "stale-check",
 ): AtlasMemoryLiveCheckResult {
-  if (
-    filePath !== undefined &&
-    !atlasMemoryRepoPathExists(sources, filePath)
-  ) {
+  const filePath = check.filePath;
+  if (filePath !== undefined && !atlasMemoryRepoPathExists(sources, filePath)) {
     return {
       check,
       status: "stale-source",
       summary: `${label} source file is missing at ${filePath}.`,
     };
   }
+  if (filePath === undefined) {
+    return {
+      check,
+      status: "out-of-scope",
+      summary: `No ${label} matched in ${analysis}. Supply its source path to establish whether this analysis covered it.`,
+    };
+  }
+  if (!files.some(file => file.filePath === filePath)) {
+    return {
+      check,
+      status: "out-of-scope",
+      summary: `${filePath} is present in the checkout and outside the files analyzed by ${analysis}.`,
+    };
+  }
   return {
     check,
-    status: "resolved",
-    summary: `${label} is no longer present in atlas.self analysis.`,
+    status: missingStatus,
+    summary: `${label} was not found in ${filePath} by ${analysis}.`,
   };
 }
 

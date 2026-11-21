@@ -70,7 +70,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/evaluator.ts",
           "symbolName": "StaticEvaluator",
-          "line": 168,
           "summary": "Static ECMAScript evaluator implementation."
         },
         {
@@ -419,7 +418,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-24"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:static-module-graph-evaluator",
@@ -448,7 +447,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/module-evaluator.ts",
           "symbolName": "StaticModuleGraphEvaluator",
-          "line": 51,
           "summary": "Module graph evaluator with import/export linkage."
         },
         {
@@ -460,8 +458,8 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/module-evaluator.ts",
-          "line": 201,
-          "summary": "Local side-effect import execution edge for modules that produce no import binding."
+          "summary": "Local side-effect import execution edge for modules that produce no import binding.",
+          "symbolName": "StaticModuleGraphEvaluator.evaluateSideEffectImport"
         },
         {
           "kind": "source",
@@ -488,7 +486,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-19"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:evaluation-module-source-host",
@@ -519,14 +517,12 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/module-host.ts",
           "symbolName": "FileSystemEvaluationModuleSourceHost",
-          "line": 251,
           "summary": "File-system implementation of the evaluation module source host."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/module-host.ts",
           "symbolName": "CachedEvaluationModuleHostFileSystem",
-          "line": 132,
           "summary": "Per-pass cached filesystem adapter and profile counters for module graph source reads and resolution."
         },
         {
@@ -569,7 +565,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-08-24"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:static-project-evaluation-frame",
@@ -815,7 +811,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/framework-api-issues.ts",
           "symbolName": "FrameworkApiIssueMaterializer",
-          "line": 80,
           "summary": "Source-backed issue materializer for framework utility/API calls."
         },
         {
@@ -864,7 +859,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:module-environment-record",
@@ -888,14 +883,12 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/environment.ts",
           "symbolName": "ModuleEnvironmentRecord",
-          "line": 54,
           "summary": "Evaluator-local ECMAScript-like environment record."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/environment.ts",
           "symbolName": "EvaluationBinding",
-          "line": 26,
           "summary": "One binding cell inside an environment record."
         },
         {
@@ -914,7 +907,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-17"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "decision:static-invocation-evidence-and-value-graph",

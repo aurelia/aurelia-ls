@@ -69,6 +69,7 @@ Status is computed by Atlas, not trusted from prose:
 - `intentional-live`: an `intentional-shape` live check still matches current source pressure.
 - `reference`: reusable guidance or decisions that are not themselves open work.
 - `resolved`: a checked pressure record no longer matches its pressure threshold.
+- `out-of-scope` means a live check needs a file outside the admitted analysis. Include the check's owning source before using its result to retire a record.
 - `stale-source`: a checked source path disappeared.
 - `stale-check`: the backing substrate was available, but the specific checked declaration or fact no longer matched.
 - `untracked`: live product pressure found by Atlas without a durable memory record.
@@ -95,6 +96,11 @@ pressure/intentional source anchors that point at large product classes without 
 check. `auLink` anchors are validated against semantic-runtime decorator placements discovered by
 `product.architecture`.
 
+The TypeScript basis counts anchor and live checks outside the analyzed files. Each page
+includes the individual anchor gaps for its returned records. Storage errors remain
+visible across pages. The stale queue contains `resolved`, `stale-source` and `stale-check`
+records. A measured active frontier can still be active while another check is out of scope.
+
 ## Usage
 
 ```powershell
@@ -117,6 +123,8 @@ pnpm --filter @aurelia-ls/atlas memory:json -- --projection=records --kind=doc-s
 ```
 
 ## Updating Storage
+
+When reviewing an old record, start with the decision it would steer today. Check its claim against the current owner and a test or consumer that could distinguish the alternatives. A live path or declaration establishes that the anchor exists. An old count, a proposed feature, or a guarantee about behavior needs separate evidence. When another owner has taken over, point to that owner and keep any rationale the new code cannot explain. A short hidden record with its original ID and a Git revision can preserve a useful historical address.
 
 Prefer the writer script when creating, moving, or deleting records so shard selection and duplicate-id cleanup stay boring:
 

@@ -95,13 +95,12 @@
         "authoring",
         "public-api"
       ],
-      "summary": "MCP is a late stable public API surface; Atlas remains the internal self-improving development map.",
-      "rationale": "The operator corrected an earlier suggestion to put legacy-replacement and internal development utility into MCP. MCP requires restarts and is meant for end users, so it cannot be the autonomous-loop workbench. Internal corpus, legacy, and product-pressure lenses belong in Atlas until the semantic-runtime public API is stable enough to expose.",
+      "summary": "MCP publishes a selected semantic-runtime API and curated Aurelia patterns. Atlas owns the internal maintainer inquiries.",
+      "rationale": "The released MCP contract has its own catalog, input schemas and transports. A semantic-runtime continuation can point at an internal target even when its source query is public. Verify public reachability at the MCP boundary.",
       "guidance": [
-        "Do not expose Atlas workbench lenses or framework corpus lenses directly as MCP resources.",
-        "Use Atlas for internal self-improving inquiry because it can be changed and exercised during autonomous loops.",
-        "Treat MCP package work as a packaging step over stable user-facing semantic-runtime concepts, not as a substrate-discovery tool.",
-        "When mining docs/tests, record the internal Atlas/product pressure separately from eventual public MCP shape."
+        "Use the public catalog and tool schemas to select a supported query. Exercise advertised continuations by passing their supplied selectors through the public client.",
+        "Locate protocol registration in packages/mcp/src/tools.ts. Exercise installed-package behavior with the MCP release-tarball probe and report the tested package version.",
+        "Keep internal source, framework corpus and product-pressure work with Atlas. A public MCP surface needs its own caller, semantics and delivery evidence."
       ],
       "anchors": [
         {
@@ -114,6 +113,12 @@
           "kind": "doc",
           "path": "packages/semantic-runtime/src/api/README.md",
           "summary": "Semantic-runtime public API boundary."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/tools.ts",
+          "symbolName": "registerAureliaSemanticRuntimeTools",
+          "summary": "Public MCP tool registration and input schemas."
         }
       ],
       "liveChecks": [
@@ -127,7 +132,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-13"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:atlas-framework-corpus-lenses",

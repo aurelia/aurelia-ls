@@ -10,8 +10,8 @@
         "world-construction",
         "external-apps"
       ],
-      "summary": "Router work needs route-config, route-tree, route-context, viewport, viewport-agent, routeable-component, and route-recognizer semantics before product features rely on it.",
-      "rationale": "External apps are pressure floors, not literal specs. Router modeling must be grounded in the Aurelia framework router architecture because semantic-runtime will eventually support MCP, IDE, AOT, SSR, and SSG.",
+      "summary": "Router configuration, route recognition, runtime topology and transition planning have distinct owners. Use their products to tell potential viewport candidates from planned route nodes.",
+      "rationale": "The router publication and literal-closure tests read source-built route products. A pre-activation tree can answer a static question while a particular engine, viewport and transition still determine live behavior.",
       "guidance": [
         "Start with framework.router flow and relationship projections before deriving product router behavior from an app sample.",
         "Router URL parsing and stringifying are first-class `framework.router` flow rows under the `url-parsing` stage with `url-parser` relationship mechanisms; do not treat route-recognizer rows as the whole navigation URL story.",
@@ -48,7 +48,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-06-11"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:route-config-kernel-emitter",
@@ -913,7 +913,7 @@
         "When one modeled AppRoot has several definitely executed RouterConfiguration operations, publish AUR3168 on each operation after the first, relate the first operation, and do not build RouterOptions or route topology for that root.",
         "Keep same-source AUR0153/AUR0154 duplicate router built-in resource rows as raw evidence, but present them as runtime consequences under the causal AUR3168 diagnostic on IDE surfaces.",
         "Use readRouterIssues(...) as the owning enumeration for RouterIssues rows, app summary counts, and cursor diagnostic projection; do not hand-assemble producer lists in each consumer.",
-        "App admission still synthesizes root containers and does not spend an explicit new Aurelia(container) argument or authored createChild topology. Common-parent versus forked multi-root analysis belongs in configuration/DI; do not approximate it with router-local source containment or sequence ordering."
+        "Configuration retains evaluator identity for implicit roots, explicit containers and authored child containers. Follow the AppRoot's actual container to its registration operations. The di-provider-model regression 'preserves authored container and facade identity across module and child boundaries' exercises separate and shared containers. Runtime rejection order across facades belongs to configuration lifecycle."
       ],
       "nextActionPolicy": "when-touched",
       "anchors": [
@@ -961,7 +961,7 @@
         }
       ],
       "createdAt": "2026-07-12",
-      "updatedAt": "2026-07-12"
+      "updatedAt": "2026-11-21"
     }
   ]
 }

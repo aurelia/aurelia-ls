@@ -2,6 +2,29 @@
 
 `atlas` is the in-repo Atlas package for this repository.
 
+## In-process analysis
+
+Use `@aurelia-ls/atlas/analysis` for source and TypeScript queries, decision memory, framework DI and static evaluation. The caller owns the source project and selects the packages its queries can see. The full Atlas build provides this entry point. To build only the analysis library, run these commands from the repository root:
+
+```powershell
+pnpm --filter @aurelia-ls/atlas build:analysis
+pnpm --filter @aurelia-ls/atlas exec node --input-type=module -e "
+  import { analysisLenses, answerAtlasMemory, createSourceProject, findRepoRoot, RepoRootLocus } from '@aurelia-ls/atlas/analysis';
+  const project = createSourceProject({ repoRoot: findRepoRoot() });
+  try {
+    const answer = answerAtlasMemory({
+      lens: analysisLenses.memory, locus: RepoRootLocus, projection: 'records', filters: { query: 'diagnostic pull' }
+    }, project);
+    console.log(answer.value.records.map(row => row.id));
+  } finally { project.dispose(); }"
+```
+
+Both builds use the canonical module paths in `dist` and the same TypeScript build-info file. A `SourceProject` imported through `@aurelia-ls/atlas/source` has the same identity as one from the analysis entry. Switching build targets can recompile their shared sources. A clean analysis build emits only its imported graph. Existing full-build files can remain in a previously populated output directory.
+
+For a scoped TypeScript query, pass `packages` to `createSourceProject`. Each entry supplies an ID, package name, root path and tsconfig path relative to the analyzed repository. For example, admit both the AOT and semantic-runtime packages to find callers through the published browser-template subpath. Inspect `project.summary().packages` before relying on an empty result. Memory reads the manifest, shards and linked source files from the analyzed checkout. The standalone library exposes the three direct inquiries above and the source, evaluation and framework library functions. Other inquiry continuations can be followed through the full Atlas session.
+
+## Inquiry kernel
+
 It is built around a small inquiry kernel whose job is to keep Codex oriented while the repo grows:
 
 - model where a question is rooted with loci;

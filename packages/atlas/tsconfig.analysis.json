@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmitOnError": true
+  },
+  "files": ["analysis.d.ts"],
+  "include": []
+}

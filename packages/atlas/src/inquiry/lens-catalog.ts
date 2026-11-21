@@ -4641,6 +4641,7 @@ export const LensCatalog: readonly LensSpec[] = [
           "intentional-live",
           "reference",
           "resolved",
+          "out-of-scope",
           "stale-source",
           "stale-check",
           "untracked",

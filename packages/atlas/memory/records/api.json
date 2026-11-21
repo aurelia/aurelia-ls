@@ -63,13 +63,13 @@
         "MCP and IDE/LSP should consume the same semantic-runtime public API and catalog surfaces. Treat MCP as an IDE-for-AI adapter over semantic-runtime, not as a lower-fidelity or separate reasoning layer.",
         "Native `aurelia.project.json` diagnostics are runtime-static shared facts, including for malformed/config-only workspaces that cannot open an app. LSP diagnostics and the MCP `aurelia_project_configurations` diagnostic view must project the same diagnostic kind, message, severity, and exact source span rather than giving MCP only an inventory count.",
         "When a capability matters to both AI and human developers, design it once in semantic-runtime as a transport-neutral affordance answer, then let MCP, IDE, CLI, or tests choose presentation and retention policy.",
-        "The retired recipe-authoring catalog, guidance, orientation, and recipe-plan surfaces should not be revived as API facade methods. Future app generation belongs in app-builder after its typed menu, source-plan, and verification contracts are ready.",
+        "Public app-building examples come from Aurelia Patterns. The semantic-runtime app-builder facade remains available for internal source-lowering and fixture research.",
         "Use `readSemanticAppQueryCatalog()` / `SemanticRuntime.appQueryCatalog()` when a public adapter needs generic app-query discovery or validation; do not rebuild a local app-query enum list in MCP or another shell.",
         "Keep app-query catalog group filters discoverable from likely user vocabulary. Open-seam queries remain canonically grouped under diagnostics, but `group: \"open-seams\"` is a supported alias for rows with `supportsOpenSeamFilters` so MCP users can find the site/summary/raw drill-down path without knowing the diagnostic grouping first.",
         "Use `SemanticApp.answerCatalogQuery(...)` as the runtime facade's app-query-family dispatch boundary. If a new public app-query group appears, update the catalog row, grouped dispatch, and contract canaries together rather than adding an ungrouped case to `ask(...)`.",
-        "Public adapters should call claim-backed runtime catalog methods such as `appQueryCatalog` and routed app-query helpers instead of raw readSemantic* helpers when the result crosses a transport boundary.",
+        "Routed app queries acquire a managed operation. The MCP app-query catalog directly reads the static catalog without opening a workspace; its schema is shared with runtime catalog callers.",
         "Keep `SemanticRuntime.summary()` summary-first for monorepos: whole-workspace rollups and app candidates should remain complete, detailed project rows are opt-in through `projectPage`, and the public summary answer itself should remain query-claim-backed under the caller's inquiry profile.",
-        "Keep `AppOverview` summary-first for real apps: diagnostics and configured analysis limitations are the normal pressure signals, compact topology counts should not expand the full AppTopology DTO, raw open seams remain a quiet typed audit child with opt-in paging, and generation-specific orientation belongs to future app-builder APIs rather than the overview DTO.",
+        "Keep `AppOverview` summary-first for real apps: diagnostics and configured analysis limitations are the normal pressure signals, compact topology counts should not expand the full AppTopology DTO, raw open seams remain a quiet typed audit child with opt-in paging.",
         "MCP onboarding guidance should be canonical, app-agnostic, and contract-backed. Server instructions, workflow prompts, and the orientation markdown resource should share one orientation module that teaches the golden path: workspace overview, retained app overview with small samples, catalog, rollup-first summaries, focused rows/cursor, catalog-shaped file scoping, and analysis-depth auto-selection.",
         "When a public overview shows breakdowns derived from a paged row family, label them as samples. `AppOverview` should not promote its opt-in `open-seam-sites` audit child into normal display pressure; explicit seam answers may show global totals as totals, but boundary/source/reason breakdowns from a returned page must not read as full-app distributions.",
         "Open-seam counts in public MCP/IDE-facing answers must be immediately navigable: summary text should include primary and reason-source samples, `OpenSeams`, `OpenSeamSummary`, and `OpenSeamSites` should accept sourceFile/sourceRole/openSeamKindKey/openSeamReasonKind filters, and continuations plus query-claim identity should preserve those filters when moving between site, cluster, and raw rows.",
@@ -108,21 +108,18 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/api/runtime.ts",
           "symbolName": "SemanticApp",
-          "line": 2083,
           "summary": "Opened app-world query facade."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/api/runtime.ts",
           "symbolName": "SemanticApp.answerCatalogQuery",
-          "line": 2167,
           "summary": "Catalog-group public app-query dispatch boundary for non-router query families."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/api/runtime.ts",
           "symbolName": "SemanticApp.answerOverviewSourceDiagnosticQuery",
-          "line": 2200,
           "summary": "Grouped overview, source, diagnostics, evaluation, configuration, DI, plugin issue, and router overview query dispatch."
         },
         {
@@ -225,21 +222,18 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/api/runtime.ts",
           "symbolName": "SemanticApp.answerObservationStateQuery",
-          "line": 2252,
           "summary": "Grouped observation, state, and i18n query dispatch."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/api/runtime.ts",
           "symbolName": "SemanticApp.answerResourceTemplateRenderingQuery",
-          "line": 2286,
           "summary": "Grouped resource, template, and rendering query dispatch."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/api/runtime.ts",
           "symbolName": "SemanticApp.answerBindingControlQuery",
-          "line": 2318,
           "summary": "Grouped binding and control query dispatch."
         },
         {
@@ -313,6 +307,11 @@
           "filePath": "packages/semantic-runtime/src/api/app-builder.ts",
           "symbolName": "SemanticRuntimeAppBuilderQueryKind",
           "summary": "Current public app-builder query-kind catalog without starter menu/golden generation lanes."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/runtime-adapter.ts",
+          "summary": "The adapter reads static catalog metadata directly and delegates app queries through managed sessions."
         }
       ],
       "liveChecks": [
@@ -346,7 +345,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-08-23"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:app-diagnostics-substrate",
@@ -358,13 +357,13 @@
         "framework-errors",
         "authoring"
       ],
-      "summary": "Semantic-runtime diagnostics have an app-level aggregation query over ordinary TypeScript and tsconfig diagnostics plus modeled Aurelia issue lanes; use this as domain guidance when diagnostic work is touched, not as a default autonomous frontier while framework-error gaps are closed.",
-      "rationale": "TypeScript diagnostics come from the semantic-runtime TypeSystemProject Program/tsconfig epoch, including tsconfig read/parse/option diagnostics and per-source Program diagnostics. Template diagnostics cover parser, compiler, binding data-flow, and runtime AST expression-call pressure; resource convergence contributes bindable/process-content/watch/controller watcher issue products; configuration contributes source/API and framework-service issue products; and DI contributes container/resource/ambient-resolve issue products. Atlas framework.errors currently reports no active mapped diagnostic gaps, so this record should steer future diagnostic work only when a new exact framework-error, ordinary TypeScript diagnostic, or authoring-policy pressure appears. Product-owned issue records should remain in the substrate that owns the framework behavior, then aggregate through AppDiagnostics.",
+      "summary": "AppDiagnostics aggregates source-located diagnostics and authoring-policy findings from their semantic owners. Use this record when changing the aggregation or investigating a particular diagnostic.",
+      "rationale": "TypeScript, Aurelia domains and configured analysis limitations have different authorities. Aggregation preserves evidence from the domain that established each diagnostic. The framework.errors pressure query recalculates open mapped-code gaps for its admitted framework and semantic-runtime sources.",
       "guidance": [
-        "This frontier is nextActionPolicy=when-touched: do not choose it as an unfiltered autonomous next task while `pressure:framework-errors` continues to report zero active mapped diagnostic gaps.",
+        "Use pressure:framework-errors on the current checkout for mapped-code and raw-error gaps. Record the observed owner, code and source phase when investigating one.",
         "Start here when a framework error frontier points at non-template source such as @watch, bindable metadata, DI resolver calls, router config, AppTask/customization callbacks, observer service configuration, or package configuration.",
         "Do not attach framework-error-code authority at the API boundary. Add or reuse a product-owned issue/diagnostic record in the substrate that owns the framework behavior, then let the API aggregate it.",
-        "Keep template diagnostics as one diagnostic source, not the only diagnostics contract. AppDiagnostics currently aggregates TypeScript, configuration, DI, template, resource, router, and route-recognizer diagnostic products by source locus while preserving diagnosticDomain and relatedQueryKind.",
+        "Read appDiagnosticRows for the current inventory of contributing domains. It filters each family by the diagnostic source and retains its diagnosticDomain and relatedQueryKind.",
         "For source-file AppDiagnostics, filter by diagnostic row source across every domain. Template diagnostics may use template-file scan narrowing for template source files, but non-template files must collect the template basis before row-source filtering so template-domain rows sourced to TypeScript declarations, such as AUR0755 resolve(IViewFactory), reach the owning file.",
         "A source-file TemplateDiagnostics request must use an app world that actually contains the requested template. Reusing the default app and then filtering its rows by the requested orphan/local template produces an honest empty LSP result from the wrong semantic basis; admit an authoring template or select an existing world that owns that source before materializing rows.",
         "Router issue products remain owned by the router lanes even when projected into template diagnostics for file/cursor loci: AppDiagnostics filters router-framework-error template copies and reads owning router/route-recognizer rows directly. Preserve repair facts on that owning RouterIssues row as well as code/domain/source. The shared router diagnostic policy emits fix-router-instruction guidance only for source-role-proven template instruction failures; TypeScript route-config, redirect, and recognizer issues must not inherit template-expression repair by product proximity.",
@@ -374,7 +373,7 @@
         "Preserve raw diagnostic rows as the authoritative evidence table. Human/editor calm belongs in additive AppDiagnostics presentation groups with primary/contextual row ids, not in producer-time row deletion or adapter-local suppression.",
         "Do not infer diagnostic cascades from span geometry. If one issue causes downstream scope, checker, or member diagnostics, retain every grounded raw row and add an explicit product-level causal relation before presentation demotes consequences to contextual evidence.",
         "Template diagnostics that describe different tokens of the same semantic operation should preserve a shared diagnostic subject. For member-access canaries, overlay TypeScript rows and semantic weak-owner rows share `SemanticDiagnosticSubject(subjectKind=template-member-access)` over the authored member-access span while each row source remains the exact squiggle token.",
-        "LSP diagnostics are a presentation boundary over AppDiagnostics, not a paged row-table consumer. The LSP session should exhaust AppDiagnostics pages for the current document and publish a complete replacement diagnostic array for that URI; MCP and public app queries keep bounded row paging.",
+        "The LSP session spends the complete AppDiagnostics result for the requested document, then returns a full or unchanged pull report. Public app queries and MCP also expose the bounded row pages.",
         "Do not drop TypeScript diagnostic relatedInformation at AppDiagnostics aggregation. Preserve related source/message/code/sourceRole rows so LSP and custom diagnostics can emit same-file or cross-file related locations from real provenance.",
         "When an owning diagnostic lane has typed relationships between the primary issue and related sources, preserve a relationKind separately from any related diagnostic code. Observation issues use subject-declaration and hidden-state-read relations so API, AppDiagnostics, and LSP data do not recover meaning from array position or overload a code field.",
         "LSP diagnostic data should carry the normalized SemanticAppDiagnosticRow intact plus adapter-owned presentation metadata. Maintaining a second hand-copied runtime payload silently loses new provenance, related-information, and handle fields.",
@@ -384,19 +383,7 @@
         "Weak-owner template diagnostic suggestions should keep action targets source-bearing. For source-independent owner shapes such as any, prefer the value-producing type annotation or return type source route when one exists; if no navigable owner route exists, target the expression source rather than emitting owner-type:no-source.",
         "Repair cluster keys should stay compact fingerprints over grouping input. Source spans, member hints, owner/value types, and edit loci belong in the structured action-target and member-hint rows, not in a URL-encoded public key. `contract:template-diagnostics` guards this token-economy rule directly.",
         "Use Atlas framework.errors diagnostic frontiers and likelySemanticRuntimeOwner hints to choose the owning substrate, then inspect exact framework usage rows before adding framework-code links.",
-        "For broad fixture sweeps, use compact app-pressure fixture-owner rows (`templates.diagnostic-error-code-fixtures`, `app.diagnostic-error-code-fixtures`, `bindings.data-flow-error-code-fixtures`, `bindings.target-access-error-code-fixtures`, and `router.error-code-fixtures`) before doing isolated runs. These rows point exact framework codes at public fixture keys while custom/external roots collapse to `custom-root`.",
-        "Treat runtime-html ast* as partial and binding-utils-owned: AUR0103 missing value converter, AUR0101 missing binding behavior, and AUR0102 duplicate authored binding behavior are template diagnostic rows with resource-registration or expression-rewrite suggestions; other runtime-html ast labels are dormant until exact framework usage and semantic owner are modeled.",
-        "Treat runtime-html node* as partial across configuration, observation, and controller ownership. AUR0653 is claimed for duplicate NodeObserverLocator mappings through ConfigurationIssue; AUR0652 is claimed through target-access/template diagnostics only for the exact dirty-check-disabled observer lookup path; host-node controller codes still need controller topology semantics before they can be claimed.",
-        "Treat runtime Scope static API nullish guards as configuration source/API diagnostics: AUR0203/AUR0204 are ConfigurationIssue rows from direct Scope.fromParent/getContext/create calls, not rendered template lookup misses.",
-        "Treat runtime-html invalid* as partial: AUR0227/AUR0229 bindable decorator errors and AUR0766 processContent hook errors are ResourceIssue products, while runtime computed_not_getter / AUR0228 is an ObservationIssue from source-backed @computed(...) call-form decorators on non-getter/non-method targets. AUR0769/AUR0771 need app-root platform host state or Aurelia instance lifecycle modeling before they can be claimed.",
-        "Treat runtime-html compiler_attr_mapper_duplicate_mapping / AUR0719 as configuration-service pressure: AppTask-time AttrMapper duplicate useMapping/useGlobalMapping calls surface through ConfigurationIssue and AppDiagnostics under the configuration domain.",
-        "Treat runtime-html watch* as complete through ResourceIssue products. Treat runtime-html controller* as split by owning framework path: AUR0501 is a resource-definition issue, AUR0506 is a resource watcher issue, and AUR0507/AUR0508 are runtime controller observer-setup issues. Lifecycle-state controller errors still need controller-state emulation before they can be claimed.",
-        "Treat runtime-html au* as partial and AuCompose-owned: AUR0805/AUR0809 are static setter diagnostics through RuntimeControllerIssue when lowered bindable SetPropertyInstruction values are invalid; AUR0806 is a static string component/view-model lookup diagnostic against the parent hydration-context container; composition controller run/deactivate errors still need lifecycle modeling before they can be claimed.",
-        "Runtime-html branch link-hook diagnostics are RuntimeControllerIssue rows: AUR0810 for else without a previous if sibling, AUR0815 for case/default-case without a parent switch controller, and AUR0816 for duplicate default-case controllers under one switch.",
-        "Runtime-html promise-result link-hook diagnostics are RuntimeControllerIssue rows: AUR0813 for pending/then/catch controllers that are not rendered under the synthetic view of a parent promise.resolve controller.",
-        "Runtime-html renderer-dispatch diagnostics are RuntimeRendererIssue rows when no binding/controller product exists yet. As of 2026-05-13 RefBindingRenderer view.ref maps to not_supported_view_ref_api / AUR0750, custom-element-host named misses map to ref_not_found / AUR0751 after same-node custom attribute targets are checked, controller/component refs on ordinary elements map to node_is_not_a_host / AUR0762, named custom-element fallback on ordinary elements maps to node_is_not_a_host2 / AUR0763, and SpreadValueRenderer invalid targets map to spreading_invalid_target / AUR0820 through runtime-renderer-framework-error template/app diagnostics.",
-        "Runtime-html IViewFactory diagnostics are controller-activation pressure, not generic DI. Ordinary custom elements/custom attributes that resolve IViewFactory during instance activation map to view_factory_provider_not_ready / AUR0755 through RuntimeControllerIssue; template controllers receive the prepared provider and should not be diagnosed.",
-        "Runtime-html portal static activation diagnostics are RuntimeControllerIssue rows over inline multi-binding props: AUR0779 for unsupported literal InsertPosition, AUR0811 for strict empty target, and AUR0812 for strict missing target. The API should surface these as framework-code template/app diagnostics only after the compiler substrate has lowered the portal attribute's secondary grammar; neighboring HTML attributes are not portal bindable props."
+        "For broad fixture sweeps, use compact app-pressure fixture-owner rows (`templates.diagnostic-error-code-fixtures`, `app.diagnostic-error-code-fixtures`, `bindings.data-flow-error-code-fixtures`, `bindings.target-access-error-code-fixtures`, and `router.error-code-fixtures`) before doing isolated runs. These rows point exact framework codes at public fixture keys while custom/external roots collapse to `custom-root`."
       ],
       "nextActionPolicy": "when-touched",
       "anchors": [
@@ -470,6 +457,16 @@
           "filePath": "packages/semantic-runtime/src/api/contracts.ts",
           "symbolName": "SemanticAppDiagnosticRow",
           "summary": "Strict normalized app-diagnostic fact and detail-handle contract."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas pressure:framework-errors",
+          "summary": "Live error definitions, usage and semantic-runtime mapping frontiers for the admitted source revisions."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/test/app-diagnostic-fact-conservation.test.ts",
+          "summary": "Checks what survives from owning issue families into app diagnostics and client presentation."
         }
       ],
       "liveChecks": [
@@ -520,7 +517,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-07-12"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "decision:semantic-project-shape-open-policy",
@@ -759,18 +756,16 @@
         "router",
         "plugins"
       ],
-      "summary": "The public MCP preview should prioritize compact, idiomatic Aurelia answers; app-building source guidance now goes through Aurelia Patterns, not the retired app-builder facade.",
+      "summary": "Public MCP authoring guidance comes from concise, read-only Aurelia Patterns examples. Semantic-runtime supplies verification of the adapted application.",
       "rationale": "A not-yet-complete au-compose or router/viewport model can be explained for an early preview, but a tool that repeatedly guides AI toward verbose or suboptimal Aurelia code undermines the product thesis. Aurelia's short-term MCP value is trust: low-token answers that help agents write small, readable, object-oriented Aurelia apps using core observation, common routing, plugins, and advertised patterns.",
       "guidance": [
         "Use this decision before expanding public MCP prompts, tools, pattern guidance, or app-building output.",
         "Keep the MCP package a thin adapter over semantic-runtime query families; do not classify diagnostics, app-building taste, or source-plan policy in the transport layer.",
-        "For current public preview behavior, prioritize analysis answers that help agents write compact Aurelia: diagnostics including ordinary TypeScript diagnostics, app/router/template/binding facts, continuations, and concise prompt workflows.",
+        "Ground advice for writing Aurelia in the current public pattern, diagnostics and semantic query contracts.",
         "Treat the MCP orientation module as the public cold-start teaching source. It should teach sequencing and affordances, not app-specific canaries or product facts that belong in semantic-runtime answers.",
         "Keep startup token economy measurable: schema descriptions are valuable, but they should remain terse and the adversarial MCP contract should fail if `tools/list` grows beyond the current described-schema budget.",
         "Prioritize low-boilerplate Aurelia guidance in Aurelia Patterns: DI-owned state classes, direct state/domain template reads where appropriate, sparse bindables, direct object or ID boundaries chosen by the admitted pattern's local microdomain, and semantic-runtime verification after adaptation.",
         "Keep core observation high priority: ordinary template reads, proxy-observed domain state, value channels, binding data-flow, and the patterns that make forwarding getters unnecessary.",
-        "Keep common router support high enough for real app-building help, but do not make pixel-perfect au-viewport or ViewportAgent parity a first-preview blocker.",
-        "Treat au-compose as lower priority for the first public cut unless it blocks a common advertised pattern or an existing semantic-runtime query surface.",
         "When a public MCP answer would be verbose, improve the semantic-runtime summary query or structuredContent shape before accepting token-heavy guidance as the preview behavior.",
         "Expose Aurelia Patterns through MCP as small transport-local forwards over `@aurelia-ls/patterns`: `aurelia_pattern_menu` for discovery and `aurelia_pattern_example` for fetch-by-`patternId`.",
         "Do not restore `aurelia_app_builder_catalog`, `aurelia_app_builder_query`, target catalogs, input-readiness, source-lowering preflight, or SourcePlan request envelopes as public MCP app-building guidance unless a later product decision explicitly reopens that design.",
@@ -836,7 +831,7 @@
         }
       ],
       "createdAt": "2026-05-18",
-      "updatedAt": "2026-07-07"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "reuse:runtime-resource-local-binding-ownership",
@@ -1046,57 +1041,52 @@
         "incrementality",
         "cancellation"
       ],
-      "summary": "The LSP bridge advances semantic-runtime's project-input generation for source events, restarts only for topology changes, and retains convergent diagnostics plus required request guards; this is not the grand incremental compiler.",
-      "rationale": "The prior LSP lifecycle maintained parallel source/workspace counters and translated ordinary text edits into adapter-owned app-cache clears. Semantic-runtime now owns one monotone project-input authority and publishes each app analysis as one atomic generation over its captured inputs. The LSP bridge advances that authority for ordinary edits to already-admitted source so the same runtime can replace stale app generations, while configuration, topology, and source-admission membership changes still replace the runtime. Document-version classification, the convergent diagnostic drain, and request guards remain adapter responsibilities.",
+      "summary": "The LSP session records changes in effective workspace inputs. After an analysis change the client pulls diagnostics, and the session validates the managed receipt before reusing a result.",
+      "rationale": "A watched path, an open buffer and a client diagnostic request have different authority. An unchanged template can consume a changed TypeScript dependency. Lifecycle compares synchronized and host values; request ingress establishes a current semantic operation, and reuse depends on the inputs the earlier operation read.",
       "guidance": [
-        "For ordinary edits to existing admitted source, call recordSourceTextChanged(); it advances SemanticRuntimeProjectInputAuthority and lets the same runtime replace stale app generations without an eager cache clear.",
-        "For client configuration, tsconfig/jsconfig, project discovery, workspace-root, source-admission membership, or other topology changes, call recordProjectTopologyChanged(); it advances the project-input generation and drops the runtime facade.",
-        "vscode-languageserver TextDocuments.onDidChangeContent fires for both open and change. onDidOpen owns the initial source event; ignore the immediately following same-version content event instead of invalidating twice.",
-        "Diagnostics refreshes are a latest-generation drain. Keep every affected open document queued across stale generations and publish only under a current guard; do not restore fixed retry counts or independent fire-and-forget refresh ownership.",
-        "Concurrent source notifications share one monotone project-input sequence. A later generation stales older guards and app publications directly; do not restore a second pending-clear lifecycle in the adapter.",
-        "Do not reintroduce adapter-local invalidate calls or optional request guards. Runtime/session-backed handlers must capture a guard from the session and pass it through to paged query loops.",
-        "When a VS Code provider supplies a cancellation token, carry it through custom language-client requests. TS-origin rename composition must stop before conversion/application when cancellation wins.",
-        "Use `pnpm --filter @aurelia-ls/language-server measure:incrementality` for bridge telemetry. It measures the largest pressure fixture by default, records generation/timing/cache snapshots, and samples stale/cancelled request abort pressure without adding timing thresholds to tests.",
-        "MCP does not need LSP-style source generations unless it gains a live source-text stream or file-watch lifecycle. Its current integration is appRetention plus aurelia_clear_analysis_cache/analysis-cache overview for retained semantic-runtime sessions.",
-        "Boundary cancellation/stale checks prevent extra pages and stale publication, but they do not cancel synchronous semantic-runtime materialization already in progress. Deep materializer cancellation remains part of the later typed dependency/edge-kind incrementality work.",
-        "Do not claim this bridge admits unsaved new files or implements fine-grained product invalidation. Those require explicit source inputs, registered materializer reads, typed lifecycle/dependency edges, and product equality/fingerprints."
+        "On open remember the host value. On content synchronization compare the effective text, including for the content event emitted by opening a document. On close compare the synchronized text with the current host value. Equal text can retain the prior answer across these transitions.",
+        "Classify source-value edits, project-configuration value changes and structural membership changes separately. The managed workspace reconciles its source-world receipt; changing the workspace boundary can replace the managed session.",
+        "Publish a settled analysisChanged notification and request workspace/diagnostic/refresh when the client advertises refresh support. The client owns the next pull. For one changed source, a previously queried template in another file may need a full replacement.",
+        "In runDiagnosticRequest match presentation and the previous result ID, then absorb the cached receipt in the current managed operation. A silent edit to a closed, unowned TS dependency can invalidate the owned template on its next pull.",
+        "Carry the client cancellation token through the managed request and defer transport effects until the operation passes egress currentness. Use the managed workspace for both LSP and MCP ingress; each host supplies its own input policy.",
+        "Use measure:incrementality for source-built bridge timing and cache evidence. Check installed activation and Problems behavior in their owning host."
       ],
       "anchors": [
         {
           "kind": "source",
+          "filePath": "packages/language-server/src/handlers/lifecycle.ts",
+          "summary": "Open, synchronization, close, watcher classification and the analysis/refresh notification wave."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/language-server/src/runtime/semantic-runtime-session.ts",
-          "line": 63,
-          "summary": "LSP session bridges document events into semantic-runtime project-input generations, owns topology-driven runtime replacement, and issues required request guards."
+          "summary": "Source, configuration and topology ingress; diagnostic result identity and receipt admission."
         },
         {
           "kind": "source",
-          "filePath": "packages/language-server/src/handlers/lifecycle.ts",
-          "line": 186,
-          "summary": "The context-owned diagnostic drain retains affected documents until a current generation publishes them."
+          "filePath": "packages/language-server/src/runtime/open-document-source-text-overlay.ts",
+          "summary": "Synchronized text and authority for open content and existence."
         },
         {
           "kind": "source",
-          "filePath": "packages/language-server/src/handlers/lifecycle.ts",
-          "line": 359,
-          "summary": "Document versions distinguish a real content change from TextDocuments' same-version open echo."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/vscode/src/core/lsp-facade.ts",
-          "line": 123,
-          "summary": "TS-origin rename carries the provider cancellation token through the custom LSP request."
+          "filePath": "packages/semantic-runtime/src/api/managed-workspace-session.ts",
+          "summary": "Common managed ingress, receipt composition and egress currentness."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/kernel/project-input.ts",
           "symbolName": "SemanticRuntimeProjectInputAuthority",
-          "summary": "Semantic-runtime-owned monotone source/configuration generation used by the LSP lifecycle bridge."
+          "summary": "Descriptor-specific currentness and invalidation."
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/api/README.md",
-          "line": 223,
-          "summary": "Long-lived adapter guidance distinguishing answer-claim disposal from app-world cache clearing."
+          "filePath": "packages/language-server/test/unit/lifecycle.test.ts",
+          "summary": "Dirty-close restoration, equal save/close, and source versus configuration or topology events."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/language-server/test/integration/diagnostic-pull-lifecycle.test.ts",
+          "summary": "Source-built stdio requests exercise full, unchanged, direct edit, and subsequent reuse."
         }
       ],
       "liveChecks": [
@@ -1107,7 +1097,7 @@
         }
       ],
       "createdAt": "2026-07-08",
-      "updatedAt": "2026-07-18"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "decision:ide-assurance-layer-ownership",
@@ -1129,7 +1119,8 @@
         "Add lane-harness probes when LSP mapping, paging, source mapping, refusal conversion, or WorkspaceEdit assembly can lose or reshape a rich semantic answer. Generated snapshots record observation; sidecar verdicts record judgment.",
         "Add extension-host journeys only when VS Code state or API spending matters: dirty buffers, cancellation, diagnostics publication/recovery, multi-file edit application, undo/redo, or provider middleware.",
         "Use explicit boot-admitted Aurelia app fixtures for adapter tests that claim app/template behavior. Keep unadmitted filename-paired files only as honest negative controls; do not reintroduce project-global convention inference through tests.",
-        "Use selective triangulation after a coherent refactor. Do not clone every semantic assertion through every layer."
+        "Use selective triangulation after a coherent refactor. Do not clone every semantic assertion through every layer.",
+        "For release evidence, identify the exact VSIX and the installed host lane. A semantic fixture, stdio test or development-extension journey observes a different installed boundary."
       ],
       "anchors": [
         {
@@ -1192,7 +1183,7 @@
         }
       ],
       "createdAt": "2026-07-12",
-      "updatedAt": "2026-07-12"
+      "updatedAt": "2026-11-21"
     }
   ]
 }

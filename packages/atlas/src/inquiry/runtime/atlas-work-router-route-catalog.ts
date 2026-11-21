@@ -4856,12 +4856,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "MCP low token",
       "IDE for AI",
       "orient inspect diagnose repair navigate author verify profile",
-      "authoring continuations deferred",
-      "Author intent reserved",
-      "InquiryContinuationIntent.Author reserved",
-      "InquiryContinuationIntent.Verify parked",
+      "app-builder authoring continuations",
+      "InquiryContinuationIntent.Author",
+      "InquiryContinuationIntent.Verify",
       "InquiryContinuationIntent.Profile parked",
-      "InquiryContinuationCost.Deep parked",
+      "InquiryContinuationCost.Deep generated source plan",
       "InquiryContinuationKind canonical action vocabulary",
       "InquiryContinuationKind public app-query action",
       "targetQueryKind continuation ownership",
@@ -4937,21 +4936,21 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         query:
-          "InquiryContinuationIntent.Author reserved authoring continuations deferred app-builder",
+          "InquiryContinuationIntent.Author app-builder authoring follow-ups",
         summary:
-          "The author intent is vocabulary-level/reserved until app-builder owns authoring continuations; enum usage alone should not decide deletion.",
+          "The app-builder continuation owner constructs Author seeds. Follow the shaped target through its adapter to establish which callers can use it.",
       },
       {
         query:
-          "InquiryContinuationIntent.Verify Profile vocabulary-only semantic contract telemetry continuations",
+          "InquiryContinuationIntent.Verify app-builder and InquiryContinuationIntent.Profile telemetry continuations",
         summary:
-          "Verify/profile continuation intents are parked contract/telemetry pressure until concrete public continuation rows spend them.",
+          "App-builder constructs Verify seeds. For Profile, check for an emitting query family before inferring an executable follow-up from the vocabulary.",
       },
       {
         query:
-          "InquiryContinuationCost.Deep unspent broad semantic substrate continuation cost",
+          "InquiryContinuationCost.Deep app-builder generated source plan",
         summary:
-          "Deep continuation cost is parked vocabulary; current app-query costs are derived from runtime boundary and query-type-projection policy.",
+          "App-builder assigns Deep cost to targets whose catalog row requests a generated source plan. Ordinary app queries have their own cost policy.",
       },
       {
         query:
@@ -5230,9 +5229,9 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
     cautions: [
       "Do not let continuation intent become a parallel app-semantic ontology; app facts still belong in kernel claims, products, materializers, and source provenance.",
-      "Do not delete or promote continuation intent members from usage counts alone; reconcile usage with reviewed intent docs and parked app-builder/authoring scope.",
-      "Do not present verify/profile continuation intents as implemented lanes until contract or telemetry query families actually emit them.",
-      "Do not emit deep continuation cost by hand; add it only when a concrete continuation intentionally crosses a broad semantic-substrate boundary beyond app-world/query-type-projection policy.",
+      "Check the app-builder seed, its target query, and the consuming adapter before changing the continuation intent vocabulary.",
+      "Distinguish app-builder Verify follow-ups from a proposed Profile follow-up in a telemetry family.",
+      "Use the target query's catalog policy when classifying app-builder generated-source-plan costs.",
       "Do not treat continuation-related enums as isolated islands; check type-surface co-occurrence before deciding whether a value space belongs to a shared protocol.",
       "Do not mint target-specific continuation kind values when targetQueryKind and the shaped target query already own the concrete app-query lane.",
       "Do not use numeric confidence as the primary continuation contract; expose evidence state, coverage, source precision, staleness, and blockers.",

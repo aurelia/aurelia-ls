@@ -62,7 +62,7 @@
         {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:i18n-binding-lifecycle",
-          "summary": "Contract proving i18n dynamic keys are evaluate-only while t-params participates in source-scope-changing binding behavior flow."
+          "summary": "Exercises evaluate-only translation keys, parameter binding signal support, and view-model scope for both key and parameter expressions using & state."
         },
         {
           "kind": "script",
@@ -101,7 +101,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-26"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:i18n-translation-key-query-effect",

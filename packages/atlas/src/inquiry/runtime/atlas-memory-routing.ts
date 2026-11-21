@@ -29,6 +29,7 @@ import {
 } from "./evidence-helpers.js";
 import type {
   AtlasMemoryAnchor,
+  AtlasMemoryAnalysis,
   AtlasMemoryComputedStatus,
   AtlasMemoryRecordRow,
   AtlasMemoryStorageIssue,
@@ -226,15 +227,18 @@ export function atlasMemoryProjectionContinuations(
   ];
 }
 
-export function storageOpenSeams(
-  issues: readonly AtlasMemoryStorageIssue[],
+export function atlasMemoryOpenSeams(
+  analysis: AtlasMemoryAnalysis,
+  records: readonly AtlasMemoryRecordRow[],
 ): readonly OpenSeam[] {
-  return issues.map((issue) => ({
+  const storage = analysis.issues.map((issue) => ({
     id: issue.id,
     kind: OpenSeamKind.StaleSubstrate,
     summary: issue.summary,
     evidence: storageIssueEvidence(issue),
   }));
+  const ids = new Set(records.map(row => row.id));
+  return [...storage, ...analysis.scopeGaps.filter(gap => ids.has(gap.recordId))];
 }
 
 export function atlasMemoryNextPageContinuation(
@@ -255,6 +259,8 @@ export function atlasMemoryNextPageContinuation(
 
 function memoryEvidenceRole(status: AtlasMemoryComputedStatus): EvidenceRole {
   switch (status) {
+    case "out-of-scope":
+      return EvidenceRole.Boundary;
     case "resolved":
     case "stale-check":
     case "stale-source":

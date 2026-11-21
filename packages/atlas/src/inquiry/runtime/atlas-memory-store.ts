@@ -6,6 +6,7 @@ import { countBy } from "../../collections.js";
 import { errorMessage } from "../../errors.js";
 import {
   readProductArchitectureAnalysis,
+  type ProductArchitectureAnalysis,
   type ProductArchitectureClassSurfaceRow,
 } from "./product-architecture-analysis.js";
 import { sourceRangeForSourceFileNode, type SourceProject } from "../../source/index.js";
@@ -75,27 +76,21 @@ export function readAtlasMemoryAnalysis(
   const rows = store.database.records.map((stored) =>
     memoryRecordRow(
       sources,
-      productArchitecture.classSurfaces,
+      productArchitecture,
       atlasSelfAnalysis,
       stored,
     ),
   );
   const tracked = trackedAtlasMemoryProductClassKeys(rows);
   const untrackedProductClassFrontiers = untrackedProductLargeClassFrontiers(productArchitecture.classSurfaces, tracked);
-  const issues = [
-    ...store.issues,
-    ...atlasMemoryIntegrityIssues(
-      sources,
-      productArchitecture.classSurfaces,
-      records,
-      tracked,
-    ),
-  ];
+  const integrity = atlasMemoryIntegrityIssues(sources, productArchitecture, records, tracked);
+  const issues = [...store.issues, ...integrity.issues];
   return {
     version: ATLAS_MEMORY_SCHEMA_VERSION,
     storagePath: store.storagePath,
     storageExists: store.storageExists,
     records: rows,
+    scopeGaps: integrity.scopeGaps,
     untrackedProductClassFrontiers,
     rollup: memoryRollup(rows, untrackedProductClassFrontiers, issues),
     issues,
@@ -224,7 +219,7 @@ function jsonProperty(node: ts.Node | undefined, name: string): ts.PropertyAssig
 
 function memoryRecordRow(
   sources: AtlasMemorySources,
-  productClasses: readonly ProductArchitectureClassSurfaceRow[],
+  product: ProductArchitectureAnalysis,
   atlasSelfAnalysis: AtlasSelfAnalysis | undefined,
   stored: AtlasMemoryStoredRecord,
 ): AtlasMemoryRecordRow {
@@ -232,7 +227,7 @@ function memoryRecordRow(
   const liveChecks = (record.liveChecks ?? []).map((check) =>
     evaluateAtlasMemoryLiveCheck(
       sources,
-      productClasses,
+      product,
       atlasSelfAnalysis,
       check,
     ),
@@ -278,6 +273,10 @@ function computedRecordStatus(
       case "reuse-guide":
         return "reference";
     }
+  }
+  // A measured pressure remains live. An unresolved input prevents a negative conclusion.
+  if (checks.some((check) => check.status === "out-of-scope")) {
+    return "out-of-scope";
   }
   if (checks.some((check) => check.status === "present")) {
     switch (kind) {

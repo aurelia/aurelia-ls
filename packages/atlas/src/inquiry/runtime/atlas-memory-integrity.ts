@@ -2,10 +2,12 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { countBy } from "../../collections.js";
+import { OpenSeamKind, type OpenSeam } from "../evidence.js";
 import { LensCatalog } from "../lens.js";
-import type { ProductArchitectureClassSurfaceRow } from "./product-architecture-analysis.js";
+import type { ProductArchitectureAnalysis, ProductArchitectureClassSurfaceRow } from "./product-architecture-analysis.js";
 import {
   type AtlasMemoryAuLinkAnchor,
+  type AtlasMemoryAnalysis,
   type AtlasMemoryDocAnchor,
   type AtlasMemoryRecord,
   type AtlasMemoryScriptAnchor,
@@ -18,27 +20,26 @@ import { atlasMemoryProductClassKey } from "./atlas-memory-product-class-key.js"
 import {
   type AtlasMemorySources,
   atlasMemoryRepoPathExists,
-  atlasMemorySourceProjectHasDeclaration,
+  atlasMemoryDeclarationStatus,
 } from "./atlas-memory-source-helpers.js";
 
 /** Validate durable memory records against live source, lens, and package-script contracts. */
 export function atlasMemoryIntegrityIssues(
   sources: AtlasMemorySources,
-  productClasses: readonly ProductArchitectureClassSurfaceRow[],
+  product: ProductArchitectureAnalysis,
   records: readonly AtlasMemoryRecord[],
   trackedProductClassKeys: ReadonlySet<string>,
-): readonly AtlasMemoryStorageIssue[] {
-  return [
-    ...duplicateRecordIdIssues(records),
-    ...records.flatMap((record) => [
-      ...anchorIntegrityIssues(sources, productClasses, record),
-      ...sourceClassAnchorLiveCheckIssues(
-        productClasses,
-        trackedProductClassKeys,
-        record,
-      ),
-    ]),
-  ];
+): Pick<AtlasMemoryAnalysis, "issues" | "scopeGaps"> {
+  const issues = [...duplicateRecordIdIssues(records)];
+  const scopeGaps: Array<OpenSeam & { recordId: string }> = [];
+  for (const record of records) {
+    for (const finding of anchorIntegrityIssues(sources, product, record)) {
+      if ("kind" in finding) scopeGaps.push({ ...finding, recordId: record.id });
+      else issues.push(finding);
+    }
+    issues.push(...sourceClassAnchorLiveCheckIssues(product.classSurfaces, trackedProductClassKeys, record));
+  }
+  return { issues, scopeGaps };
 }
 
 function duplicateRecordIdIssues(
@@ -55,10 +56,10 @@ function duplicateRecordIdIssues(
 
 function anchorIntegrityIssues(
   sources: AtlasMemorySources,
-  productClasses: readonly ProductArchitectureClassSurfaceRow[],
+  product: ProductArchitectureAnalysis,
   record: AtlasMemoryRecord,
-): readonly AtlasMemoryStorageIssue[] {
-  return (record.anchors ?? []).flatMap((anchor, index) => {
+): readonly (AtlasMemoryStorageIssue | OpenSeam)[] {
+  return (record.anchors ?? []).flatMap<AtlasMemoryStorageIssue | OpenSeam>((anchor, index) => {
     if (anchor.kind === "external") {
       return [];
     }
@@ -67,7 +68,7 @@ function anchorIntegrityIssues(
         ? lensAnchorIntegrityIssues(record, anchor.lensId, anchor.projection, index)
         : anchor.kind === "script"
           ? scriptAnchorIntegrityIssues(sources, record, anchor, index)
-          : auLinkAnchorIntegrityIssues(productClasses, record, anchor, index);
+          : auLinkAnchorIntegrityIssues(sources, product, record, anchor, index);
     }
     const filePath = anchor.kind === "source" ? anchor.filePath : anchor.path;
     const issues: AtlasMemoryStorageIssue[] = [];
@@ -78,16 +79,14 @@ function anchorIntegrityIssues(
       });
       return issues;
     }
-    if (
-      anchor.kind === "source" &&
-      anchor.symbolName !== undefined &&
-      !atlasMemorySourceProjectHasDeclaration(
-        sources,
-        anchor.filePath,
-        anchor.symbolName,
-      )
-    ) {
-      issues.push({
+    if (anchor.kind === "source" && anchor.symbolName !== undefined) {
+      const status = atlasMemoryDeclarationStatus(sources, anchor.filePath, anchor.symbolName);
+      if (status === "out-of-scope") return [{
+        kind: OpenSeamKind.InsufficientBasis,
+        id: `atlas.memory:record:${record.id}:anchor:${index}:out-of-scope`,
+        summary: `Checking ${anchor.symbolName} for ${record.id} requires admitting ${anchor.filePath} to the declaration index.`,
+      }];
+      if (status === "stale-check") issues.push({
         id: `atlas.memory:record:${record.id}:anchor:${index}:missing-symbol`,
         summary: `Memory record ${record.id} points at ${anchor.symbolName} in ${anchor.filePath}, but the source project did not find that declaration there.`,
       });
@@ -133,23 +132,32 @@ function docAnchorHeadingIssues(
 }
 
 function auLinkAnchorIntegrityIssues(
-  productClasses: readonly ProductArchitectureClassSurfaceRow[],
+  sources: AtlasMemorySources,
+  product: ProductArchitectureAnalysis,
   record: AtlasMemoryRecord,
   anchor: AtlasMemoryAuLinkAnchor,
   index: number,
-): readonly AtlasMemoryStorageIssue[] {
-  const found = productClasses.some((row) =>
+): readonly (AtlasMemoryStorageIssue | OpenSeam)[] {
+  const found = product.classSurfaces.some((row) =>
     row.auLinkIds.includes(anchor.linkId) &&
     (anchor.symbolName === undefined || row.name === anchor.symbolName),
   );
-  return found
-    ? []
-    : [
-      {
-        id: `atlas.memory:record:${record.id}:anchor:${index}:unknown-aulink`,
-        summary: `Memory record ${record.id} points at auLink ${anchor.linkId}, but product.architecture did not find a matching semantic-runtime decorator placement.`,
-      },
-    ];
+  if (found) return [];
+  const excludedPlacement = record.liveChecks?.find(check =>
+    check.kind === "auLink-exists" && check.linkId === anchor.linkId &&
+    (anchor.symbolName === undefined || anchor.symbolName === check.symbolName) &&
+    check.filePath !== undefined && !product.modules.some(row => row.filePath === check.filePath) &&
+    atlasMemoryRepoPathExists(sources, check.filePath),
+  );
+  if (product.modules.length === 0 || excludedPlacement !== undefined) return [{
+    kind: OpenSeamKind.InsufficientBasis,
+    id: `atlas.memory:record:${record.id}:anchor:${index}:out-of-scope`,
+    summary: `Checking auLink ${anchor.linkId} for ${record.id} requires admitting ${excludedPlacement?.filePath ?? "semantic-runtime source"} to product.architecture.`,
+  }];
+  return [{
+    id: `atlas.memory:record:${record.id}:anchor:${index}:unknown-aulink`,
+    summary: `Memory record ${record.id} points at auLink ${anchor.linkId}, but product.architecture did not find a matching semantic-runtime decorator placement.`,
+  }];
 }
 
 function lensAnchorIntegrityIssues(

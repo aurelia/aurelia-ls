@@ -4,12 +4,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { createSourceProject } from "../dist/source/project.js";
-import { readFrameworkModuleBootIndex } from "../dist/framework/module-boot.js";
-import { readEvaluationEffectTrace } from "../dist/evaluation/effects.js";
-import { answerFrameworkDi } from "../dist/inquiry/runtime/framework-di-lenses.js";
-import { answerFrameworkEvaluator } from "../dist/inquiry/runtime/framework-evaluator-lenses.js";
-import { readFrameworkMaterializationIndex } from "../dist/inquiry/runtime/framework-materialization-lenses.js";
+import {
+  answerFrameworkDi,
+  answerFrameworkEvaluator,
+  createSourceProject,
+  readEvaluationEffectTrace,
+  readFrameworkMaterializationIndex,
+  readFrameworkModuleBootIndex,
+} from "@aurelia-ls/atlas/analysis";
 
 function configurationProject(root, useClassKeys = false) {
   const packages = ["kernel", "router", "validation", "runtime-html"].map(id => ({

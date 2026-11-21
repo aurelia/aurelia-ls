@@ -26,7 +26,7 @@ import {
   nextActionContinuations,
   nextActionEvidence,
   storageIssueEvidence,
-  storageOpenSeams,
+  atlasMemoryOpenSeams,
   untrackedProductClassFrontierEvidence,
 } from "./atlas-memory-routing.js";
 import {
@@ -150,10 +150,12 @@ function memoryAtPath(store: AtlasMemoryAnalysis, path: string, exactFile: boole
   const records = store.records.filter(row =>
     (exactFile && row.shardPath === path) || atlasMemoryBackingPaths(row).some(matches),
   );
+  const ids = new Set(records.map(row => row.id));
   const untrackedProductClassFrontiers = store.untrackedProductClassFrontiers.filter(row => matches(row.filePath));
   return {
     ...store,
     records,
+    scopeGaps: store.scopeGaps.filter(gap => ids.has(gap.recordId)),
     untrackedProductClassFrontiers,
     rollup: memoryRollup(records, untrackedProductClassFrontiers, store.issues),
   };
@@ -194,7 +196,7 @@ function answerAtlasMemorySummary(
       },
       basis,
       evidence,
-      openSeams: storageOpenSeams(analysis.issues),
+      openSeams: atlasMemoryOpenSeams(analysis, [...summaryRecords, ...backingRecordsForNextActions(nextActions)]),
       continuations: atlasMemorySummaryContinuations(
         inquiry,
         summaryRecords,
@@ -241,7 +243,7 @@ function answerAtlasMemoryRecordRows(
       records: page.rows,
       issues: analysis.issues,
     }),
-    openSeams: () => storageOpenSeams(analysis.issues),
+    openSeams: page => atlasMemoryOpenSeams(analysis, page.rows),
   });
 }
 
@@ -279,7 +281,7 @@ function answerAtlasMemoryFrontiers(
       frontiers: page.rows,
       issues: analysis.issues,
     }),
-    openSeams: () => storageOpenSeams(analysis.issues),
+    openSeams: page => atlasMemoryOpenSeams(analysis, page.rows.flatMap(row => row.kind === "memory-record" ? [row.record] : [])),
   });
 }
 
@@ -321,7 +323,7 @@ function answerAtlasMemoryNextActions(
         backingUntrackedFrontiersForNextActions(page.rows),
       issues: analysis.issues,
     }),
-    openSeams: () => storageOpenSeams(analysis.issues),
+    openSeams: page => atlasMemoryOpenSeams(analysis, backingRecordsForNextActions(page.rows)),
   });
 }
 
@@ -495,6 +497,9 @@ function atlasMemoryBasis(
   sourceProject: SourceProject,
   analysis: AtlasMemoryAnalysis,
 ): readonly Basis[] {
+  const excludedChecks = analysis.records.reduce(
+    (count, row) => count + row.liveChecks.filter(check => check.status === "out-of-scope").length, 0,
+  );
   return [
     {
       kind: BasisKind.HumanJudgement,
@@ -510,11 +515,10 @@ function atlasMemoryBasis(
     },
     {
       kind: BasisKind.TypeScriptProgram,
-      closure: BasisClosure.Exact,
+      closure: analysis.scopeGaps.length > 0 || excludedChecks > 0 ? BasisClosure.Partial : BasisClosure.Exact,
       authority: BasisAuthority.Checker,
       freshness: BasisFreshness.Live,
-      summary:
-        "Joined memory live checks to product.architecture rows derived from the hot TypeScript Program.",
+      summary: `Evaluated memory against admitted source and analysis surfaces. Across ${analysis.records.length} record(s), ${analysis.scopeGaps.length} anchor(s) and ${excludedChecks} live check(s) were outside that scope.`,
       identity: sourceProject.summary().identity,
     },
   ];

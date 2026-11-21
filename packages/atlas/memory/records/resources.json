@@ -36,7 +36,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/resource-definition-converger.ts",
           "symbolName": "ResourceDefinitionConverger",
-          "line": 326,
           "summary": "Resource definition convergence materializer."
         },
         {
@@ -145,7 +144,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-08-24"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:resource-metadata-diagnostics",
@@ -274,14 +273,12 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/resource-recognition-publication.ts",
           "symbolName": "ResourceRecognitionPublicationSupport",
-          "line": 93,
           "summary": "Resource recognition publication support."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/resource-recognition-kernel-emitter.ts",
           "symbolName": "ResourceRecognitionKernelEmitter",
-          "line": 84,
           "summary": "Recognition emitter that frames source records, headers, products, and materialization records."
         },
         {
@@ -307,7 +304,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-13"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:built-in-resource-catalog-materializer",
@@ -325,7 +322,7 @@
         "Start here when framework built-ins, configured resource catalogs, i18n/state/runtime-html/validation-html resource visibility, or built-in full definitions are involved.",
         "Keep catalog grouping and configured catalog selection distinct from per-resource publication and built-in full-definition construction.",
         "Keep the selected built-in catalog header in TemplateVisibleResource.resourceProductHandle and the converged full definition in definitionProductHandle. Built-in identity consumers must read the selected header directly; never reconstruct catalog origin from a definition by scanning convergence claims, because that loses compiler visibility and app-shadowing authority.",
-        "ValidationHtmlConfiguration admits a default validation-html catalog with ValidateBindingBehavior, ValidationErrorsCustomAttribute, and ValidationContainerCustomElement; option-sensitive subscriber toggles are still a future customization frontier.",
+        "ValidationHtmlConfiguration enables both subscriber resources by default. The catalog reads UseSubscriberCustomAttribute and SubscriberCustomElementTemplate for the exact admission. Check each resource independently under a closed option and under an unknown registration.",
         "Atlas resource convergence now sees nested framework definition calls such as CustomElement.define({ ...defaultContainerDefinition, template }, ValidationContainerCustomElement); use the convergence lens before assuming framework resources must be decorator/static-$au carriers.",
         "Use `framework:resources -- --projection=convergence` and framework.discovery bundle rows before assuming StandardConfiguration is the only source of built-in resource visibility."
       ],
@@ -334,21 +331,18 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/built-in-resource-catalog-materializer.ts",
           "symbolName": "BuiltInResourceCatalogMaterializer",
-          "line": 353,
           "summary": "Built-in resource catalog materializer."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/built-in-resource-catalog-materializer.ts",
           "symbolName": "ConfiguredBuiltInResourceCatalogMaterializer",
-          "line": 632,
           "summary": "Configured built-in resource catalog selection materializer."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/built-in-resource-catalog-materializer.ts",
           "symbolName": "BuiltInResourcePublicationMaterializer",
-          "line": 151,
           "summary": "Per-resource built-in publication companion."
         },
         {
@@ -367,6 +361,17 @@
           "lensId": "framework.resources",
           "projection": "convergence",
           "summary": "Framework resource grounding for built-in resource visibility."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/framework-capability-configuration.ts",
+          "symbolName": "validationHtmlResourceConfigurationForAdmission",
+          "summary": "Computes default, closed and open subscriber options for one admission."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/validation-html-configured-resources",
+          "summary": "False, empty string, null and undefined options in distinct app roots."
         }
       ],
       "liveChecks": [
@@ -393,7 +398,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-22"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:resource-recognition-project-pass",
@@ -413,7 +418,7 @@
         "Start here when project-level resource recognition, linked source admission, build-transform admission, unresolved module carry-through, recognition profiling, or TypeChecker handoff changes.",
         "Keep source-level recognizers and convergence materializers below this pass; this class should orchestrate them rather than learn carrier-specific resource logic.",
         "Resource recognition depends on the shared project evaluator executing local side-effect imports. If a source file is admitted but its decorators are invisible, inspect StaticModuleGraphEvaluator.evaluateSideEffectImport before adding a resource-local import walk.",
-        "Convention-derived resources require source-specific transform evidence. Read supported build-tool configuration before recognition and publish an open admission seam when the transform cannot be closed; do not let recognizers infer project-global convention activation.",
+        "Pass source-specific transform evidence from evaluated tooling or the active invocation provider to the recognizer. An open configuration remains open.",
         "If imported templates lose exact provenance, inspect this pass and the shared evaluation source admissions before adding template-layer fallbacks.",
         "When convergence follows AST nodes into linked modules, thread ResourceRecognitionContextIndex and ask readNodeContext for the owning source context before evaluating expressions or source spans."
       ],
@@ -422,7 +427,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/resource-recognition-project-pass.ts",
           "symbolName": "ResourceRecognitionProjectPass",
-          "line": 200,
           "summary": "Project-level resource recognition and transform-admission pass."
         },
         {
@@ -435,6 +439,11 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/README.md",
           "summary": "Project-level recognition, linked-source, and transform-admission guidance."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/test/resource-definition-source-attachment.test.ts",
+          "summary": "Covers nested AOT Vite options, invocation-only provider reach and exclusion."
         }
       ],
       "liveChecks": [
@@ -452,7 +461,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-11"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:resource-definition-index",
@@ -482,7 +491,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/resource-definition-index.ts",
           "symbolName": "ResourceDefinitionIndex",
-          "line": 32,
           "summary": "Converged resource definition lookup index."
         },
         {
@@ -513,7 +521,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-22"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:resource-definition-api-issues",
@@ -539,7 +547,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/resource-definition-api-issues.ts",
           "symbolName": "ResourceDefinitionApiIssueMaterializer",
-          "line": 90,
           "summary": "Materializes direct runtime-html resource definition API issue products."
         },
         {
@@ -574,7 +581,7 @@
         }
       ],
       "createdAt": "2026-05-14",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "reuse:style-registry-dependencies",
@@ -799,14 +806,14 @@
         "tooling",
         "provenance"
       ],
-      "summary": "Convention-derived resources require source-backed build-transform admission rather than class/file-shape inference.",
-      "rationale": "Aurelia conventions are implemented by build-tool preprocessing that emits resource metadata before runtime registration. A convention-shaped source class is therefore not itself proof of a resource. Semantic-runtime must admit the transform from project tooling, preserve that evidence per matching source, and remain open when configuration cannot be closed statically.",
+      "summary": "Conventions require matching per-source transform evidence from evaluated tooling or an explicit provider for this app invocation.",
+      "rationale": "Provider admissions can change the outcome for identical source files. Include the provider module, filter base and include/exclude patterns in the world being compared.",
       "guidance": [
-        "Do not recognize convention resources from class/file shape alone; ResourceRecognitionProjectPass must supply source-specific transform evidence.",
+        "ResourceRecognitionProjectPass spends transform evidence for each matching source. Test both the configured plugin and invocation-provided route before concluding that a convention is absent.",
         "Read tooling configuration through the shared StaticProjectEvaluationPass with tooling-config roots and narrow host intrinsics; do not build a resource-local AST closure evaluator.",
         "Carry Vite and Aurelia plugin factory identity through StaticModuleExternalValueResolver and the CommonJS require host boundary; do not reconstruct import identity from local syntax inside the resource adapter.",
         "Use evaluator executedCallExpressions for plugin-call evidence; syntax-only scans must not turn uninvoked helpers or dead branches into transform admission or open seams.",
-        "Supported static Vite configuration reads @aurelia/vite-plugin admission, enableConventions, and include/exclude source filters through the same evaluator path for ESM imports/exports and CommonJS require/module.exports. Missing tooling or explicit false means the convention resource is absent.",
+        "The tooling reader recognizes @aurelia/vite-plugin directly and @aurelia-ls/aot-vite aureliaAot through its conventions option. With no tooling source, conventionTransformAdmissions can still establish reach. An invocation-specific exclusion can remove that same source.",
         "Dynamic plugin lists, options, or filter expressions publish resource.open-convention-transform-admission instead of minting confident resource definitions.",
         "Convention admission seams preserve evaluator boundary reason kinds such as host-environment-value instead of replacing known provenance with feature-not-yet-modeled.",
         "Convention recognition provenance retains the tooling transform evidence and paired-template admission. A derived public resource name remains non-editable until an authored name token exists.",
@@ -865,6 +872,17 @@
           "kind": "source",
           "filePath": "aurelia/packages-tooling/vite-plugin/src/index.ts",
           "summary": "Aurelia Vite plugin owns preprocessing and source-filter admission."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-convention-transform-admission.ts",
+          "symbolName": "ResourceConventionTransformAdmissionInput",
+          "summary": "Active provider evidence on an app-analysis invocation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/test/resource-definition-source-attachment.test.ts",
+          "summary": "Covers nested AOT Vite options, invocation-only provider reach and exclusion."
         }
       ],
       "liveChecks": [
@@ -885,7 +903,7 @@
         }
       ],
       "createdAt": "2026-07-11",
-      "updatedAt": "2026-07-11"
+      "updatedAt": "2026-11-21"
     }
   ]
 }

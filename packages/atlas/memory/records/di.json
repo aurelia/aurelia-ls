@@ -60,7 +60,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/di/container-materializer.ts",
           "symbolName": "ContainerChildMaterializer",
-          "line": 128,
           "summary": "Runtime-created child container materializer."
         }
       ],
@@ -74,7 +73,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:container",
@@ -238,14 +237,15 @@
         "Resolver wrapper calls such as newInstanceOf(...) are source-recognized as resolver keys; invalid_new_instance_on_interface / AUR0017 is exact only when the container state is proven fresh and the wrapped interface has no default registration.",
         "Use InstanceProvider for contextual provider semantics and no_instance_provided / AUR0013; keep it at provider-resolution level until a source/runtime lifecycle path proves a diagnostic.",
         "Keep resolver model changes grounded in framework.di rather than local app pressure alone.",
-        "If resolver publication grows, route record emission through DI publication materializers instead of inflating Resolver."
+        "If resolver publication grows, route record emission through DI publication materializers instead of inflating Resolver.",
+        "Preserve the handler, original requestor and registration order at alias activation. Resolver.resolve exposes a lookup against its container snapshot. Activation re-enters through DiProviderActivationSession and can see a different effective target.",
+        "At d5305caef alias re-entry passes a canonical key with null sourceValue. Direct interface defaults and AUR0012 on a direct missing interface are exercised by the provider-model test. They need separate alias controls."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/di/resolver.ts",
           "symbolName": "Resolver",
-          "line": 74,
           "summary": "Semantic-runtime resolver model."
         },
         {
@@ -265,6 +265,16 @@
           "lensId": "framework.di",
           "projection": "relationships",
           "summary": "Framework DI resolver relationship grounding."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/provider-activation.ts",
+          "summary": "Alias re-entry, requestor and activation-session state."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/test/di-provider-model.test.ts",
+          "summary": "Direct interface default, missing interface, alias and authored-order controls."
         }
       ],
       "liveChecks": [
@@ -282,7 +292,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-17"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:di-world-publication-materializers",

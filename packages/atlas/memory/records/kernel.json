@@ -25,7 +25,6 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/kernel/store.ts",
           "symbolName": "KernelStore",
-          "line": 88,
           "summary": "Central kernel product-record store."
         },
         {
@@ -51,7 +50,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-17"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "reuse:authored-source-text-cache",
@@ -276,21 +275,19 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/kernel/product-details.ts",
           "symbolName": "ProductDetailCatalog",
-          "line": 48,
           "summary": "Hot typed product-detail catalog."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/kernel/product-details.ts",
           "symbolName": "ProductDetailSlot",
-          "line": 13,
           "summary": "Typed product-detail slot contract."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/kernel/product-details.ts",
-          "line": 83,
-          "summary": "Bulk detail attachment for homogeneous emitted product-detail row families."
+          "summary": "Bulk detail attachment for homogeneous emitted product-detail row families.",
+          "symbolName": "ProductDetailCatalog.addAll"
         }
       ],
       "liveChecks": [
@@ -303,7 +300,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-18"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "frontier:hot-detail-catalog",
@@ -774,7 +771,8 @@
         "The former focused family producer and dynamic cohort authorities are deleted. Do not recreate a second family production path.",
         "Owner-local materialization membership and pre/family/post phase ownership are revisioned. Carry a family only through ComputationRun.tryCarryChild after exact rebase and retained dependency preview; otherwise rerun it.",
         "The measured activation layer is the existing deterministic family loop over a pre-template -> independent family* -> post-template star. Only Retain cuts propagation; open closure, RefreshWitness, nontrivial SCCs, or failed rebase rerun.",
-        "Keep app-root compiler worlds under pre-template until they have an independently reusable closure. Computation children are flat, so lexically nesting an app-root child would create a sibling SCC rather than hierarchy."
+        "Keep app-root compiler worlds under pre-template until they have an independently reusable closure. Computation children are flat, so lexically nesting an app-root child would create a sibling SCC rather than hierarchy.",
+        "When an upstream bindable changes, distinguish an equal retained projection from the current definition object required by a consumer. Compare the compiler read, current emitted definition and caller use before interpreting a reference-equality failure as evidence of safe reuse."
       ],
       "anchors": [
         {
@@ -799,6 +797,11 @@
           "kind": "doc",
           "path": "packages/semantic-runtime/src/template/README.md",
           "summary": "Template-family ownership and exact compiler-to-runtime handoff."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/test/template-family-production-lifecycle.test.ts",
+          "summary": "Recursive ownership, retained output and resource-definition identity after an upstream bindable edit. The definition-reference assertion requires an independent decision about canonical current identity."
         }
       ],
       "liveChecks": [
@@ -814,7 +817,7 @@
         }
       ],
       "createdAt": "2026-07-17",
-      "updatedAt": "2026-07-22"
+      "updatedAt": "2026-11-21"
     },
     {
       "id": "decision:product-owned-hot-detail-boundary",
@@ -1058,7 +1061,8 @@
         "Classify a descriptor as PushObserved only when every mutation affecting it calls advance(); the LSP policy currently applies that proof only to open-document content and existence, not to the surrounding filesystem.",
         "Use SessionSnapshot only when snapshotIdentity names immutable input output, not merely a mutable host session.",
         "Do not replace exact project-input values with event or snapshot identities. Those witnesses avoid redundant validation; exact values still decide semantic carry when a generation is recaptured.",
-        "Synchronize policy-mode and snapshot-identity transitions with advance() so a generation cannot observe changed authority before revocation."
+        "Synchronize policy-mode and snapshot-identity transitions with advance() so a generation cannot observe changed authority before revocation.",
+        "Warm diagnostic pulls match presentation and the prior result ID, then validate and absorb the cached operation receipt. A closed imported type can change without a client notification. Module selection can also depend on existence of a previously absent candidate."
       ],
       "anchors": [
         {
@@ -1081,6 +1085,21 @@
           "kind": "doc",
           "path": "packages/semantic-runtime/src/kernel/README.md",
           "summary": "Project-input generation, exact-read, and change-detection doctrine."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/language-server/src/runtime/semantic-runtime-session.ts",
+          "summary": "runDiagnosticRequest uses the retained receipt before returning an unchanged report."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/language-server/test/unit/dependency-currentness.test.ts",
+          "summary": "A closed imported dependency has no authored owner. Editing it invalidates the previously reported template diagnostic."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/language-server/test/integration/diagnostic-pull-lifecycle.test.ts",
+          "summary": "Real stdio baseline for unchanged reuse and a direct edit to the open template."
         }
       ],
       "liveChecks": [
@@ -1099,7 +1118,7 @@
         }
       ],
       "createdAt": "2026-08-03",
-      "updatedAt": "2026-08-04"
+      "updatedAt": "2026-11-21"
     }
   ]
 }
