@@ -107,22 +107,27 @@ test("cold open-document bursts converge on diagnostics for the latest unsaved t
       myApp.text.replace("${preview.name}", "${heading()}"),
     );
 
-    let rows: LspDiagnosticLike[];
     try {
-      rows = await waitForDiagnosticsWithMessage(diagnostics, myApp.uri, "not callable");
+      const rows = await diagnostics.wait(myApp.uri, 10000) as LspDiagnosticLike[];
+      const start = myApp.text.indexOf("heading()");
+      expect(start).toBeGreaterThanOrEqual(0);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        code: "AUR0111",
+        range: { start: positionAt(myApp.text, start), end: positionAt(myApp.text, start + "heading()".length) },
+        relatedInformation: [expect.objectContaining({
+          message: expect.stringContaining("TS2349"),
+          location: { uri: myApp.uri, range: {
+            start: positionAt(myApp.text, start), end: positionAt(myApp.text, start + "heading".length),
+          } },
+        })],
+      });
     } catch (error) {
       throw new Error(
         `${error instanceof Error ? error.message : String(error)}\nServer lifecycle log:\n${serverLogs.join("\n")}`,
         { cause: error },
       );
     }
-    const diagnostic = rows.find((row) => diagnosticMessage(row).includes("not callable"));
-    expect(diagnostic).toBeDefined();
-    const start = myApp.text.indexOf("heading()");
-    expect(diagnostic?.range).toEqual({
-      start: positionAt(myApp.text, start),
-      end: positionAt(myApp.text, start + "heading".length),
-    });
   } finally {
     logSubscription.dispose();
     diagnostics.dispose();

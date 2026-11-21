@@ -139,15 +139,19 @@ test('template diagnostics use the default, false, and true Aurelia strictness m
       reports.set(relativePath, await pullDiagnostics(connection, uri));
     }
 
-    expect(reports.get('src/default-strict.html')?.items.map(diagnosticCode)).not.toContain('TS18047');
-    expect(reports.get('src/explicit-loose.html')?.items.map(diagnosticCode)).not.toContain('TS18047');
-    const strictNullish = reports.get('src/explicit-strict.html')?.items.filter((item) =>
-      diagnosticCode(item) === 'TS18047'
-    ) ?? [];
-    expect(strictNullish).toHaveLength(1);
-    expect(strictNullish[0]?.range).toEqual({
-      start: { line: 0, character: 5 },
-      end: { line: 0, character: 14 },
+    expect(reports.get('src/default-strict.html')?.items).toEqual([]);
+    expect(reports.get('src/explicit-loose.html')?.items).toEqual([]);
+    const strict = reports.get('src/explicit-strict.html')!.items;
+    expect(strict).toHaveLength(1);
+    expect(strict[0]).toMatchObject({
+      code: 'AUR0114',
+      range: { start: { line: 0, character: 5 }, end: { line: 0, character: 20 } },
+      relatedInformation: [expect.objectContaining({
+        message: expect.stringContaining('TS18047'),
+        location: { uri: fileUri(fixture, 'src/explicit-strict.html'), range: {
+          start: { line: 0, character: 5 }, end: { line: 0, character: 14 },
+        } },
+      })],
     });
   } finally {
     dispose();

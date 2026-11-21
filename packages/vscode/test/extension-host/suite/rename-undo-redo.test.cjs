@@ -465,11 +465,11 @@ suite("extension-host IDE reliability", () => {
         nonCallableDiagnostic = vscode.languages.getDiagnostics(document.uri).find((diagnostic) => {
           const code = typeof diagnostic.code === "object" ? diagnostic.code.value : diagnostic.code;
           return diagnostic.source === "aurelia"
-            && code === "TS2349"
-            && document.getText(diagnostic.range) === "heading";
+            && code === "AUR0111"
+            && document.getText(diagnostic.range) === "heading()";
         });
         return nonCallableDiagnostic != null;
-      }, "unsaved non-callable template expression should publish TS2349 on the authored member token", DIAGNOSTIC_RELIABILITY_TIMEOUT_MS);
+      }, "unsaved non-callable template expression should publish AUR0111 on the authored call", DIAGNOSTIC_RELIABILITY_TIMEOUT_MS);
     } catch (error) {
       const diagnostics = vscode.languages.getDiagnostics(document.uri).map((diagnostic) => ({
         source: diagnostic.source,
@@ -484,7 +484,11 @@ suite("extension-host IDE reliability", () => {
       );
     }
     assert.strictEqual(nonCallableDiagnostic.severity, vscode.DiagnosticSeverity.Error);
-    assert.match(nonCallableDiagnostic.message, /not callable/i);
+    assert(nonCallableDiagnostic.relatedInformation?.some(related =>
+      related.message.startsWith("TS2349:")
+      && related.location.uri.toString() === document.uri.toString()
+      && document.getText(related.location.range) === "heading"
+    ), "Expected the TypeScript callability diagnostic on the authored callee.");
     assertDirty([rel], true, "after introducing template type error");
 
     changeLog = [];
