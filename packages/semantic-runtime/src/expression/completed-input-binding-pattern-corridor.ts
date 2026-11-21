@@ -1,4 +1,4 @@
-import { TokenType, type Token } from './expression-scanner.js';
+import { hasTokenFlag, TokenFlags, TokenType, type Token } from './expression-scanner.js';
 import {
   ArrayBindingPattern,
   BindingIdentifier,
@@ -471,7 +471,7 @@ export class CompletedInputBindingPatternCorridor {
   }
 
   private isObjectBindingKeyToken(token: Token): boolean {
-    return token.type === TokenType.Identifier
+    return hasTokenFlag(token.type, TokenFlags.IdentifierName)
       || token.type === TokenType.StringLiteral
       || token.type === TokenType.NumericLiteral;
   }

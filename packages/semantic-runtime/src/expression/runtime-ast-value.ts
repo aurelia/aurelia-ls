@@ -407,7 +407,8 @@ class RuntimeExpressionAstValueProjector {
       }
       case 'Interpolation': {
         const expressions = this.projectAll(expression.expressions, [...path, 'expressions']);
-        if (expressions == null || expressions.length === 0) {
+        if (expressions == null) return null;
+        if (expressions.length === 0) {
           throw new Error('Runtime Interpolation projection requires its parser-owned nonempty expression band.');
         }
         return {

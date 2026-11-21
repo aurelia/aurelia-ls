@@ -76,6 +76,59 @@ describe('runtime expression AST value projection', () => {
     });
   });
 
+  test.each([
+    ['condition?.5:1', { $kind: 'Conditional', yes: { value: 0.5 } }],
+    ['({true:label}).true', { $kind: 'AccessMember', name: 'true', object: { keys: ['true'] } }],
+    ['(label) = 1', { $kind: 'Assign', target: { name: 'label' } }],
+    ['(x,) => x', { $kind: 'ArrowFunction', args: [{ name: 'x' }] }],
+    ['2 ** 3 ** 2', { $kind: 'Binary', left: { operation: '**' }, right: { value: 2 } }],
+    ['2 ** (3 ** 2)', { $kind: 'Binary', left: { value: 2 }, right: { operation: '**' } }],
+    ['x => `value ${$this.x}`', { body: { expressions: [{ name: 'x', ancestor: 1 }] } }],
+    ['new new X()', { $kind: 'New', func: { $kind: 'New', func: { name: 'X' } } }],
+    ['x | new', { $kind: 'ValueConverter', name: 'new' }],
+    ['x & true', { $kind: 'BindingBehavior', name: 'true' }],
+  ] as const)('preserves the framework expression shape for %s', (source, expected) => {
+    const result = new ExpressionParser().parse(source, 'IsProperty');
+    if (result.kind !== ExpressionParseResultKind.ExpressionSuccess) throw new Error(`Expected a complete expression for ${source}.`);
+    expect(source.slice(result.ast.span.start, result.ast.span.end)).toBe(source);
+    expect(projectRuntimeExpressionAstValue(result.ast)).toMatchObject({
+      state: RuntimeExpressionAstProjectionState.Exact,
+      value: expected,
+    });
+  });
+
+  test.each([
+    ['1e3', 'AUR0156'],
+    ['$this.x => x', 'AUR0156'],
+    ['(x?.name) = 1', 'AUR0158'],
+    ['f(#)', 'AUR0168'],
+    ['(a,#)', 'AUR0168'],
+    ['x.#', 'AUR0168'],
+    ['a?.', 'AUR0155'],
+  ])('rejects %s with the framework diagnostic', (source, code) => {
+    expect(new ExpressionParser().parse(source, 'IsProperty')).toMatchObject({ frameworkErrorCode: code });
+  });
+
+  test.each([
+    ['item of #', 'AUR0168'],
+    ['item of ...xs', 'AUR0152'],
+    ['item of x #', 'AUR0168'],
+    ['of xs', 'AUR0151'],
+    ['item of xs;', 'AUR0156'],
+  ])('retains the framework rejection inside iterator %s', (source, code) => {
+    expect(new ExpressionParser().parse(source, 'IsIterator')).toMatchObject({ frameworkErrorCode: code });
+  });
+
+  test('retains a pending nested global call through interpolation projection', () => {
+    const result = new ExpressionParser().parse('before ${parseInt(label)}', 'Interpolation');
+    const ast = runtimeAcceptedBindingExpressionAstForResult(result);
+    if (ast == null) throw new Error('Expected a runtime-accepted interpolation.');
+    expect(projectRuntimeExpressionAstValue(ast)).toMatchObject({
+      state: RuntimeExpressionAstProjectionState.Pending,
+      reasons: [{ reasonKind: RuntimeExpressionAstProjectionReasonKind.GlobalCallOptionalIntentUnavailable }],
+    });
+  });
+
   test('materializes the current framework tagged-template raw field and preserves explicit raw strings', () => {
     const result = new ExpressionParser().parse('tag`line\\n${value}`', 'IsFunction');
     expect(result.kind).toBe(ExpressionParseResultKind.ExpressionSuccess);

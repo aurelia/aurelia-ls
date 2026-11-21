@@ -83,10 +83,10 @@ export class CompletedInputLeftHandSideCorridor {
     return this.parseMemberExpression();
   }
 
-  private parseNewExpression(): ParsedLeftHandSide {
+  private parseNewExpression(allowCalls = true): ParsedLeftHandSide {
     const newTok = this.state.nextToken();
     const targetStart = this.state.peekToken();
-    if (!this.deps.canStartPrimaryExpression(targetStart)) {
+    if (targetStart.type !== TokenType.KeywordNew && !this.deps.canStartPrimaryExpression(targetStart)) {
       return this.companionBuilder.frontierOnlyFailure(
         "Expected constructor target after 'new'",
         targetStart,
@@ -97,7 +97,9 @@ export class CompletedInputLeftHandSideCorridor {
       );
     }
 
-    const primary = this.deps.parsePrimaryExpr();
+    const primary = targetStart.type === TokenType.KeywordNew
+      ? this.parseNewExpression(false)
+      : this.deps.parsePrimaryExpr();
     if (isParseFailure(primary)) {
       if (isParseCompanionFailure(primary)) {
         return this.companionBuilder.widenNewExpressionFailure(primary, newTok);
@@ -134,7 +136,7 @@ export class CompletedInputLeftHandSideCorridor {
       func,
       args,
     );
-    return this.parseLeftHandSideTail(expression, true);
+    return this.parseLeftHandSideTail(expression, allowCalls);
   }
 
   private parseMemberExpression(): ParsedLeftHandSide {
@@ -275,7 +277,9 @@ export class CompletedInputLeftHandSideCorridor {
         next,
         questionDot,
         expr,
-        ExpressionFrameworkErrorCode.ParseUnexpectedTokenOptionalChain,
+        next.type === TokenType.EOF
+          ? ExpressionFrameworkErrorCode.ParseUnexpectedEnd
+          : ExpressionFrameworkErrorCode.ParseUnexpectedTokenOptionalChain,
       );
     }
 

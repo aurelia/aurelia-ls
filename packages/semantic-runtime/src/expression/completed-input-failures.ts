@@ -1,4 +1,5 @@
-import type { Token } from './expression-scanner.js';
+import { TokenType, type Token } from './expression-scanner.js';
+import { ExpressionFrameworkErrorCode } from './framework-error-code.js';
 import type { SourceSpan } from './source-span.js';
 import {
   ClosedSubtreeRef,
@@ -65,7 +66,7 @@ export class CompletedInputFailureTracker {
       this.host.tokenSpan(blocked),
       message,
       this.host.tokenText(blocked),
-      frameworkErrorCode,
+      errorCodeAtToken(blocked, frameworkErrorCode),
     );
     this.recordFailure(failure);
     return failure;
@@ -105,7 +106,7 @@ export class CompletedInputFailureTracker {
       span: this.host.tokenSpan(blocked),
       message,
       text: this.host.tokenText(blocked),
-      frameworkErrorCode,
+      frameworkErrorCode: errorCodeAtToken(blocked, frameworkErrorCode),
       frontierKind,
       expectedContinuationClasses,
       matchedDelimiterStack: this.host.delimiters.snapshot(),
@@ -162,7 +163,7 @@ export class CompletedInputFailureTracker {
       span: this.host.tokenSpan(blocked),
       message,
       text: this.host.tokenText(blocked),
-      frameworkErrorCode,
+      frameworkErrorCode: errorCodeAtToken(blocked, frameworkErrorCode),
       frontierKind,
       expectedContinuationClasses,
       matchedDelimiterStack: this.host.delimiters.snapshot(),
@@ -210,4 +211,9 @@ export class CompletedInputFailureTracker {
       this.firstFailure = failure;
     }
   }
+}
+
+// The framework scanner rejects an unknown character before its enclosing grammar can reject the token.
+function errorCodeAtToken(token: Token, grammarCode: string | null): string | null {
+  return token.type === TokenType.Unknown ? ExpressionFrameworkErrorCode.ParseUnexpectedCharacter : grammarCode;
 }

@@ -137,7 +137,7 @@ export class CompletedInputIteratorCorridor {
       return null;
     }
     if (first.type === TokenType.KeywordOf) {
-      return this.iteratorDeclarationFrontier("Expected iterator declaration before 'of' in iterator header", first);
+      return this.iteratorDeclarationFrontier("Expected iterator declaration before 'of' in iterator header", first, ExpressionFrameworkErrorCode.ParseInvalidStart);
     }
     return CompletedInputPublication.toParseError(
       'IsIterator',
@@ -293,7 +293,7 @@ export class CompletedInputIteratorCorridor {
               [ExpressionExpectedContinuationClass.Expression],
             ),
           ],
-          ExpressionFrameworkErrorCode.ParseUnexpectedEnd,
+          iterable.frameworkErrorCode ?? ExpressionFrameworkErrorCode.ParseUnexpectedEnd,
         );
     return CompletedInputPublication.toIteratorResult(
       iteratorIterableFailure,
@@ -340,6 +340,7 @@ export class CompletedInputIteratorCorridor {
         ),
       ],
       trailingSplit,
+      ExpressionFrameworkErrorCode.ParseUnconsumedToken,
     );
   }
 

@@ -47,9 +47,8 @@ export class CompletedInputParserState {
   readonly prefixRefs: CompletedInputPrefixRefBuilder;
   readonly failures: CompletedInputFailureTracker;
   private lastTokenEnd = 0;
-  private currentScopeDepth = 0;
 
-  constructor(source: string, baseSpan: SourceSpan | null = null) {
+  constructor(source: string, baseSpan: SourceSpan | null = null, private currentScopeDepth = 0) {
     this.source = source;
     this.baseSpan = baseSpan ? normalizeSpan(baseSpan) : null;
     this.scanner = new Scanner(source);

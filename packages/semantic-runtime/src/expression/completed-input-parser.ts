@@ -78,7 +78,6 @@ class BinaryOperatorInfo {
   constructor(
     readonly operator: BinaryOperator,
     readonly precedence: number,
-    readonly isRightAssociative: boolean,
   ) {}
 }
 
@@ -124,25 +123,25 @@ class BinaryOperatorInfo {
  * later entry family or operator-law divergence appears.
  */
 export class CompletedInputParser {
-  private static readonly binaryNullish = new BinaryOperatorInfo("??", 1, false);
-  private static readonly binaryOr = new BinaryOperatorInfo("||", 2, false);
-  private static readonly binaryAnd = new BinaryOperatorInfo("&&", 3, false);
-  private static readonly binaryLooseEqual = new BinaryOperatorInfo("==", 4, false);
-  private static readonly binaryStrictEqual = new BinaryOperatorInfo("===", 4, false);
-  private static readonly binaryLooseNotEqual = new BinaryOperatorInfo("!=", 4, false);
-  private static readonly binaryStrictNotEqual = new BinaryOperatorInfo("!==", 4, false);
-  private static readonly binaryLessThan = new BinaryOperatorInfo("<", 5, false);
-  private static readonly binaryLessThanOrEqual = new BinaryOperatorInfo("<=", 5, false);
-  private static readonly binaryGreaterThan = new BinaryOperatorInfo(">", 5, false);
-  private static readonly binaryGreaterThanOrEqual = new BinaryOperatorInfo(">=", 5, false);
-  private static readonly binaryInstanceof = new BinaryOperatorInfo("instanceof", 5, false);
-  private static readonly binaryIn = new BinaryOperatorInfo("in", 5, false);
-  private static readonly binaryPlus = new BinaryOperatorInfo("+", 6, false);
-  private static readonly binaryMinus = new BinaryOperatorInfo("-", 6, false);
-  private static readonly binaryMultiply = new BinaryOperatorInfo("*", 7, false);
-  private static readonly binaryDivide = new BinaryOperatorInfo("/", 7, false);
-  private static readonly binaryModulo = new BinaryOperatorInfo("%", 7, false);
-  private static readonly binaryExponent = new BinaryOperatorInfo("**", 8, true);
+  private static readonly binaryNullish = new BinaryOperatorInfo("??", 1);
+  private static readonly binaryOr = new BinaryOperatorInfo("||", 2);
+  private static readonly binaryAnd = new BinaryOperatorInfo("&&", 3);
+  private static readonly binaryLooseEqual = new BinaryOperatorInfo("==", 4);
+  private static readonly binaryStrictEqual = new BinaryOperatorInfo("===", 4);
+  private static readonly binaryLooseNotEqual = new BinaryOperatorInfo("!=", 4);
+  private static readonly binaryStrictNotEqual = new BinaryOperatorInfo("!==", 4);
+  private static readonly binaryLessThan = new BinaryOperatorInfo("<", 5);
+  private static readonly binaryLessThanOrEqual = new BinaryOperatorInfo("<=", 5);
+  private static readonly binaryGreaterThan = new BinaryOperatorInfo(">", 5);
+  private static readonly binaryGreaterThanOrEqual = new BinaryOperatorInfo(">=", 5);
+  private static readonly binaryInstanceof = new BinaryOperatorInfo("instanceof", 5);
+  private static readonly binaryIn = new BinaryOperatorInfo("in", 5);
+  private static readonly binaryPlus = new BinaryOperatorInfo("+", 6);
+  private static readonly binaryMinus = new BinaryOperatorInfo("-", 6);
+  private static readonly binaryMultiply = new BinaryOperatorInfo("*", 7);
+  private static readonly binaryDivide = new BinaryOperatorInfo("/", 7);
+  private static readonly binaryModulo = new BinaryOperatorInfo("%", 7);
+  private static readonly binaryExponent = new BinaryOperatorInfo("**", 8);
 
   private readonly state: CompletedInputParserState;
   private readonly companionBuilder: CompletedInputCompanionBuilder;
@@ -153,14 +152,14 @@ export class CompletedInputParser {
   private readonly tailCorridor: CompletedInputTailCorridor;
   private readonly templateCorridor: CompletedInputTemplateCorridor;
 
-  constructor(source: string, baseSpan: SourceSpan | null = null) {
-    this.state = new CompletedInputParserState(source, baseSpan);
+  constructor(source: string, baseSpan: SourceSpan | null = null, scopeDepth = 0) {
+    this.state = new CompletedInputParserState(source, baseSpan, scopeDepth);
     this.companionBuilder = new CompletedInputCompanionBuilder(this.state);
     this.templateCorridor = new CompletedInputTemplateCorridor({
       state: this.state,
       companionBuilder: this.companionBuilder,
       parseHoleExpression: (nestedSource, nestedBaseSpan) => {
-        const inner = new CompletedInputParser(nestedSource, nestedBaseSpan);
+        const inner = new CompletedInputParser(nestedSource, nestedBaseSpan, this.state.scopeDepth);
         const expr = inner.parseAssignExpr();
         const trailing = inner.state.peekToken();
         if (trailing.type !== TokenType.EOF) {
@@ -338,15 +337,15 @@ export class CompletedInputParser {
       if (isParseCompanionFailure(value)) {
         return value;
       }
-        return this.companionBuilder.missingExpressionGapFailure(
-          value,
-          next,
-          ExpressionCompanionFrameKind.AssignmentExpression,
-          this.state.span(this.state.localStart(target), next.end),
-          [this.state.prefixRefs.root(target)],
-        );
-      }
-    const span = this.state.spanFrom(target, value);
+      return this.companionBuilder.missingExpressionGapFailure(
+        value,
+        next,
+        ExpressionCompanionFrameKind.AssignmentExpression,
+        this.state.span(this.state.localStart(left), next.end),
+        [this.state.prefixRefs.root(target)],
+      );
+    }
+    const span = this.state.spanFrom(left, value);
 
     const assign: AssignExpression = new AssignExpression(
       span,
@@ -441,8 +440,7 @@ export class CompletedInputParser {
       }
 
       this.state.nextToken(); // consume operator
-      const nextMin = info.isRightAssociative ? info.precedence : info.precedence + 1;
-      const right = this.parseBinaryExpr(nextMin);
+      const right = this.parseBinaryExpr(info.precedence + 1);
       if (isParseFailure(right)) {
         if (isParseCompanionFailure(right)) {
           return right;
@@ -534,7 +532,7 @@ export class CompletedInputParser {
 
       const assignable = this.ensureAssignable(lhs, next);
       if (isParseFailure(assignable)) return assignable;
-      const span = this.state.spanFrom(assignable, next.end);
+      const span = this.state.spanFrom(lhs, next.end);
 
       const unary: UnaryExpression = new UnaryExpression(
         span,
@@ -705,10 +703,12 @@ export class CompletedInputParser {
   }
 
   private ensureAssignable(
-    expr: IsBinary | ConditionalExpression | IsLeftHandSide,
+    expr: IsAssign,
     opToken: Token,
   ): ParsedAssignable {
     switch (expr.$kind) {
+      case "Paren":
+        return this.ensureAssignable(expr.expression, opToken);
       case "AccessScope":
       case "AccessKeyed":
       case "AccessMember":

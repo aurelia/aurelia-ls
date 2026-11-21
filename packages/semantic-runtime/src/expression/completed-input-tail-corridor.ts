@@ -1,4 +1,4 @@
-import { TokenType, type Token } from './expression-scanner.js';
+import { hasTokenFlag, TokenFlags, TokenType, type Token } from './expression-scanner.js';
 import {
   BindingBehaviorExpression,
   ValueConverterExpression,
@@ -56,7 +56,7 @@ export class CompletedInputTailCorridor {
     while (this.state.peekToken().type === TokenType.Bar) {
       const pipe = this.state.nextToken();
       const nameTok = this.state.peekToken();
-      if (nameTok.type !== TokenType.Identifier) {
+      if (!hasTokenFlag(nameTok.type, TokenFlags.IdentifierName)) {
         return this.companionBuilder.missingTailNameFailure(
           "Expected identifier after '|'",
           nameTok,
@@ -88,7 +88,7 @@ export class CompletedInputTailCorridor {
     while (this.state.peekToken().type === TokenType.Ampersand) {
       const amp = this.state.nextToken();
       const nameTok = this.state.peekToken();
-      if (nameTok.type !== TokenType.Identifier) {
+      if (!hasTokenFlag(nameTok.type, TokenFlags.IdentifierName)) {
         return this.companionBuilder.missingTailNameFailure(
           "Expected identifier after '&'",
           nameTok,

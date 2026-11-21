@@ -1,5 +1,6 @@
 import { TokenType, type Token } from './expression-scanner.js';
 import {
+  scopeExpressionWasAuthoredFromCurrentBindingContext,
   AccessGlobalExpression,
   AccessScopeExpression,
   ArrowFunction,
@@ -105,6 +106,13 @@ export class CompletedInputArrowCorridor {
   }
 
   parseFromLeft(left: IsBinary | ConditionalExpression): ParseOutcome<ArrowFunction> {
+    if (left.$kind === 'AccessScope' && scopeExpressionWasAuthoredFromCurrentBindingContext(left)) {
+      return this.state.failures.error(
+        "Unexpected '=>' after an explicit $this member",
+        this.state.peekToken(),
+        ExpressionFrameworkErrorCode.ParseUnconsumedToken,
+      );
+    }
     let identifier: Identifier | null = null;
     if (
       (left as Partial<AccessScopeExpression>).$kind === 'AccessScope' ||
@@ -334,13 +342,7 @@ export class CompletedInputArrowCorridor {
     head.expectParameterAfter(comma);
     const next = this.state.peekToken();
     if (next.type === TokenType.CloseParen) {
-      return this.companionBuilder.missingArrowParameterFailure(
-        "Expected binding declaration after ',' in arrow parameter list",
-        next,
-        comma,
-        head.start,
-        head.params,
-      );
+      return this.closeAndFinishParenthesizedHead(head);
     }
     return ParenthesizedArrowHeadStep.Continue;
   }
