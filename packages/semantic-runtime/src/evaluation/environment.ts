@@ -40,7 +40,7 @@ export const enum EvaluationBindingState {
 
 /** One binding cell inside a module or function environment record. */
 export class EvaluationBinding {
-  public openSeams: readonly EvaluationOpenSeam[];
+  private localOpenSeams: readonly EvaluationOpenSeam[];
 
   constructor(
     /** Name used for lexical lookup. */
@@ -52,14 +52,20 @@ export class EvaluationBinding {
     /** Declaration node that produced the binding, when one exists. */
     readonly declaration: ts.Node | null,
     /** Current binding state. */
-    public state: EvaluationBindingState,
+    private localState: EvaluationBindingState,
     /** Current evaluator-local value. */
-    public value: EvaluationValue,
+    private localValue: EvaluationValue,
     /** Exact pressure that qualifies the retained value in this lexical slot. */
     openSeams: readonly EvaluationOpenSeam[],
+    /** Imported names forward reads to the exporting module's cell. Writes still obey the local binding's mutability. */
+    readonly importTarget: EvaluationBinding | null = null,
   ) {
-    this.openSeams = compactEvaluationOpenSeams(openSeams);
+    this.localOpenSeams = compactEvaluationOpenSeams(openSeams);
   }
+
+  get state(): EvaluationBindingState { return this.importTarget?.state ?? this.localState; }
+  get value(): EvaluationValue { return this.importTarget?.value ?? this.localValue; }
+  get openSeams(): readonly EvaluationOpenSeam[] { return this.importTarget?.openSeams ?? this.localOpenSeams; }
 
   /** Replace only the mutable cell state while preserving declaration and mutability identity. */
   replaceState(
@@ -67,9 +73,20 @@ export class EvaluationBinding {
     value: EvaluationValue,
     openSeams: readonly EvaluationOpenSeam[],
   ): void {
-    this.state = state;
-    this.value = value;
-    this.openSeams = compactEvaluationOpenSeams(openSeams);
+    if (this.importTarget != null) {
+      this.importTarget.replaceState(state, value, openSeams);
+    } else {
+      this.localState = state;
+      this.localValue = value;
+      this.localOpenSeams = compactEvaluationOpenSeams(openSeams);
+    }
+  }
+}
+
+/** Import linking needs a lexical cell as well as the value observed during dependency evaluation. */
+export class LinkedEvaluationExport extends EvaluationValueEvidence {
+  constructor(readonly binding: EvaluationBinding, readonly environment: ModuleEnvironmentRecord) {
+    super(binding.value, binding.openSeams);
   }
 }
 
@@ -168,6 +185,14 @@ export class ModuleEnvironmentRecord {
     const binding = this.readBinding(name);
     return binding == null
       ? null
+      : new EvaluationValueEvidence(binding.value, binding.openSeams);
+  }
+
+  readExportBinding(name: string): EvaluationValueEvidence | null {
+    const binding = this.readOwnBinding(name);
+    if (binding == null) return null;
+    return binding.mutable || binding.importTarget != null
+      ? new LinkedEvaluationExport(binding.importTarget ?? binding, this)
       : new EvaluationValueEvidence(binding.value, binding.openSeams);
   }
 

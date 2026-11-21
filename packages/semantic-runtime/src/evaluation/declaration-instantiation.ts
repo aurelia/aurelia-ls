@@ -1,7 +1,10 @@
 import ts from 'typescript';
 
 import {
+  EvaluationBinding,
   EvaluationBindingKind,
+  EvaluationBindingState,
+  LinkedEvaluationExport,
   type ModuleEnvironmentRecord,
 } from './environment.js';
 import type { StaticEvaluationImportValues } from './evaluator.js';
@@ -9,6 +12,7 @@ import { EvaluationOpenSeamKind } from './seams.js';
 import {
   EvaluationBoundaryKind,
   EvaluationBoundaryValue,
+  EvaluationUndefined,
   EvaluationFunctionValue,
   EvaluationUnknownValue,
 } from './values.js';
@@ -106,44 +110,29 @@ function instantiateStaticImportDeclaration(
     return;
   }
   const clause = statement.importClause;
-  if (clause == null) {
-    return;
+  if (clause == null || clause.isTypeOnly) return;
+  function link(localName: string, node: ts.Node) {
+    const imported = imports.get(localName);
+    if (imported instanceof LinkedEvaluationExport) {
+      environment.installBinding(new EvaluationBinding(localName, EvaluationBindingKind.Import, false, node,
+        EvaluationBindingState.Initialized, EvaluationUndefined, [], imported.binding));
+    } else {
+      environment.initializeBinding(localName, imported?.value
+        ?? new EvaluationUnknownValue('Import binding is not linked to its source module in this evaluator pass.', node),
+      EvaluationBindingKind.Import, false, node, imported?.openSeams ?? []);
+    }
   }
   if (clause.name != null) {
-    const imported = imports.get(clause.name.text);
-    environment.initializeBinding(
-      clause.name.text,
-      imported?.value ?? new EvaluationUnknownValue('Default import binding is not linked to its source module in this evaluator pass.', clause.name),
-      EvaluationBindingKind.Import,
-      false,
-      clause,
-      imported?.openSeams ?? [],
-    );
+    link(clause.name.text, clause);
   }
   if (clause.namedBindings == null) {
     return;
   }
   if (ts.isNamespaceImport(clause.namedBindings)) {
-    const imported = imports.get(clause.namedBindings.name.text);
-    environment.initializeBinding(
-      clause.namedBindings.name.text,
-      imported?.value ?? new EvaluationUnknownValue('Namespace import binding is not linked to its source module in this evaluator pass.', clause.namedBindings.name),
-      EvaluationBindingKind.Import,
-      false,
-      clause.namedBindings,
-      imported?.openSeams ?? [],
-    );
+    link(clause.namedBindings.name.text, clause.namedBindings);
     return;
   }
   for (const element of clause.namedBindings.elements) {
-    const imported = imports.get(element.name.text);
-    environment.initializeBinding(
-      element.name.text,
-      imported?.value ?? new EvaluationUnknownValue('Named import binding is not linked to its source module in this evaluator pass.', element.name),
-      EvaluationBindingKind.Import,
-      false,
-      element,
-      imported?.openSeams ?? [],
-    );
+    if (!element.isTypeOnly) link(element.name.text, element);
   }
 }

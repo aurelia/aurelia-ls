@@ -45,6 +45,7 @@ import {
 import {
   EvaluationBindingKind,
   EvaluationBindingState,
+  LinkedEvaluationExport,
   ModuleEnvironmentRecord,
 } from './environment.js';
 import {
@@ -587,7 +588,8 @@ export class StaticEvaluator {
       ? imports
       : new Map([...imports].map(([name, evidence]) => [
           name,
-          new EvaluationValueEvidence(graph.adoptExternal(evidence.value), evidence.openSeams),
+          evidence instanceof LinkedEvaluationExport ? graph.adoptExport(evidence)
+            : new EvaluationValueEvidence(graph.adoptExternal(evidence.value), evidence.openSeams),
         ]));
     instantiateStaticModuleDeclarations(
       sourceFile,
@@ -1880,11 +1882,9 @@ export class StaticEvaluator {
     environment: ModuleEnvironmentRecord,
     moduleKey: string,
   ): EvaluationValue {
-    if (identifier.text === 'undefined') {
-      return new EvaluationUndefinedValue(identifier);
-    }
     const binding = environment.readBinding(identifier.text);
     if (binding == null) {
+      if (identifier.text === 'undefined') return new EvaluationUndefinedValue(identifier);
       const resolved = this.resolveUnboundIdentifier(identifier, environment, moduleKey);
       if (resolved != null) {
         return resolved;

@@ -1,4 +1,4 @@
-import type { ModuleEnvironmentRecord } from './environment.js';
+import type { LinkedEvaluationExport, ModuleEnvironmentRecord } from './environment.js';
 import {
   EvaluationValueKind,
   type EvaluationValue,
@@ -7,6 +7,8 @@ import {
 export interface StaticEvaluationValueGraph {
   /** Import a value owned outside this graph without sharing later mutation. */
   adoptExternal<TValue extends EvaluationValue>(value: TValue): TValue;
+  /** Fork an imported live binding into this graph without linking changes back into its origin. */
+  adoptExport(binding: LinkedEvaluationExport): LinkedEvaluationExport;
   /** Retain a value produced by an evaluator already executing inside this graph. */
   retainProduced<TValue extends EvaluationValue>(value: TValue): TValue;
   /** Establish and validate ownership for one evaluator lexical environment. */

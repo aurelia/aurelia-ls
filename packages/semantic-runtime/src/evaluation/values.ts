@@ -3,7 +3,7 @@ import {
   mapExpressionPrimitiveLiteralValue,
   type ExpressionPrimitiveLiteralValue,
 } from '../expression/ast.js';
-import type { ModuleEnvironmentRecord } from './environment.js';
+import type { EvaluationBinding, ModuleEnvironmentRecord } from './environment.js';
 import {
   compactEvaluationOpenSeams,
   type EvaluationOpenSeam,
@@ -1524,18 +1524,24 @@ export function openEvaluationLocalPropertyMembership(
 
 /** One named export retained by a statically assembled module namespace. */
 export class EvaluationModuleNamespaceExport {
-  readonly openSeams: readonly EvaluationOpenSeam[];
+  private readonly fixedOpenSeams: readonly EvaluationOpenSeam[];
+  private readonly fixedValue: EvaluationValue;
 
   constructor(
     readonly name: string,
-    readonly value: EvaluationValue,
+    value: EvaluationValue,
     /** Export specifier or ultimate declaration that exposes this name, when known. */
     readonly sourceNode: ts.Node | null,
     /** Exact pressure qualifying the exported value while namespace membership remains known. */
     openSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+    readonly binding: EvaluationBinding | null = null,
   ) {
-    this.openSeams = compactEvaluationOpenSeams(openSeams);
+    this.fixedValue = binding == null ? value : EvaluationUndefined;
+    this.fixedOpenSeams = binding == null ? compactEvaluationOpenSeams(openSeams) : noEvaluationOpenSeams;
   }
+
+  get value(): EvaluationValue { return this.binding?.value ?? this.fixedValue; }
+  get openSeams(): readonly EvaluationOpenSeam[] { return this.binding?.openSeams ?? this.fixedOpenSeams; }
 }
 
 /** Module namespace assembled from linked exports. */

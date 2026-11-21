@@ -18,6 +18,7 @@ import {
   staticInvocationValue,
 } from '../src/evaluation/invocation.js';
 import { StaticModuleGraphEvaluator } from '../src/evaluation/module-evaluator.js';
+import { StaticEvaluationSessionFork } from '../src/evaluation/evaluation-session.js';
 import { buildEvaluationModuleGraph } from '../src/evaluation/module-host.js';
 import {
   EvaluationOpenSeam,
@@ -26,6 +27,7 @@ import {
 import {
   EvaluationBoundaryKind,
   EvaluationBoundaryValue,
+  EvaluationBooleanValue,
   EvaluationPromiseSettlementKind,
   EvaluationValueKind,
 } from '../src/evaluation/values.js';
@@ -39,6 +41,39 @@ afterEach(() => {
 });
 
 describe('project static evaluation', () => {
+  test('keeps live named and namespace imports linked through re-exports while preserving historical observations', () => {
+    const graph = evaluateModuleGraph({
+      'settings.ts': 'export let active = false; export function enable() { active = true; } export const { nested: [count] } = { nested: [2] };',
+      'barrel.ts': "export { active as mode, enable, count } from './settings';",
+      'entry.ts': [
+        "import { mode, enable, count } from './barrel'; import * as ns from './barrel';",
+        'function snapshot(namespace) { return namespace.mode; }',
+        'const before = snapshot(ns); enable(); const after = mode; const throughNamespace = ns.mode;',
+        'function shadow(undefined) { return undefined; } const localValue = shadow(count);',
+      ].join('\n'),
+    });
+    const entry = graph.modules.get('entry.ts')!;
+    const settings = graph.modules.get('settings.ts')!;
+    expect(entry.environment.readValue('before')).toMatchObject({ value: false });
+    expect(entry.environment.readValue('after')).toMatchObject({ value: true });
+    expect(entry.environment.readValue('throughNamespace')).toMatchObject({ value: true });
+    expect(entry.environment.readValue('localValue')).toMatchObject({ value: 2 });
+    const saved = entry.invocations.find(i => i.node.getText() === 'snapshot(ns)')!.argumentList.elements[0]!.value;
+    if (saved.kind !== EvaluationValueKind.ModuleNamespace) throw new Error('Expected a captured namespace');
+    expect(saved.exportEntries.get('mode')?.value).toMatchObject({ value: false });
+
+    const fork = new StaticEvaluationSessionFork({});
+    const reader = fork.forkEnvironment(entry.environment);
+    const writer = fork.forkEnvironment(settings.environment);
+    const disabled = new EvaluationBooleanValue(false);
+    expect(reader.setBinding('mode', disabled, [])).toBe(false);
+    expect(writer.setBinding('active', disabled, [])).toBe(true);
+    expect(reader.readValue('mode')).toBe(disabled);
+    const ns = reader.readValue('ns');
+    if (ns?.kind !== EvaluationValueKind.ModuleNamespace) throw new Error('Expected the live namespace');
+    expect(ns.exportEntries.get('mode')?.value).toBe(disabled);
+    expect(entry.environment.readValue('mode')).toMatchObject({ value: true });
+  });
   test('evaluates shared dependencies in one project identity domain', () => {
     const root = temporaryProject({
       'entry-a.ts': [

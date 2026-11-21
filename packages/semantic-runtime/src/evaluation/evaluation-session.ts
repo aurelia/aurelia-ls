@@ -10,6 +10,7 @@ import {
 } from './completion.js';
 import {
   EvaluationBinding,
+  LinkedEvaluationExport,
   ModuleEnvironmentRecord,
 } from './environment.js';
 import {
@@ -66,6 +67,7 @@ import {
   EvaluationSetElement,
   EvaluationSetValue,
   EvaluationUnknownValue,
+  EvaluationUndefined,
   EvaluationValueKind,
   type EvaluationValue,
 } from './values.js';
@@ -87,6 +89,7 @@ export class StaticEvaluationSessionFork implements StaticEvaluationForkLineage 
   private readonly populatedEnvironments = new WeakSet<ModuleEnvironmentRecord>();
   private readonly populatingEnvironments = new WeakSet<ModuleEnvironmentRecord>();
   private readonly capturedBindings = new WeakSet<EvaluationBinding>();
+  private readonly bindings = new WeakMap<EvaluationBinding, EvaluationBinding>();
   private readonly values = new WeakMap<object, EvaluationValue>();
   private readonly sourceValues = new WeakMap<object, EvaluationValue>();
   private readonly populatedClasses = new WeakSet<EvaluationClassValue>();
@@ -134,6 +137,7 @@ export class StaticEvaluationSessionFork implements StaticEvaluationForkLineage 
   }
 
   forkEnvironment(source: ModuleEnvironmentRecord): ModuleEnvironmentRecord {
+    if (source.belongsToGraph(this)) return source;
     const target = this.environmentShell(source);
     this.populateEnvironment(source, target);
     return target;
@@ -141,6 +145,28 @@ export class StaticEvaluationSessionFork implements StaticEvaluationForkLineage 
 
   sourceEnvironment(environment: ModuleEnvironmentRecord): ModuleEnvironmentRecord | null {
     return this.sourceEnvironments.get(environment) ?? null;
+  }
+
+  adoptExport(exported: LinkedEvaluationExport): LinkedEvaluationExport {
+    return exported.environment.belongsToGraph(this) ? exported
+      : new LinkedEvaluationExport(this.forkBinding(exported.binding), this.environmentShell(exported.environment));
+  }
+
+  private forkBinding(source: EvaluationBinding): EvaluationBinding {
+    // Immutable locals have no live export cell to share across lexical or namespace views.
+    if (!source.mutable && source.importTarget == null) {
+      return new EvaluationBinding(source.name, source.bindingKind, false, source.declaration,
+        source.state, this.forkValue(source.value), source.openSeams);
+    }
+    const previous = this.bindings.get(source);
+    if (previous != null) return previous;
+    const linked = source.importTarget == null ? null : this.forkBinding(source.importTarget);
+    const binding = new EvaluationBinding(source.name, source.bindingKind, source.mutable, source.declaration,
+      source.state, EvaluationUndefined, source.openSeams, linked);
+    // Reserve the cell before a namespace or captured function follows a cycle back into this scope.
+    this.bindings.set(source, binding);
+    if (linked == null) binding.replaceState(source.state, this.forkValue(source.value), source.openSeams);
+    return binding;
   }
 
   forkValue<TValue extends EvaluationValue>(source: TValue): TValue {
@@ -374,9 +400,10 @@ export class StaticEvaluationSessionFork implements StaticEvaluationForkLineage 
         for (const [name, entry] of source.exportEntries) {
           exportEntries.set(name, new EvaluationModuleNamespaceExport(
             entry.name,
-            this.forkValue(entry.value),
+            entry.binding == null ? this.forkValue(entry.value) : EvaluationUndefined,
             entry.sourceNode,
             entry.openSeams,
+            entry.binding == null ? null : this.forkBinding(entry.binding),
           ));
         }
         return target;
@@ -425,16 +452,7 @@ export class StaticEvaluationSessionFork implements StaticEvaluationForkLineage 
         this.populateEnvironment(source.outer, target.outer);
       }
       for (const binding of source.readBindings()) {
-        const targetBinding = new EvaluationBinding(
-          binding.name,
-          binding.bindingKind,
-          binding.mutable,
-          binding.declaration,
-          binding.state,
-          this.forkValue(binding.value),
-          binding.openSeams,
-        );
-        target.installBinding(targetBinding);
+        target.installBinding(this.forkBinding(binding));
       }
       this.populatedEnvironments.add(source);
     } finally {
@@ -464,15 +482,7 @@ export class StaticEvaluationSessionFork implements StaticEvaluationForkLineage 
         if (binding != null) {
           if (!this.capturedBindings.has(binding)) {
             this.capturedBindings.add(binding);
-            this.environmentShell(environment).installBinding(new EvaluationBinding(
-              binding.name,
-              binding.bindingKind,
-              binding.mutable,
-              binding.declaration,
-              binding.state,
-              this.forkValue(binding.value),
-              binding.openSeams,
-            ));
+            this.environmentShell(environment).installBinding(this.forkBinding(binding));
           }
           break;
         }
@@ -825,7 +835,8 @@ export class StaticEvaluationSessionFork implements StaticEvaluationForkLineage 
       this.normalizeEnvironment(environment.outer, retention, values, environments);
     }
     for (const binding of environment.readBindings()) {
-      binding.value = this.normalizeRetainedValue(binding.value, retention, values, environments);
+      const value = this.normalizeRetainedValue(binding.value, retention, values, environments);
+      if (value !== binding.value) binding.replaceState(binding.state, value, binding.openSeams);
     }
   }
 

@@ -42,6 +42,7 @@ import {
 } from './completion.js';
 import { bindEvaluationValueLineage } from './value-relation.js';
 import { EvaluationValueEvidence } from './value-pressure.js';
+import { LinkedEvaluationExport } from './environment.js';
 import { DefaultStaticEvaluationRuntimeHost } from './runtime-host.js';
 import { StaticDataSnapshotPool } from './data-snapshot.js';
 
@@ -190,7 +191,8 @@ export class StaticModuleGraphEvaluator {
 
   /** Resolve one export together with pressure retained by its live binding edge. */
   readExportEvidence(moduleKey: string, exportName: string): EvaluationValueEvidence | null {
-    return this.readExportEvidenceCore(moduleKey, exportName, true);
+    const evidence = this.readExportEvidenceCore(moduleKey, exportName, true);
+    return evidence instanceof LinkedEvaluationExport ? new EvaluationValueEvidence(evidence.value, evidence.openSeams) : evidence;
   }
 
   private readExportEvidenceCore(
@@ -238,13 +240,13 @@ export class StaticModuleGraphEvaluator {
 
     for (const entry of record.exports) {
       if (entry.exportKind === EvaluationExportKind.Local && entry.exportName === exportName && entry.valueName != null) {
-        return result.environment.readEvidence(entry.valueName)
+        return result.environment.readExportBinding(entry.valueName)
           ?? this.openEvidence(`Local export '${exportName}' did not resolve to an environment binding.`, entry.node);
       }
       if (entry.exportKind === EvaluationExportKind.Default && exportName === 'default') {
         return entry.valueName == null
           ? this.openEvidence('Default export did not expose a local environment binding.', entry.node)
-          : result.environment.readEvidence(entry.valueName)
+          : result.environment.readExportBinding(entry.valueName)
             ?? this.openEvidence('Default export did not resolve to a static value.', entry.node);
       }
       if (
@@ -361,7 +363,7 @@ export class StaticModuleGraphEvaluator {
       return new EvaluationValueEvidence(this.readModuleNamespaceValue(targetModuleKey, entry.node), []);
     }
     const exportName = entry.exportName ?? 'default';
-    return this.readExportEvidence(targetModuleKey, exportName)
+    return this.readExportEvidenceCore(targetModuleKey, exportName, true)
       ?? this.openEvidence(`Import '${entry.localName ?? exportName}' from ${entry.moduleSpecifier} did not resolve to a static export.`, entry.node);
   }
 
@@ -752,6 +754,7 @@ export class StaticModuleGraphEvaluator {
         value,
         this.readModuleExportSourceNode(moduleKey, name, new Set()) ?? value.node,
         evidence.openSeams,
+        evidence instanceof LinkedEvaluationExport ? evidence.binding : null,
       ));
     }
     const namespace = new EvaluationModuleNamespaceValue(moduleKey, exportEntries, mayHaveUnknownExports, node);
