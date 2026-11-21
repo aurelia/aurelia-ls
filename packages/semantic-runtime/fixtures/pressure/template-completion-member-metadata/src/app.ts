@@ -1,8 +1,16 @@
-import { customElement } from 'aurelia';
+import { bindable, customElement } from 'aurelia';
 import template from './app.html';
+
+@customElement({ name: 'flag-card', template: '<span></span>' })
+class FlagCard {
+  @bindable enabled: boolean = true;
+  @bindable size: 1 | 2 = 1;
+  @bindable color: 'red' | 'blue' = 'red';
+}
 
 @customElement({
   name: 'app',
+  dependencies: [FlagCard],
   template,
 })
 export class App {

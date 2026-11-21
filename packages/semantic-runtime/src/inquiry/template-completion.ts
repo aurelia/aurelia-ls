@@ -2601,7 +2601,7 @@ function attributeValueCompletionMissingInput(
       }
       return `attribute-value-domain:binding-command:${site.bindingCommand?.name ?? 'unknown'}`;
     case TemplateValueSiteKind.BindableValue:
-      if (bindableValueHasOpenEndedScalarDomain(store, projector, site)) {
+      if (bindableValueHasKnownScalarDomain(store, projector, site)) {
         return null;
       }
       return `attribute-value-domain:bindable:${site.bindable?.reference.attribute ?? 'unknown'}`;
@@ -2610,7 +2610,7 @@ function attributeValueCompletionMissingInput(
         return null;
       }
       if (site.bindable != null) {
-        if (bindableValueHasOpenEndedScalarDomain(store, projector, site)) {
+        if (bindableValueHasKnownScalarDomain(store, projector, site)) {
           return null;
         }
         return `attribute-value-domain:bindable:${site.bindable.reference.attribute}`;
@@ -2654,14 +2654,14 @@ function templateControllerSemanticsForValueSite(
   );
 }
 
-function bindableValueHasOpenEndedScalarDomain(
+function bindableValueHasKnownScalarDomain(
   store: KernelStore,
   projector: CheckerTypeProjector,
   site: TemplateValueSite,
 ): boolean {
   const member = bindableTypeMember(store, projector, site);
   const carrier = member?.carrier;
-  return carrier?.valueType == null ? false : isOpenEndedScalarType(carrier.checker, carrier.valueType);
+  return carrier?.valueType == null ? false : isKnownScalarType(carrier.checker, carrier.valueType);
 }
 
 function attributeValueDomainCandidates(
@@ -3062,7 +3062,7 @@ function bindableAttributeValueCandidates(
     member.ownerType.productHandle,
     checkerTypeMemberReachableIdentityHandle(member),
     checkerTypeMemberSourceAddressHandle(store, member),
-    'Finite static value accepted by the checker-projected bindable type.',
+    'String literal from the bindable type, inserted as attribute text.',
     member.valueType,
   ));
 }
@@ -3099,77 +3099,22 @@ function bindableTypeMember(
 function finiteStaticValueCandidatesForMember(
   member: CheckerTypeMember,
 ): readonly string[] {
-  const carrier = member.carrier;
-  return carrier?.valueType == null ? [] : finiteStaticValueCandidatesForType(carrier.checker, carrier.valueType);
+  const type = member.carrier?.valueType;
+  if (type == null) return [];
+  // A bare attribute writes text. A numeric/boolean property annotation alone cannot convert it.
+  const values = (type.isUnion() ? type.types : [type]).flatMap(part => part.isStringLiteral() ? [part.value] : []);
+  return [...uniqueValues(values)].sort((left, right) => left.localeCompare(right));
 }
 
-function finiteStaticValueCandidatesForType(
-  checker: ts.TypeChecker,
-  type: ts.Type,
-): readonly string[] {
-  if (type.isUnion()) {
-    return finiteStaticValueCandidatesForUnion(checker, type);
-  }
-  if (isBooleanType(type)) {
-    return ['false', 'true'];
-  }
-  const literal = literalCandidateForType(type);
-  return literal == null ? [] : [literal];
-}
-
-function isOpenEndedScalarType(
+function isKnownScalarType(
   checker: ts.TypeChecker,
   type: ts.Type,
 ): boolean {
   if (type.isUnion()) {
     return type.types.some((constituent) => !checkerNullishType(checker, constituent))
-      && type.types.every((constituent) => checkerNullishType(checker, constituent) || isOpenEndedScalarType(checker, constituent));
+      && type.types.every((constituent) => checkerNullishType(checker, constituent) || isKnownScalarType(checker, constituent));
   }
-  return (type.flags & ts.TypeFlags.String) !== 0
-    || (type.flags & ts.TypeFlags.Number) !== 0
-    || (type.flags & ts.TypeFlags.BigInt) !== 0;
-}
-
-function finiteStaticValueCandidatesForUnion(
-  checker: ts.TypeChecker,
-  type: ts.UnionType,
-): readonly string[] {
-  const values: string[] = [];
-  for (const constituent of type.types) {
-    if (checkerNullishType(checker, constituent)) {
-      continue;
-    }
-    if (isBooleanType(constituent)) {
-      values.push('false', 'true');
-      continue;
-    }
-    const literal = literalCandidateForType(constituent);
-    if (literal == null) {
-      return [];
-    }
-    values.push(literal);
-  }
-  return [...uniqueValues(values)].sort((left: string, right: string) => left.localeCompare(right));
-}
-
-function literalCandidateForType(
-  type: ts.Type,
-): string | null {
-  if ((type.flags & ts.TypeFlags.StringLiteral) !== 0) {
-    return String((type as ts.StringLiteralType).value);
-  }
-  if ((type.flags & ts.TypeFlags.NumberLiteral) !== 0) {
-    return String((type as ts.NumberLiteralType).value);
-  }
-  if ((type.flags & ts.TypeFlags.BooleanLiteral) !== 0) {
-    const intrinsicName = (type as unknown as { readonly intrinsicName?: string }).intrinsicName;
-    return intrinsicName === 'true' ? 'true' : 'false';
-  }
-  return null;
-}
-
-function isBooleanType(type: ts.Type): boolean {
-  return (type.flags & ts.TypeFlags.Boolean) !== 0;
+  return (type.flags & (ts.TypeFlags.StringLike | ts.TypeFlags.NumberLike | ts.TypeFlags.BigIntLike | ts.TypeFlags.BooleanLike)) !== 0;
 }
 
 function expressionMemberSurfaceMissingInput(

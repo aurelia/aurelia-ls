@@ -36,6 +36,20 @@ const app = await runtime.openApp({
   analysisDepth: 'binding-observation',
 });
 
+for (const [attribute, value, expected] of [
+  ['enabled', 'false', []],
+  ['size', '2', []],
+  ['color', 'blue', ['blue', 'red']],
+]) {
+  const answer = app.ask({
+    kind: SemanticAppQueryKind.TemplateCompletions,
+    cursor: cursorInside(`${attribute}="${value}"`, value, 1),
+    page: { size: 60 },
+  });
+  assert.equal(answer.coverage, 'complete');
+  assert.deepEqual(answer.value.candidates.map(candidate => candidate.edit.newText), expected, attribute);
+}
+
 const completion = app.ask({
   kind: SemanticAppQueryKind.TemplateCompletions,
   cursor: cursorAfter('${'),
