@@ -23,13 +23,9 @@ describe('hover resource normalization', () => {
     const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-completion-member-metadata');
     const templatePath = path.join(fixtureRoot, 'src/app.html');
     const scriptPath = path.join(fixtureRoot, 'src/app.ts');
-    const originalScriptText = readFileSync(scriptPath, 'utf8');
-    const scriptText = originalScriptText
-      .replace(
-        "import { customElement } from 'aurelia';",
+    const scriptText = [
         "import { bindable, bindingBehavior, customAttribute, customElement, valueConverter } from 'aurelia';",
-      )
-      .replace('@customElement({', [
+        "import template from './app.html';",
         "@customElement({ name: 'product-card', aliases: ['PRODUCT-CARD', 'catalog-card'], template: '<template></template>' })",
         'class ProductCard { @bindable item = null; }',
         "@customAttribute({ name: 'focus-ring', aliases: ['FOCUS-RING', 'focus'] })",
@@ -43,12 +39,9 @@ describe('hover resource normalization', () => {
         "@bindingBehavior({ name: 'trackEdit', aliases: ['trackedit', 'TrackEdit'] })",
         'class TrackEditBindingBehavior { bind() {} unbind() {} }',
         '',
-        '@customElement({',
-      ].join('\n'))
-      .replace(
-        '  template,',
-        '  template,\n  dependencies: [ProductCard, FocusRing, SvgViewBox, MathDefinitionUrl, FormatNameValueConverter, TrackEditBindingBehavior],',
-      );
+        "@customElement({ name: 'app', template, dependencies: [ProductCard, FocusRing, SvgViewBox, MathDefinitionUrl, FormatNameValueConverter, TrackEditBindingBehavior] })",
+        "export class App { title = 'Theme preview'; }",
+    ].join('\n');
     const templateText = [
       '<template>',
       '  <PRODUCT-CARD ITEM.BIND="title"></PrOdUcT-CaRd>',
@@ -139,6 +132,7 @@ describe('hover resource normalization', () => {
     expect(canonicalCustomAttribute.selectedDefinition).toMatchObject({
       resourceKind: 'custom-attribute',
       matchedName: 'focus-ring',
+      targetName: 'FocusRing',
     });
     expect(canonicalCustomAttribute.selectedDefinition?.matchedNameSource)
       .toEqual(canonicalCustomAttribute.selectedDefinition?.nameSource);
