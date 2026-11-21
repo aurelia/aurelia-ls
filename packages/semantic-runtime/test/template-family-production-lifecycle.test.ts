@@ -975,8 +975,14 @@ describe('production template-family lifecycle', () => {
     const changed = await reopenApp(runtime, inputAuthority, baseline);
     const changedItemList = requireNamedCompilation(changed.emission, 'item-list-route');
     const changedItemCard = requireNamedCompilation(changed.emission, 'item-card');
-    expect(changedItemList.definition).toBe(requireCustomElementDefinition(changed.emission, 'item-list-route'));
-    expect(changedItemCard.definition).toBe(requireCustomElementDefinition(changed.emission, 'item-card'));
+    for (const compilation of [changedItemList, changedItemCard]) {
+      const indexed = requireCustomElementDefinition(changed.emission, compilation.definition.name);
+      expect(indexed.productHandle).toBe(compilation.definition.productHandle);
+      expect(indexed.bindables.map(bindable => bindable.name)).toEqual(compilation.definition.bindables.map(bindable => bindable.name));
+      expect(compilation.definition).toBe(runtime.workspace.store.productDetails.read(
+        ResourceProductDetails.Definition, indexed.productHandle!,
+      ));
+    }
     const changedBindableRead = requireCompilerRead(
       changedItemList,
       TemplateCompilerReadKind.Bindables,
