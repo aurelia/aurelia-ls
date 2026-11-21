@@ -7,6 +7,7 @@ import type {
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { BindableDefinition } from '../resources/bindable-definition.js';
 import type { ResourceTargetReference } from '../resources/resource-reference.js';
+import { ResourceDefinitionKind, runtimeResourceKeyForKind } from '../resources/resource-kind.js';
 import type { SourceSpan } from '../expression/source-span.js';
 import type { BindingIdentifierOrPattern } from '../expression/ast.js';
 import {
@@ -392,6 +393,7 @@ export class BindingCommandResolverService {
     readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<BindingCommandResolverField>[] = [],
+    readonly selectedByKey: ReadonlyMap<string, BindingCommandExecutable | null>,
   ) {}
 
   /** Product handles for commands visible through this resolver service. */
@@ -401,9 +403,8 @@ export class BindingCommandResolverService {
 
   /** Runtime `IBindingCommandResolver.get(container, name)` shape for this container-scoped service. */
   get(commandName: string): BindingCommandExecutable | null {
-    return this.commands.find((candidate) =>
-      candidate.name === commandName || candidate.aliases.includes(commandName)
-    ) ?? null;
+    const key = runtimeResourceKeyForKind(ResourceDefinitionKind.BindingCommand, commandName)!;
+    return this.selectedByKey.get(key) ?? null;
   }
 
   toReference(): TemplateCompilerServiceReference {

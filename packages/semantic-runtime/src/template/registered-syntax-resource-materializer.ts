@@ -13,6 +13,7 @@ import { BindingCommandDefinition } from '../resources/binding-command-definitio
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import type { ResourceRegistrationAdmission } from '../registration/registration-admission.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import type { AddressHandle } from '../kernel/handles.js';
 import type { TemplateVisibleResource } from './compiler-world-reference.js';
 import {
   AttributePatternExecutionKind,
@@ -87,6 +88,7 @@ export class RegisteredSyntaxResourceMaterializer {
       const publication = this.bindingCommand(
         `${input.localKey}:binding-command:${index}`,
         definition,
+        admission.sourceAddressHandle,
         admission,
       );
       if (publication != null) {
@@ -118,6 +120,17 @@ export class RegisteredSyntaxResourceMaterializer {
       ],
     ));
     return new RegisteredSyntaxResourceEmission(attributePatterns, bindingCommands, records);
+  }
+
+  /** A component's declared command dependency is registered in its own child container. */
+  componentBindingCommand(localKey: string, definition: BindingCommandDefinition, source: AddressHandle | null): SourceBindingCommandResource | null {
+    const result = this.bindingCommand(localKey, definition, source, null);
+    if (result == null) return null;
+    const executable = result.resource.executable;
+    this.publication.publish(new KernelPublicationPlan(new KernelStoreBatch(result.records, localKey), [
+      publishProductDetail(TemplateProductDetails.BindingCommandExecutable, executable.productHandle, executable),
+    ]));
+    return result.resource;
   }
 
   private attributePattern(
@@ -163,7 +176,8 @@ export class RegisteredSyntaxResourceMaterializer {
   private bindingCommand(
     localKey: string,
     definition: BindingCommandDefinition,
-    admission: ResourceRegistrationAdmission,
+    registrationSource: AddressHandle | null,
+    admission: ResourceRegistrationAdmission | null,
   ): { readonly resource: SourceBindingCommandResource; readonly records: readonly KernelStoreRecord[] } | null {
     if (definition.productHandle == null || definition.identityHandle == null) {
       return null;
@@ -172,7 +186,7 @@ export class RegisteredSyntaxResourceMaterializer {
     if (provenanceHandle == null) {
       return null;
     }
-    const sourceAddressHandle = admission.sourceAddressHandle ?? definition.sourceAddressHandle;
+    const sourceAddressHandle = registrationSource ?? definition.sourceAddressHandle;
     const publication = this.executables.materializeBindingCommand({
       localKey,
       ownerIdentityHandle: definition.identityHandle,
@@ -181,7 +195,7 @@ export class RegisteredSyntaxResourceMaterializer {
       name: definition.name,
       aliases: definition.aliases.map((alias) => alias.name),
       key: definition.key,
-      ignoreAttr: null,
+      ignoreAttr: definition.instanceIgnoreAttr,
       executionKind: BindingCommandExecutionKind.Custom,
       sourceAddressHandle,
       provenanceHandle,
@@ -190,7 +204,7 @@ export class RegisteredSyntaxResourceMaterializer {
       resource: new SourceBindingCommandResource(
         publication.executable,
         definition,
-        admission.sourceAddressHandle,
+        registrationSource,
       ),
       records: [
         ...publication.records,
@@ -204,10 +218,10 @@ export class RegisteredSyntaxResourceMaterializer {
   }
 
   private provenanceHandle(
-    admission: ResourceRegistrationAdmission,
+    admission: ResourceRegistrationAdmission | null,
     definitionProductHandle: NonNullable<AttributePatternDefinition['productHandle'] | BindingCommandDefinition['productHandle']>,
   ) {
-    const admissionProduct = this.publication.read(admission.productHandle);
+    const admissionProduct = admission == null ? null : this.publication.read(admission.productHandle);
     const definitionProduct = this.publication.read(definitionProductHandle);
     return admissionProduct?.kind === 'materialized-product'
       ? admissionProduct.provenanceHandle

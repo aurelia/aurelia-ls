@@ -164,6 +164,9 @@ class AttributeClassificationDecisionExecution {
         `Binding command '${commandName}' is absent, but compiler-scope closure does not prove current absence.`,
       );
     }
+    if (bindingCommand != null && this.bindingCommandRead?.value?.ignoreAttr == null) {
+      return this.openDecision(bindingCommand, `Binding command '${commandName}' has an unresolved ignoreAttr policy.`);
+    }
 
     this.elementRead = this.owner.elementDefinitionEligible === false
       ? null

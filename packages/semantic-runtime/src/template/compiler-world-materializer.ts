@@ -91,7 +91,7 @@ import {
   KernelVocabulary,
   type ProductKindKey,
 } from '../kernel/vocabulary.js';
-import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import { ResourceDefinitionKind, runtimeResourceKeyForKind } from '../resources/resource-kind.js';
 import type { AttributePatternDefinitionEntry } from '../resources/attribute-pattern-definition.js';
 import { TemplateProductDetails } from './product-details.js';
 import { mergeVisibleResourceScopeResolution } from './resource-scope-builder.js';
@@ -179,6 +179,7 @@ export class TemplateCompilerWorldDerivationRequest {
     readonly compilerHooks: TemplateCompilerHookSetCandidate | null = null,
     /** Replacement leaf-locus CSS mapping; null inherits the exact current locus. */
     readonly cssClassMapping: CssClassMappingAuthorityCandidate | null = null,
+    readonly localBindingCommands: readonly CompilerBindingCommandResource[] = [],
   ) {}
 }
 
@@ -482,6 +483,7 @@ export class TemplateCompilerWorldMaterializer {
       || resolution.blockedLookups.some((lookup, index) => lookup !== parent.resourceScope.blockedLookups[index]);
     if (
       sameTemplateVisibleResourceSet(resolution.resources, parent.resourceScope.resources)
+      && input.localBindingCommands.length === 0
       && !hasNewExclusions
       && !hasNewLookups
       && !hasNewBlockedLookups
@@ -497,7 +499,10 @@ export class TemplateCompilerWorldMaterializer {
       parent.world.appRoot,
       resolution.resources,
       parent.attributePatterns,
-      parent.bindingCommands,
+      input.localBindingCommands.length === 0 ? parent.bindingCommands : [
+        ...input.localBindingCommands,
+        ...parent.bindingCommands.filter(command => !input.localBindingCommands.includes(command)),
+      ],
       parent.runtimeRenderers,
       input.syntaxVisibilityKind,
       input.sourceAddressHandle,
@@ -836,17 +841,36 @@ export class TemplateCompilerWorldMaterializer {
     source: CompilerWorldSourceSet,
     issues: CompilerWorldIssueSet,
   ): BindingCommandResolverService {
-    const commands = bindingCommandsWithRegistrationIssues(
-      input.bindingCommands,
-      handles.bindingResolverIdentityHandle,
-      issues,
-    );
+    const commands = input.parentResourceScope == null
+      ? bindingCommandsWithRegistrationIssues(input.bindingCommands, handles.bindingResolverIdentityHandle, issues)
+      : input.bindingCommands.map(resource => resource.executable);
+    const selectedByKey = new Map<string, BindingCommandExecutable | null>();
+    const scopedDefinitions = new Set<ProductHandle>();
+    for (const lookup of input.resourceLookups) {
+      if (lookup.winner.resourceKind === ResourceDefinitionKind.BindingCommand) {
+        if (lookup.winner.definitionProductHandle != null) scopedDefinitions.add(lookup.winner.definitionProductHandle);
+        selectedByKey.set(lookup.lookupKey, commands.find(command =>
+          command.definitionProductHandle === lookup.winner.definitionProductHandle) ?? null);
+      }
+    }
+    for (const command of commands) {
+      if (command.definitionProductHandle != null && scopedDefinitions.has(command.definitionProductHandle)) continue;
+      for (const name of [command.name, ...command.aliases]) {
+        const key = bindingCommandKeyFor(command, name);
+        if (!selectedByKey.has(key)) selectedByKey.set(key, command);
+      }
+    }
+    const prefix = runtimeResourceKeyForKind(ResourceDefinitionKind.BindingCommand, '')!;
+    for (const blocked of input.blockedResourceLookups) {
+      if (blocked.lookupKey.startsWith(prefix)) selectedByKey.set(blocked.lookupKey, null);
+    }
     return new BindingCommandResolverService(
       handles.bindingResolverProductHandle,
       handles.bindingResolverIdentityHandle,
       commands,
       source.addressHandle,
       [],
+      selectedByKey,
     );
   }
 

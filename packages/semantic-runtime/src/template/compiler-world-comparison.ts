@@ -386,7 +386,10 @@ export function compareBindingCommandResolverDetails(
   next: BindingCommandResolverService,
   context: KernelPublicationComparisonContext,
 ): KernelComparablePublicationDecision {
-  if (!sameValues(previous.productHandle, next.productHandle, previous.identityHandle, next.identityHandle)) {
+  if (!sameValues(previous.productHandle, next.productHandle, previous.identityHandle, next.identityHandle)
+    || previous.selectedByKey.size !== next.selectedByKey.size
+    || [...previous.selectedByKey].some(([key, command]) =>
+      !next.selectedByKey.has(key) || next.selectedByKey.get(key)?.productHandle !== command?.productHandle)) {
     return KernelPublicationDecisionKind.Replace;
   }
   return combineDecisions(

@@ -49,5 +49,7 @@ export class BindingCommandDefinition {
     readonly fieldProvenance: readonly FieldProvenance<BindingCommandDefinitionField>[] = [],
     /** Exact address for the authored public resource-name token, when the declaration has one. */
     readonly nameSourceAddressHandle: AddressHandle | null = null,
+    /** Known value of the command instance's ignoreAttr flag; null when instance initialization or the getter is open. */
+    readonly instanceIgnoreAttr: boolean | null = null,
   ) {}
 }

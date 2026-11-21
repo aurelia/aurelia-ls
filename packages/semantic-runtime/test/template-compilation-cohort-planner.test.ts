@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
+import { NodeSemanticRuntimeProjectInputHost, SemanticRuntimeProjectInputAuthority } from '../src/kernel/project-input.js';
 import { AureliaAppWorldEmission } from '../src/configuration/app-world-composer.js';
 import {
   type KernelPublicationWriterId,
@@ -40,6 +41,51 @@ import {
 import { TemplateTypeSystemOverlayBuilder } from '../src/template/template-type-system-overlay.js';
 
 describe('template compilation cohort planning', () => {
+  test('selects an owning library component’s declared dependency ahead of an unrelated same-named resource', async () => {
+    const root = fixturePath('template-completion-member-metadata');
+    const files = new Map([
+      [path.join(root, 'src/main.ts'), 'export { App } from "./app";'],
+      [path.join(root, 'src/app.ts'), [
+        "import {customElement} from 'aurelia'; import template from './app.html';",
+        "@customElement({name:'same-chip',template:'<span></span>'}) export class OtherChip {}",
+        "@customElement({name:'same-chip',template:'<i></i>',bindables:['beta']}) export class SelectedChip {}",
+        "@customElement({name:'app',template,dependencies:[SelectedChip]}) export class App { title = 'hello'; }",
+      ].join('\n')],
+      [path.join(root, 'src/app.html'), '<same-chip beta.bind="title"></same-chip>'],
+    ]);
+    const runtime = await createSemanticRuntime({ workspaceRoot: root,
+      projectInputAuthority: new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost({
+        readFile: file => files.get(path.resolve(file)), fileExists: file => files.has(path.resolve(file)) || undefined,
+      })),
+    });
+    try {
+      const app = await runtime.openApp({ sourceFilePath: path.join(root, 'src/app.html'), includeAuthoringTemplates: true });
+      const cohort = owner(app.emission.templates.cohortPlan, 'app').cohorts[0]!;
+      const selected = cohort.parentCompilerWorld.resourceResolver.el('same-chip');
+      const expected = app.emission.resourceIndex.entries.find(row => row.definition.target.localName === 'SelectedChip')!.definition;
+      expect(cohort.kind).toBe(TemplateCompilationCohortKind.Authoring);
+      expect(selected?.definitionProductHandle).toBe(expected.productHandle);
+    } finally {
+      runtime.retireWorkspaceIncarnation();
+    }
+  });
+
+  test('infers generated slots from each concrete parent binding and preserves the definition-wide union', async () => {
+    const runtime = await createSemanticRuntime({ workspaceRoot: fixturePath('template-local-template-semantics') });
+    try {
+      const app = await runtime.openApp({ analysisDepth: 'binding-observation', templateAnalysisBreadth: 'app-aggregate' });
+      const owner = app.emission.templates.resources.find(r => r.compilation.definition.name === 'template-local-template-semantics-app')!;
+      const local = app.emission.templates.resources.find(r => r.compilation.definition.name === 'mode-panel')!;
+      const scopes = owner.runtimeAnalysis.scopes.readScopes();
+      const concrete = owner.runtimeAnalysis.runtimeRendering.controllers.filter(controller => controller.name === 'mode-panel').map(controller =>
+        scopes.find(scope => scope.productHandle === controller.readScopeReference()?.productHandle)!);
+      expect(concrete.map(scope => scope.lookup('mixedValue').slot?.targetType?.display).sort()).toEqual(['number', 'string']);
+      expect(concrete.every(scope => scope.lookup('fromViewValue').slot?.targetType == null)).toBe(true);
+      expect(local.runtimeAnalysis.scopes.rootScope.lookup('mixedValue').slot?.targetType?.display).toBe('string | number');
+    } finally {
+      runtime.retireWorkspaceIncarnation();
+    }
+  });
   test('selects source-filtered authoring owners from the staged app generation', async () => {
     const fixtureRoot = fixturePath('resource-metadata-errors');
     const sourceFile = path.join(fixtureRoot, 'src/resource-metadata-errors-app.ts');

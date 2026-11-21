@@ -709,6 +709,7 @@ function resourceDefinitionComparisonProjection(
           definition.name,
           definition.aliases.map((alias) => alias.name),
           definition.key,
+          ...(definition.type === ResourceDefinitionKind.BindingCommand ? [definition.instanceIgnoreAttr] : []),
           definition.contributions.map((contribution) => [
             contribution.contributionKind,
             resourceTargetSemanticValue(contribution.target),
@@ -803,12 +804,12 @@ function dependencySemanticValue(
     dependency.identityHandle,
     dependency.keyName,
     dependency.moduleKey,
-    dependency.localName,
     ...(dependency.htmlModule == null ? [] : [[
       dependency.htmlModule.specifier,
       dependency.htmlModule.exportTargets.map(target => [target.moduleKey, target.localName]),
       [...dependency.htmlModule.aliases],
     ]]),
+    dependency.localName,
     dependency.dependencyKind,
     dependency.registryKind,
     dependency.cssModulesInput == null

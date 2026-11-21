@@ -1407,6 +1407,7 @@ export class ResourceDefinitionConverger {
             [new BindingCommandDefinitionContribution(namedResourceContributionKindForCarrier(observation.carrierKind), target, name, aliases.definitions, key)],
             [],
             nameSource?.addressHandle ?? null,
+            sourceBindingCommandIgnoreAttr(targetClass),
           ),
           [...annotations.open, ...staticAliases.open],
           [...(nameSource?.records ?? []), ...aliases.records],
@@ -2563,7 +2564,6 @@ function readHtmlTemplateDependencies(
   templatePath: string,
   imports: readonly HtmlTemplateMetadataImport[],
 ): ResourceDependenciesRead {
-  return new ResourceDependenciesRead(
   const mergedAliases = new Map<string, Map<string, string>>();
   for (const item of imports) {
     if (item.aliases.size === 0) continue;
@@ -2573,6 +2573,7 @@ function readHtmlTemplateDependencies(
     for (const [name, alias] of item.aliases) aliases.set(name, alias);
     mergedAliases.set(item.specifier, aliases);
   }
+  return new ResourceDependenciesRead(
     imports.map((htmlImport) => {
       const moduleKey = resolveTemplateImportModuleKey(context, templatePath, htmlImport.specifier);
       return new ResourceDependencyReference(
@@ -2580,7 +2581,6 @@ function readHtmlTemplateDependencies(
         moduleKey == null ? null : conventionalResourceNameForFilePath(moduleKey),
         moduleKey,
         null,
-      );
         ResourceDependencyReferenceKind.Resource,
         null,
         null,
@@ -2589,6 +2589,7 @@ function readHtmlTemplateDependencies(
           moduleKey == null ? [] : htmlModuleExportTargets(context, moduleKey),
           mergedAliases.get(htmlImport.specifier) ?? htmlImport.aliases,
         ),
+      );
     }),
     [],
   );
@@ -2663,8 +2664,8 @@ function resourceDependencyReferenceKey(
     reference.moduleKey ?? '',
     reference.localName ?? '',
     reference.registryKind ?? '',
-  ].join('\0');
     reference.htmlModule?.specifier ?? '',
+  ].join('\0');
 }
 
 function readStyleRegistryDependencyReference(
@@ -2931,6 +2932,27 @@ function isClassOrFunctionDeclaration(
       || ts.isFunctionExpression(declaration)
       || ts.isArrowFunction(declaration)
     );
+}
+
+function sourceBindingCommandIgnoreAttr(target: ts.ClassLikeDeclarationBase | null): boolean | null {
+  if (target == null || target.heritageClauses?.some(clause => clause.token === ts.SyntaxKind.ExtendsKeyword)
+    || target.members.some(member => !hasStaticModifier(member) &&
+      (ts.isConstructorDeclaration(member) || member.name != null && ts.isComputedPropertyName(member.name)))) {
+    return null;
+  }
+  const member = target.members.find(member => !hasStaticModifier(member) && member.name != null && readPropertyName(member.name) === 'ignoreAttr');
+  if (member == null) return false;
+  if (ts.canHaveDecorators(member) && ts.getDecorators(member)?.length) return null;
+  let flag: ts.Expression | undefined;
+  if (ts.isPropertyDeclaration(member)) {
+    flag = member.initializer;
+  } else if (ts.isGetAccessorDeclaration(member) && member.body?.statements.length === 1) {
+    const statement = member.body.statements[0]!;
+    flag = ts.isReturnStatement(statement) ? statement.expression : undefined;
+  }
+  if (flag == null) return null;
+  const value = unwrapExpression(flag);
+  return value.kind === ts.SyntaxKind.TrueKeyword ? true : value.kind === ts.SyntaxKind.FalseKeyword ? false : null;
 }
 
 function readContainerStrategy(

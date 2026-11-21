@@ -357,7 +357,7 @@ describe('hover bindable usage-effective mode', () => {
       ['title.bind="titleText & customMode"', 'Custom binding behavior'],
       ['title="${titleText & twoWay}"', 'Interpolation mode'],
       ['title="${titleText & fromView}"', 'Interpolation mode'],
-      ['title.custom-mode="titleText"', 'lowering'],
+      ['title.custom-mode="titleText"', 'executable body'],
     ] as const) {
       const row = bindable(marker, 'title');
       expect(row).toMatchObject({
@@ -368,13 +368,11 @@ describe('hover bindable usage-effective mode', () => {
       expect(info(marker, 'title').missingInputs).toContain('bindable-usage-mode:open');
       expect(info(marker, 'title').displayText).toContain('effective=open');
     }
-    expect(info('title.unknown-mode="titleText"', 'title').selectedBindable).toMatchObject({
-      usageEffectiveMode: null,
-      usageModeAuthority: 'open',
-      usageModeCommand: 'unknown-mode',
-      usageModeCommandKind: null,
-      usageModeOpenReason: expect.stringContaining('lowering'),
-    });
+    expect(info('title.unknown-mode="titleText"', 'title').selectedBindable).toBeNull();
+    expect(info('title.takeover="titleText"', 'title').selectedBindable).toBeNull();
+    expect(info('title.opaque-policy="titleText"', 'title').selectedBindable).toBeNull();
+    const card = app.emission.templates.resources.find(resource => resource.compilation.definition.name === 'profile-card');
+    expect(card?.compilation.compilerWorld.bindingCommandResolver.get('custom-mode')).toBeNull();
 
     const invalidFromView = bindable('strict-quantity.from-view="42"', 'strict-quantity');
     expect(invalidFromView).toMatchObject({
@@ -608,6 +606,8 @@ function bindableUsageTemplate(original: string): string {
     '  <profile-card title="${titleText & fromView}"></profile-card>',
     '  <profile-card title.custom-mode="titleText"></profile-card>',
     '  <profile-card title.unknown-mode="titleText"></profile-card>',
+    '  <profile-card title.takeover="titleText"></profile-card>',
+    '  <profile-card title.opaque-policy="titleText"></profile-card>',
     '  <profile-card strict-quantity.from-view="42"></profile-card>',
     '  <section display-hint="message.bind: statusMessage & twoWay"></section>',
     '</template>',
@@ -618,18 +618,22 @@ function customModeResourcesScript(original: string): string {
   return original
     .replace(
       "import { customElement } from 'aurelia';",
-      "import { bindingBehavior, bindingCommand, customElement } from 'aurelia';",
+      "import { bindingBehavior, bindingCommand, customElement } from 'aurelia';\nimport { TwoWayBindingCommand, AttrBindingCommand } from '@aurelia/template-compiler';",
     )
     .replace('@customElement({', [
       "@bindingBehavior('customMode')",
       'class CustomModeBindingBehavior {}',
       '',
       "@bindingCommand('custom-mode')",
-      'class CustomModeBindingCommand {}',
+      "class CustomModeBindingCommand { get ignoreAttr() { return false; } build(...args: Parameters<TwoWayBindingCommand['build']>) { return new TwoWayBindingCommand().build(...args); } }",
+      "@bindingCommand('takeover')",
+      "class TakeoverCommand { get ignoreAttr() { return true; } build(...args: Parameters<AttrBindingCommand['build']>) { return new AttrBindingCommand().build(...args); } }",
+      "@bindingCommand('opaque-policy')",
+      "class OpaqueCommand { get ignoreAttr() { return Math.random() > 0.5; } build(...args: Parameters<AttrBindingCommand['build']>) { return new AttrBindingCommand().build(...args); } }",
       '',
       '@customElement({',
     ].join('\n'))
-    .replace('dependencies: [', 'dependencies: [CustomModeBindingBehavior, CustomModeBindingCommand, ');
+    .replace('dependencies: [', 'dependencies: [CustomModeBindingBehavior, CustomModeBindingCommand, TakeoverCommand, OpaqueCommand, ');
 }
 
 function expectUsage(

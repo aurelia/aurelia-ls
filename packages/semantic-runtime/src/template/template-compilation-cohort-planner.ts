@@ -7,6 +7,7 @@ import { sameTypeSystemSourcePath } from '../type-system/source-file-path.js';
 import type { KernelPublicationContext } from '../kernel/publication.js';
 import type { KernelStore } from '../kernel/store.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
+import { BindingCommandDefinition } from '../resources/binding-command-definition.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import type { RouteConfigContextMaterializationProjectResult } from '../router/route-context-materialization.js';
@@ -32,6 +33,7 @@ import {
 } from './compiler-world-materializer.js';
 import {
   directDependencyDefinitions,
+  directDependencyRegistrations,
   visibleResourceForDefinition,
 } from './resource-scope-builder.js';
 import {
@@ -44,6 +46,7 @@ import {
   TemplateCompilationOwnerPlan,
 } from './template-compilation-cohort.js';
 import { TemplateAuthoringCompilerWorldMaterializer } from './template-authoring-world.js';
+import { RegisteredSyntaxResourceMaterializer } from './registered-syntax-resource-materializer.js';
 import type { FrameworkSupportCatalogs } from '../framework/framework-support-authority.js';
 
 export const enum TemplateCompilationCohortPlanningPhase {
@@ -123,12 +126,13 @@ export class TemplateCompilationCohortPlanner {
       );
     if (authoringCompilerWorld != null) {
       for (const definition of authoringDefinitions) {
+        const componentWorld = this.parentCompilerWorldForOwner(request, authoringCompilerWorld, definition, null);
         appendOwnerPlan(owners, new TemplateCompilationOwnerPlan(definition, [
           new TemplateCompilationCohortPlan(
             TemplateCompilationCohortKind.Authoring,
             authoringCompilerWorld.world.productHandle,
             null,
-            authoringCompilerWorld,
+            componentWorld,
             [new TemplateCompilationAdmissionOrigin(
               TemplateCompilationAdmissionOriginKind.AuthoringPolicy,
               definition.template?.addressHandle ?? definition.sourceAddressHandle,
@@ -215,15 +219,7 @@ export class TemplateCompilationCohortPlanner {
     }
 
     return [...admissionsByOwner.values()].map((admission) => {
-      const parentCompilerWorld = request.phases.measure(
-        TemplateCompilationCohortPlanningPhase.ComponentCompilerWorld,
-        () => this.parentCompilerWorldForOwner(
-          request.projectKey,
-          appRootWorld,
-          admission,
-          request.resourceDefinitions,
-        ),
-      );
+      const parentCompilerWorld = this.parentCompilerWorldForOwner(request, appRootWorld, admission.definition, admission.visibleResource);
       return new TemplateCompilationOwnerPlan(admission.definition, [
         new TemplateCompilationCohortPlan(
           TemplateCompilationCohortKind.App,
@@ -237,37 +233,52 @@ export class TemplateCompilationCohortPlanner {
   }
 
   private parentCompilerWorldForOwner(
-    projectKey: string,
-    appRootWorld: TemplateCompilerWorldEmission,
-    admission: AppOwnerAdmission,
-    resourceDefinitions: ResourceDefinitionIndex | null,
+    request: TemplateCompilationCohortPlanningRequest,
+    parent: TemplateCompilerWorldEmission,
+    definition: CustomElementDefinition,
+    retainedOwner: TemplateVisibleResource | null,
   ): TemplateCompilerWorldEmission {
-    const dependencies = directDependencyDefinitions(admission.definition, resourceDefinitions)
-      .map((dependency) => visibleResourceForDefinition(
+    const declared = directDependencyRegistrations(definition, request.resourceDefinitions);
+    const dependencies = declared
+      .map(({ definition: dependency, registrationName }) => visibleResourceForDefinition(
         dependency,
         TemplateResourceVisibilityKind.Local,
-        dependency.sourceAddressHandle ?? admission.definition.sourceAddressHandle,
+        dependency.sourceAddressHandle ?? definition.sourceAddressHandle,
+        registrationName,
       ))
       .filter((resource): resource is TemplateVisibleResource => resource != null);
-    const appRootHandle = appRootWorld.world.appRoot?.identityHandle
-      ?? appRootWorld.world.appRoot?.productHandle
-      ?? appRootWorld.world.identityHandle;
+    if (dependencies.length === 0 && retainedOwner == null) return parent;
+    const parentHandle = parent.world.appRoot?.identityHandle
+      ?? parent.world.appRoot?.productHandle
+      ?? parent.world.identityHandle;
     const localKey = `component-world:${encodeTemplateCompilationKeyParts([
-      projectKey,
-      appRootHandle,
-      stableOwnerHandle(admission.definition),
+      request.projectKey,
+      parentHandle,
+      stableOwnerHandle(definition),
     ])}`;
-    return this.compilerWorlds.constructDerived(new TemplateCompilerWorldDerivationRequest(
-      localKey,
-      TemplateCompilerWorldKind.Component,
-      appRootWorld,
-      // A controller owner is retained by the compilation/cohort plan itself. Runtime registers only its declared
-      // dependencies into the child container, so the owner must not compete for an exact resource lookup here.
-      dependencies,
-      TemplateResourceVisibilityKind.Configured,
-      admission.definition.sourceAddressHandle,
-      [admission.visibleResource],
-    ));
+    const commands = declared.flatMap(({ definition: dependency }, index) => {
+      if (!(dependency instanceof BindingCommandDefinition)) return [];
+      const inherited = parent.bindingCommands.find(command => command.definition?.productHandle === dependency.productHandle);
+      if (inherited != null) return [inherited];
+      const command = new RegisteredSyntaxResourceMaterializer(this.publication).componentBindingCommand(
+        `${localKey}:binding-command:${index}`, dependency, definition.sourceAddressHandle,
+      );
+      return command == null ? [] : [command];
+    });
+    return request.phases.measure(TemplateCompilationCohortPlanningPhase.ComponentCompilerWorld, () =>
+      this.compilerWorlds.constructDerived(new TemplateCompilerWorldDerivationRequest(
+        localKey,
+        TemplateCompilerWorldKind.Component,
+        parent,
+        // Only the owner's declared dependencies compete for lookup keys in its child container.
+        dependencies,
+        TemplateResourceVisibilityKind.Configured,
+        definition.sourceAddressHandle,
+        retainedOwner == null ? null : [retainedOwner],
+        null,
+        null,
+        commands,
+      )));
   }
 }
 
