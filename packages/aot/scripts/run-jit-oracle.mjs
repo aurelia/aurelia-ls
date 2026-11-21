@@ -1,10 +1,10 @@
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
+import { repositoryIdentity } from "./repository-identity.mjs";
 import { BatchRunner } from "../out/testing/batch-runner.js";
 import { CompilerCaseCatalog } from "../out/testing/compiler-case-catalog.js";
 import {
@@ -394,22 +394,6 @@ function parseShard(value) {
   return { index: oneBasedIndex - 1, count };
 }
 
-function gitIdentity(root) {
-  try {
-    const revision = execFileSync("git", ["-C", root, "rev-parse", "HEAD"], {
-      encoding: "utf8",
-      windowsHide: true,
-    }).trim();
-    const dirty = execFileSync("git", ["-C", root, "status", "--porcelain=v1"], {
-      encoding: "utf8",
-      windowsHide: true,
-    }).trim().length > 0;
-    return { revision, dirty };
-  } catch {
-    return { revision: null, dirty: null };
-  }
-}
-
 function packageVersion(root) {
   try {
     const manifest = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
@@ -420,19 +404,19 @@ function packageVersion(root) {
 }
 
 function buildAuthorityIdentity() {
-  const repositoryIdentity = gitIdentity(workspaceRoot);
+  const workspaceIdentity = repositoryIdentity(workspaceRoot);
   return {
     aot: {
       version: packageVersion(packageRoot),
-      ...repositoryIdentity,
+      ...workspaceIdentity,
     },
     semanticRuntime: {
       version: packageVersion(resolve(workspaceRoot, "packages/semantic-runtime")),
-      repositoryRevision: repositoryIdentity.revision,
+      repositoryRevision: workspaceIdentity.revision,
     },
     framework: {
       version: frameworkVersion(),
-      ...gitIdentity(frameworkRoot),
+      ...repositoryIdentity(frameworkRoot),
     },
   };
 }

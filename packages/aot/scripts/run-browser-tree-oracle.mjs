@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -7,6 +6,7 @@ import { performance } from "node:perf_hooks";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { repositoryIdentity } from "./repository-identity.mjs";
 import {
   BROWSER_TREE_ORACLE_CASE_SCHEMA_VERSION,
   BROWSER_TREE_ORACLE_CASES,
@@ -48,7 +48,7 @@ async function main() {
   }
 
   validateBrowserTreeOracleCases(BROWSER_TREE_ORACLE_CASES);
-  const authorityBefore = repositoryIdentity();
+  const authorityBefore = repositoryIdentity(workspaceRoot);
   const startedAt = performance.now();
 
   const semanticStartedAt = performance.now();
@@ -70,7 +70,7 @@ async function main() {
   ));
   const comparisonDurationMs = performance.now() - compareStartedAt;
 
-  const authorityAfter = repositoryIdentity();
+  const authorityAfter = repositoryIdentity(workspaceRoot);
   if (JSON.stringify(authorityAfter) !== JSON.stringify(authorityBefore)) {
     throw new Error("Repository authority changed while the browser-tree oracle batch was running.");
   }
@@ -259,22 +259,6 @@ async function publishReceipt(receipt, values) {
   );
   for (const candidate of receipt.result.cases.filter((item) => item.outcome === "failed")) {
     process.stderr.write(`${candidate.id}: ${candidate.problems.join(" ")}\n`);
-  }
-}
-
-function repositoryIdentity() {
-  try {
-    const revision = execFileSync("git", ["-C", workspaceRoot, "rev-parse", "HEAD"], {
-      encoding: "utf8",
-      windowsHide: true,
-    }).trim();
-    const dirty = execFileSync("git", ["-C", workspaceRoot, "status", "--porcelain=v1"], {
-      encoding: "utf8",
-      windowsHide: true,
-    }).trim().length > 0;
-    return { revision, dirty };
-  } catch {
-    return { revision: null, dirty: null };
   }
 }
 

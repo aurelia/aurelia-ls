@@ -112,6 +112,8 @@ function runCliToFile(stdoutFd: number, ...args: readonly string[]): { status: n
   const result = spawnSync(process.execPath, [runnerPath, ...args], {
     cwd: workspaceRoot,
     encoding: "utf8",
+    // Successful Git commands can also write diagnostics to their stderr.
+    env: { ...process.env, GIT_TRACE: "1" },
     windowsHide: true,
     stdio: ["ignore", stdoutFd, "pipe"],
   });
