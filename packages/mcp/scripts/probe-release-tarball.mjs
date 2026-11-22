@@ -3,10 +3,12 @@ import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { probeWorkspaceQueries } from './probe-workspace-queries.mjs';
+import { probeDependencyInstall } from './probe-dependency-install.mjs';
 import {
   expectedPatternCatalogCount,
   patternReleaseSentinels,
@@ -153,6 +155,9 @@ try {
     assert(Array.isArray(docsFetchValue?.sections) && docsFetchValue.sections.length >= 1, 'installed package docs fetch returned bounded sections');
 
     await probeWorkspaceQueries(client, fixtureWorkspaceRoot);
+    const installedTypeScript = createRequire(installedEntry)('typescript/package.json').version;
+    await probeDependencyInstall(client, installedTypeScript, (cwd) =>
+      run('install application dependencies', 'npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund'], cwd));
 
     console.log([
       'MCP release tarball probe passed.',
