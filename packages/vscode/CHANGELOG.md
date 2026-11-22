@@ -3,6 +3,8 @@
 ## 0.5.5
 
 - Editing an open template can request fresh diagnostics after an ordinary request failure. **Aurelia: Create Support Report** records the first failure and subsequent recovery in the local report.
+- A diagnostic response superseded by a newer edit during conversion can no longer overwrite the newer document's Problems.
+- Support reports identify the workspace startup phase that failed and record recovery for the same root. For retained projects they include the analyzer and workspace TypeScript versions when available.
 - Rename preserves authored text in closed BOM-prefixed files and escaped inline templates. Declare-member Quick Fixes select the backing class and generate valid JavaScript in JS components. Registration fixes handle existing type-only imports.
 - Hover, navigation and diagnostics now follow HTML character references, local resource imports and case-sensitive converter aliases. A directly imported Aurelia decorator can establish template ownership while project dependencies are being installed.
 - Related TypeScript errors point to the original template operand and appear alongside the corresponding Aurelia Problem.
