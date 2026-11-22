@@ -60,7 +60,9 @@ const app = await runtime.openApp({
 });
 
 const runtimeControllers = collectAppRows(app, SemanticAppQueryKind.RuntimeControllers, 100);
-const resource = app.emission.templates.resources[0] ?? null;
+const resource = app.emission.templates.resources.find((candidate) =>
+  candidate.compilation.definition.name === 'template-controller-built-ins-app'
+) ?? null;
 const overlayEmission = resource == null
   ? null
   : new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
@@ -197,7 +199,7 @@ assertExpressionType('otherOnly(modeGroup)', 'string');
 assertExpressionType('listOnly(fallMode)', 'string');
 assertExpressionType('listOrDetailOnly(fallMode)', 'string');
 assertExpressionType('otherOnly(fallMode)', 'string');
-assertExpressionType('portalMessage', 'string');
+assertExpressionType('portalMessage', '"Portaled content"');
 assert(
   virtualRepeatProbe.controllerCount >= 1,
   `Expected virtual-repeat fixture to materialize a virtual-repeat template-controller row, observed ${virtualRepeatProbe.controllerCount}.`,
