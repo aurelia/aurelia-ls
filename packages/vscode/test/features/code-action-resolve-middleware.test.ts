@@ -131,6 +131,7 @@ function createHarness(options: {
   const showWarningMessage = vi.fn();
   const logger = { warn: vi.fn() };
   const vscode = {
+    CancellationError: class extends Error { override readonly name = "Canceled"; },
     Uri: {
       parse: (value: string) => new StubUri(value),
     },
@@ -370,23 +371,47 @@ describe("code-action resolve middleware", () => {
 });
 
 describe("Extension Host tail observation middleware", () => {
-  test("installs no provider wrappers unless both private test gates are enabled", () => {
+  test("guards diagnostics in production and installs provider observations only when both gates are enabled", () => {
     process.env[observationEnv] = "1";
     delete process.env[tailObservationEnv];
     let middleware = createHarness().middleware;
-    expect(middleware.provideDiagnostics).toBeUndefined();
+    expect(middleware.provideDiagnostics).toBeTypeOf("function");
     expect(middleware.provideCompletionItem).toBeUndefined();
 
     delete process.env[observationEnv];
     process.env[tailObservationEnv] = "1";
     middleware = createHarness().middleware;
-    expect(middleware.provideDiagnostics).toBeUndefined();
+    expect(middleware.provideDiagnostics).toBeTypeOf("function");
     expect(middleware.provideCompletionItem).toBeUndefined();
 
     process.env[observationEnv] = "1";
     middleware = createHarness().middleware;
     expect(middleware.provideDiagnostics).toBeTypeOf("function");
     expect(middleware.provideCompletionItem).toBeTypeOf("function");
+  });
+
+  test.each([false, true])("rejects a converted superseded report and preserves the next pull and genuine errors (observation=%s)", async (observe) => {
+    if (observe) enableTailObservation();
+    else {
+      delete process.env[observationEnv];
+      delete process.env[tailObservationEnv];
+    }
+    const provideDiagnostics = createHarness().middleware.provideDiagnostics!;
+    const document = { uri: new StubUri("file:///work/src/app.html"), version: 1 };
+    const token = { isCancellationRequested: false };
+    const first = { kind: "full", resultId: "superseded", items: [] };
+    const second = { kind: "full", resultId: "current", items: [{ message: "current" }] };
+    let completeConversion!: () => void;
+    const converting = new Promise<typeof first>((resolve) => { completeConversion = () => resolve(first); });
+    const previous = provideDiagnostics(document as never, undefined, token as never, () => converting as never);
+    document.version++;
+    token.isCancellationRequested = true;
+    completeConversion();
+    await expect(previous).rejects.toMatchObject({ name: "Canceled" });
+    const current = { isCancellationRequested: false };
+    await expect(provideDiagnostics(document as never, undefined, current as never, () => second as never)).resolves.toBe(second);
+    const fault = new Error("ordinary diagnostic failure");
+    await expect(provideDiagnostics(document as never, undefined, current as never, () => Promise.reject(fault))).rejects.toBe(fault);
   });
 
   test("observes one converted full diagnostic response without changing it", async () => {

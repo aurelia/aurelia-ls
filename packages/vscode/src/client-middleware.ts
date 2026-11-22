@@ -45,7 +45,7 @@ export function createMiddleware(
   client: MiddlewareLanguageClient,
 ): Middleware {
   return {
-    ...extensionHostTailMiddleware(),
+    ...providerMiddleware(vscode),
     workspace: {
       didChangeWatchedFile: async (event, next) => {
         const uri = vscode.Uri.parse(event.uri);
@@ -201,12 +201,19 @@ function isAureliaTemplateDocument(document: TextDocument): boolean {
     || /\.html?$/iu.test(document.uri.path);
 }
 
-function extensionHostTailMiddleware(): Pick<Middleware, "provideDiagnostics" | "provideCompletionItem"> {
-  if (!extensionHostTailObservationEnabled()) return {};
+function providerMiddleware(vscode: VscodeApi): Pick<Middleware, "provideDiagnostics" | "provideCompletionItem"> {
+  // The SDK checks before asynchronously converting a report. A newer pull can cancel during conversion.
+  const currentReport = <T>(token: CancellationToken, report: T): T => {
+    if (token.isCancellationRequested) throw new vscode.CancellationError();
+    return report;
+  };
+  const provideDiagnostics: NonNullable<Middleware["provideDiagnostics"]> = async (document, previousResultId, token, next) =>
+    currentReport(token, await next(document, previousResultId, token));
+  if (!extensionHostTailObservationEnabled()) return { provideDiagnostics };
   return {
     provideDiagnostics: async (document, previousResultId, token, next) => {
       const observationId = nextExtensionHostObservationId("host-tail-diagnostics");
-      if (observationId == null) return next(document, previousResultId, token);
+      if (observationId == null) return provideDiagnostics(document, previousResultId, token, next);
       const documentIdentity = observedDocumentIdentity(document);
       emitExtensionHostObservation({
         source: "language-client-provider",
@@ -219,7 +226,7 @@ function extensionHostTailMiddleware(): Pick<Middleware, "provideDiagnostics" | 
         previousResultIdPresent: previousResultId !== undefined,
       });
       try {
-        const report = await next(document, previousResultId, token);
+        const report = currentReport(token, await next(document, previousResultId, token));
         emitExtensionHostObservation({
           source: "language-client-provider",
           observationId,
