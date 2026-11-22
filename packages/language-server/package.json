@@ -24,6 +24,7 @@
     "build": "tsc -b",
     "typecheck": "tsc --noEmit",
     "typecheck:test": "tsc --noEmit -p tsconfig.test.json",
+    "probe:release-workspace": "node scripts/probe-release-workspace.mjs",
     "measure:incrementality": "node scripts/measure-incrementality.mjs",
     "measure:protocol": "node scripts/measure-protocol-responsiveness.mjs"
   },

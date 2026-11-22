@@ -27,7 +27,8 @@ const serverEntry = path.join(
 );
 
 export function startServer(cwd: string) {
-  const child = spawn(process.execPath, [serverEntry, "--stdio"], {
+  const entry = process.env.AURELIA_LS_TEST_SERVER;
+  const child = spawn(process.execPath, [entry == null ? serverEntry : path.resolve(entry), "--stdio"], {
     cwd,
     stdio: ["pipe", "pipe", "pipe"],
   });
@@ -72,6 +73,7 @@ export async function initialize(
     };
     /** Client-authored workspace URI when the test is exercising a non-file URI namespace. */
     readonly rootUri?: string;
+    readonly projectRootHintUris?: readonly string[];
   } = {},
 ) {
   if (options.configuration != null) {
@@ -106,6 +108,9 @@ export async function initialize(
     connection.sendRequest("initialize", {
       processId: process.pid,
       rootUri,
+      ...(options.projectRootHintUris == null ? {} : {
+        initializationOptions: { projectRootHintUris: options.projectRootHintUris },
+      }),
       capabilities: {
         workspace: options.configuration == null && options.diagnostics == null
           ? undefined

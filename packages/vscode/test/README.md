@@ -151,6 +151,13 @@ Guidelines:
   their clean Git HEAD and inputs; it never packages again. Archive contract
   tests use synthetic in-memory ZIPs and dependency-injected lifecycle seams,
   so they perform no packaging, download, network request, or Electron launch.
+- To exercise the packaged language server on a fresh npm workspace, run
+  `node packages/language-server/scripts/probe-release-workspace.mjs <manifest.json> <installed-dist/server/main.cjs>`
+  from the checkout root. The probe matches the bundle to the VSIX receipt and checks both project-local
+  TypeScript 5.9.3 and 6.0.3. Supply one exact TypeScript version as the third argument for a focused run.
+  It opens an explicit inline component before installation, installs the project's dependencies,
+  navigates a package-provided component, and applies and reverses a cross-file rename in a sibling Vite app.
+  The ordinary development suite skips the npm installs.
 - `pnpm verify:ide:vsix:installed` consumes that already-verified, current-HEAD
   artifact without building or repackaging it. It resolves current stable VS
   Code once, installs the exact VSIX once into an isolated extensions/profile
