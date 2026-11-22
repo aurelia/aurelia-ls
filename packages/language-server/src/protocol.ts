@@ -285,9 +285,34 @@ export interface AureliaSupportPhaseSnapshot {
   readonly itemCount: number | null;
 }
 
+export interface AureliaSupportTypeScriptEnvironment {
+  readonly analyzerVersion: string | null;
+  readonly workspaceVersion: string | null;
+  readonly versionRelation: "same-package" | "same-version-different-package" | "different-version" | "workspace-not-found";
+}
+
+/** Workspace packages can supply arbitrary version strings. Only transmit ordinary TypeScript release labels. */
+export function readAureliaSupportTypeScriptEnvironment(value: unknown): AureliaSupportTypeScriptEnvironment | null {
+  if (value == null || typeof value !== "object" || !("versionRelation" in value)) return null;
+  const relation = value.versionRelation;
+  if (relation !== "same-package" && relation !== "same-version-different-package"
+    && relation !== "different-version" && relation !== "workspace-not-found") return null;
+  return {
+    analyzerVersion: "analyzerVersion" in value ? publicTypeScriptVersion(value.analyzerVersion) : null,
+    workspaceVersion: "workspaceVersion" in value ? publicTypeScriptVersion(value.workspaceVersion) : null,
+    versionRelation: relation,
+  };
+}
+
+function publicTypeScriptVersion(value: unknown): string | null {
+  return typeof value === "string" && /^\d{1,4}\.\d{1,4}\.\d{1,4}(?:-(?:alpha|beta|rc|dev)(?:\.\d{1,10})?)?$/u.test(value)
+    ? value : null;
+}
+
 export interface AureliaSupportCachedAppSnapshot {
   /** Per-report HMAC id using the same kind/NUL/value convention as client support identities. */
   readonly projectId: string;
+  readonly typeScript?: AureliaSupportTypeScriptEnvironment | null;
   readonly analysisDepth: string;
   readonly templateAnalysisBreadth: string;
   readonly includeAuthoringTemplates: boolean;

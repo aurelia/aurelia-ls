@@ -394,6 +394,19 @@ describe("SupportReportService", () => {
             );
             return {
               schemaVersion: "aurelia-support-snapshot/1",
+              analysisCache: {
+                status: "available",
+                cachedApps: [
+                  { projectId: "project:1", typeScript: {
+                    analyzerVersion: "6.1.0-dev.20260709", workspaceVersion: "5.9.3",
+                    versionRelation: "different-version", packageJsonPath: "DO_NOT_EMBED_SERVER_OVERRIDE_SOURCE",
+                  } },
+                  { projectId: "project:2", typeScript: {
+                    analyzerVersion: "6.0.3", workspaceVersion: "5.9.3-DO_NOT_EMBED_SERVER_OVERRIDE_SOURCE",
+                    versionRelation: "different-version",
+                  } },
+                ],
+              },
               requests: {
                 aggregateCount: 0,
                 firstDiagnosticFailure: {
@@ -441,6 +454,14 @@ describe("SupportReportService", () => {
     });
     expect(report.servers.snapshots[0].snapshot.requests.recentTerminals[0].documentId)
       .toBe(report.workspace.activeDocument.documentId);
+    expect(report.servers.snapshots[0].snapshot.analysisCache.cachedApps).toEqual([
+      { projectId: "project:1", typeScript: {
+        analyzerVersion: "6.1.0-dev.20260709", workspaceVersion: "5.9.3", versionRelation: "different-version",
+      } },
+      { projectId: "project:2", typeScript: {
+        analyzerVersion: "6.0.3", workspaceVersion: null, versionRelation: "different-version",
+      } },
+    ]);
     expect(report.servers.snapshots[0].snapshot.requests.firstDiagnosticFailure).toMatchObject({
       incidentId: "0ee15932-3502-4363-b5b1-87ed63080f58", stage: "analysis",
       serverBundleSha256: "a".repeat(64), frames: [{ line: 12, column: 3 }],

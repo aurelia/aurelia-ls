@@ -89,6 +89,26 @@ inspection, and feature authoring.
 See the [0.3.0 protocol reference](./docs/reference-v0.3.0.md) for the exact
 transport contract and the 18 new app-query kinds.
 
+### Report a setup problem
+
+Record the server or installed package version, the launch method, and the Node version and platform
+that ran the server. If the server failed before the handshake, include the provider's launch error
+after removing private details.
+
+1. Call `aurelia_workspace_overview` with the same absolute `workspaceRoot` and `projectPage: {"size":5}`.
+   Record the error reason or the intended project's relative location. You can use a neutral label such as
+   “workspace root” or “project 2 of 3.” Follow the next page if needed.
+2. If an `aurelia.project.json` is involved, pass the selected `projectKey` to
+   `aurelia_project_configurations`. Use `view: "configurations"` for the application state and accepted
+   version and `view: "diagnostics"` for the diagnostic kind. After a repair, save and repeat those calls
+   on the same connection.
+3. For checker issues, call `aurelia_app_query` with the same workspace and project, a workspace-relative
+   TypeScript `sourceFilePath`, `queryKind: "typescript-diagnostic-summary"`, and `page: {"size":0}`.
+   Include the analyzer version, workspace TypeScript version if available, and `versionRelation`.
+
+Share the reviewed summary. Raw replies and provider logs can contain absolute paths, project names, or
+authored text. Aurelia does not upload this support information.
+
 ## Patterns, Docs, And Agent Guidance
 
 Use `aurelia_pattern_menu` to select a curated authoring starting point and

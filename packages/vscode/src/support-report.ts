@@ -12,6 +12,7 @@ import {
   AureliaProtocolRequest,
   readAureliaDiagnosticFailureData,
   readAureliaSupportDiagnosticFailure,
+  readAureliaSupportTypeScriptEnvironment,
   readAureliaWorkerProgressSnapshot,
   type AureliaDiagnosticFailureData,
   type AureliaSupportSnapshotResponse,
@@ -23,6 +24,7 @@ import type { WorkerProgressEvidence, WorkerTransportEvent } from "./worker-tran
 import {
   readWorkspaceActivationTopology,
   workspaceFolderKey,
+  type WorkspaceActivationEvidenceKind,
 } from "./workspace-activation.js";
 
 export const AURELIA_SUPPORT_REPORT_SCHEMA = "aurelia-support-report/1" as const;
@@ -40,6 +42,17 @@ const DEFAULT_SERVER_SNAPSHOT_DEADLINE_MS = 2_500;
 const MAX_TOTAL_SERVER_SNAPSHOT_BYTES = 512 * 1_024;
 
 type SupportTransportMode = "worker" | "ipc";
+
+type WorkspaceStartupStage = "activation-preflight" | "resolve-server-module" | "prepare-client" | "initialize-client" | "workspace-status";
+
+interface WorkspaceStartupFailure {
+  readonly workspaceUri: string;
+  readonly recordedAt: string;
+  readonly stage: WorkspaceStartupStage;
+  readonly activationEvidence: WorkspaceActivationEvidenceKind | null;
+  readonly code: string | number | null;
+  nextSuccessfulStart: { readonly recordedAt: string; readonly incarnation: number } | null;
+}
 
 interface DiagnosticFailureRecord {
   readonly workspaceUri: string;
@@ -152,6 +165,7 @@ export class SupportReportService implements Disposable {
   readonly #workerProgress: WorkerEventRecord[] = [];
   #omittedWorkerProgressSamples = 0;
   #firstDiagnosticFailure: DiagnosticFailureRecord | null = null;
+  #firstWorkspaceStartupFailure: WorkspaceStartupFailure | null = null;
   readonly #workerIdentityKey = randomBytes(32);
   #languageClient: AureliaLanguageClient | null = null;
   #resourceExplorerState: (() => ResourceExplorerSupportState) | null = null;
@@ -176,6 +190,29 @@ export class SupportReportService implements Disposable {
   attachLanguageClient(languageClient: AureliaLanguageClient): void {
     if (this.#disposed) return;
     this.#languageClient = languageClient;
+  }
+
+  recordWorkspaceStartupFailure(
+    workspaceUri: string,
+    stage: WorkspaceStartupStage,
+    activationEvidence: WorkspaceActivationEvidenceKind | null,
+    error: unknown,
+  ): void {
+    if (this.#disposed || this.#firstWorkspaceStartupFailure != null) return;
+    const code = errorCode(error);
+    // Keep protocol numbers and known local setup codes. Third-party errors can put authored text in any field.
+    const knownCode = typeof code === "number" ? Number.isSafeInteger(code) : code != null && WORKSPACE_STARTUP_CODES.has(code);
+    this.#firstWorkspaceStartupFailure = {
+      workspaceUri, recordedAt: this.#now().toISOString(), stage, activationEvidence, code: knownCode ? code : null,
+      nextSuccessfulStart: null,
+    };
+  }
+
+  recordWorkspaceStarted(workspaceUri: string, incarnation: number): void {
+    const first = this.#firstWorkspaceStartupFailure;
+    if (first != null && first.workspaceUri === workspaceUri && first.nextSuccessfulStart == null) {
+      first.nextSuccessfulStart = { recordedAt: this.#now().toISOString(), incarnation };
+    }
   }
 
   /** Observe the wire result before the SDK maps cancellation and lost connections to provider fallbacks. */
@@ -283,6 +320,7 @@ export class SupportReportService implements Disposable {
     const failures: Array<{ readonly section: string; readonly reason: string }> = [];
     const client = this.#readClientState(identities, failures);
     const first = this.#firstDiagnosticFailure;
+    const startup = this.#firstWorkspaceStartupFailure;
     const explorer = this.#readResourceExplorerState(failures);
     const [servers, logs] = await Promise.all([
       this.#readServerSnapshots(identities, failures),
@@ -310,6 +348,14 @@ export class SupportReportService implements Disposable {
       product: this.#productState(),
       workspace: this.#workspaceState(identities),
       client,
+      firstWorkspaceStartupFailure: startup == null ? null : {
+        workspaceId: identities.id("workspace", startup.workspaceUri),
+        recordedAt: startup.recordedAt,
+        stage: startup.stage,
+        activationEvidence: startup.activationEvidence,
+        code: startup.code,
+        nextSuccessfulStart: startup.nextSuccessfulStart,
+      },
       firstDiagnosticFailure: first == null ? null : {
         method: DocumentDiagnosticRequest.method,
         recordedAt: first.recordedAt,
@@ -346,6 +392,7 @@ export class SupportReportService implements Disposable {
   dispose(): void {
     this.#disposed = true;
     this.#firstDiagnosticFailure = null;
+    this.#firstWorkspaceStartupFailure = null;
     this.#languageClient = null;
     this.#resourceExplorerState = null;
     this.#workerEvents.splice(0);
@@ -512,6 +559,7 @@ export class SupportReportService implements Disposable {
       languageCounts.set(document.languageId, (languageCounts.get(document.languageId) ?? 0) + 1);
     }
     const active = this.#vscode.window.activeTextEditor?.document;
+    const activeFolder = active == null ? undefined : topology.owningFolder(active.uri);
     return {
       folderCount: folders.length,
       folders,
@@ -523,6 +571,7 @@ export class SupportReportService implements Disposable {
         ? null
         : {
             documentId: identities.id("document", active.uri.toString()),
+            workspaceId: activeFolder == null ? null : identities.id("workspace", workspaceFolderKey(activeFolder)),
             languageId: active.languageId,
             version: Number.isSafeInteger(active.version) ? active.version : null,
             semanticSessionState: this.#languageClient?.semanticSessionStateForUri(active.uri) ?? "unavailable",
@@ -732,6 +781,17 @@ function projectServerSnapshot(value: unknown): AureliaSupportSnapshotResponse |
   // cannot bypass the support report's privacy or payload assumptions merely by spoofing the schema version.
   const projected = JSON.parse(JSON.stringify(value, [...SERVER_SUPPORT_PROPERTY_ALLOWLIST])) as AureliaSupportSnapshotResponse;
   if (projected?.schemaVersion !== "aurelia-support-snapshot/1") return null;
+  // Version evidence is meaningful only at its cached project. Never allow arbitrary version properties elsewhere.
+  const cache = "analysisCache" in value ? value.analysisCache : null;
+  if (projected.analysisCache?.status === "available" && Array.isArray(projected.analysisCache.cachedApps)
+    && cache != null && typeof cache === "object" && "cachedApps" in cache && Array.isArray(cache.cachedApps)) {
+    for (const [index, app] of projected.analysisCache.cachedApps.entries()) {
+      const raw = cache.cachedApps[index];
+      if (app != null && raw != null && typeof raw === "object" && "typeScript" in raw) {
+        Object.assign(app, { typeScript: readAureliaSupportTypeScriptEnvironment(raw.typeScript) });
+      }
+    }
+  }
   const requests = "requests" in value ? value.requests : null;
   if (requests != null && typeof requests === "object" && "firstDiagnosticFailure" in requests) {
     return { ...projected, requests: { ...projected.requests, firstDiagnosticFailure: readAureliaSupportDiagnosticFailure(requests.firstDiagnosticFailure) } };
@@ -1111,6 +1171,12 @@ function errorCode(error: unknown): string | number | null {
     return null;
   }
 }
+
+const WORKSPACE_STARTUP_CODES = new Set([
+  "AURELIA_SERVER_MODULE_UNAVAILABLE", "AURELIA_SERVER_START_TIMEOUT",
+  "MODULE_NOT_FOUND", "ERR_MODULE_NOT_FOUND", "ERR_WORKER_OUT_OF_MEMORY",
+  "EACCES", "EPERM", "ENOENT", "ECONNRESET", "ECONNREFUSED", "EPIPE", "ETIMEDOUT",
+]);
 
 function lineCount(text: string): number {
   if (text.length === 0) return 0;

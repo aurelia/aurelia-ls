@@ -11,6 +11,7 @@ import {
   AureliaSemanticSessionState,
 } from "../../out/client-core.js";
 import { LspFacade } from "../../out/core/lsp-facade.js";
+import { SupportReportService } from "../../out/support-report.js";
 import { EXTENSION_HOST_OBSERVATION_EVENT } from "../../out/extension-host-observation.js";
 import {
   createResourceDiscoveryHostControl,
@@ -587,9 +588,14 @@ describe("AureliaLanguageClient workspace ownership", () => {
       ]));
       const createClient = harness.createClient.getMockImplementation()!;
       harness.createClient
-        .mockImplementationOnce(() => { throw new Error("factory unavailable"); })
+        .mockImplementationOnce(() => {
+          throw Object.assign(new Error("private factory unavailable"), { code: "PRIVATE_FACTORY_NAME" });
+        })
         .mockImplementation(createClient);
-      const manager = createManager(vscode, harness);
+      const supportReport = new SupportReportService(stubExtensionContext(vscode), vscode as unknown as VscodeApi, {
+        transportMode: "worker", readLogTails: async () => ({ tails: [], failures: [] }),
+      });
+      const manager = createManager(vscode, harness, supportReport);
 
       await manager.start(stubExtensionContext(vscode));
 
@@ -602,6 +608,13 @@ describe("AureliaLanguageClient workspace ownership", () => {
         sessionCount: 0,
         sessions: [],
       });
+      const failed = await supportReport.createReport() as any;
+      expect(failed.firstWorkspaceStartupFailure).toEqual({
+        workspaceId: failed.workspace.folders[0].workspaceId, stage: "prepare-client",
+        activationEvidence: "package-manifest", code: null, recordedAt: expect.any(String),
+        nextSuccessfulStart: null,
+      });
+      expect(JSON.stringify(failed)).not.toMatch(/PRIVATE_FACTORY_NAME|private factory|file:\/\/\/work/u);
 
       recorded.fireDocumentChanged({
         uri: vscode.Uri.parse(`${workspaceUri}/src/app.html`),
@@ -613,6 +626,11 @@ describe("AureliaLanguageClient workspace ownership", () => {
         expect.objectContaining({ client: harness.clients[0]?.raw, availability: "active" }),
       ]));
 
+      const repaired = await supportReport.createReport() as any;
+      expect(repaired.firstWorkspaceStartupFailure).toMatchObject({
+        workspaceId: repaired.workspace.folders[0].workspaceId,
+        nextSuccessfulStart: { incarnation: 1, recordedAt: expect.any(String) },
+      });
       await manager.stop();
     } finally {
       vi.clearAllTimers();
@@ -818,6 +836,43 @@ describe("AureliaLanguageClient workspace ownership", () => {
     expect(configWatcher.disposed).toBe(true);
   });
 
+  test("records the initial workspace-status error beside a valid outside-Aurelia result and a healthy sibling", async () => {
+    const roots = ["a-outside", "b-broken", "c-healthy"].map((name) => ({ name, uri: `file:///work/${name}` }));
+    const { vscode } = createVscodeApi({
+      workspaceFolders: roots,
+      files: Object.fromEntries(roots.map(({ uri }) => [
+        `${uri}/package.json`, JSON.stringify({ dependencies: { aurelia: "latest" } }),
+      ])),
+    });
+    const broken = roots[1]!.uri;
+    vscode.window.activeTextEditor = { document: { uri: vscode.Uri.parse(`${broken}/app.html`), languageId: "html" } } as never;
+    const harness = createClientHarness(new Map(), {
+      workspaceStatus: (uri) => {
+        if (uri === broken) throw Object.assign(new Error("private message"), { code: -32603 });
+        return workspaceStatus(uri === roots[0]!.uri ? "outside-aurelia" : "app-world");
+      },
+    });
+    const supportReport = new SupportReportService(stubExtensionContext(vscode), vscode as unknown as VscodeApi, {
+      transportMode: "worker", readLogTails: async () => ({ tails: [], failures: [] }),
+    });
+    const manager = createManager(vscode, harness, supportReport);
+    try {
+      await manager.start(stubExtensionContext(vscode));
+      expect(manager.sessions.map((session) => session.workspace.uri)).toEqual([roots[2]!.uri]);
+      const report = await supportReport.createReport() as any;
+      expect(report.firstWorkspaceStartupFailure).toEqual({
+        workspaceId: report.workspace.activeDocument.workspaceId,
+        activationEvidence: "package-manifest", stage: "workspace-status", code: -32603,
+        recordedAt: expect.any(String), nextSuccessfulStart: null,
+      });
+      expect(report.client.sessions[0].workspaceId).not.toBe(report.workspace.activeDocument.workspaceId);
+      expect(JSON.stringify(report)).not.toMatch(/b-broken|private message|file:\/\/\/work/u);
+    } finally {
+      await manager.stop();
+      supportReport.dispose();
+    }
+  });
+
   test("does not retain an automatic candidate without semantic confirmation", async () => {
     const { vscode } = createVscodeApi({
       workspaceFolders: [{ name: "candidate", uri: "file:///work/candidate" }],
@@ -828,13 +883,17 @@ describe("AureliaLanguageClient workspace ownership", () => {
     const harness = createClientHarness(new Map([
       ["file:///work/candidate", null],
     ]));
-    const manager = createManager(vscode, harness);
+    const supportReport = new SupportReportService(stubExtensionContext(vscode), vscode as unknown as VscodeApi, {
+      transportMode: "worker", readLogTails: async () => ({ tails: [], failures: [] }),
+    });
+    const manager = createManager(vscode, harness, supportReport);
 
     await manager.start(stubExtensionContext(vscode));
 
     expect(manager.sessions).toEqual([]);
     expect(harness.clients).toHaveLength(1);
     expect(harness.clients[0]?.stop).toHaveBeenCalledTimes(1);
+    expect((await supportReport.createReport()).firstWorkspaceStartupFailure).toBeNull();
     await manager.stop();
   });
 
@@ -3536,11 +3595,14 @@ function twoWorkspaceApi() {
   });
 }
 
-function createManager(vscode: ReturnType<typeof createVscodeApi>["vscode"], harness: ClientHarness) {
+function createManager(vscode: ReturnType<typeof createVscodeApi>["vscode"], harness: ClientHarness, supportReport?: SupportReportService) {
   const { logger } = createTestServices(vscode as unknown as VscodeApi);
-  return new AureliaLanguageClient(logger, vscode as unknown as VscodeApi, {
+  const manager = new AureliaLanguageClient(logger, vscode as unknown as VscodeApi, {
     createClient: harness.createClient as never,
+    supportReport,
   });
+  supportReport?.attachLanguageClient(manager);
+  return manager;
 }
 
 function createClientHarness(

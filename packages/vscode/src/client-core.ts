@@ -170,6 +170,10 @@ class AureliaLanguageClientStartError extends Error {
   }
 }
 
+class ServerModuleUnavailableError extends Error {
+  readonly code = "AURELIA_SERVER_MODULE_UNAVAILABLE";
+}
+
 export interface AureliaLanguageClientOptions {
   readonly createClient: LanguageClientFactory;
   readonly supportReport?: SupportReportService;
@@ -294,7 +298,7 @@ async function resolveServerModule(context: ExtensionContext, logger: ClientLogg
   }
   const msg = `Cannot locate server module. Tried:\n${candidates.map((c) => `- ${c}`).join("\n")}`;
   logger.error(msg);
-  throw new Error(msg);
+  throw new ServerModuleUnavailableError(msg);
 }
 
 /** Owns one language-client/server session for each disjoint active VS Code workspace root. */
@@ -887,6 +891,9 @@ export class AureliaLanguageClient {
           if (result.status === "invalidated") return;
           admission = result.value;
         } catch (error) {
+          if (this.#isCurrentLifecycle(intent)) {
+            this.#supportReport?.recordWorkspaceStartupFailure(key, "activation-preflight", null, error);
+          }
           this.#logger.warn(`[client] activation preflight failed for ${key}: ${errorMessage(error)}`);
         }
       }
@@ -1045,6 +1052,9 @@ export class AureliaLanguageClient {
           ) ?? undefined;
         } catch (error) {
           if (error instanceof AureliaLanguageClientStartError) {
+            if (this.#isCurrentLifecycle(intent)) {
+              this.#supportReport?.recordWorkspaceStartupFailure(key, "initialize-client", admission.evidence, error.cause);
+            }
             recoveryStartFailed = true;
             const failedSession = {
               ...error.unavailableSession,
@@ -1054,6 +1064,10 @@ export class AureliaLanguageClient {
             this.#recordWorkspaceFailure(failedSession);
             nextSessions.set(key, this.#publishUnavailableSession(failedSession, false));
           } else {
+            if (this.#isCurrentLifecycle(intent)) {
+              const stage = error instanceof ServerModuleUnavailableError ? "resolve-server-module" : "prepare-client";
+              this.#supportReport?.recordWorkspaceStartupFailure(key, stage, admission.evidence, error);
+            }
             recoveryStartFailed = true;
             accepted.push(admission);
             const recovery = this.#recordClientFreeWorkspaceFailure(
@@ -1140,7 +1154,10 @@ export class AureliaLanguageClient {
       }
       nextSessions.set(key, session);
       this.#publishSessions(new Map(nextSessions));
-      if (createdSession) this.#markWorkspaceRunning(session);
+      if (createdSession) {
+        this.#markWorkspaceRunning(session);
+        this.#supportReport?.recordWorkspaceStarted(session.workspace.uri, session.incarnation);
+      }
       accepted.push(admission);
     }
 
@@ -1263,6 +1280,11 @@ export class AureliaLanguageClient {
             this.#logger,
             workspace.uri,
             admission.nativeProjectConfigurationUris,
+            (error) => {
+              if (this.#isCurrentLifecycle(intent)) {
+                this.#supportReport?.recordWorkspaceStartupFailure(workspace.uri, "workspace-status", admission.evidence, error);
+              }
+            },
           ),
           intent,
         );
@@ -1919,6 +1941,7 @@ async function readWorkspaceStatus(
   logger: ClientLogger,
   workspaceUri: string,
   nativeProjectConfigurationUris: readonly Uri[],
+  onStartupFailure?: (error: unknown) => void,
 ): Promise<WorkspaceStatusResponse | null> {
   for (let attempt = 0; ; attempt += 1) {
     try {
@@ -1936,11 +1959,13 @@ async function readWorkspaceStatus(
         }
         // Do not launder managed currentness into ordinary unavailability: an
         // established session must not publish the older topology fingerprint.
+        onStartupFailure?.(error);
         throw error;
       }
       // Initial admission fails closed on null; an established session may keep
       // running through a genuine transient transport failure.
       logger.warn(`[client] workspace status unavailable for ${workspaceUri}: ${errorMessage(error)}`);
+      onStartupFailure?.(error);
       return null;
     }
   }
@@ -1950,7 +1975,9 @@ async function boundedClientStart(start: Promise<void>): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | null = null;
   const timeout = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => {
-      reject(new Error(`Aurelia language server did not initialize within ${LANGUAGE_SERVER_START_TIMEOUT_MS}ms.`));
+      reject(Object.assign(new Error(`Aurelia language server did not initialize within ${LANGUAGE_SERVER_START_TIMEOUT_MS}ms.`), {
+        code: "AURELIA_SERVER_START_TIMEOUT",
+      }));
     }, LANGUAGE_SERVER_START_TIMEOUT_MS);
     timer.unref?.();
   });

@@ -132,6 +132,7 @@ describe("language-server support snapshot", () => {
       typeSystemProjectCount: 1,
       cachedApps: [expect.objectContaining({
         projectId: expect.stringMatching(/^project:[a-f0-9]{20}$/),
+        typeScript: { analyzerVersion: "6.0.3", workspaceVersion: "5.9.3", versionRelation: "different-version" },
         analysisDepth: "binding-observation",
       })],
     });
@@ -204,6 +205,11 @@ function fakeAnalysisCacheOverview() {
       authoringTemplateSourceFileCount: 1,
       authoringTemplateLimit: 1,
       profile: {
+        typeScript: {
+          analyzer: { version: "6.0.3", packageJsonPath: "C:\\private\\tenant\\game" },
+          workspace: { version: "5.9.3", packageJsonPath: "file:///C:/private/tenant/game" },
+          versionRelation: "different-version",
+        },
         inquiryProfile: "lsp-cursor",
         totalMilliseconds: 321.2,
         phaseCount: 2,

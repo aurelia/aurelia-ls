@@ -315,12 +315,26 @@ If VS Code shows `Request textDocument/diagnostic failed`, or an Aurelia Problem
 keep the affected file active and run **Aurelia: Create Support Report** from the Command Palette **before reloading
 the window**. Reloading starts a new session and clears in-memory evidence.
 
+Use the same command if an Aurelia workspace fails to start. The report records the first startup exception
+in this window, the stage that failed, the activation evidence and a recognized error code when available.
+The active document identifies its nearest configured workspace folder. Use `workspaceId` to correlate
+the failure, configured folder and client session **within the same report**.
+If that workspace subsequently starts, `nextSuccessfulStart` records when. For example,
+`resolve-server-module` with `AURELIA_SERVER_MODULE_UNAVAILABLE` means the extension could not locate its
+server entry point. Check the extension installation and reinstall if the bundle is missing.
+
+For a checker mismatch, a live server's `analysisCache.cachedApps` identifies each retained project by a
+masked ID. Its `typeScript` field shows the analyzer and workspace versions and their relationship.
+This evidence is available after the server has analyzed a project. Private version labels are omitted.
+If a framework version is relevant, include the installed version of `aurelia` or `@aurelia/runtime-html`
+for the affected project. The report does not inspect workspace dependencies.
+
 The command opens a local JSON document with extension and VS Code versions, session and Worker status,
 and recent log excerpts. It keeps the first diagnostic request error since the extension started, including
 a short excerpt of its message and any server incident ID. It also records the next successful diagnostic
 request for the same file, if one has completed. Workspace and document identities are masked. Error messages
 and logs can still contain project names or snippets. Review the document and remove private text before
-attaching it to an issue.
+attaching it to an issue. The command does not upload the report.
 
 For the original error, open **View → Output** and select **Aurelia Language Server (`<workspace-folder-name>`)**
 for the affected folder. Look for the request, message, and code around the time of the failure.

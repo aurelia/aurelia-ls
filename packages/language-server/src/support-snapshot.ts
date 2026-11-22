@@ -10,6 +10,7 @@ import {
 } from "@aurelia-ls/semantic-runtime";
 import {
   AURELIA_SUPPORT_SNAPSHOT_SCHEMA,
+  readAureliaSupportTypeScriptEnvironment,
   type AureliaSupportAnalysisCacheSnapshot,
   type AureliaSupportCachedAppSnapshot,
   type AureliaSupportCountRow,
@@ -336,6 +337,11 @@ function readSafeAnalysisCache(
   const cachedApps = cache.cachedApps.slice(0, SUPPORT_SNAPSHOT_MAXIMUM_CACHED_APPS)
     .map((app): AureliaSupportCachedAppSnapshot => ({
       projectId: reportIdentity(identitySalt, "project", app.projectKey),
+      typeScript: readAureliaSupportTypeScriptEnvironment({
+        analyzerVersion: app.profile.typeScript.analyzer.version,
+        workspaceVersion: app.profile.typeScript.workspace?.version,
+        versionRelation: app.profile.typeScript.versionRelation,
+      }),
       analysisDepth: safeOperationalLabel(String(app.analysisDepth), "unknown"),
       templateAnalysisBreadth: safeOperationalLabel(String(app.templateAnalysisBreadth), "unknown"),
       includeAuthoringTemplates: app.includeAuthoringTemplates,
