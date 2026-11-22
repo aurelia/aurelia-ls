@@ -8,6 +8,13 @@ preserve the repository's earlier package line.
 
 ---
 
+## VS Code 0.5.5 and MCP 0.3.4
+
+- Restored editor diagnostic recovery and preserved the original failure in local support reports.
+- Repaired rename and Quick Fix source coordinates across HTML, TypeScript and JavaScript.
+- Fixed default MCP diagnostic depth, file-query ordering, pagination and retained project isolation.
+- Both consumers recognize more framework-equivalent forms of template expressions, resource imports and application startup. Checks cover the same examples against TypeScript and Aurelia runtime behavior.
+
 ## VS Code 0.5.4
 
 - Fixed VS Code request cancellation and resource navigation during concurrent edits, and reduced repeated inventory warnings.

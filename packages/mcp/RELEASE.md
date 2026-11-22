@@ -66,26 +66,26 @@ and checks that TypeScript resolves from the same package context as the app.
 ## Promote Published Documentation
 
 Source documentation can target the next MCP protocol while install guidance
-continues to identify the last hosted tarball. Before creating the 0.3.3 tag:
+continues to identify the last hosted tarball. Before creating the 0.3.4 tag:
 
-1. Set `publishedReleaseVersion` to `0.3.3` in
-   `scripts/contract-release-docs.mjs`.
+1. Set `publishedReleaseVersion` to `0.3.4` and `previousPublishedReleaseVersion`
+   to `0.3.3` in `scripts/contract-release-docs.mjs`.
 2. Promote the MCP release/status/install links in the root README,
    `docs/getting-started.md`, the package README, and every provider guide from
-   0.3.2 to 0.3.3, and remove the package README's source-versus-published
+   0.3.3 to 0.3.4, and remove the package README's source-versus-published
    transition wording.
 3. Run `pnpm --filter @aurelia-ls/mcp contract:release` again.
 
 Do not create the tag while any current install surface still identifies
-0.3.2 as the published release. Historical release notes and the current
+0.3.3 as the published release. Historical release notes and the current
 protocol reference are excluded from that promotion.
 
 ## GitHub Release Flow
 
 ```powershell
-git tag mcp-v0.3.3
-git push origin mcp-v0.3.3
-gh release create mcp-v0.3.3 packages/mcp/.release/aurelia-ls-mcp-0.3.3.tgz --title "Aurelia MCP 0.3.3" --notes-file packages/mcp/release-notes/mcp-v0.3.3.md
+git tag mcp-v0.3.4
+git push origin mcp-v0.3.4
+gh release create mcp-v0.3.4 packages/mcp/.release/aurelia-ls-mcp-0.3.4.tgz --title "Aurelia MCP 0.3.4" --notes-file packages/mcp/release-notes/mcp-v0.3.4.md
 ```
 
 Do not add npm publish steps to this flow yet.

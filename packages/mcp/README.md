@@ -13,6 +13,7 @@ coding agent.
 | Surface | Version | Status |
 |---|---:|---|
 | [GitHub tarball](https://github.com/aurelia/aurelia-ls/releases/tag/mcp-v0.3.3) | 0.3.3 | Latest published release |
+| [0.3.4 release notes](./release-notes/mcp-v0.3.4.md) | 0.3.4 | Current source and next release target |
 | [Protocol reference](./docs/reference-v0.3.0.md) | 0.3.0 | Current protocol |
 
 The [0.3.3 release notes](./release-notes/mcp-v0.3.3.md) cover the current reliability improvements.
@@ -50,7 +51,7 @@ install lets the analyzer use the workspace's TypeScript package. Then call
 
 ## Tool Surface
 
-The 0.3.3 server registers 19 tools:
+The server registers 19 tools:
 
 | Area | Tools |
 |---|---|

@@ -6,7 +6,7 @@ import {
   patternReleaseSentinels,
 } from './pattern-sentinels.mjs';
 
-const sourceReleaseVersion = '0.3.3';
+const sourceReleaseVersion = '0.3.4';
 const publishedReleaseVersion = '0.3.3';
 const previousPublishedReleaseVersion = '0.3.2';
 const protocolVersion = '0.3.0';
@@ -396,7 +396,7 @@ function extractObjectStringValues(source, objectName) {
 }
 
 function extractEnumStringValues(source, enumName) {
-  const match = source.match(new RegExp(`export const enum ${enumName} \\{([\\s\\S]*?)\\n\\}`));
+  const match = source.match(new RegExp(`export enum ${enumName} \\{([\\s\\S]*?)\\n\\}`));
   if (match?.[1] == null) {
     throw new Error(`Could not read source enum ${enumName}.`);
   }
