@@ -20,6 +20,13 @@ const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const weakOwnerFixtureRoot = path.join(packageRoot, 'fixtures/pressure/weak-owner-repair-planning');
 const mixedFormFixtureRoot = path.join(packageRoot, 'fixtures/pressure/mixed-form-surfaces');
 const selectModelPrimitiveFixtureRoot = path.join(packageRoot, 'fixtures/pressure/select-model-primitives');
+const singleSelectMismatchMembers = ['selectedText', 'selectedValueBoundProductId', 'selectedRepeatedValueProductId'];
+const singleSelectMismatchFilters = [
+  effectFilter('diagnosticKind', 'binding-source-assignment-strictness'),
+  effectFilter('missingInput', 'binding-source-assignment:target-to-source-type-mismatch'),
+  effectFilter('suggestion.suggestionKind', 'align-assignment-type'),
+  effectFilter('suggestion.summary', 'Align the source member type with the single-select option domain; use model.bind for non-string domain values or type the source for the string/null value channel emitted by option value attributes.'),
+];
 const syntheticWritebackFixtureRoot = path.join(packageRoot, 'fixtures/pressure/synthetic-writeback-local');
 const templateOverlayTypeErrorFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-overlay-type-errors');
 const guidanceTruthCanariesFixtureRoot = path.join(packageRoot, 'fixtures/pressure/guidance-truth-canaries');
@@ -296,16 +303,20 @@ const contracts = [
         'Single-select primitive assignment strictness should explain option model/value domain alignment.',
         'template-diagnostic',
         'template',
-        2,
+        singleSelectMismatchMembers.length,
         null,
-        [
-          effectFilter('diagnosticKind', 'binding-source-assignment-strictness'),
-          effectFilter('missingInput', 'binding-source-assignment:target-to-source-type-mismatch'),
-          effectFilter('suggestion.suggestionKind', 'align-assignment-type'),
-          effectFilter('suggestion.summary', 'Align the source member type with the single-select option domain; use model.bind for non-string domain values or type the source for the string/null value channel emitted by option value attributes.'),
-        ],
+        singleSelectMismatchFilters,
         'signature',
       ),
+      ...singleSelectMismatchMembers.map(member => ExpectedSemanticEffect.exactly(
+        `The select bound to ${member} should report its incompatible option domain.`,
+        'template-diagnostic',
+        'template',
+        1,
+        null,
+        [...singleSelectMismatchFilters, effectFilter('selectedMemberName', member)],
+        'signature',
+      )),
       ExpectedSemanticEffect.exactly(
         'Radio primitive assignment strictness should explain model.bind versus value attributes.',
         'template-diagnostic',
