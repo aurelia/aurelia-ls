@@ -776,5 +776,10 @@ function runCommand(command, commandArgs, options = {}) {
 
 function appendOutput(current, chunk) {
   const next = current + chunk.toString();
-  return next.length > 20000 ? next.slice(next.length - 20000) : next;
+  const limit = 20000;
+  if (next.length <= limit) return next;
+  const marker = '\n[contract output truncated]\n';
+  const headLength = limit / 2;
+  const tailLength = limit - headLength - marker.length;
+  return next.slice(0, headLength) + marker + next.slice(-tailLength);
 }
