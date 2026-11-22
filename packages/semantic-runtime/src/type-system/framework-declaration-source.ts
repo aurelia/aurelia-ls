@@ -46,11 +46,21 @@ export function typeMatchesFrameworkDeclarationSource(
       typeMatchesFrameworkDeclarationSource(part, checker, sourcePathByFileName, spec)
     );
   }
+  return frameworkDeclarationSymbolForType(type, checker, sourcePathByFileName, spec) != null;
+}
+
+/** Select a declaration-backed symbol for the supplied type or its apparent type in checker precedence order. */
+export function frameworkDeclarationSymbolForType(
+  type: ts.Type | null,
+  checker: ts.TypeChecker,
+  sourcePathByFileName: FrameworkDeclarationSourcePathIndex,
+  spec: FrameworkDeclarationSourceSpec,
+): ts.Symbol | null {
+  if (type == null) return null;
   const apparent = checker.getApparentType(type);
-  return symbolMatchesFrameworkDeclarationSource(type.symbol, checker, sourcePathByFileName, spec)
-    || symbolMatchesFrameworkDeclarationSource(type.aliasSymbol, checker, sourcePathByFileName, spec)
-    || symbolMatchesFrameworkDeclarationSource(apparent.symbol, checker, sourcePathByFileName, spec)
-    || symbolMatchesFrameworkDeclarationSource(apparent.aliasSymbol, checker, sourcePathByFileName, spec);
+  return [type.symbol, type.aliasSymbol, apparent.symbol, apparent.aliasSymbol].find(symbol =>
+    symbolMatchesFrameworkDeclarationSource(symbol, checker, sourcePathByFileName, spec)
+  ) ?? null;
 }
 
 /** Match a checker type or an explicitly declared heritage type against a framework-owned declaration. */

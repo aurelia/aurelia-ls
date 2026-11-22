@@ -46,6 +46,7 @@ import type {
 import {
   declarationMatchesFrameworkSource,
   frameworkDeclarationSourceSpec,
+  frameworkDeclarationSymbolForType,
   symbolMatchesFrameworkDeclarationSource,
   typeMatchesFrameworkDeclarationSource,
   type FrameworkDeclarationSourceSpec,
@@ -53,8 +54,8 @@ import {
 import {
   firstSymbolDeclaration,
   resolveAliasedSymbol,
-  symbolForExpression,
 } from '../type-system/checker-node-helpers.js';
+import type { TypeSystemProject } from '../type-system/project.js';
 import { typeSystemSourcePathIndex } from '../type-system/source-path-index.js';
 import {
   dedupeRuntimeRegistrationRequirementReasons as dedupeReasons,
@@ -388,7 +389,8 @@ function programmaticUsePressure(emission: AureliaAppWorldProjectEmission): Runt
     ...bindingConstructorNames,
     ...resourceApiNames,
   ]);
-  const checker = emission.typeSystem.checker;
+  const typeSystem = emission.typeSystem;
+  const checker = typeSystem.checker;
   const frameworkSources = frameworkDeclarationSourceSpec(
     frameworkApiNames,
     [
@@ -411,9 +413,9 @@ function programmaticUsePressure(emission: AureliaAppWorldProjectEmission): Runt
     ['aurelia', '@aurelia/runtime-html'],
     ['/packages/aurelia/', '/packages/runtime-html/'],
   );
-  const sourcePathByFileName = typeSystemSourcePathIndex(emission.project, emission.typeSystem);
+  const sourcePathByFileName = typeSystemSourcePathIndex(emission.project, typeSystem);
   const resolveCallSites = new WeakMap<ts.CallExpression, DiResolveCallSite>(
-    readDiResolveCallSites(emission.project, emission.typeSystem)
+    readDiResolveCallSites(emission.project, typeSystem)
       .map((site) => [site.sourceNode, site] as const),
   );
   const runtimeCompilerPackageSources: Readonly<Record<RuntimeCompilerPackageKind, FrameworkDeclarationSourceSpec>> = {
@@ -458,21 +460,22 @@ function programmaticUsePressure(emission: AureliaAppWorldProjectEmission): Runt
     const current = unwrapExpression(expression);
     const cached = frameworkApiValueCache.get(current);
     if (cached !== undefined) return cached;
-    const symbol = symbolForExpression(checker, current);
-    const type = checker.getTypeAtLocation(current);
-    const apparent = checker.getApparentType(type);
-    for (const candidate of [symbol, type.symbol, type.aliasSymbol, apparent.symbol, apparent.aliasSymbol]) {
-      if (symbolMatchesFrameworkDeclarationSource(candidate, checker, sourcePathByFileName, frameworkSources)) {
-        const resolved = resolveAliasedSymbol(checker, candidate!);
-        const result = {
-          exportName: resolved.getName(),
-          runtimeCompilerPackageKind: runtimeCompilerPolicyKnownNames.has(resolved.getName())
-            ? runtimeCompilerPackageForSymbol(resolved)
-            : null,
-        };
-        frameworkApiValueCache.set(current, result);
-        return result;
-      }
+    const symbol = typeSystem.readProgramAliasedSymbolAtLocation(current);
+    const candidate = symbolMatchesFrameworkDeclarationSource(symbol, checker, sourcePathByFileName, frameworkSources)
+      ? symbol
+      : frameworkDeclarationSymbolForType(
+          typeSystem.readProgramTypeAtLocation(current), checker, sourcePathByFileName, frameworkSources,
+        );
+    if (candidate != null) {
+      const resolved = resolveAliasedSymbol(checker, candidate);
+      const result = {
+        exportName: resolved.getName(),
+        runtimeCompilerPackageKind: runtimeCompilerPolicyKnownNames.has(resolved.getName())
+          ? runtimeCompilerPackageForSymbol(resolved)
+          : null,
+      };
+      frameworkApiValueCache.set(current, result);
+      return result;
     }
     if (symbol != null && !seen.has(symbol)) {
       seen.add(symbol);
@@ -488,7 +491,7 @@ function programmaticUsePressure(emission: AureliaAppWorldProjectEmission): Runt
   };
   const isAureliaInstance = (expression: ts.Expression): boolean =>
     typeMatchesFrameworkDeclarationSource(
-      checker.getTypeAtLocation(unwrapExpression(expression)),
+      typeSystem.readProgramTypeAtLocation(unwrapExpression(expression)),
       checker,
       sourcePathByFileName,
       aureliaInstanceSources,
@@ -515,8 +518,8 @@ function programmaticUsePressure(emission: AureliaAppWorldProjectEmission): Runt
       eventReasons.push(open);
       continue;
     }
-    const sourceFile = emission.typeSystem.readProgramSourceFileByModuleKey(source.moduleKey)
-      ?? emission.typeSystem.readProgramSourceFileByHostPath(evaluatedSourceFile.fileName);
+    const sourceFile = typeSystem.readProgramSourceFileByModuleKey(source.moduleKey)
+      ?? typeSystem.readProgramSourceFileByHostPath(evaluatedSourceFile.fileName);
     if (sourceFile == null) {
       const open = reason(
         RuntimeRegistrationRequirementReasonKind.ProgrammaticUseOpen,
@@ -641,14 +644,14 @@ function programmaticUsePressure(emission: AureliaAppWorldProjectEmission): Runt
       const canonical = frameworkApiValue(expression)?.exportName;
       if (canonical != null) return canonical;
       if (ts.isIdentifier(expression)) {
-        return identifierRefersToImportBinding(checker, expression)
+        return identifierRefersToImportBinding(typeSystem, expression)
           ? imports.get(expression.text) ?? null
           : null;
       }
       return ts.isPropertyAccessExpression(expression)
         && ts.isIdentifier(expression.expression)
         && namespaces.has(expression.expression.text)
-        && identifierRefersToImportBinding(checker, expression.expression)
+        && identifierRefersToImportBinding(typeSystem, expression.expression)
         ? expression.name.text
         : null;
     };
@@ -658,13 +661,13 @@ function programmaticUsePressure(emission: AureliaAppWorldProjectEmission): Runt
       const current = unwrapExpression(expression);
       if (ts.isIdentifier(current)) {
         const imported = runtimeCompilerImports.get(current.text);
-        if (imported != null && identifierRefersToImportBinding(checker, current)) return imported;
+        if (imported != null && identifierRefersToImportBinding(typeSystem, current)) return imported;
       }
       if (ts.isPropertyAccessExpression(current) && ts.isIdentifier(current.expression)) {
         const namespace = runtimeCompilerNamespaces.get(current.expression.text);
         if (
           namespace?.packageKind != null
-          && identifierRefersToImportBinding(checker, current.expression)
+          && identifierRefersToImportBinding(typeSystem, current.expression)
         ) {
           return {
             packageKind: namespace.packageKind,
@@ -712,7 +715,7 @@ function programmaticUsePressure(emission: AureliaAppWorldProjectEmission): Runt
           admitRuntimeCompilerPackageValue(runtimeCompilerValue);
         }
         const exportName = frameworkApiValue(node)?.exportName
-          ?? (imports.has(node.text) && identifierRefersToImportBinding(checker, node)
+          ?? (imports.has(node.text) && identifierRefersToImportBinding(typeSystem, node)
             ? imports.get(node.text) ?? null
             : null);
         if (exportName != null && rendererApiNames.has(exportName)) {
@@ -737,7 +740,7 @@ function programmaticUsePressure(emission: AureliaAppWorldProjectEmission): Runt
         const namespace = runtimeCompilerNamespaces.get(node.text);
         if (
           namespace?.canExposeRuntimeCompilerPackages === true
-          && identifierRefersToImportBinding(checker, node)
+          && identifierRefersToImportBinding(typeSystem, node)
           && !isStaticOrComputedNamespaceReceiver(node)
         ) {
           addRuntimeCompilerNamespacePressure(
@@ -754,7 +757,7 @@ function programmaticUsePressure(emission: AureliaAppWorldProjectEmission): Runt
         ts.isPropertyAccessExpression(node)
         && ts.isIdentifier(node.expression)
         && namespaces.has(node.expression.text)
-        && identifierRefersToImportBinding(checker, node.expression)
+        && identifierRefersToImportBinding(typeSystem, node.expression)
         && !isTypePosition(node)
       ) {
         const runtimeCompilerValue = runtimeCompilerPackageValue(node);
@@ -786,7 +789,7 @@ function programmaticUsePressure(emission: AureliaAppWorldProjectEmission): Runt
         const namespace = runtimeCompilerNamespaces.get(node.expression.text);
         if (
           namespace?.canExposeRuntimeCompilerPackages === true
-          && identifierRefersToImportBinding(checker, node.expression)
+          && identifierRefersToImportBinding(typeSystem, node.expression)
         ) {
           addRuntimeCompilerNamespacePressure(
             sourceFile.fileName,
@@ -824,7 +827,7 @@ function programmaticUsePressure(emission: AureliaAppWorldProjectEmission): Runt
       }
       if (ts.isCallExpression(node) && importedExport(node.expression) === 'resolve') {
         if (resourceKeyMayAddressRuntimeResource(
-          emission,
+          typeSystem,
           node.arguments[0] ?? null,
           resolveCallSites.get(node) ?? null,
         )) {
@@ -842,12 +845,12 @@ function programmaticUsePressure(emission: AureliaAppWorldProjectEmission): Runt
         if (
           containerMethodKind != null
           && isAureliaContainerReceiver(
-            emission.typeSystem,
+            typeSystem,
             node.expression.expression,
             containerMethodKind,
             sourcePathByFileName,
           )
-          && resourceKeyMayAddressRuntimeResource(emission, node.arguments[0] ?? null, null)
+          && resourceKeyMayAddressRuntimeResource(typeSystem, node.arguments[0] ?? null, null)
         ) {
           resourceReasons.push(programmaticReason(
             sourceFile.fileName,
@@ -918,10 +921,10 @@ function isImportBinding(node: ts.Identifier): boolean {
 }
 
 function identifierRefersToImportBinding(
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   node: ts.Identifier,
 ): boolean {
-  return checker.getSymbolAtLocation(node)?.declarations?.some((declaration) =>
+  return typeSystem.readProgramSymbolAtLocation(node)?.declarations?.some((declaration) =>
     ts.isImportSpecifier(declaration)
     || ts.isImportClause(declaration)
     || ts.isNamespaceImport(declaration)
@@ -991,7 +994,7 @@ function diContainerApiMethodKind(method: string): DiContainerApiMethodKind | nu
 }
 
 function resourceKeyMayAddressRuntimeResource(
-  emission: AureliaAppWorldProjectEmission,
+  typeSystem: TypeSystemProject,
   expression: ts.Expression | null,
   resolveCallSite: DiResolveCallSite | null,
 ): boolean {
@@ -1007,10 +1010,11 @@ function resourceKeyMayAddressRuntimeResource(
   if (expression == null) return false;
   const current = unwrapExpression(expression);
   if (ts.isStringLiteralLike(current)) return current.text.startsWith('au:resource:');
-  const keyKind = containerLookupKeyKindForExpression(emission.typeSystem, current);
+  const keyKind = containerLookupKeyKindForExpression(typeSystem, current);
   if (keyKind === ContainerLookupKeyKind.Resource) return true;
   if (keyKind !== ContainerLookupKeyKind.Unknown) return false;
-  return typeMayBeString(emission.typeSystem.checker.getTypeAtLocation(current));
+  const type = typeSystem.readProgramTypeAtLocation(current);
+  return type == null || typeMayBeString(type);
 }
 
 function typeMayBeString(type: ts.Type): boolean {
