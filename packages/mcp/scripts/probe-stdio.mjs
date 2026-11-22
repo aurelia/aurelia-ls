@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { probeWorkspaceQueries } from './probe-workspace-queries.mjs';
@@ -14,6 +15,7 @@ const packageJson = JSON.parse(await fs.readFile(path.join(packageRoot, 'package
 const minimalFixtureWorkspaceRoot = path.resolve(packageRoot, '../semantic-runtime/fixtures/pressure/app-pattern-minimal-app');
 const routedFixtureWorkspaceRoot = path.resolve(packageRoot, '../semantic-runtime/fixtures/pressure/app-pattern-routed-state-backed-form');
 const formFixtureWorkspaceRoot = path.resolve(packageRoot, '../semantic-runtime/fixtures/pressure/app-pattern-state-backed-form');
+const { values } = parseArgs({ options: { 'workspace-only': { type: 'boolean' } } });
 
 const transport = new StdioClientTransport({
   command: process.execPath,
@@ -31,6 +33,17 @@ try {
     `source server announces package version ${packageJson.version}`,
   );
 
+  if (values['workspace-only']) {
+    await probeWorkspaceQueries(client, minimalFixtureWorkspaceRoot);
+    console.log(`MCP stdio workspace checks passed (${serverVersion.name}@${serverVersion.version}).`);
+  } else {
+    await probeFullSurface(serverVersion);
+  }
+} finally {
+  await client.close();
+}
+
+async function probeFullSurface(serverVersion) {
   const tools = await client.listTools();
   const toolNames = new Set(tools.tools.map((tool) => tool.name));
   const prompts = await client.listPrompts();
@@ -226,8 +239,6 @@ try {
     `- prompts: ${prompts.prompts.length}`,
     `- resources: ${resources.resources.length}`,
   ].join('\n'));
-} finally {
-  await client.close();
 }
 
 function structuredValue(result) {

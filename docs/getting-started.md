@@ -124,6 +124,20 @@ closure without running lifecycle scripts.
 
 ## Running Tests
 
+Run the fast product check after changing diagnostics or either product adapter.
+
+```bash
+pnpm test:product:fast
+```
+
+This compiles the product TypeScript incrementally, starts the language server
+and MCP server over stdio, and exercises the VS Code support-report service with
+a simulated host. It checks diagnostic reuse and invalidation after an unsaved
+edit, distinguishes cancellation from server failure, and verifies the redacted
+first-failure and recovery evidence. MCP checks cover resource lookup and the
+exact range of a missing template member. Release qualification also exercises
+the installed artifacts and native editor.
+
 Run the root build and workspace Vitest suite:
 
 ```bash
