@@ -126,7 +126,7 @@ export class NonTrackableTemplateMethodCallIssueMaterializer {
     const bodyReads = collectHiddenTemplateMethodReads(
       this.store,
       this.publication,
-      typeSystem.checker,
+      typeSystem,
       project,
       method,
     );
@@ -233,7 +233,7 @@ function findMethodDeclarationAtSourceSpan(
 function collectHiddenTemplateMethodReads(
   store: KernelStore,
   publication: KernelPublicationContext,
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   project: ProjectBootFrame,
   method: ts.MethodDeclaration,
 ): readonly HiddenTemplateMethodRead[] {
@@ -247,7 +247,7 @@ function collectHiddenTemplateMethodReads(
     if (ts.isFunctionLike(node) || ts.isClassLike(node)) return;
     if (ts.isCallExpression(node)) {
       const callee = unwrapThisPathExpression(node.expression);
-      const declaration = ts.isIdentifier(callee) ? checker.getSymbolAtLocation(callee)?.valueDeclaration : undefined;
+      const declaration = ts.isIdentifier(callee) ? typeSystem.readProgramSymbolAtLocation(callee)?.valueDeclaration : undefined;
       const body = declaration && ts.isVariableDeclaration(declaration) && declaration.initializer
         && (declaration.parent.flags & ts.NodeFlags.Const)
         ? unwrapThisPathExpression(declaration.initializer) : callee;
@@ -258,14 +258,14 @@ function collectHiddenTemplateMethodReads(
       }
     }
     if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
-      addThisReadExpression(store, publication, checker, project, method, sourceFile, reads, node.expression.expression);
+      addThisReadExpression(store, publication, typeSystem.checker, project, method, sourceFile, reads, node.expression.expression);
       for (const argument of node.arguments) {
         visit(argument);
       }
       return;
     }
     if (isThisPathExpression(node) && shouldRecordThisPathExpression(node)) {
-      addThisReadExpression(store, publication, checker, project, method, sourceFile, reads, node);
+      addThisReadExpression(store, publication, typeSystem.checker, project, method, sourceFile, reads, node);
       return;
     }
     ts.forEachChild(node, visit);

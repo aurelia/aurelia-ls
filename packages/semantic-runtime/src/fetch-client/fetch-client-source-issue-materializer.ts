@@ -585,7 +585,7 @@ function readRetryConfigurationIssues(
   const strategyExpression = retryConfig == null ? undefined : readEffectiveObjectProperty(retryConfig, 'strategy');
   const strategy = strategyExpression === null ? null : staticRetryStrategyValue(context, strategyExpression ?? null);
   const intervalExpression = retryConfig == null ? undefined : readEffectiveObjectProperty(retryConfig, 'interval');
-  const interval = intervalExpression === undefined ? 1000 : staticNumberValue(intervalExpression, context.checker);
+  const interval = intervalExpression === undefined ? 1000 : staticNumberValue(intervalExpression, context.typeSystem);
 
   if (strategy === RETRY_STRATEGY_VALUES.exponential && interval != null && interval <= 1000) {
     const intervalSourceNode = intervalExpression ?? siteNode;
@@ -852,15 +852,15 @@ function retryStrategyNumberIsValid(
 
 function staticNumberValue(
   expression: ts.Expression | null,
-  checker?: ts.TypeChecker,
+  typeSystem?: TypeSystemProject,
 ): number | null {
   if (expression == null) {
     return null;
   }
   const current = unwrapExpression(expression);
-  if (checker != null && ts.isIdentifier(current)) {
-    const value = checker.getTypeAtLocation(current);
-    return value.isNumberLiteral() ? value.value : null;
+  if (ts.isIdentifier(current)) {
+    const value = typeSystem?.readProgramTypeAtLocation(current);
+    return value?.isNumberLiteral() ? value.value : null;
   }
   if (ts.isNumericLiteral(current)) {
     return Number(current.text);

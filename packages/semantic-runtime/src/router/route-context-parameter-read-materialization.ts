@@ -399,8 +399,7 @@ function routeContextParameterMergeStrategy(
   sourceFile: ts.SourceFile,
   typeSystem: TypeSystemProject,
 ): RouteContextParameterMergeStrategy {
-  const checker = typeSystem.checker;
-  const optionStrategy = routeContextParameterStringOption(call, sourceFile, checker, 'mergeStrategy');
+  const optionStrategy = routeContextParameterStringOption(call, sourceFile, typeSystem, 'mergeStrategy');
   if (isRouteContextParameterMergeStrategy(optionStrategy)) {
     return optionStrategy;
   }
@@ -458,14 +457,16 @@ function routeContextParameterIncludeQueryParams(
 function routeContextParameterStringOption(
   call: ts.CallExpression,
   sourceFile: ts.SourceFile,
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   propertyName: string,
 ): string | null {
+  const checker = typeSystem.checker;
   const option = routeContextParameterPropertyInitializer(call, propertyName);
   if (option == null) {
     const options = call.arguments[0];
     if (options == null) return null;
-    const optionsType = checker.getTypeAtLocation(options);
+    const optionsType = typeSystem.readProgramTypeAtLocation(options);
+    if (optionsType == null) return 'unknown';
     const symbol = checkerPropertySymbol(checker, optionsType, propertyName);
     if (symbol == null) return optionsType.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown) ? 'unknown' : null;
     const fieldType = checkerSymbolValueType(checker, symbol, options);

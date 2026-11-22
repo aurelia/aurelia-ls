@@ -116,7 +116,7 @@ function readWithStoreAfterRegistrationSites(
     const sourceFile = typeSystem.readProgramSourceFileByProjectPath(source.path);
     return sourceFile == null
       ? []
-      : readSourceFileWithStoreAfterRegistrationSites(source.path, source.addressHandle, sourceFile, typeSystem.checker, registrationCalls);
+      : readSourceFileWithStoreAfterRegistrationSites(source.path, source.addressHandle, sourceFile, typeSystem, registrationCalls);
   });
 }
 
@@ -124,7 +124,7 @@ function readSourceFileWithStoreAfterRegistrationSites(
   sourcePath: string,
   sourceFileAddressHandle: AddressHandle,
   sourceFile: ts.SourceFile,
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   registrationCalls: ReadonlySet<ts.Node>,
 ): readonly WithStoreAfterRegistrationSite[] {
   const bindings = readSourceImportBindings(
@@ -141,7 +141,7 @@ function readSourceFileWithStoreAfterRegistrationSites(
     ts.forEachChild(node, visit);
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer != null) {
       if (isStateDefaultConfigurationBuilderExpression(node.initializer, bindings)) {
-        const symbol = checker.getSymbolAtLocation(node.name);
+        const symbol = typeSystem.readProgramSymbolAtLocation(node.name);
         if (symbol != null) stateConfigLocals.add(symbol);
       }
     }
@@ -149,7 +149,7 @@ function readSourceFileWithStoreAfterRegistrationSites(
     if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
       const callee = node.expression;
       const receiver = unwrapExpression(callee.expression);
-      const target = ts.isIdentifier(receiver) ? checker.getSymbolAtLocation(receiver) : undefined;
+      const target = ts.isIdentifier(receiver) ? typeSystem.readProgramSymbolAtLocation(receiver) : null;
       const scopes = target == null ? undefined : registeredIn.get(target);
       if (callee.name.text === 'withStore' && target != null && scopes != null && followsRegistration(node, scopes)) {
         sites.push(new WithStoreAfterRegistrationSite(
@@ -165,7 +165,7 @@ function readSourceFileWithStoreAfterRegistrationSites(
         const scope = registrationExecutionScope(node);
         if (scope == null) return;
         const targets = registrationCalls.has(node)
-          ? node.arguments.filter(ts.isIdentifier).map(argument => checker.getSymbolAtLocation(argument))
+          ? node.arguments.filter(ts.isIdentifier).map(argument => typeSystem.readProgramSymbolAtLocation(argument))
           : [target];
         for (const symbol of targets) {
           if (symbol == null || !stateConfigLocals.has(symbol)) continue;

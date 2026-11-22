@@ -137,7 +137,7 @@ function recordContainerApiCallSite(
     keyNameForContainerKeyExpression(keyWrapper?.innerExpression ?? null),
     containerLookupKeyKindForExpression(typeSystem, keyExpression),
     containerKeyExpressionIdentityKind(keyExpression),
-    containerApiAutoRegister(methodKind, node, checker),
+    containerApiAutoRegister(methodKind, node, typeSystem),
     isFreshCreateContainerReceiver(checker, access.expression),
     readNullishKeyArguments(node, sourceFile),
     access.expression.getText(sourceFile),
@@ -196,13 +196,13 @@ function containerApiMethodKind(
 function containerApiAutoRegister(
   methodKind: DiContainerApiMethodKind,
   call: ts.CallExpression,
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
 ): boolean | null {
   switch (methodKind) {
     case DiContainerApiMethodKind.Get:
       return true;
     case DiContainerApiMethodKind.GetResolver:
-      return call.arguments[1] === undefined ? true : booleanArgument(call.arguments[1], checker);
+      return call.arguments[1] === undefined ? true : booleanArgument(call.arguments[1], typeSystem);
     case DiContainerApiMethodKind.GetAll:
     case DiContainerApiMethodKind.Has:
     case DiContainerApiMethodKind.GetFactory:
@@ -213,11 +213,12 @@ function containerApiAutoRegister(
 
 function booleanArgument(
   expression: ts.Expression,
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
 ): boolean | null {
-  const type = checker.getTypeAtLocation(expression);
-  if (type === checker.getTrueType()) return true;
-  if (type === checker.getFalseType()) return false;
+  const type = typeSystem.readProgramTypeAtLocation(expression);
+  if (type == null) return null;
+  if (type === typeSystem.checker.getTrueType()) return true;
+  if (type === typeSystem.checker.getFalseType()) return false;
   if (type.flags & ts.TypeFlags.Undefined) return true;
   return null;
 }
