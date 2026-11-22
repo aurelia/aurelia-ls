@@ -182,16 +182,16 @@ function frameworkApiIssueSiteForCall(
   typeSystem: TypeSystemProject,
   call: ts.CallExpression,
 ): FrameworkApiIssueSite | null {
-  if (isImportedValue(call.expression, typeSystem.checker, KERNEL_API_MODULES, 'firstDefined')) {
-    return firstDefinedIssueSite(call, typeSystem.checker);
+  if (isImportedValue(call.expression, typeSystem, KERNEL_API_MODULES, 'firstDefined')) {
+    return firstDefinedIssueSite(call, typeSystem);
   }
   return eventAggregatorIssueSiteForCall(typeSystem, call)
-    ?? metadataDefineIssueSiteForCall(typeSystem.checker, call);
+    ?? metadataDefineIssueSiteForCall(typeSystem, call);
 }
 
 function firstDefinedIssueSite(
   call: ts.CallExpression,
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
 ): FrameworkApiIssueSite | null {
   if (call.arguments.some(ts.isSpreadElement)) {
     return null;
@@ -208,7 +208,7 @@ function firstDefinedIssueSite(
       null,
     );
   }
-  const rejected = call.arguments.every((argument) => nullishExpressionKind(argument, checker) === 'undefined')
+  const rejected = call.arguments.every((argument) => nullishExpressionKind(argument, typeSystem) === 'undefined')
     ? call.arguments[0] ?? null
     : null;
   return rejected == null
@@ -244,7 +244,7 @@ function eventAggregatorIssueSiteForCall(
   if (first != null && ts.isSpreadElement(first)) return null;
   const actualValueKind = first == null
     ? EvaluationValueKind.Undefined
-    : falsyExpressionValueKind(first, typeSystem.checker);
+    : falsyExpressionValueKind(first, typeSystem);
   if (actualValueKind == null) {
     return null;
   }
@@ -272,14 +272,14 @@ function eventAggregatorIssueSiteForCall(
 }
 
 function metadataDefineIssueSiteForCall(
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   call: ts.CallExpression,
 ): FrameworkApiIssueSite | null {
   const callee = unwrapExpression(call.expression);
   if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'define') {
     return null;
   }
-  if (!isImportedValue(callee.expression, checker, METADATA_API_MODULES, 'Metadata')) {
+  if (!isImportedValue(callee.expression, typeSystem, METADATA_API_MODULES, 'Metadata')) {
     return null;
   }
   if (!metadataDefineHasStaticallyEmptyKeys(call)) {
@@ -338,10 +338,10 @@ function isAureliaEventAggregatorMethodDeclaration(
 
 function falsyExpressionValueKind(
   expression: ts.Expression,
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
 ): EvaluationValueKind | null {
   const current = unwrapExpression(expression);
-  const nullishKind = nullishExpressionKind(current, checker);
+  const nullishKind = nullishExpressionKind(current, typeSystem);
   if (nullishKind === 'undefined') {
     return EvaluationValueKind.Undefined;
   }

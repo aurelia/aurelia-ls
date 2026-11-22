@@ -1,5 +1,6 @@
 import ts from 'typescript';
-import { importedValueExportName, readImportedExportName, readSourceImportBindings, resolveValueAlias } from '../evaluation/import-bindings.js';
+import { checkerValueImportName } from '../type-system/checker-node-helpers.js';
+import { readImportedExportName, readSourceImportBindings, resolveValueAlias } from '../evaluation/import-bindings.js';
 import { declarationMatchesFrameworkSource } from '../type-system/framework-declaration-source.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
 import {
@@ -112,8 +113,8 @@ export function readDecoratorCalleeName(decorator: ts.Decorator, context: Resour
   const checker = project.checker;
   // A member of a type-only namespace can resolve to a real framework symbol while its receiver is erased.
   const unresolvedReceiver = ts.isPropertyAccessExpression(node)
-    && resolveValueAlias(checker, checker.getSymbolAtLocation(node.expression)) == null;
-  const symbol = unresolvedReceiver ? null : resolveValueAlias(checker, checker.getSymbolAtLocation(node));
+    && resolveValueAlias(checker, project.readProgramSymbolAtLocation(node.expression)) == null;
+  const symbol = unresolvedReceiver ? null : resolveValueAlias(checker, project.readProgramSymbolAtLocation(node));
   // Resolved imports, including paths redirects and re-exports, are owned by the declaring module.
   if (symbol?.declarations?.length) {
     const name = symbol.getName();
@@ -124,12 +125,12 @@ export function readDecoratorCalleeName(decorator: ts.Decorator, context: Resour
   }
   // A source-only app can lack the external declarations while its local value-import
   // binding remains exact. A resolved module missing that export is a different case.
-  const direct = importedValueExportName(node, checker, decoratorModules);
+  const direct = checkerValueImportName(node, checker, decoratorModules);
   if (direct == null || !decoratorExports.has(direct)) return null;
   const receiver = ts.isPropertyAccessExpression(node) ? unwrapExpression(node.expression) : node;
-  const local = checker.getSymbolAtLocation(receiver)?.declarations?.[0];
+  const local = project.readProgramSymbolAtLocation(receiver)?.declarations?.[0];
   const imported = local == null ? null : ts.findAncestor(local, ts.isImportDeclaration);
-  if (imported == null || checker.getSymbolAtLocation(imported.moduleSpecifier)?.declarations?.length) return null;
+  if (imported == null || project.readProgramSymbolAtLocation(imported.moduleSpecifier)?.declarations?.length) return null;
   if (!ts.isStringLiteralLike(imported.moduleSpecifier)) return null;
   const moduleName = imported.moduleSpecifier.text;
   const compilerDecorator = direct === 'bindingCommand' || direct === 'attributePattern';

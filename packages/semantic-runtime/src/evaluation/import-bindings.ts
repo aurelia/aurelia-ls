@@ -1,4 +1,6 @@
 import ts from 'typescript';
+import type { TypeSystemProject } from '../type-system/project.js';
+import { checkerValueImportName } from '../type-system/checker-node-helpers.js';
 
 import {
   unwrapExpression,
@@ -12,7 +14,7 @@ export interface SourceImportBindings {
 }
 
 /** Follow value aliases through barrels without crossing an erased type-only declaration. */
-export function resolveValueAlias(checker: ts.TypeChecker, symbol: ts.Symbol | undefined): ts.Symbol | null {
+export function resolveValueAlias(checker: ts.TypeChecker, symbol: ts.Symbol | null | undefined): ts.Symbol | null {
   if (symbol == null) return null;
   if ((symbol.flags & ts.SymbolFlags.Alias) === 0) return symbol;
   const seen = new Set<ts.Symbol>();
@@ -28,35 +30,12 @@ export function resolveValueAlias(checker: ts.TypeChecker, symbol: ts.Symbol | u
 /** Resolve a value use by the import declaration visible at the use site, including namespace imports. */
 export function isImportedValue(
   expression: ts.Expression,
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   modules: ReadonlySet<string>,
   exportName: string,
 ): boolean {
-  return importedValueExportName(expression, checker, modules) === exportName;
-}
-
-/** Export selected by this value use's actual import, even when its local name differs. */
-export function importedValueExportName(
-  expression: ts.Expression,
-  checker: ts.TypeChecker,
-  modules: ReadonlySet<string>,
-): string | null {
-  const value = unwrapExpression(expression);
-  const namespace = ts.isPropertyAccessExpression(value);
-  const identifier = namespace ? unwrapExpression(value.expression) : value;
-  if (!ts.isIdentifier(identifier)) return null;
-  for (const declaration of checker.getSymbolAtLocation(identifier)?.declarations ?? []) {
-    if (!ts.isNamespaceImport(declaration) && !ts.isImportSpecifier(declaration)) continue;
-    if (namespace !== ts.isNamespaceImport(declaration)) continue;
-    if (ts.isImportSpecifier(declaration) && declaration.isTypeOnly) continue;
-    const clause = ts.isNamespaceImport(declaration) ? declaration.parent : declaration.parent.parent;
-    const source = clause.parent.moduleSpecifier;
-    if (!clause.isTypeOnly && ts.isStringLiteralLike(source) && modules.has(source.text)) {
-      if (ts.isImportSpecifier(declaration)) return (declaration.propertyName ?? declaration.name).text;
-      if (ts.isPropertyAccessExpression(value)) return value.name.text;
-    }
-  }
-  return null;
+  const node = typeSystem.readProgramNode(expression);
+  return node != null && checkerValueImportName(node, typeSystem.checker, modules) === exportName;
 }
 
 /** Read named and namespace imports for a bounded module/export set. */
@@ -107,7 +86,7 @@ export function readImportedExportName(
   const current = unwrapExpression(expression);
   if (bindings.checker != null && bindings.moduleSpecifiers != null) {
     if (ts.isIdentifier(current) && !bindings.locals.has(current.text)) return null;
-    const name = importedValueExportName(current, bindings.checker, bindings.moduleSpecifiers);
+    const name = checkerValueImportName(current, bindings.checker, bindings.moduleSpecifiers);
     return name != null && (bareAllowedExports === true || bareAllowedExports.has(name)) ? name : null;
   }
   if (ts.isIdentifier(current)) {

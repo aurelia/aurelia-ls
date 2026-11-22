@@ -18,6 +18,8 @@ import {
   semanticRuntimeProcessTypeSystemCacheOverview,
 } from '../src/api/runtime.js';
 import { aureliaAppProjectEvaluationProfile } from '../src/configuration/aurelia-project-evaluation.js';
+import { isImportedValue } from '../src/evaluation/import-bindings.js';
+import { nullishExpressionKind } from '../src/evaluation/nullish-expression.js';
 import { SourceFileRole } from '../src/kernel/address.js';
 import { SemanticRuntimeProjectInputReadKind } from '../src/kernel/project-input.js';
 import {
@@ -35,6 +37,39 @@ afterEach(() => {
 });
 
 describe('type-system project module resolution', () => {
+  test('keeps local import and undefined identities when evaluation reparses a source file', async () => {
+    const workspaceRoot = path.resolve(import.meta.dirname, '../fixtures/pressure/kernel-api-errors');
+    const runtime = await createSemanticRuntime({ workspaceRoot });
+    try {
+      const typeSystem = (await runtime.openApp()).emission.typeSystem;
+      const programFile = typeSystem.readProgramSourceFileByProjectPath('src/main.ts');
+      if (programFile == null) throw new Error('Missing fixture source file.');
+      const reparsed = ts.createSourceFile(programFile.fileName, programFile.text, programFile.languageVersion, true);
+      const modules = new Set(['@aurelia/kernel']);
+      for (const file of [programFile, reparsed]) {
+        const calls: { imported: boolean; firstArgument: string | null }[] = [];
+        function visit(node: ts.Node): void {
+          if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'firstDefined') {
+            calls.push({
+              imported: isImportedValue(node.expression, typeSystem, modules, 'firstDefined'),
+              firstArgument: node.arguments[0] ? nullishExpressionKind(node.arguments[0], typeSystem) : null,
+            });
+          }
+          ts.forEachChild(node, visit);
+        }
+        visit(file);
+        expect(calls).toEqual([
+          { imported: true, firstArgument: null },
+          { imported: true, firstArgument: 'undefined' },
+          { imported: false, firstArgument: null },
+          { imported: true, firstArgument: null },
+        ]);
+      }
+    } finally {
+      runtime.retireWorkspaceIncarnation();
+    }
+  });
+
   test('admits exact linked sources through usage-specific package conditions', async () => {
     const fixtureRoot = temporaryRoot();
     const appRoot = path.join(fixtureRoot, 'app');

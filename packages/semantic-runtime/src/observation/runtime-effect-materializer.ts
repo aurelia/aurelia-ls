@@ -327,7 +327,7 @@ function readObservationRoots(
   const roots = new Set<ts.Declaration>();
   const visit = (node: ts.Node): void => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-      if (nodeIsObservationTyped(node, typeSystem.checker) || expressionCreatesObservationRoot(node.initializer ?? null, typeSystem, sourcePathByFileName)) {
+      if (nodeIsObservationTyped(node, typeSystem) || expressionCreatesObservationRoot(node.initializer ?? null, typeSystem, sourcePathByFileName)) {
         roots.add(node);
       }
     } else if (ts.isPropertyDeclaration(node)) {
@@ -335,7 +335,7 @@ function readObservationRoots(
       if (
         name != null
         && (
-          nodeIsObservationTyped(node, typeSystem.checker)
+          nodeIsObservationTyped(node, typeSystem)
           || expressionCreatesObservationRoot(node.initializer ?? null, typeSystem, sourcePathByFileName)
         )
       ) {
@@ -343,7 +343,7 @@ function readObservationRoots(
       }
     } else if (ts.isParameter(node) && ts.isIdentifier(node.name)) {
       if (
-        nodeIsObservationTyped(node, typeSystem.checker)
+        nodeIsObservationTyped(node, typeSystem)
         || parameterIsInjectedObservation(node, typeSystem, classDependencies)
       ) {
         roots.add(node);
@@ -433,13 +433,13 @@ function readObservationRunSite(
 
 function nodeIsObservationTyped(
   node: ts.VariableDeclaration | ts.PropertyDeclaration | ts.ParameterDeclaration,
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
 ): boolean {
   if (node.type == null || !ts.isTypeReferenceNode(node.type)) return false;
   const name = node.type.typeName;
   const local = ts.isQualifiedName(name) ? name.left : name;
   if (!ts.isIdentifier(local)) return false;
-  const declarations = checker.getSymbolAtLocation(local)?.declarations ?? [];
+  const declarations = typeSystem.readProgramSymbolAtLocation(local)?.declarations ?? [];
   return declarations.some(declaration => {
     if (ts.isImportSpecifier(declaration) && ts.isIdentifier(name)) {
       const module = declaration.parent.parent.parent.moduleSpecifier;
@@ -471,7 +471,7 @@ function expressionCreatesObservationRoot(
     return false;
   }
   const callee = unwrapExpression(current.expression);
-  if (isImportedValue(callee, typeSystem.checker, OBSERVATION_MODULES, 'resolve')) {
+  if (isImportedValue(callee, typeSystem, OBSERVATION_MODULES, 'resolve')) {
     return true;
   }
   return ts.isPropertyAccessExpression(callee)
@@ -493,13 +493,13 @@ function expressionIsObservationRoot(
   const current = unwrapExpression(expression);
   const name = ts.isIdentifier(current) ? current
     : ts.isPropertyAccessExpression(current) && current.expression.kind === ts.SyntaxKind.ThisKeyword ? current.name : null;
-  if (name && typeSystem.checker.getSymbolAtLocation(name)?.declarations?.some(declaration => roots.has(declaration))) return true;
+  if (name && typeSystem.readProgramSymbolAtLocation(name)?.declarations?.some(declaration => roots.has(declaration))) return true;
   return expressionCreatesObservationRoot(current, typeSystem, sourcePathByFileName);
 }
 
 function expressionReferencesObservationKey(expression: ts.Expression, typeSystem: TypeSystemProject): boolean {
   const programExpression = typeSystem.readProgramExpression(expression);
-  return programExpression != null && isImportedValue(programExpression, typeSystem.checker, OBSERVATION_MODULES, 'IObservation');
+  return programExpression != null && isImportedValue(programExpression, typeSystem, OBSERVATION_MODULES, 'IObservation');
 }
 
 function parameterIsInjectedObservation(

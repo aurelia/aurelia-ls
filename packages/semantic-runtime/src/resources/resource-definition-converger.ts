@@ -2636,7 +2636,7 @@ function htmlModuleExportTargets(context: ResourceRecognitionContext, moduleKey:
   const project = context.typeSystem;
   const source = project?.readProgramSourceFileByModuleKey(moduleKey);
   if (project == null || source == null) return [];
-  const moduleSymbol = project.checker.getSymbolAtLocation(source);
+  const moduleSymbol = project.readProgramSymbolAtLocation(source);
   if (moduleSymbol == null) return [];
   const exports = [...project.checker.getExportsOfModule(moduleSymbol)]
     .sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);

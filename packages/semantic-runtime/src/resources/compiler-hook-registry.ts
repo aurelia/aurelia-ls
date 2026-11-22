@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import { checkerPropertySymbol } from '../type-system/checker-node-helpers.js';
 
 import { unwrapExpression } from '../evaluation/ts-syntax.js';
 import {
@@ -91,12 +92,11 @@ export function hasAureliaRegistryShape(
   if (typeSystem == null) return false;
   const type = typeSystem.readProgramTypeAtLocation(expression);
   if (type == null) return false;
-  const apparent = typeSystem.checker.getApparentType(type);
-  const register = apparent.getProperty('register') ?? type.getProperty('register');
+  const register = checkerPropertySymbol(typeSystem.checker, type, 'register');
   if (register == null) return false;
   const declaration = register.valueDeclaration ?? register.declarations?.[0] ?? expression;
-  const registerType = typeSystem.checker.getTypeOfSymbolAtLocation(register, declaration);
-  return typeSystem.checker.getSignaturesOfType(registerType, ts.SignatureKind.Call).length > 0;
+  const registerType = typeSystem.readProgramTypeOfSymbolAtLocation(register, declaration);
+  return registerType != null && typeSystem.checker.getSignaturesOfType(registerType, ts.SignatureKind.Call).length > 0;
 }
 
 function readTemplateCompilerHookImports(sourceFile: ts.SourceFile): TemplateCompilerHookImports {

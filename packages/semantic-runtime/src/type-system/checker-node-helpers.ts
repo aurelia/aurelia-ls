@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import { unwrapExpression } from '../evaluation/ts-syntax.js';
 
 export function resolveAliasedSymbol(
   checker: ts.TypeChecker,
@@ -17,6 +18,30 @@ export function symbolForExpression(
   return symbol == null
     ? null
     : resolveAliasedSymbol(checker, symbol);
+}
+
+/** Read the local value-import declaration of a Program expression before following its alias. */
+export function checkerValueImportName(
+  expression: ts.Expression,
+  checker: ts.TypeChecker,
+  modules: ReadonlySet<string>,
+): string | null {
+  const value = unwrapExpression(expression);
+  const namespace = ts.isPropertyAccessExpression(value);
+  const identifier = namespace ? unwrapExpression(value.expression) : value;
+  if (!ts.isIdentifier(identifier)) return null;
+  for (const declaration of checker.getSymbolAtLocation(identifier)?.declarations ?? []) {
+    if (!ts.isNamespaceImport(declaration) && !ts.isImportSpecifier(declaration)) continue;
+    if (namespace !== ts.isNamespaceImport(declaration)) continue;
+    if (ts.isImportSpecifier(declaration) && declaration.isTypeOnly) continue;
+    const clause = ts.isNamespaceImport(declaration) ? declaration.parent : declaration.parent.parent;
+    const source = clause.parent.moduleSpecifier;
+    if (!clause.isTypeOnly && ts.isStringLiteralLike(source) && modules.has(source.text)) {
+      if (ts.isImportSpecifier(declaration)) return (declaration.propertyName ?? declaration.name).text;
+      if (ts.isPropertyAccessExpression(value)) return value.name.text;
+    }
+  }
+  return null;
 }
 
 export function firstSymbolDeclaration(symbol: ts.Symbol): ts.Declaration | null {

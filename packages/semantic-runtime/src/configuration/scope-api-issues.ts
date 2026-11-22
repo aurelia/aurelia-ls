@@ -241,7 +241,7 @@ function scopeApiNullishArgument(
   if (argument == null) {
     return { index: argumentIndex, kind: 'missing', text: null };
   }
-  const literalKind = nullishExpressionKind(argument, typeSystem.checker);
+  const literalKind = nullishExpressionKind(argument, typeSystem);
   if (literalKind != null) {
     return { index: argumentIndex, kind: literalKind, text: argument.getText(sourceFile) };
   }
@@ -258,7 +258,7 @@ function isAureliaScopeReceiver(
   methodKind: ScopeApiMethodKind,
   sourcePathByFileName: ReadonlyMap<string, string>,
 ): boolean {
-  if (isImportedValue(receiver, typeSystem.checker, AURELIA_SCOPE_MODULES, 'Scope')) {
+  if (isImportedValue(receiver, typeSystem, AURELIA_SCOPE_MODULES, 'Scope')) {
     return true;
   }
 

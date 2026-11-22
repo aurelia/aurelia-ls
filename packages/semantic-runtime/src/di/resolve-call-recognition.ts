@@ -223,7 +223,7 @@ function recordDiResolveCallSite(
   node: ts.Node,
   lexical: DiResolveLexicalContext,
 ): void {
-  if (!ts.isCallExpression(node) || !isImportedValue(node.expression, context.typeSystem.checker, AURELIA_RESOLVE_MODULES, 'resolve')) {
+  if (!ts.isCallExpression(node) || !isImportedValue(node.expression, context.typeSystem, AURELIA_RESOLVE_MODULES, 'resolve')) {
     return;
   }
   const argument = node.arguments[0] == null ? null : unwrapExpression(node.arguments[0]);
