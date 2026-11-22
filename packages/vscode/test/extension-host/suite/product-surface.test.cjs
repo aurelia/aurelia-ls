@@ -5957,15 +5957,26 @@ function startObservedCommand(command) {
 }
 
 async function waitForQuickPickModel(flow, modelOrdinal, timeoutMs = 120_000) {
-  const ready = await waitForExtensionHostObservation(
-    flow.start,
-    (event) => event.source === "resource-quick-pick"
-      && event.phase === "model-ready"
-      && event.modelOrdinal === modelOrdinal,
-    `${flow.command} should publish Quick Pick model ${modelOrdinal}`,
-    flow.settled,
-    timeoutMs,
-  );
+  const focusedAtStart = vscode.window.state.focused;
+  let lostWindowFocus = false;
+  const subscription = vscode.window.onDidChangeWindowState((state) => {
+    if (!state.focused) lostWindowFocus = true;
+  });
+  let ready;
+  try {
+    ready = await waitForExtensionHostObservation(
+      flow.start,
+      (event) => event.source === "resource-quick-pick"
+        && event.phase === "model-ready"
+        && event.modelOrdinal === modelOrdinal,
+      () => `${flow.command} should publish Quick Pick model ${modelOrdinal}; window focus `
+        + JSON.stringify({ atStart: focusedAtStart, now: vscode.window.state.focused, lostWhileWaiting: lostWindowFocus }),
+      flow.settled,
+      timeoutMs,
+    );
+  } finally {
+    subscription.dispose();
+  }
   const items = extensionHostObservations.filter((event) =>
     event.source === "resource-quick-pick"
       && event.observationId === ready.observationId
@@ -6201,15 +6212,13 @@ async function runAvailabilityRestartRace({
   assert(currentSelectableRows.some((row) => row.identityKey === includedCurrentRow.identityKey));
   assert(!currentSelectableRows.some((row) => row.identityKey === excludedCurrentRow.identityKey));
 
-  const templateEditor = await vscode.window.showTextDocument(templateDocument, { preview: false });
-  await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
-  assert.strictEqual(
-    vscode.window.activeTextEditor?.document.uri.toString(),
-    templateEditor.document.uri.toString(),
-    "The availability command must target the exact requested template editor.",
-  );
   const position = new vscode.Position(templatePosition.line, templatePosition.character);
-  templateEditor.selection = new vscode.Selection(position, position);
+  const selection = new vscode.Selection(position, position);
+  await vscode.window.showTextDocument(templateDocument, { preview: false, selection });
+  await waitFor(() => {
+    const editor = vscode.window.activeTextEditor;
+    return editor?.document.uri.toString() === templateDocument.uri.toString() && editor.selection.isEqual(selection);
+  }, "The availability command must start at the requested active template and cursor.", 10_000);
   const editorBefore = publicEditorFact();
   const flow = startObservedCommand("aurelia.goToAvailableResource");
   const model = await waitForQuickPickModel(flow, 1);
@@ -7419,10 +7428,9 @@ async function waitForExtensionHostObservation(
   };
   await waitFor(() => {
     matched = extensionHostObservations.slice(start).find(predicate);
-    if (matched != null) return true;
-    if (executionSettled()) throw new Error(`${failureMessage()}; the command settled before that phase.`);
-    return false;
+    return matched != null || executionSettled();
   }, failureMessage, timeoutMs);
+  if (matched == null) throw new Error(`${failureMessage()}; the command settled before that phase.`);
   return matched;
 }
 
