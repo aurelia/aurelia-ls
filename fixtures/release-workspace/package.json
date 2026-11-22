@@ -1,0 +1,5 @@
+{
+  "name": "aurelia-release-workspace",
+  "private": true,
+  "workspaces": ["apps/*"]
+}

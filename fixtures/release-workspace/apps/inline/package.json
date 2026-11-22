@@ -1,0 +1,11 @@
+{
+  "name": "release-inline-app",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aurelia/runtime-html": "2.0.0-rc.2",
+    "aurelia": "2.0.0-rc.2",
+    "@release/card-kit": "file:../../vendor/card-kit"
+  }
+}
