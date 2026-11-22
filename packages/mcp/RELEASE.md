@@ -60,8 +60,29 @@ sentinels such as `template.dom-ref`, `resource.custom-attribute`,
 `resource.template-controller`, and `template.portal-overlay`
 through natural menu searches and example fetches.
 
-The project-local install probe verifies the recommended app-local install path
-and checks that TypeScript resolves from the same package context as the app.
+The same tools-directory server reads a separate app before and after its dependencies are
+installed. The probe checks the missing-module diagnostic and TypeScript package relation
+on both sides of the install, along with an independently verifiable template error.
+
+The project-local install probe installs the tarball with npm in a disposable workspace containing
+a Vite convention app, an explicit app with an inline template, and a local resource package. It
+compares the archive's integrity with the installed lockfile and confirms both apps use the same
+TypeScript package as the analyzer. Through stdio it checks sibling and library resolution,
+project-scoped retention, paging, and rejected cursors. In each app it saves a typo at the
+template's member token, checks the exact finding in the same process and a fresh process,
+checks the unaffected app, and restores the original source.
+
+The default checker is TypeScript 5.9.3. Set `AURELIA_MCP_PROJECT_LOCAL_TYPESCRIPT_VERSION` to
+select another supported checker, such as `6.0.3`. To save a JSON receipt for specific release
+bytes, run the script from the repository root and pass the tarball and receipt paths.
+
+```powershell
+node packages/mcp/scripts/probe-project-local-install.mjs <tarball.tgz> <receipt.json>
+```
+
+The receipt includes the archive and installed executable hashes, resolved dependency versions,
+diagnostic locations, query timings, and one final process-memory sample. The timings include the
+tool call after connection. The sample describes this workload on the recorded host.
 
 ## Promote Published Documentation
 
