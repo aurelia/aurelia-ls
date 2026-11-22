@@ -520,8 +520,8 @@ if (generatedScopeAliasOverlay.expressionTypes.get('$parent.titleLength()') !== 
 if (generatedScopeAliasOverlay.expressionTypes.get('$index') !== 'number') {
   failures.push(`Expected generated scope-alias overlay to declare repeat override local $index as number, observed ${generatedScopeAliasOverlay.expressionTypes.get('$index') ?? 'missing'}.`);
 }
-if (generatedScopeAliasOverlay.expressionTypes.get('title & oneTime') !== 'string') {
-  failures.push(`Expected generated scope-alias overlay to unwrap binding-behavior value expressions as title:string, observed ${generatedScopeAliasOverlay.expressionTypes.get('title & oneTime') ?? 'missing'}.`);
+if (generatedScopeAliasOverlay.expressionTypes.get('title & oneTime') !== '"Alias pressure"') {
+  failures.push(`Expected the oneTime binding behavior to preserve the readonly title literal, observed ${generatedScopeAliasOverlay.expressionTypes.get('title & oneTime') ?? 'missing'}.`);
 }
 if (generatedScopeAliasOverlay.expressionTypes.get('item.label') !== 'string') {
   failures.push(`Expected generated scope-alias overlay to preserve repeat item member type, observed item.label=${generatedScopeAliasOverlay.expressionTypes.get('item.label') ?? 'missing'}.`);
@@ -586,8 +586,10 @@ if (generatedScopeAliasOverlay.expressionTypes.get('$parent.acceptApp($parent)')
 if (generatedScopeAliasOverlay.overlayDiagnosticCount !== 0) {
   failures.push(`Expected generated scope-alias overlay to avoid name-resolution diagnostics for represented repeat override locals, observed ${generatedScopeAliasOverlay.overlayDiagnosticCount}.`);
 }
-if (generatedScopeAliasOverlay.nonSourceObservedDependencyCount !== 0) {
-  failures.push(`Expected generated scope-alias fixture observed dependencies to stay source-backed after repeat BindingContext aliasing, observed non-source rows=${generatedScopeAliasOverlay.nonSourceObservedDependencyCount}.`);
+const scopeAliasSources = generatedScopeAliasOverlay.observedDependencySources;
+if (scopeAliasSources.memberDeclarations === 0 || scopeAliasSources.temporaryResults === 0
+  || scopeAliasSources.memberDeclarations + scopeAliasSources.temporaryResults !== scopeAliasSources.total) {
+  failures.push(`Expected scope-alias reads to retain their member declarations and binding-owned results to retain their temporary source state, observed ${JSON.stringify(scopeAliasSources)}.`);
 }
 if (
   generatedScopeAliasOverlay.scopeStateTopology.derivedStateCount !== 8
@@ -613,8 +615,11 @@ for (const [expression, type] of generatedValueConverterOverlay.expressionTypes)
     }
     continue;
   }
-  if (type !== 'string') {
-    failures.push(`Expected generated value-converter overlay call to infer the converter toView return as string, observed ${type ?? 'missing'} for ${expression}.`);
+  const expected = expression === 'message' || expression === 'message | identityOnly:minimumText'
+    ? '"one two three"'
+    : 'string';
+  if (type !== expected) {
+    failures.push(`Expected value-converter fixture expression '${expression}' to have type ${expected}, observed ${type ?? 'missing'}.`);
   }
 }
 if (!generatedValueConverterOverlay.hasDynamicWithContextBranch) {
@@ -1017,7 +1022,7 @@ if (failures.length > 0) {
           bindingContextOnlyParentArgument: generatedScopeAliasOverlay.expressionTypes.get('$parent.acceptApp($parent)'),
         },
         scopeStateTopology: generatedScopeAliasOverlay.scopeStateTopology,
-        nonSourceObservedDependencyCount: generatedScopeAliasOverlay.nonSourceObservedDependencyCount,
+        observedDependencySources: scopeAliasSources,
         skippedSummaries: generatedScopeAliasOverlay.skippedSummaries,
       },
       generatedValueConverterOverlay: {
@@ -1402,7 +1407,6 @@ async function readGeneratedEventScopeOverlayProbe() {
       skippedExpressionCount: 0,
       expressionTypes: new Map(),
       overlayDiagnosticCount: 0,
-      nonSourceObservedDependencyCount: 0,
     };
   }
   const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
@@ -1586,6 +1590,7 @@ async function readGeneratedScopeAliasOverlayProbe() {
   const app = await runtime.openApp({
     analysisDepth: 'binding-observation',
   });
+  const observedDependencySources = readScopeAliasDependencySources(app);
   const resource = app.emission.templates.resources[0] ?? null;
   if (resource == null) {
     return {
@@ -1594,6 +1599,7 @@ async function readGeneratedScopeAliasOverlayProbe() {
       skippedSummaries: [],
       expressionTypes: new Map(),
       overlayDiagnosticCount: 0,
+      observedDependencySources,
       scopeStateTopology: emptyScopeStateTopology(),
     };
   }
@@ -1606,7 +1612,7 @@ async function readGeneratedScopeAliasOverlayProbe() {
       skippedSummaries: emission.skippedExpressions.map((skip) => skip.summary),
       expressionTypes: new Map(),
       overlayDiagnosticCount: 0,
-      nonSourceObservedDependencyCount: nonSourceObservedDependencyCount(app),
+      observedDependencySources,
       scopeStateTopology: emptyScopeStateTopology(),
     };
   }
@@ -1626,7 +1632,7 @@ async function readGeneratedScopeAliasOverlayProbe() {
     skippedSummaries: emission.skippedExpressions.map((skip) => skip.summary),
     expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName, emission.expressionProbes),
     overlayDiagnosticCount: diagnostics.length,
-    nonSourceObservedDependencyCount: nonSourceObservedDependencyCount(app),
+    observedDependencySources,
     generatedAnyHole: overlayTextHasGeneratedAnyHole(emission.overlaySource),
     scopeStateTopology: readScopeStateTopology(runtime.workspace.store, resource),
   };
@@ -1693,10 +1699,23 @@ function emptyScopeStateTopology() {
   };
 }
 
-function nonSourceObservedDependencyCount(app) {
-  return app.bindingObservedDependencies({ size: 500 }).value.rows
-    .filter((row) => row.occurrence.observedMemberSourceState !== 'source')
-    .length;
+function readScopeAliasDependencySources(app) {
+  const answer = app.bindingObservedDependencies({ size: 500 });
+  if (!answer.page.exhausted) throw new Error('The scope-alias dependency check requires all fixture rows.');
+  const rows = answer.value.rows;
+  const memberDeclarations = rows.filter(({ occurrence }) =>
+    occurrence.dependencyKind === 'template-expression-read'
+    && occurrence.observedMemberSourceState === 'source'
+    && occurrence.observedMemberSourceRoute === 'member-declaration'
+    && occurrence.observedMemberSource != null
+  ).length;
+  const temporaryResults = rows.filter(({ occurrence }) =>
+    occurrence.dependencyKind === 'binding-result-collection-read'
+    && occurrence.observedMemberSourceState === 'temporary-value'
+    && occurrence.observedMemberSource == null
+    && occurrence.memberTokenSource == null
+  ).length;
+  return { total: rows.length, memberDeclarations, temporaryResults };
 }
 
 async function readGeneratedValueConverterOverlayProbe() {
