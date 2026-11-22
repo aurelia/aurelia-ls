@@ -22,6 +22,11 @@ from 0.2.0.
 
 ## Install The Published Release
 
+Use Node `>=22.13 <25` and an app-local TypeScript `>=5.9 <7`.
+The MCP server uses the TypeScript 5.9/6 checker API. If the app declares
+`typescript@7`, normal npm installation reports a peer dependency conflict
+(`ERESOLVE`) before the server starts.
+
 For diagnostics that should agree with project-local `tsc`, install the
 tarball as a dev dependency in the Aurelia app:
 
@@ -33,6 +38,15 @@ Configure the MCP client to launch the app-local package:
 
 ```powershell
 node --max-old-space-size=8192 ./node_modules/@aurelia-ls/mcp/au-mcp.js
+```
+
+In an npm workspace the executable may be under the monorepo root's
+`node_modules`. From the app directory, print its installed path and use that
+path in the client's Node arguments. On tool calls, pass the absolute
+`workspaceRoot` you want to analyze.
+
+```sh
+node -p "require.resolve('@aurelia-ls/mcp/au-mcp.js')"
 ```
 
 Provider-specific configuration is available for

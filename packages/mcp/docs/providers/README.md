@@ -1,17 +1,21 @@
 # MCP Provider Setup
 
 Install the MCP release tarball inside the Aurelia app before configuring any MCP
-client:
+client. The server requires Node `>=22.13 <25` and the TypeScript peer
+`>=5.9 <7`.
 
 ```bash
 npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.3/aurelia-ls-mcp-0.3.3.tgz
 ```
 
-The recommended launch command is always the app-local package:
+When npm installs the executable under the app's own `node_modules`, launch it with:
 
 ```bash
 node --max-old-space-size=8192 ./node_modules/@aurelia-ls/mcp/au-mcp.js
 ```
+
+For a workspace-hoisted install, run `node -p "require.resolve('@aurelia-ls/mcp/au-mcp.js')"`
+from the app and use the resulting absolute executable path in the provider configuration.
 
 Provider guides:
 
