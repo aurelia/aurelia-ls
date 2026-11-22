@@ -517,7 +517,7 @@
               "group": "diagnostics",
               "resultRole": "row-table",
               "materializationPolicy": "query-type-projection",
-              "minimumAnalysisDepth": "runtime-topology",
+              "minimumAnalysisDepth": "binding-observation",
               "supportsPaging": true,
               "supportsSourceFile": true,
               "supportsDiagnosticProjection": true
@@ -532,7 +532,7 @@
               "group": "diagnostics",
               "resultRole": "summary-row-table",
               "materializationPolicy": "query-type-projection",
-              "minimumAnalysisDepth": "runtime-topology",
+              "minimumAnalysisDepth": "binding-observation",
               "supportsPaging": true,
               "supportsSourceFile": true,
               "supportsDiagnosticProjection": true
