@@ -786,7 +786,7 @@ function projectServerSnapshot(value: unknown): AureliaSupportSnapshotResponse |
   if (projected.analysisCache?.status === "available" && Array.isArray(projected.analysisCache.cachedApps)
     && cache != null && typeof cache === "object" && "cachedApps" in cache && Array.isArray(cache.cachedApps)) {
     for (const [index, app] of projected.analysisCache.cachedApps.entries()) {
-      const raw = cache.cachedApps[index];
+      const raw: unknown = cache.cachedApps[index];
       if (app != null && raw != null && typeof raw === "object" && "typeScript" in raw) {
         Object.assign(app, { typeScript: readAureliaSupportTypeScriptEnvironment(raw.typeScript) });
       }
