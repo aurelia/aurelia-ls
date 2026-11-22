@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import type { SemanticApp } from '../api/runtime.js';
+import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import {
   semanticSourceReferenceMatchesFilePath,
   type SemanticSourceReference,
@@ -211,14 +212,17 @@ export function materializeSemanticAppTemplateCompilerHandoffs(
 ): SemanticAppTemplateCompilerHandoffBatch {
   const app = request.app;
   app.requireCurrent();
+  // Every resource in a handoff belongs to one committed app world. Revalidate that world before
+  // returning the detached batch, including the registration requirements projected below.
+  const emission = app.emission;
   const store = app.runtime.workspace.store;
   const requestedPaths = [...new Set(request.templateSourcePaths ?? [])];
   const candidates = request.includeAuthoringResources === true
     ? uniqueResources([
-        ...app.emission.templates.resources,
-        ...app.emission.templates.authoringResources,
+        ...emission.templates.resources,
+        ...emission.templates.authoringResources,
       ])
-    : app.emission.templates.resources;
+    : emission.templates.resources;
   const selectedResources = candidates.filter((resource) =>
     requestedPaths.length === 0 || requestedPaths.some((filePath) => resourceMatchesPath(app, resource, filePath, store))
   );
@@ -240,6 +244,7 @@ export function materializeSemanticAppTemplateCompilerHandoffs(
   try {
     const preparations = resources.map((resource, ordinal) => prepareResource(
       app,
+      emission,
       resource,
       ordinal,
       run,
@@ -250,17 +255,16 @@ export function materializeSemanticAppTemplateCompilerHandoffs(
       ? finalizeResource(preparation, requestorFamiliesByDefinitionProduct, store)
       : preparation.materialization
     );
-    app.requireCurrent();
-    return new SemanticAppTemplateCompilerHandoffBatch(
+    const batch = new SemanticAppTemplateCompilerHandoffBatch(
       materialized.map((entry): SemanticAppTemplateCompilerHandoffResource => ({
         ...entry.handoff,
         resourceName: entry.resource.compilation.definition.name,
-        address: entry.handoff.value?.address ?? resourceAddress(app, entry.resource),
+        address: entry.handoff.value?.address ?? resourceAddress(emission, entry.resource),
         runtimeFallback: processContentRuntimeFallback(entry.handoff),
       })),
       requestedPaths.filter((filePath) => !matchedPaths.has(filePath)),
       projectSemanticAppRuntimeRegistrationRequirements(
-        app,
+        emission,
         materialized.flatMap((entry) => entry.requirementInputs),
         selectedResources.length === candidates.length
           ? []
@@ -273,13 +277,15 @@ export function materializeSemanticAppTemplateCompilerHandoffs(
             }],
       ),
     );
+    app.requireCurrent();
+    return batch;
   } finally {
     run.abort();
   }
 }
 
 function resourceAddress(
-  app: SemanticApp,
+  emission: AureliaAppWorldProjectEmission,
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): TemplateCompilerCompiledHandoffAddress | null {
   const compilation = resource.compilation;
@@ -289,7 +295,7 @@ function resourceAddress(
     definitionIdentityHandle: compilation.definition.identityHandle,
     compilerWorldProductHandle: compilation.compilerWorld.world.productHandle,
     compilerWorldIdentityHandle: compilation.compilerWorld.world.identityHandle,
-    sourceAttachment: app.emission.resources.readDefinitionSourceAttachment(compilation.definition.productHandle),
+    sourceAttachment: emission.resources.readDefinitionSourceAttachment(compilation.definition.productHandle),
   };
 }
 
@@ -314,15 +320,16 @@ function uniqueResources(
 
 function prepareResource(
   app: SemanticApp,
+  emission: AureliaAppWorldProjectEmission,
   resource: TemplateResourceRuntimeAnalysisEmission,
   ordinal: number,
   run: ComputationRun,
   store: KernelStore,
 ): SemanticAppTemplateCompilerPreparation {
   const compilation = resource.compilation;
-  const occurrenceSource = occurrencePrecedentForResource(app, resource);
+  const occurrenceSource = occurrencePrecedentForResource(emission, resource);
   if (occurrenceSource != null) {
-    return prepareOccurrenceResource(app, resource, occurrenceSource, ordinal, run, store);
+    return prepareOccurrenceResource(app, emission, resource, occurrenceSource, ordinal, run, store);
   }
   const templateSource = compilation.unit.templateSource;
   const source = sourceReference(store, templateSource.sourceAddressHandle);
@@ -358,7 +365,7 @@ function prepareResource(
     compilationKey: localKey,
     compilation,
     browserEmission: browser,
-    currentFrontDoor: app.emission.templates.frontDoor,
+    currentFrontDoor: emission.templates.frontDoor,
     compilerReadStore: store,
     domServices,
   });
@@ -405,7 +412,7 @@ function prepareResource(
   }
   const authoredSourceRevision = compilation.definition.template?.authoredSourceRevision
     ?? templateSource.productHandle;
-  const sourceAttachment = app.emission.resources.readDefinitionSourceAttachment(compilation.definition.productHandle);
+  const sourceAttachment = emission.resources.readDefinitionSourceAttachment(compilation.definition.productHandle);
   const definitionProductHandle = compilation.definition.productHandle;
   if (definitionProductHandle == null) {
     return unavailablePreparation(unavailableMaterialization(resource, unavailable(
@@ -433,11 +440,11 @@ function prepareResource(
 }
 
 function occurrencePrecedentForResource(
-  app: SemanticApp,
+  emission: AureliaAppWorldProjectEmission,
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): TemplateCompilerOccurrencePrecedentEmission | null {
   if (resource.compilation.unit.rootContext.dependencyIdentityHandles.length === 0) return null;
-  const family = app.emission.templates.frontDoor.familyForOwner(resource.compilation.familyOwnerHandle);
+  const family = emission.templates.frontDoor.familyForOwner(resource.compilation.familyOwnerHandle);
   if (family == null) return null;
   const productHandle = resource.compilation.definition.productHandle;
   const matches = [...family.appOccurrencePrecedents, ...family.authoringOccurrencePrecedents].filter((precedent) =>
@@ -449,6 +456,7 @@ function occurrencePrecedentForResource(
 
 function prepareOccurrenceResource(
   app: SemanticApp,
+  emission: AureliaAppWorldProjectEmission,
   resource: TemplateResourceRuntimeAnalysisEmission,
   occurrenceSource: TemplateCompilerOccurrencePrecedentEmission,
   ordinal: number,
@@ -477,7 +485,7 @@ function prepareOccurrenceResource(
     browser: browserDraft,
     carrierSelection: selectBrowserTemplateCompilerCarrier(browserDraft.fragment),
   });
-  const currentFamily = app.emission.templates.frontDoor.familyForOwner(compilation.familyOwnerHandle);
+  const currentFamily = emission.templates.frontDoor.familyForOwner(compilation.familyOwnerHandle);
   if (currentFamily == null) {
     return unavailablePreparation(unavailableMaterialization(resource, unavailable(
       TemplateCompilerCompiledHandoffState.Ineligible,
@@ -492,7 +500,7 @@ function prepareOccurrenceResource(
     appCurrentness: app,
     occurrencePrecedent: occurrenceSource,
     browserEmission: browser,
-    currentFrontDoor: app.emission.templates.frontDoor,
+    currentFrontDoor: emission.templates.frontDoor,
     currentFamily,
     appRootDefinitionProductHandle: compilation.appRootDefinitionProductHandle,
     publication: run,
@@ -552,8 +560,8 @@ function prepareOccurrenceResource(
   const root = exactProjected[0];
   if (root == null) throw new Error('Exact occurrence family lost its projected root.');
   const sourceResources = new Map([
-    ...app.emission.templates.resources,
-    ...app.emission.templates.authoringResources,
+    ...emission.templates.resources,
+    ...emission.templates.authoringResources,
   ].map((candidate) => [candidate.compilation.unit.templateSource.productHandle, candidate] as const));
   const localPreparations = occurrence.value.locals.map((relation, index) => {
     const localResource = sourceResources.get(relation.sourceTemplateProductHandle) ?? null;
@@ -576,7 +584,7 @@ function prepareOccurrenceResource(
   if (!root.definitions.isCurrent() || localPreparations.some((local) => !local.definitions.isCurrent())) {
     throw new Error(`Occurrence compiled handoff for '${compilation.definition.name}' changed before detachment.`);
   }
-  const sourceAttachment = app.emission.resources.readDefinitionSourceAttachment(compilation.definition.productHandle);
+  const sourceAttachment = emission.resources.readDefinitionSourceAttachment(compilation.definition.productHandle);
   const definitionProductHandle = compilation.definition.productHandle;
   if (definitionProductHandle == null) {
     return unavailablePreparation(unavailableMaterialization(resource, unavailable(

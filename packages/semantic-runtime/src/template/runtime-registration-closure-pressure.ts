@@ -3,6 +3,7 @@ import path from 'node:path';
 import ts from 'typescript';
 
 import type { SemanticApp } from '../api/runtime.js';
+import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import { catalogProductHandlesForOperations } from '../configuration/configured-catalog-selection.js';
 import {
   frameworkRegistrationKindForOperation,
@@ -156,29 +157,29 @@ const runtimeCompilerIndependentValueExports: Readonly<Record<RuntimeCompilerPac
 
 /** Collect every negative-knowledge boundary that prevents exact selective registration. */
 export function collectRuntimeRegistrationClosurePressure(
-  app: SemanticApp,
+  emission: AureliaAppWorldProjectEmission,
   inputs: readonly RuntimeRegistrationRequirementCompilerInput[],
 ): RuntimeRegistrationClosurePressure {
-  const templateUniverseReasons = runtimeTemplateUniversePressure(app);
-  const programmatic = programmaticUsePressure(app);
+  const templateUniverseReasons = runtimeTemplateUniversePressure(emission);
+  const programmatic = programmaticUsePressure(emission);
   const resources = [...templateUniverseReasons, ...programmatic.resources];
   const renderers = [...templateUniverseReasons, ...programmatic.renderers];
   const eventModifier = [...templateUniverseReasons, ...programmatic.eventModifier];
-  collectRegistrationPressure(app, inputs, resources, renderers, eventModifier);
+  collectRegistrationPressure(emission, inputs, resources, renderers, eventModifier);
   return { resources, renderers, eventModifier };
 }
 
 function collectRegistrationPressure(
-  app: SemanticApp,
+  emission: AureliaAppWorldProjectEmission,
   inputs: readonly RuntimeRegistrationRequirementCompilerInput[],
   resourceReasons: RuntimeRegistrationRequirementReason[],
   rendererReasons: RuntimeRegistrationRequirementReason[],
   eventReasons: RuntimeRegistrationRequirementReason[],
 ): void {
-  const relevantContainers = relevantContainerIdentityHandles(app, inputs);
+  const relevantContainers = relevantContainerIdentityHandles(emission, inputs);
   for (const fact of registrationOpenPressureFacts(
-    app.emission.appWorld.diWorld,
-    app.emission.appWorld.configuration.openSeamScopes,
+    emission.appWorld.diWorld,
+    emission.appWorld.configuration.openSeamScopes,
   )) {
     if (
       fact.containerIdentityHandles != null
@@ -208,7 +209,7 @@ function collectRegistrationPressure(
       )
     ) eventReasons.push(openReason);
   }
-  for (const operation of app.emission.appWorld.diWorld.registrationOperations) {
+  for (const operation of emission.appWorld.diWorld.registrationOperations) {
     const containerIdentity = operation.container.identityHandle;
     if (containerIdentity == null || !relevantContainers.has(containerIdentity)) continue;
     if (frameworkRegistrationKindForOperation(operation) != null) continue;
@@ -238,8 +239,8 @@ function frameworkRegistrationKindForOperationOrNull(
   return operation == null ? null : frameworkRegistrationKindForOperation(operation);
 }
 
-function runtimeTemplateUniversePressure(app: SemanticApp): readonly RuntimeRegistrationRequirementReason[] {
-  const routeContexts = app.emission.routeContexts;
+function runtimeTemplateUniversePressure(emission: AureliaAppWorldProjectEmission): readonly RuntimeRegistrationRequirementReason[] {
+  const routeContexts = emission.routeContexts;
   const routeConfigs = routeContexts.readRouteConfigs();
   const byProduct = new Map(routeConfigs.map((config) => [config.productHandle, config]));
   const byIdentity = new Map(routeConfigs.map((config) => [config.identityHandle, config]));
@@ -313,7 +314,7 @@ function unresolvedRouteableReason(
   );
 }
 
-function programmaticUsePressure(app: SemanticApp): RuntimeRegistrationClosurePressure {
+function programmaticUsePressure(emission: AureliaAppWorldProjectEmission): RuntimeRegistrationClosurePressure {
   const resourceReasons: RuntimeRegistrationRequirementReason[] = [];
   const rendererReasons: RuntimeRegistrationRequirementReason[] = [];
   const eventReasons: RuntimeRegistrationRequirementReason[] = [];
@@ -387,7 +388,7 @@ function programmaticUsePressure(app: SemanticApp): RuntimeRegistrationClosurePr
     ...bindingConstructorNames,
     ...resourceApiNames,
   ]);
-  const checker = app.emission.typeSystem.checker;
+  const checker = emission.typeSystem.checker;
   const frameworkSources = frameworkDeclarationSourceSpec(
     frameworkApiNames,
     [
@@ -410,9 +411,9 @@ function programmaticUsePressure(app: SemanticApp): RuntimeRegistrationClosurePr
     ['aurelia', '@aurelia/runtime-html'],
     ['/packages/aurelia/', '/packages/runtime-html/'],
   );
-  const sourcePathByFileName = typeSystemSourcePathIndex(app.project, app.emission.typeSystem);
+  const sourcePathByFileName = typeSystemSourcePathIndex(emission.project, emission.typeSystem);
   const resolveCallSites = new WeakMap<ts.CallExpression, DiResolveCallSite>(
-    readDiResolveCallSites(app.project, app.emission.typeSystem)
+    readDiResolveCallSites(emission.project, emission.typeSystem)
       .map((site) => [site.sourceNode, site] as const),
   );
   const runtimeCompilerPackageSources: Readonly<Record<RuntimeCompilerPackageKind, FrameworkDeclarationSourceSpec>> = {
@@ -493,7 +494,7 @@ function programmaticUsePressure(app: SemanticApp): RuntimeRegistrationClosurePr
       aureliaInstanceSources,
     );
   const sourceFiles = new Map<string, ts.SourceFile>();
-  for (const source of app.emission.evaluation.sources) {
+  for (const source of emission.evaluation.sources) {
     const packageOrigin = source.packageOrigin;
     if (
       packageOrigin?.sourceScope === ResolvedEvaluationModuleSourceScope.ExternalDependency
@@ -514,8 +515,8 @@ function programmaticUsePressure(app: SemanticApp): RuntimeRegistrationClosurePr
       eventReasons.push(open);
       continue;
     }
-    const sourceFile = app.emission.typeSystem.readProgramSourceFileByModuleKey(source.moduleKey)
-      ?? app.emission.typeSystem.readProgramSourceFileByHostPath(evaluatedSourceFile.fileName);
+    const sourceFile = emission.typeSystem.readProgramSourceFileByModuleKey(source.moduleKey)
+      ?? emission.typeSystem.readProgramSourceFileByHostPath(evaluatedSourceFile.fileName);
     if (sourceFile == null) {
       const open = reason(
         RuntimeRegistrationRequirementReasonKind.ProgrammaticUseOpen,
@@ -528,13 +529,13 @@ function programmaticUsePressure(app: SemanticApp): RuntimeRegistrationClosurePr
       continue;
     }
     if (packageOrigin == null) {
-      const relative = path.relative(app.project.rootDir, sourceFile.fileName);
+      const relative = path.relative(emission.project.rootDir, sourceFile.fileName);
       if (relative.startsWith('..') || path.isAbsolute(relative)) continue;
     }
     const resolvedFileName = path.resolve(sourceFile.fileName);
     sourceFiles.set(process.platform === 'win32' ? resolvedFileName.toLowerCase() : resolvedFileName, sourceFile);
   }
-  const unresolvedModules = app.emission.evaluation.readUnresolvedModules();
+  const unresolvedModules = emission.evaluation.readUnresolvedModules();
   if (unresolvedModules.length > 0) {
     const open = reason(
       RuntimeRegistrationRequirementReasonKind.ProgrammaticUseOpen,
@@ -545,7 +546,7 @@ function programmaticUsePressure(app: SemanticApp): RuntimeRegistrationClosurePr
     rendererReasons.push(open);
     eventReasons.push(open);
   }
-  const moduleResolutions = app.emission.evaluation.profile.sourceHost.moduleResolutions;
+  const moduleResolutions = emission.evaluation.profile.sourceHost.moduleResolutions;
   const unclassifiedBareBoundaries = Math.max(
     0,
     moduleResolutions.unresolvedBare
@@ -823,7 +824,7 @@ function programmaticUsePressure(app: SemanticApp): RuntimeRegistrationClosurePr
       }
       if (ts.isCallExpression(node) && importedExport(node.expression) === 'resolve') {
         if (resourceKeyMayAddressRuntimeResource(
-          app,
+          emission,
           node.arguments[0] ?? null,
           resolveCallSites.get(node) ?? null,
         )) {
@@ -841,12 +842,12 @@ function programmaticUsePressure(app: SemanticApp): RuntimeRegistrationClosurePr
         if (
           containerMethodKind != null
           && isAureliaContainerReceiver(
-            app.emission.typeSystem,
+            emission.typeSystem,
             node.expression.expression,
             containerMethodKind,
             sourcePathByFileName,
           )
-          && resourceKeyMayAddressRuntimeResource(app, node.arguments[0] ?? null, null)
+          && resourceKeyMayAddressRuntimeResource(emission, node.arguments[0] ?? null, null)
         ) {
           resourceReasons.push(programmaticReason(
             sourceFile.fileName,
@@ -990,7 +991,7 @@ function diContainerApiMethodKind(method: string): DiContainerApiMethodKind | nu
 }
 
 function resourceKeyMayAddressRuntimeResource(
-  app: SemanticApp,
+  emission: AureliaAppWorldProjectEmission,
   expression: ts.Expression | null,
   resolveCallSite: DiResolveCallSite | null,
 ): boolean {
@@ -1006,10 +1007,10 @@ function resourceKeyMayAddressRuntimeResource(
   if (expression == null) return false;
   const current = unwrapExpression(expression);
   if (ts.isStringLiteralLike(current)) return current.text.startsWith('au:resource:');
-  const keyKind = containerLookupKeyKindForExpression(app.emission.typeSystem, current);
+  const keyKind = containerLookupKeyKindForExpression(emission.typeSystem, current);
   if (keyKind === ContainerLookupKeyKind.Resource) return true;
   if (keyKind !== ContainerLookupKeyKind.Unknown) return false;
-  return typeMayBeString(app.emission.typeSystem.checker.getTypeAtLocation(current));
+  return typeMayBeString(emission.typeSystem.checker.getTypeAtLocation(current));
 }
 
 function typeMayBeString(type: ts.Type): boolean {
@@ -1073,14 +1074,14 @@ function programmaticReason(
 }
 
 function relevantContainerIdentityHandles(
-  app: SemanticApp,
+  emission: AureliaAppWorldProjectEmission,
   inputs: readonly RuntimeRegistrationRequirementCompilerInput[],
 ): ReadonlySet<IdentityHandle> {
   const identities = new Set<IdentityHandle>();
   for (const input of inputs) {
     const containerIdentity = input.resource.compilation.compilerWorld.container.identityHandle;
     if (containerIdentity == null) continue;
-    for (const identity of app.emission.appWorld.containerChainFacts.containerChainIdentityHandles(containerIdentity)) {
+    for (const identity of emission.appWorld.containerChainFacts.containerChainIdentityHandles(containerIdentity)) {
       identities.add(identity);
     }
   }

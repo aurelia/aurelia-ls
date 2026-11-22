@@ -43,7 +43,7 @@ export class RuntimeCompositionCompilerDemand {
   private readonly occurrences = new Map<ProductHandle, CompositionOccurrence[]>();
   private readonly compiledTemplates = new Map<ProductHandle, Set<ProductHandle>>();
 
-  constructor(app: SemanticApp, inputs: readonly RuntimeRegistrationRequirementCompilerInput[]) {
+  constructor(resources: readonly TemplateResourceRuntimeAnalysisEmission[], inputs: readonly RuntimeRegistrationRequirementCompilerInput[]) {
     for (const input of inputs) {
       const definition = input.resource.compilation.definition.productHandle;
       if (definition == null || input.family == null || input.instructions == null || input.unavailableReasons.length > 0
@@ -52,7 +52,7 @@ export class RuntimeCompositionCompilerDemand {
       if (templates == null) this.compiledTemplates.set(definition, templates = new Set());
       templates.add(input.resource.compilation.compiledTemplate.compiledTemplate.productHandle);
     }
-    for (const resource of app.emission.templates.resources) {
+    for (const resource of resources) {
       const composition = resource.runtimeAnalysis.runtimeComposition;
       const controllers = new Map(composition.controllers.map((controller) => [controller.context.productHandle, controller]));
       for (const context of composition.contexts) {

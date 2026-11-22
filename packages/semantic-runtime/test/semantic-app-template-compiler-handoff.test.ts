@@ -2,13 +2,17 @@ import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
+import { SemanticRuntimeAnalysisCurrentnessError } from '../src/kernel/analysis-currentness.js';
 import {
   NodeSemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputAuthority,
+  SemanticRuntimeProjectInputChange,
+  SemanticRuntimeProjectInputChangeKind,
 } from '../src/kernel/project-input.js';
+import * as registrationRequirements from '../src/template/runtime-registration-requirements.js';
 import {
   materializeSemanticAppTemplateCompilerHandoffs,
   TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION,
@@ -130,6 +134,34 @@ describe('semantic app template compiler handoff', () => {
       schemaVersion: TEMPLATE_COMPILER_COMPILED_HANDOFF_VERSION,
       definitions: [{ definitionId: 'definition:0' }],
     });
+  });
+
+  test('rejects a template edit during final registration-requirements projection', async () => {
+    const overlay = new MutableProjectSourceOverlay();
+    const inputs = new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost(overlay));
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      projectDiscovery: 'single-root',
+      projectInputAuthority: inputs,
+      storeKey: 'template-handoff-egress',
+    });
+    const project = registrationRequirements.projectSemanticAppRuntimeRegistrationRequirements;
+    const projection = vi.spyOn(registrationRequirements, 'projectSemanticAppRuntimeRegistrationRequirements');
+    try {
+      const app = await runtime.openApp({ telemetry: { inquiryProfile: 'aot' } });
+      projection.mockImplementationOnce((...args) => {
+        const result = project(...args);
+        overlay.write(templateFileName, '<main>Changed during projection</main>');
+        inputs.advance([new SemanticRuntimeProjectInputChange(SemanticRuntimeProjectInputChangeKind.FileValue, templateFileName)]);
+        return result;
+      });
+      expect(() => materializeSemanticAppTemplateCompilerHandoffs({ app }))
+        .toThrow(SemanticRuntimeAnalysisCurrentnessError);
+      expect(projection.mock.results.map(result => result.type)).toEqual(['return']);
+    } finally {
+      projection.mockRestore();
+      runtime.retireWorkspaceIncarnation();
+    }
   });
 
   test('keeps local let traversal and definitions in each root compiler context', async () => {

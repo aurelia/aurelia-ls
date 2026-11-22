@@ -1,4 +1,4 @@
-import type { SemanticApp } from '../api/runtime.js';
+import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import {
   registrationOperationsVisibleToContainer,
 } from '../di/world-construction.js';
@@ -103,15 +103,14 @@ const eventModifierConservativeGroup: RuntimeRegistrationRequirementGroupReferen
 /**
  * Project the runtime-html registration subset for one complete AOT app cohort.
  *
- * This consumes current, in-process browser-final compiler products and returns only detached value data. It is not a
- * general inquiry: callers reach it through the explicit browser-template/build corridor.
+ * The browser handoff owns currentness validation around this projection. All registration lookups here must use
+ * the same emission as the compiler inputs and instructions in that handoff.
  */
 export function projectSemanticAppRuntimeRegistrationRequirements(
-  app: SemanticApp,
+  appEmission: AureliaAppWorldProjectEmission,
   compilerInputs: readonly RuntimeRegistrationRequirementCompilerInput[],
   cohortReasons: readonly RuntimeRegistrationRequirementReason[] = [],
 ): SemanticAppRuntimeRegistrationRequirements {
-  app.requireCurrent();
   const resourceReasons: RuntimeRegistrationRequirementReason[] = [];
   const rendererReasons: RuntimeRegistrationRequirementReason[] = [];
   const eventReasons: RuntimeRegistrationRequirementReason[] = [];
@@ -137,25 +136,24 @@ export function projectSemanticAppRuntimeRegistrationRequirements(
   rendererReasons.push(...unavailableReasons);
   eventReasons.push(...unavailableReasons);
 
-  const closurePressure = collectRuntimeRegistrationClosurePressure(app, compilerInputs);
+  const closurePressure = collectRuntimeRegistrationClosurePressure(appEmission, compilerInputs);
   resourceReasons.push(...closurePressure.resources);
   rendererReasons.push(...closurePressure.renderers);
   eventReasons.push(...closurePressure.eventModifier);
 
-  const resourceUses = collectRuntimeHtmlResourceUses(app, compilerInputs, resourceReasons, rendererReasons, eventReasons);
+  const resourceUses = collectRuntimeHtmlResourceUses(appEmission, compilerInputs, resourceReasons, rendererReasons, eventReasons);
   const rendererProjection = collectRendererUses(compilerInputs, rendererReasons);
-  const providerAttribution = new ProviderAttributionIndex(app, compilerInputs);
+  const providerAttribution = new ProviderAttributionIndex(appEmission, compilerInputs);
   const resourceSelection = resourceReasons.length === 0
-    ? exactResourceSelection(app, providerAttribution, resourceUses, resourceReasons)
+    ? exactResourceSelection(appEmission, providerAttribution, resourceUses, resourceReasons)
     : null;
   const rendererSelection = rendererReasons.length === 0
-    ? exactRendererSelection(app, providerAttribution, rendererProjection.uses, rendererReasons)
+    ? exactRendererSelection(appEmission, providerAttribution, rendererProjection.uses, rendererReasons)
     : null;
   const eventSelection = eventReasons.length === 0
     ? exactEventModifierSelection(providerAttribution, compilerInputs, rendererProjection.eventModifierUseCount, eventReasons)
     : null;
 
-  app.requireCurrent();
   return new SemanticAppRuntimeRegistrationRequirements(
     resourceSelection ?? conservativeSelection(
       RuntimeRegistrationRequirementGroupKind.RuntimeHtmlDefaultResources,
@@ -176,13 +174,13 @@ export function projectSemanticAppRuntimeRegistrationRequirements(
 }
 
 function collectRuntimeHtmlResourceUses(
-  app: SemanticApp,
+  appEmission: AureliaAppWorldProjectEmission,
   inputs: readonly RuntimeRegistrationRequirementCompilerInput[],
   resourceReasons: RuntimeRegistrationRequirementReason[],
   rendererReasons: RuntimeRegistrationRequirementReason[],
   eventReasons: RuntimeRegistrationRequirementReason[],
 ): readonly RequirementUse[] {
-  const configured = app.emission.appWorld.configuredResources.catalogEmission.resources;
+  const configured = appEmission.appWorld.configuredResources.catalogEmission.resources;
   const byDefinition = new Map(configured.flatMap((emission) => emission.definition?.productHandle == null
     ? []
     : [[emission.definition.productHandle, emission] as const]
@@ -192,7 +190,7 @@ function collectRuntimeHtmlResourceUses(
     : [[emission.resource.productHandle, emission] as const]
   ));
   const uses = new Map<string, RequirementUse>();
-  const compositionDemand = new RuntimeCompositionCompilerDemand(app, inputs);
+  const compositionDemand = new RuntimeCompositionCompilerDemand(appEmission.templates.resources, inputs);
   for (const input of inputs) {
     const family = input.family;
     if (family == null) continue;
@@ -423,12 +421,12 @@ function nestedRuntimeInstructionValues(
 }
 
 function exactResourceSelection(
-  app: SemanticApp,
+  appEmission: AureliaAppWorldProjectEmission,
   providerAttribution: ProviderAttributionIndex,
   uses: readonly RequirementUse[],
   reasons: RuntimeRegistrationRequirementReason[],
 ): RuntimeRegistrationRequirementSelection | null {
-  const configured = app.emission.appWorld.configuredResources.catalogEmission;
+  const configured = appEmission.appWorld.configuredResources.catalogEmission;
   const resourcesByProduct = new Map(configured.resources.flatMap((emission) =>
     emission.resource.productHandle == null ? [] : [[emission.resource.productHandle, emission] as const]
   ));
@@ -455,7 +453,7 @@ function exactResourceSelection(
     const provider = providerAttribution.uniqueProvider(
       use.worlds,
       use.catalogProductHandle,
-      app.emission.appWorld.configuredResources.selections,
+      appEmission.appWorld.configuredResources.selections,
     );
     if (provider == null) {
       reasons.push(reason(
@@ -499,12 +497,12 @@ function exactResourceSelection(
 }
 
 function exactRendererSelection(
-  app: SemanticApp,
+  appEmission: AureliaAppWorldProjectEmission,
   providerAttribution: ProviderAttributionIndex,
   uses: readonly RuntimeRendererUse[],
   reasons: RuntimeRegistrationRequirementReason[],
 ): RuntimeRegistrationRequirementSelection | null {
-  const configured = app.emission.appWorld.configuredRenderers.catalogEmission;
+  const configured = appEmission.appWorld.configuredRenderers.catalogEmission;
   const runtimeHtmlCatalog = configured.catalogs.find((catalog) =>
     catalog.packageId === RuntimeRendererPackage.RuntimeHtml
     && catalog.group === RuntimeRendererGroup.RuntimeHtmlDefaultRenderers
@@ -546,7 +544,7 @@ function exactRendererSelection(
     const provider = providerAttribution.uniqueProvider(
       [...use.worlds],
       runtimeHtmlCatalog.productHandle,
-      app.emission.appWorld.configuredRenderers.selections,
+      appEmission.appWorld.configuredRenderers.selections,
       'rendering',
     );
     if (provider == null) {
@@ -707,10 +705,10 @@ class ProviderAttributionIndex {
   private readonly admissionByProduct: ReadonlyMap<ProductHandle, RegistrationAdmissionProduct>;
 
   constructor(
-    app: SemanticApp,
+    appEmission: AureliaAppWorldProjectEmission,
     inputs: readonly RuntimeRegistrationRequirementCompilerInput[],
   ) {
-    this.admissionByProduct = new Map(app.emission.appWorld.configuration.registrationAdmissions.map((admission) => [
+    this.admissionByProduct = new Map(appEmission.appWorld.configuration.registrationAdmissions.map((admission) => [
       admission.productHandle,
       admission,
     ]));
@@ -721,8 +719,8 @@ class ProviderAttributionIndex {
         world.world.productHandle,
         registrationOperationsVisibleToContainer(
           world.container,
-          app.emission.appWorld.diWorld,
-          app.emission.appWorld.containerChainFacts,
+          appEmission.appWorld.diWorld,
+          appEmission.appWorld.containerChainFacts,
         ),
       );
     }
