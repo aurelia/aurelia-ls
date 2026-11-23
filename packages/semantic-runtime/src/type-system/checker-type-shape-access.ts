@@ -35,6 +35,7 @@ import {
   checkerNumberIndexValueType,
   checkerNullishType,
   checkerRuntimeObjectMemberAdmission,
+  checkerTypeShapeHasUnresolvedBase,
   checkerTypeShapeNullishPresence,
   checkerTupleElementType,
 } from './checker-related-types.js';
@@ -130,6 +131,7 @@ export function checkerRuntimeAccessorDescriptorPresence(
     }
     return access.accessKind === CheckerTypeShapeMemberValueAccessKind.Missing
       && ownerType.shapeKind === CheckerTypeShapeKind.Class
+      && !checkerTypeShapeHasUnresolvedBase(ownerType)
       ? CheckerRuntimeMemberPresence.Absent
       : CheckerRuntimeMemberPresence.Open;
   }
@@ -322,7 +324,7 @@ export class CheckerTypeShapeAccess {
     if (access.accessKind !== CheckerTypeShapeMemberValueAccessKind.Missing) {
       return CheckerRuntimeMemberPresence.Open;
     }
-    return ownerType.shapeKind === CheckerTypeShapeKind.Class
+    return ownerType.shapeKind === CheckerTypeShapeKind.Class && !checkerTypeShapeHasUnresolvedBase(ownerType)
       ? CheckerRuntimeMemberPresence.Absent
       : CheckerRuntimeMemberPresence.Open;
   }

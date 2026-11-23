@@ -60,3 +60,58 @@ test.each(['js', 'ts'])('applies the missing-member fix to the selected .%s clas
     await rm(workspaceRoot, { recursive: true, force: true });
   }
 }, 60_000);
+
+test('declares a missing member only after the complete class hierarchy is known', async () => {
+  const tempParent = path.resolve(import.meta.dirname, '../.temp');
+  await mkdir(tempParent, { recursive: true });
+  const root = await mkdtemp(path.join(tempParent, 'declare-inherited-member-'));
+  const file = path.join(root, 'app.html');
+  const markup = '<p>${message} ${formatLabel()} ${realTypo}</p>';
+  try {
+    await Promise.all([
+      writeFile(file, markup),
+      writeFile(path.join(root, 'package.json'), '{"dependencies":{"aurelia":"^2.0.0-rc.2"}}'),
+      writeFile(path.join(root, 'middle.ts'), "import { Base } from './base'; export class Middle extends Base {}"),
+      writeFile(path.join(root, 'app.ts'), [
+        "import { customElement } from 'aurelia';",
+        "import template from './app.html';",
+        "import { Middle } from './middle';",
+        "@customElement({name: 'my-app', template}) export class MyApp extends Middle {}",
+      ].join('\n')),
+      writeFile(path.join(root, 'main.ts'), [
+        "import Aurelia from 'aurelia';",
+        "import { MyApp } from './app';",
+        "Aurelia.app(MyApp).start();",
+      ].join('\n')),
+    ]);
+    const runtime = await createSemanticRuntime({ workspaceRoot: root });
+    try {
+      const missing = async () => {
+        const result = await runtime.answerAppQuery({
+          kind: SemanticAppQueryKind.TemplateDiagnostics, sourceFile: { filePath: file },
+        });
+        expect(result.result).toBe('answered');
+        return (result.value as SemanticTemplateDiagnosticsResult).rows
+          .filter(row => row.diagnosticKind === 'missing-expression-member').map(row => row.selectedMemberName);
+      };
+      const declarations = async (name: string) => {
+        const offset = markup.indexOf(name) + 1;
+        const result = await runtime.answerAppQuery({
+          kind: SemanticAppQueryKind.TemplateCodeActions, cursor: { filePath: file, offset, line: 0, character: offset },
+        });
+        return (result.value as SemanticTemplateCodeActionsResult).rows.filter(row => row.title.startsWith('Declare member'));
+      };
+      expect(await missing()).toEqual([]);
+      expect(await declarations('message')).toEqual([]);
+      expect(await declarations('realTypo')).toEqual([]);
+      await writeFile(path.join(root, 'base.ts'), "export class Base { message = 'Hello'; formatLabel() { return this.message; } }");
+      expect(await missing()).toEqual(['realTypo']);
+      expect(await declarations('message')).toEqual([]);
+      expect(await declarations('realTypo')).toHaveLength(1);
+    } finally {
+      runtime.retireWorkspaceIncarnation();
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 60_000);

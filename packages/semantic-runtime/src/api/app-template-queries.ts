@@ -167,6 +167,8 @@ import {
 } from '../resources/resource-definition.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import { TypeSystemHotDetails } from '../type-system/product-details.js';
+import { checkerClassHasUnresolvedBase } from '../type-system/checker-related-types.js';
+import { checkerPropertySymbol } from '../type-system/checker-node-helpers.js';
 import { checkerTypeMemberValueSourceAddressHandle } from '../type-system/checker-type-member-source.js';
 import {
   TypeSystemRelatedMemberFamilyReadState,
@@ -2438,6 +2440,13 @@ function declareViewModelMemberEdit(
   }
   const classDecl = classAtDeclarationSpan(sourceFile, declaration.start, declaration.end);
   if (classDecl == null) {
+    return null;
+  }
+  const instance = emission.typeSystem.readRuntimeTargetType(classDecl);
+  const checker = emission.typeSystem.checker;
+  if (instance == null
+      || checkerPropertySymbol(checker, instance, memberName) != null
+      || checkerClassHasUnresolvedBase(checker, instance)) {
     return null;
   }
 

@@ -146,6 +146,7 @@ import {
 import { readOrProjectCheckerTypeMembersInProjection } from '../type-system/checker-type-member-surface.js';
 import { readCheckerReferenceSurface } from '../type-system/type-surface.js';
 import { CheckerExpressionTypeOpenKind } from '../type-system/expression-type-evaluation.js';
+import { checkerTypeShapeHasUnresolvedBase } from '../type-system/checker-related-types.js';
 import type { TemplateBindableReference } from '../template/compiler-world-reference.js';
 import { resolveSemanticSourceCursor } from './source-cursor.js';
 import {
@@ -2415,6 +2416,12 @@ function expressionRootDiagnosticRowsForSelection(
       || cursorContext.selectedScopeSlot != null
       || cursorInfo.selectedMember != null
     ) {
+      return [];
+    }
+    const ownerHandle = cursorContext.query.memberOwnerTypeProductHandle
+      ?? cursorContext.selectedScopeLookup?.context?.contextType?.productHandle;
+    const ownerType = ownerHandle == null ? null : store.productDetails.read(TypeSystemProductDetails.TypeShape, ownerHandle);
+    if (checkerTypeShapeHasUnresolvedBase(ownerType)) {
       return [];
     }
     const source = sourceReferenceForParserSpan(

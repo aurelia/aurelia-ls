@@ -49,6 +49,7 @@ import {
   RuntimeRendererIssueKind,
 } from '../template/runtime-renderer-issue.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
+import { checkerTypeShapeHasUnresolvedBase } from '../type-system/checker-related-types.js';
 import {
   CheckerTypeMemberKind,
   CheckerTypeShapeKind,
@@ -152,6 +153,7 @@ export function cursorDiagnosticRows(
     )];
   }
   if (selectedMember == null) {
+    if (checkerTypeShapeHasUnresolvedBase(ownerType)) return [];
     return [missingMemberDiagnostic(
       source,
       selectedMemberName,

@@ -122,6 +122,32 @@ export function checkerBaseTypes(
   return checker.getBaseTypes(carrier) ?? [];
 }
 
+/** TypeScript can return an empty base list for a class whose authored base failed to resolve. */
+export function checkerClassHasUnresolvedBase(checker: ts.TypeChecker, type: ts.Type): boolean {
+  const seen = new Set<ts.Type>();
+  function visit(instance: ts.Type): boolean {
+    if (seen.has(instance)) return false;
+    seen.add(instance);
+    if (instance.isUnionOrIntersection()) return instance.types.some(visit);
+    const symbol = instance.getSymbol();
+    const declaration = symbol?.declarations?.find(ts.isClassLike);
+    if (symbol == null || declaration == null) return false;
+    const base = declaration.heritageClauses?.find(clause => clause.token === ts.SyntaxKind.ExtendsKeyword)?.types[0];
+    if (base == null || base.expression.kind === ts.SyntaxKind.NullKeyword) return false;
+    // getBaseTypes expects the instance side even for a query about a class constructor.
+    const bases = checkerBaseTypes(checker, checker.getDeclaredTypeOfSymbol(symbol));
+    return bases.length === 0 || bases.some(parent =>
+      (parent.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0 || visit(parent),
+    );
+  }
+  return visit(type);
+}
+
+export function checkerTypeShapeHasUnresolvedBase(shape: CheckerTypeShape | null): boolean {
+  const carrier = shape?.carrier;
+  return carrier != null && checkerClassHasUnresolvedBase(carrier.checker, carrier.type);
+}
+
 function checkerClassOrInterfaceCarrier(type: ts.Type): ts.InterfaceType | null {
   if ((type.flags & ts.TypeFlags.Object) === 0) {
     return null;
