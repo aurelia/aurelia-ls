@@ -9,6 +9,8 @@ export interface EmbeddedValidationOptions {
   readonly styles: boolean;
   readonly scripts: boolean;
   readonly css?: LanguageSettings;
+  /** Optional declarations supplied once by the active host's HTML extension. */
+  readonly nativeHtmlScriptLibrary?: string;
   readonly javascript?: Pick<ts.CompilerOptions, "strictNullChecks" | "experimentalDecorators">;
 }
 
@@ -146,7 +148,7 @@ function cssDiagnostics(
 }
 
 // Like VS Code's HTML validator, analyze the document's inline JavaScript in its own script context.
-// Only the shipped TypeScript declaration libraries are readable by this host.
+// Its only disk inputs are the shipped TypeScript libraries; the HTML host supplies its declaration text.
 function createScriptValidator() {
   let options: ts.CompilerOptions = {
     target: ts.ScriptTarget.Latest,
@@ -158,15 +160,22 @@ function createScriptValidator() {
   };
   const libDir = path.dirname(ts.getDefaultLibFilePath(options));
   const fileName = path.resolve("__aurelia_embedded__.js").replaceAll(path.sep, "/");
+  const htmlLibraryName = path.posix.join(path.posix.dirname(fileName), "jquery.d.ts");
   const isLibrary = (f: string) => path.resolve(path.dirname(f)) === path.resolve(libDir)
     && /^lib(?:\.[\w.-]+)?\.d\.ts$/u.test(path.basename(f));
   let version = 0;
   let source = "";
-  const readFile = (file: string) => file === fileName ? source : isLibrary(file) ? ts.sys.readFile(file) : undefined;
+  let htmlLibraryVersion = 0;
+  let htmlLibrary: string | undefined;
+  const readFile = (file: string) => {
+    if (file === fileName) return source;
+    if (file === htmlLibraryName) return htmlLibrary;
+    return isLibrary(file) ? ts.sys.readFile(file) : undefined;
+  };
   const service = ts.createLanguageService({
     getCompilationSettings: () => options,
-    getScriptFileNames: () => [fileName],
-    getScriptVersion: file => file === fileName ? String(version) : "0",
+    getScriptFileNames: () => htmlLibrary === undefined ? [fileName] : [fileName, htmlLibraryName],
+    getScriptVersion: file => file === fileName ? String(version) : file === htmlLibraryName ? String(htmlLibraryVersion) : "0",
     getScriptSnapshot: file => {
       const text = readFile(file);
       return text === undefined ? undefined : ts.ScriptSnapshot.fromString(text);
@@ -174,9 +183,14 @@ function createScriptValidator() {
     getCurrentDirectory: () => path.dirname(fileName),
     getDefaultLibFileName: ts.getDefaultLibFilePath,
     readFile,
-    fileExists: file => file === fileName || (isLibrary(file) && ts.sys.fileExists(file)),
+    fileExists: file => file === fileName || (file === htmlLibraryName && htmlLibrary !== undefined)
+      || (isLibrary(file) && ts.sys.fileExists(file)),
   });
-  return (text: string, settings: EmbeddedValidationOptions["javascript"]) => {
+  return (text: string, settings: EmbeddedValidationOptions["javascript"], nativeLibrary?: string) => {
+    if (nativeLibrary !== htmlLibrary) {
+      htmlLibrary = nativeLibrary;
+      htmlLibraryVersion++;
+    }
     if (options.strictNullChecks !== settings?.strictNullChecks || options.experimentalDecorators !== settings?.experimentalDecorators) {
       options = { ...options, strictNullChecks: settings?.strictNullChecks, experimentalDecorators: settings?.experimentalDecorators };
       version++;
@@ -195,17 +209,18 @@ function javascriptDiagnostics(
   document: TextDocument,
   regions: readonly EmbeddedLanguageRegion[],
   module: boolean,
-  settings: EmbeddedValidationOptions["javascript"],
+  options: EmbeddedValidationOptions,
 ): Diagnostic[] {
   const projection = project(regions, module);
   validateScript ??= createScriptValidator();
   const diagnostics: Diagnostic[] = [];
-  for (const d of validateScript(projection.text, settings)) {
+  for (const d of validateScript(projection.text, options.javascript, options.nativeHtmlScriptLibrary)) {
     // Inline event handlers can return, and a script tag's module graph is outside this document.
     if (d.start === undefined || d.length === undefined || d.code === 1108 || d.code === 2307 || d.code === 2792) continue;
     // VS Code's HTML service supplies legacy ambient jQuery declarations. This isolated
     // DOM/ES project has no evidence for a missing-name Problem at one of those globals.
-    if ((d.code === 2304 || d.code === 2592) && ["$", "jQuery"].includes(projection.text.slice(d.start, d.start + d.length))) continue;
+    if (options.nativeHtmlScriptLibrary === undefined && (d.code === 2304 || d.code === 2592)
+      && ["$", "jQuery"].includes(projection.text.slice(d.start, d.start + d.length))) continue;
     const range = authoredRange(document, projection, d.start, d.start + d.length, true);
     if (range) diagnostics.push({
       range, source: "javascript", severity: DiagnosticSeverity.Error, message: ts.flattenDiagnosticMessageText(d.messageText, "\n"),
@@ -227,9 +242,9 @@ export function validateEmbeddedLanguages(
   if (options.scripts) {
     const scripts = regions.filter(region => region.language === "javascript");
     const classic = scripts.filter(region => !region.module);
-    if (classic.length) diagnostics.push(...javascriptDiagnostics(document, classic, false, options.javascript));
+    if (classic.length) diagnostics.push(...javascriptDiagnostics(document, classic, false, options));
     for (const region of scripts) {
-      if (region.module) diagnostics.push(...javascriptDiagnostics(document, [region], true, options.javascript));
+      if (region.module) diagnostics.push(...javascriptDiagnostics(document, [region], true, options));
     }
   }
   return diagnostics;

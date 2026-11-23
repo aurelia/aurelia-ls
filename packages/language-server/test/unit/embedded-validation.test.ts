@@ -24,7 +24,7 @@ describe("embedded validation on a template with a compiler-owned interpolation"
   test("keeps a genuine colour error in the same style attribute and an independent script syntax error", () => {
     const style = "width: ${amount}%; border-color:#${hex}; color: #12zz34";
     const script = "const real = ;";
-    const document = html(`<p title="ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬" style="${style}"></p>\r\n<script>\r\n${script}\r\n</script>`);
+    const document = html(`<p title="ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬" style="${style}"></p>\r\n<script>\r\n${script}\r\n</script>`);
     const regions = [region(document, "css", "attribute", style), region(document, "javascript", "element", script)];
     const diagnostics = validateEmbeddedLanguages(document, regions, settings);
     expect(diagnostics.map(d => [d.source, document.getText(d.range)])).toEqual([["css", "#12zz34"], ["javascript", ";"]]);
@@ -51,7 +51,7 @@ describe("embedded validation on a template with a compiler-owned interpolation"
   });
 
   test("maps browser-decoded attribute diagnostics back across HTML entities and an astral character", () => {
-    const raw = "width: ${w}%; content:&quot;ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬&quot;; color:#12zz34";
+    const raw = "width: ${w}%; content:&quot;ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬&quot;; color:#12zz34";
     const document = html(`<div\r\n  style='${raw}'></div>`);
     const source = region(document, "css", "attribute", raw);
     const value = raw.replaceAll("&quot;", '"');
@@ -116,6 +116,19 @@ describe("embedded validation on a template with a compiler-owned interpolation"
     expect(diagnostics.map(d => [doc.getText(d.range), String(d.message).includes("not callable")])).toEqual([
       ["missingDomProperty", false], ["$", true],
     ]);
+  });
+
+  test("uses the host's actual HTML declaration library and invalidates it independently of document text", () => {
+    const script = '// @ts-check\n$("p").hasClass("active"); $("p").hasClass(42);';
+    const document = html(`<script>${script}</script>`);
+    const regions = [region(document, "javascript", "element", script)];
+    const declarations = (type: string) => `declare function $(selector: string): { hasClass(name: ${type}): boolean };`;
+    const validate = (nativeHtmlScriptLibrary?: string) =>
+      validateEmbeddedLanguages(document, regions, { ...settings, nativeHtmlScriptLibrary }).map(d => document.getText(d.range));
+    expect(validate()).toEqual([]);
+    expect(validate(declarations("string"))).toEqual(["42"]);
+    expect(validate(declarations("number"))).toEqual(['"active"']);
+    expect(validate()).toEqual([]);
   });
 
   test("maps an expected value at a generated attribute terminator to the authored end of the declaration", () => {
