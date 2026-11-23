@@ -200,6 +200,17 @@ for (const imports of [
   assert.match(outputText, /\.register\(ShortHandBindingSyntax\)/u);
   assert.doesNotMatch(outputText, /\bSideType\b/u);
 }
+// Adding a value import must not displace a shebang, directive prologue or an import's line comment.
+for (const [source, preserved, next] of [
+  ["#!/usr/bin/env node\n'use strict'; // keep script mode\nbootstrap();", "'use strict'; // keep script mode", "bootstrap();"],
+  ["import * as other from 'other'; // documentation for other\nbootstrap();", "import * as other from 'other'; // documentation for other", "bootstrap();"],
+]) {
+  const file = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
+  const [edit] = planTypeScriptImportSourceOperations(file, shorthandAdmission.entrypointImports);
+  const updated = source.slice(0, edit.start) + edit.newText + source.slice(edit.end);
+  assert.ok(updated.indexOf(preserved) >= 0 && updated.indexOf(preserved) < updated.indexOf('import { ShortHandBindingSyntax }'));
+  assert.ok(updated.indexOf('import { ShortHandBindingSyntax }') < updated.indexOf(next));
+}
 const occupiedName = ts.createSourceFile('main.ts', "import { Other as ShortHandBindingSyntax } from '@aurelia/runtime-html';", ts.ScriptTarget.Latest, true);
 assert.equal(planTypeScriptImportSourceOperations(occupiedName, shorthandAdmission.entrypointImports), null);
 
