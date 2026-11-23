@@ -1791,7 +1791,7 @@ class TemplateCompilerRootSiteCursor {
       return;
     }
     if (bundle == null) {
-      if (authoredText == null || authoredText.text !== text.text) {
+      if (authoredText == null || authoredText.data !== text.text) {
         this.appendEvent(new TemplateCompilerSiteCursorTextEvent(
           siteCursorConstructionAuthority,
           this.transcriptOrdinal++,
@@ -1844,8 +1844,8 @@ class TemplateCompilerRootSiteCursor {
       ));
       return;
     }
-    const compatible = text.text === bundle.text.text
-      && bundle.valueSite.rawValue === bundle.text.text
+    const compatible = text.text === bundle.text.data
+      && bundle.valueSite.rawValue === bundle.text.data
       && bundle.valueSite.siteKind === TemplateValueSiteKind.TextInterpolation
       && bundle.valueSite.entryFamily === 'Interpolation'
       && bundle.valueSite.syntax == null

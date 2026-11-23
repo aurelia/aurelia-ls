@@ -136,6 +136,31 @@ describe('semantic app template compiler handoff', () => {
     });
   });
 
+  test('compiles DOM-decoded text while preserving expression offsets in the physical HTML', async () => {
+    const rawName = 'm&#101;ssage';
+    const markup = '<main>\r\n  <b>plain&nbsp;&amp;</b>\r\n  <h1>Label:&#32;${' + rawName + '}</h1>\r\n</main>';
+    const overlay = new MutableProjectSourceOverlay();
+    overlay.write(templateFileName, markup);
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      projectInputAuthority: new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost(overlay)),
+    });
+    try {
+      const app = await runtime.openApp({ includeCompilerOccurrencePrecedents: true, telemetry: { inquiryProfile: 'aot' } });
+      const batch = materializeSemanticAppTemplateCompilerHandoffs({ app, templateSourcePaths: [templateFileName] });
+      const row = batch.resources.find(resource => resource.resourceName === 'my-app');
+      expect(row?.state, row?.reasons.map(reason => reason.summary).join('\n')).toBe(TemplateCompilerCompiledHandoffState.Exact);
+      const definition = row?.value?.definitions[0];
+      expect(definition?.tree.nodes).toContainEqual(expect.objectContaining({ nodeKind: 'text', text: 'plain\u00a0&' }));
+      const instruction = definition?.rows.flat().find(item => item.value.type === TemplateCompilerFrameworkInstructionType.TextBinding);
+      expect(instruction?.value).toMatchObject({ from: { $kind: 'AccessScope', name: 'message' } });
+      const start = markup.indexOf(rawName);
+      expect(instruction?.source).toMatchObject({ path: 'src/my-app.html', start, end: start + rawName.length });
+    } finally {
+      runtime.retireWorkspaceIncarnation();
+    }
+  });
+
   test('rejects a template edit during final registration-requirements projection', async () => {
     const overlay = new MutableProjectSourceOverlay();
     const inputs = new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost(overlay));
