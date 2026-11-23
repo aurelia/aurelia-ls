@@ -220,13 +220,16 @@ export function mapSemanticRuntimeAppDiagnostics(
       `Aurelia Problems mapping rejected an invalid diagnostic presentation: ${presentationFailures.join(" ")}`,
     );
   }
+  const clientOwnsTypeScriptProgramDiagnostics =
+    options.clientOwnsTypeScriptProgramDiagnostics === true;
   for (const group of presentation.groups) {
     const primaryRow = rows[group.primary.rowIndex]!;
-    const clientOwnsTypeScriptProgramDiagnostics =
-      options.clientOwnsTypeScriptProgramDiagnostics === true;
     if (
       clientOwnsTypeScriptProgramDiagnostics
-      && isTypeScriptProgramDiagnostic(primaryRow)
+      && (isTypeScriptProgramDiagnostic(primaryRow)
+        || (primaryRow.diagnosticDomain === "resource" && group.related.some((related) =>
+          related.relation === "checker-evidence" && isTypeScriptProgramDiagnostic(rows[related.rowIndex]!)
+        )))
     ) {
       continue;
     }

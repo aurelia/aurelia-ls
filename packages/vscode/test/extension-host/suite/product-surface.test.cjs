@@ -2778,8 +2778,8 @@ suite("extension-host product surface", () => {
         document,
         "the correlated decorator case should finish one current full Aurelia diagnostic pull",
       );
-      assert.strictEqual(receipt.itemCount, 1,
-        `Aurelia should publish only its semantic primary; receipt ${JSON.stringify(receipt)}`);
+      assert.strictEqual(receipt.itemCount, 0,
+        `The native checker owns the matched decorator Problem; receipt ${JSON.stringify(receipt)}`);
 
       let nativeDecoratorProblems = [];
       let aureliaDecoratorProblems = [];
@@ -2792,21 +2792,12 @@ suite("extension-host product surface", () => {
         aureliaDecoratorProblems = current.filter((candidate) =>
           candidate.source === "aurelia" && diagnosticCode(candidate) === "AUR0228"
         );
-        return nativeDecoratorProblems.length === 1 && aureliaDecoratorProblems.length === 1;
-      }, () => `the correlated decorator case should publish one native TS Problem and one Aurelia Problem; observed ${diagnosticSummary(vscode.languages.getDiagnostics(document.uri))}`, 120_000);
+        return nativeDecoratorProblems.length === 1 && aureliaDecoratorProblems.length === 0;
+      }, () => `the correlated decorator case should publish one native TS Problem; observed ${diagnosticSummary(vscode.languages.getDiagnostics(document.uri))}`, 120_000);
 
       const nativeDecorator = nativeDecoratorProblems[0];
-      const aureliaDecorator = aureliaDecoratorProblems[0];
       assert.strictEqual(diagnosticCode(nativeDecorator), 2769);
       assert.strictEqual(nativeDecorator.severity, vscode.DiagnosticSeverity.Error);
-      assert.strictEqual(aureliaDecorator.severity, vscode.DiagnosticSeverity.Error);
-      assert.strictEqual(aureliaDecorator.message, "Class-level @bindable cannot use a null configuration.");
-      assert.deepStrictEqual(aureliaDecorator.relatedInformation ?? [], []);
-      assert.strictEqual(
-        JSON.stringify(aureliaDecorator).includes(nativeDecorator.message),
-        false,
-        "the Aurelia semantic Problem must not repeat the client-owned native TS message as context",
-      );
       console.log(`[aurelia-extension-host] correlated TypeScript ownership ${JSON.stringify({
         vscodeVersion: vscode.version,
         native: {
@@ -2814,12 +2805,7 @@ suite("extension-host product surface", () => {
           code: diagnosticCode(nativeDecorator),
           rangeText: document.getText(nativeDecorator.range),
         },
-        aurelia: {
-          source: aureliaDecorator.source,
-          code: diagnosticCode(aureliaDecorator),
-          rangeText: document.getText(aureliaDecorator.range),
-          relatedInformationCount: aureliaDecorator.relatedInformation?.length ?? 0,
-        },
+        aureliaDecoratorCount: aureliaDecoratorProblems.length,
       })}`);
     } finally {
       const observationStart = extensionHostObservations.length;

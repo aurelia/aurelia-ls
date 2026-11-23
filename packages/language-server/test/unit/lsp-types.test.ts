@@ -654,15 +654,16 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
     )).toEqual({ value: [], failures: [] });
   });
 
-  test("removes client-owned Program diagnostics from semantic-primary context", () => {
-    const text = "@bindable(null as unknown as { name: string })";
+  test("delegates proved decorator agreements to the native checker and keeps independent framework Problems", () => {
+    const decorator = "@bindable(null as unknown as { name: string })";
+    const text = `${decorator}\nclass Card {}`;
     const doc = TextDocument.create(
       "file:///C:/projects/app/src/component.ts",
       "typescript",
       1,
       text,
     );
-    const source = sourceReference("src/component.ts", 0, text.length);
+    const source = sourceReference("src/component.ts", 0, decorator.length);
     const rows = [
       {
         projectKey: "app",
@@ -739,20 +740,21 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
       { clientOwnsTypeScriptProgramDiagnostics: true },
     );
     expect(bundledClient.failures).toEqual([]);
-    expect(bundledClient.value).toHaveLength(1);
-    expect(bundledClient.value[0]?.source).toBe("aurelia");
-    expect(bundledClient.value[0]?.code).toBe("AUR0228");
-    expect(bundledClient.value[0]?.relatedInformation ?? []).toEqual([]);
-    expect(bundledClient.value[0]?.data).toMatchObject({
-      semanticRuntime: {
-        presentation: {
-          rawRowCount: 1,
-          primarySeverity: "error",
-          maxRawSeverity: "error",
-          contextual: [],
-        },
-      },
-    });
+    expect(bundledClient.value).toEqual([]);
+
+    const [framework, checker] = rows;
+    for (const independentChecker of [
+      { ...checker, typeScriptDiagnosticCode: 2322 },
+      { ...checker, source: sourceReference("src/component.ts", text.indexOf("Card"), text.indexOf("Card") + 4) },
+    ]) {
+      const independent = mapSemanticRuntimeAppDiagnostics(
+        completeDiagnosticAnswer({ value: { rows: [framework, independentChecker] } } as never),
+        doc, appDocumentUris, null,
+        { clientOwnsTypeScriptProgramDiagnostics: true },
+      );
+      expect(independent.failures).toEqual([]);
+      expect(independent.value.map((item) => item.code)).toEqual(["AUR0228"]);
+    }
   });
 
   test("prefers framework and structured TypeScript codes before the diagnostic-kind fallback", () => {
