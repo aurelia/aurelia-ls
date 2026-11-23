@@ -566,6 +566,11 @@ export type ProtocolWorkspaceEdit = WorkspaceEdit & {
 };
 export type ProtocolRange = Range;
 
+/** Same-document identity of a native TypeScript Problem that covers a grouped Aurelia decorator finding. */
+export function typeScriptDiagnosticEvidenceKey(code: number, range: ProtocolRange): string {
+  return `${code}:${range.start.line},${range.start.character}-${range.end.line},${range.end.character}`;
+}
+
 /**
  * Exact diagnostic locus handed from a command-only quick fix to the explanation request.
  * The document version is part of the subject: callers must not silently retarget a stale

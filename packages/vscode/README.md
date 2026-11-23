@@ -41,9 +41,10 @@ incomplete-analysis loci. Broad ownership/admission uncertainty and operational
 failures stay out of standalone Problems.
 
 VS Code's native TypeScript/JavaScript provider owns ordinary Program
-diagnostics. When the semantic model identifies a checker diagnostic for the same
-invalid Aurelia decorator, the editor leaves that Problem to TypeScript. A
-framework error without matching checker evidence still appears. When Aurelia's semantic
+diagnostics. For invalid Aurelia decorators, the extension checks the native
+Problems currently visible in the same document for the related checker code and
+range. It shows the Aurelia Problem when native validation is disabled or the
+matching TypeScript Problem is absent. When Aurelia's semantic
 diagnosis and generated template checker evidence describe the same authored
 problem, the semantic diagnosis owns the squiggle and the checker fact appears
 as related information. The 0.5 release line has no severity overrides, inline

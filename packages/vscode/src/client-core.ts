@@ -31,6 +31,7 @@ import type {
 } from "@aurelia-ls/language-server/protocol";
 import type { AureliaWorkspaceIdentity } from "./types.js";
 import { createMiddleware } from "./client-middleware.js";
+import { NativeTypeScriptProblemOwnership } from "./native-typescript-problem-ownership.js";
 import { type ClientLogger } from "./log.js";
 import type { SupportReportService } from "./support-report.js";
 import type { VscodeApi } from "./vscode-api.js";
@@ -308,6 +309,7 @@ export class AureliaLanguageClient {
   #vscode: VscodeApi;
   readonly #createClient: LanguageClientFactory;
   readonly #supportReport: SupportReportService | undefined;
+  readonly #nativeProblemOwnership = new WeakMap<LanguageClient, NativeTypeScriptProblemOwnership>();
   #context: ExtensionContext | null = null;
   #serverModule: Promise<string> | null = null;
   #lifecycle: Disposable | null = null;
@@ -678,6 +680,16 @@ export class AureliaLanguageClient {
   }
 
   #installLifecycleListeners(lifecycle: Disposable[]): void {
+    if (this.#vscode.languages?.onDidChangeDiagnostics) {
+      lifecycle.push(this.#vscode.languages.onDidChangeDiagnostics(event => {
+        const clients = new Set<LanguageClient>();
+        for (const uri of event.uris) {
+          const owner = this.sessionForUri(uri.toString());
+          if (owner != null && this.#nativeProblemOwnership.get(owner.client)?.changed(uri)) clients.add(owner.client);
+        }
+        for (const client of clients) client.getFeature("textDocument/diagnostic").refresh();
+      }));
+    }
     const packageWatcher = this.#vscode.workspace.createFileSystemWatcher("**/package.json");
     lifecycle.push(packageWatcher);
     lifecycle.push(packageWatcher.onDidCreate((uri) => {
@@ -728,6 +740,7 @@ export class AureliaLanguageClient {
       }
     }));
     lifecycle.push(this.#vscode.workspace.onDidCloseTextDocument((document) => {
+      for (const session of this.sessions) this.#nativeProblemOwnership.get(session.client)?.forget(document.uri);
       if (
         SCRIPT_LANGUAGE_IDS.has(document.languageId)
         && !this.#isDisabledUri(document.uri)
@@ -1194,6 +1207,7 @@ export class AureliaLanguageClient {
     let client: LanguageClient | undefined;
     let start: Promise<void> | undefined;
     let startCompleted = false;
+    const nativeOwnership = new NativeTypeScriptProblemOwnership(uri => this.#vscode.languages.getDiagnostics(uri));
     const key = workspaceFolderKey(admission.folder);
     const restartControl = createClientRestartControl(() =>
       this.#workspaceMayUseAutomaticRestart(key));
@@ -1230,7 +1244,7 @@ export class AureliaLanguageClient {
       diagnosticPullOptions: { onChange: false, onFocus: true },
       errorHandler: restartControl.handler,
       middleware: {
-        ...createMiddleware(this.#vscode, this.#logger, middlewareClient),
+        ...createMiddleware(this.#vscode, this.#logger, middlewareClient, nativeOwnership),
         ...(this.#supportReport == null ? {} : {
           sendRequest: this.#supportReport.diagnosticRequestMiddleware(
             admission.folder.uri.toString(),
@@ -1260,6 +1274,7 @@ export class AureliaLanguageClient {
         return null;
       }
       client = clientResult.value;
+      this.#nativeProblemOwnership.set(client, nativeOwnership);
       restartControl.delegate = typeof client.createDefaultErrorHandler === "function"
         ? client.createDefaultErrorHandler()
         : fallbackClientErrorHandler();

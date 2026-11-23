@@ -1252,7 +1252,8 @@ TypeScript row as contextual `checker-evidence`. Exact diagnostic-source equalit
 owns this join because a checker call subject can enclose the semantic member-access subject. Checker ownership remains
 one-to-one so coincident authored sources cannot consume the same checker fact twice. Resource metadata uses the same
 contextual relation only for three explicit decorator agreements: AUR0228 with TS2769, AUR0227 with TS1166, and AUR9990
-with TS1241/TS1270. The VS Code adapter delegates those groups to the native TypeScript provider. Other LSP clients
+with TS1241/TS1270. The VS Code adapter delegates such a group while the native TypeScript provider publishes
+the matching code and range in the same document. Other LSP clients
 that leave Program diagnostics to Aurelia retain the framework primary and its related checker explanation.
 The semantic query retains both facts. TypeScript-native rows such as argument mismatch,
 arity mismatch, nullish access, and unknown-owner access remain primary. Template overlay rows share the same TypeScript

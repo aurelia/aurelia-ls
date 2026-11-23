@@ -654,7 +654,7 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
     )).toEqual({ value: [], failures: [] });
   });
 
-  test("delegates proved decorator agreements to the native checker and keeps independent framework Problems", () => {
+  test("makes decorator delegation conditional on evidence at the native checker span", () => {
     const decorator = "@bindable(null as unknown as { name: string })";
     const text = `${decorator}\nclass Card {}`;
     const doc = TextDocument.create(
@@ -740,7 +740,8 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
       { clientOwnsTypeScriptProgramDiagnostics: true },
     );
     expect(bundledClient.failures).toEqual([]);
-    expect(bundledClient.value).toEqual([]);
+    expect(bundledClient.value.map(item => item.code)).toEqual(["AUR0228"]);
+    expect(bundledClient.value[0]?.data).toMatchObject({ nativeTypeScriptEvidence: [`2769:0,0-0,${decorator.length}`] });
 
     const [framework, checker] = rows;
     for (const independentChecker of [
@@ -754,6 +755,7 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
       );
       expect(independent.failures).toEqual([]);
       expect(independent.value.map((item) => item.code)).toEqual(["AUR0228"]);
+      expect(independent.value[0]?.data).not.toHaveProperty("nativeTypeScriptEvidence");
     }
   });
 

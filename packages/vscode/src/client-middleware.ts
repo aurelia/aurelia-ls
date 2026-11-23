@@ -14,6 +14,7 @@ import {
 } from "./extension-host-observation.js";
 import type { ClientLogger } from "./log.js";
 import type { VscodeApi } from "./vscode-api.js";
+import type { NativeTypeScriptProblemOwnership } from "./native-typescript-problem-ownership.js";
 import {
   globalActivationTopologyOwner,
   readWorkspaceActivationTopology,
@@ -43,9 +44,10 @@ export function createMiddleware(
   vscode: VscodeApi,
   logger: ClientLogger,
   client: MiddlewareLanguageClient,
+  nativeOwnership?: NativeTypeScriptProblemOwnership,
 ): Middleware {
   return {
-    ...providerMiddleware(vscode),
+    ...providerMiddleware(vscode, nativeOwnership),
     workspace: {
       didChangeWatchedFile: async (event, next) => {
         const uri = vscode.Uri.parse(event.uri);
@@ -201,14 +203,21 @@ function isAureliaTemplateDocument(document: TextDocument): boolean {
     || /\.html?$/iu.test(document.uri.path);
 }
 
-function providerMiddleware(vscode: VscodeApi): Pick<Middleware, "provideDiagnostics" | "provideCompletionItem"> {
+function providerMiddleware(
+  vscode: VscodeApi,
+  nativeOwnership?: NativeTypeScriptProblemOwnership,
+): Pick<Middleware, "provideDiagnostics" | "provideCompletionItem"> {
   // The SDK checks before asynchronously converting a report. A newer pull can cancel during conversion.
   const currentReport = <T>(token: CancellationToken, report: T): T => {
     if (token.isCancellationRequested) throw new vscode.CancellationError();
     return report;
   };
-  const provideDiagnostics: NonNullable<Middleware["provideDiagnostics"]> = async (document, previousResultId, token, next) =>
-    currentReport(token, await next(document, previousResultId, token));
+  const provideDiagnostics: NonNullable<Middleware["provideDiagnostics"]> = async (document, previousResultId, token, next) => {
+    const uri = "uri" in document ? document.uri : document;
+    const previous = nativeOwnership == null ? previousResultId : nativeOwnership.previousResultId(uri, previousResultId);
+    const report = currentReport(token, await next(document, previous, token));
+    return nativeOwnership == null ? report : nativeOwnership.project(uri, report);
+  };
   if (!extensionHostTailObservationEnabled()) return { provideDiagnostics };
   return {
     provideDiagnostics: async (document, previousResultId, token, next) => {
@@ -226,7 +235,7 @@ function providerMiddleware(vscode: VscodeApi): Pick<Middleware, "provideDiagnos
         previousResultIdPresent: previousResultId !== undefined,
       });
       try {
-        const report = currentReport(token, await next(document, previousResultId, token));
+        const report = await provideDiagnostics(document, previousResultId, token, next);
         emitExtensionHostObservation({
           source: "language-client-provider",
           observationId,

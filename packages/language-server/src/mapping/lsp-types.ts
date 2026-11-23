@@ -67,6 +67,7 @@ import {
   AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA,
   AureliaProtocolCommand,
   aureliaWorkspaceEditContentRevision,
+  typeScriptDiagnosticEvidenceKey,
   templateCodeActionResolveRefusalFromValue,
   type FrameworkCapabilityExplanationParams,
   type RenameCandidateLocation,
@@ -225,13 +226,7 @@ export function mapSemanticRuntimeAppDiagnostics(
     options.clientOwnsTypeScriptProgramDiagnostics === true;
   for (const group of presentation.groups) {
     const primaryRow = rows[group.primary.rowIndex]!;
-    if (
-      clientOwnsTypeScriptProgramDiagnostics
-      && (isTypeScriptProgramDiagnostic(primaryRow)
-        || (primaryRow.diagnosticDomain === "resource" && group.related.some((related) =>
-          related.relation === "checker-evidence" && isTypeScriptProgramDiagnostic(rows[related.rowIndex]!)
-        )))
-    ) {
+    if (clientOwnsTypeScriptProgramDiagnostics && isTypeScriptProgramDiagnostic(primaryRow)) {
       continue;
     }
     const relatedInformation: DiagnosticRelatedInformation[] = [];
@@ -269,6 +264,19 @@ export function mapSemanticRuntimeAppDiagnostics(
     );
     failures.push(...diagnosticMapping.failures);
     if (diagnosticMapping.value != null) {
+      // Only the editor can tell whether its native provider actually published the checker finding.
+      if (clientOwnsTypeScriptProgramDiagnostics && primaryRow.diagnosticDomain === "resource") {
+        const nativeChecks = group.related.flatMap(related => {
+          const row = rows[related.rowIndex]!;
+          if (related.relation !== "checker-evidence" || !isTypeScriptProgramDiagnostic(row)
+            || row.typeScriptDiagnosticCode == null) return [];
+          const exact = semanticExactSourceReference(row.source);
+          if (exact?.start == null || exact.end == null) return [];
+          const range = semanticRuntimeDiagnosticRange(exact, document, documentUris);
+          return range == null ? [] : [typeScriptDiagnosticEvidenceKey(row.typeScriptDiagnosticCode, range)];
+        });
+        if (nativeChecks.length) Object.assign(diagnosticMapping.value.data as object, { nativeTypeScriptEvidence: nativeChecks });
+      }
       mapped.push(diagnosticMapping.value);
     } else {
       failures.push(
