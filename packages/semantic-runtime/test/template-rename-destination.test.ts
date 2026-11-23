@@ -15,11 +15,12 @@ test('renaming a TypeScript member or template local preserves bound names at ed
     '<p repeat.for="item of items">${title}|${item}</p>',
     '<p>${items.map(x => title + x)}</p>',
     '<p>${$this.qualifiedOnly}</p>',
+    '<p repeat.for="item of items">${$parent.parentOnly}</p>',
     '<p>${other}</p>',
     '<p>${model.key}</p>',
   ].join('\n');
   const script = readFileSync(ts, 'utf8').replace("message = 'Hello semantic runtime';",
-    "title = 'ROOT'; items = ['ROW']; qualifiedOnly = 'Q'; other = 'NEIGHBOR'; model!: Named & Coded;")
+    "title = 'ROOT'; items = ['ROW']; qualifiedOnly = 'Q'; parentOnly = 'P'; other = 'NEIGHBOR'; model!: Named & Coded;")
     + '\ninterface Named { key: string }\ninterface Coded { code: string }\n';
   const inputs = new Map([[html, markup], [ts, script]]);
   const runtime = await createSemanticRuntime({
@@ -55,6 +56,8 @@ test('renaming a TypeScript member or template local preserves bound names at ed
     expect(rename(html, 'other', 'item')).toMatchObject({ status: 'available' });
     expect(rename(html, 'other', 'x')).toMatchObject({ status: 'available' });
     expect(rename(html, 'qualifiedOnly', 'Math')).toMatchObject({ status: 'available' });
+    expect(rename(html, 'qualifiedOnly', '$parent')).toMatchObject({ status: 'available' });
+    expect(rename(html, 'parentOnly', '$parent')).toMatchObject({ status: 'not-available', reason: 'name-conflict', edits: [] });
     for (const [file, marker] of [[ts, 'key: string'], [html, 'key}']] as const) {
       expect(rename(file, marker, 'code')).toMatchObject({ status: 'not-available', reason: 'name-conflict', edits: [] });
     }

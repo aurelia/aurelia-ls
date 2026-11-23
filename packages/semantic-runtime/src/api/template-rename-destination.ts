@@ -2,9 +2,10 @@ import { semanticSourceReferenceHostPath } from '../boot/source-ownership.js';
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import { ConfigurationProductDetails } from '../configuration/product-details.js';
 import type { BindingScope, BindingScopeContext } from '../configuration/scope.js';
-import type { ArrowFunction } from '../expression/ast.js';
-import { isAureliaExpressionIdentifier, isAureliaExpressionIdentifierName } from '../expression/expression-scanner.js';
-import { isAureliaExpressionGlobalName } from '../expression/global-names.js';
+import { AuthoredScopePathKind, type ArrowFunction } from '../expression/ast.js';
+import { ExpressionParser } from '../expression/expression-parser.js';
+import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
+import { isAureliaExpressionIdentifierName } from '../expression/expression-scanner.js';
 import { visitExpressionAstNodes } from '../expression/parse-result-inspection.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { ProductHandle } from '../kernel/handles.js';
@@ -49,6 +50,16 @@ export function templateRenameDestinationConflict(
   const callbackConflict = bindableRenameCallbackConflict(store, emission, typeAccess, oldName, newName, isChanged);
   if (callbackConflict != null) return callbackConflict;
   const selectedContexts = new Map<BindingScopeContext, boolean>();
+  const parser = new ExpressionParser();
+  const parsedAccessKinds = new Map<string, string>();
+  const scopeAccessKind = (prefix: string): string => {
+    const cached = parsedAccessKinds.get(prefix);
+    if (cached != null) return cached;
+    const parsed = parser.parse(prefix + newName, 'IsProperty');
+    const kind = parsed.kind === ExpressionParseResultKind.ExpressionSuccess ? parsed.ast.$kind : 'unparseable';
+    parsedAccessKinds.set(prefix, kind);
+    return kind;
+  };
   const ownsRenamedSlot = (context: BindingScopeContext): boolean => {
     const cached = selectedContexts.get(context);
     if (cached != null) return cached;
@@ -72,14 +83,8 @@ export function templateRenameDestinationConflict(
       const edited = name === oldName && isChanged(source);
       if (!edited && name !== newName) continue;
 
-      const bare = (node.$kind === 'AccessScope' || node.$kind === 'CallScope') && node.authoredScopePath == null;
-      if (edited && !(bare ? isAureliaExpressionIdentifier(newName) : isAureliaExpressionIdentifierName(newName))) {
-        return `'${newName}' cannot be used as a ${bare ? 'bare binding' : 'member'} name at ${source.label}.`;
-      }
-      if (edited && bare && isAureliaExpressionGlobalName(newName)) {
-        return `'${newName}' would resolve to an Aurelia expression global at ${source.label}.`;
-      }
       if (node.$kind === 'AccessMember' || node.$kind === 'CallMember') {
+        if (edited && !isAureliaExpressionIdentifierName(newName)) return `'${newName}' cannot be used as a member name at ${source.label}.`;
         if (edited && resolution.targetLinks.some(link => {
           const member = link.targetTypeMemberHandle == null ? null : store.hotDetails.read(TypeSystemHotDetails.TypeMember, link.targetTypeMemberHandle);
           const owner = member == null ? null : typeAccess.resolveReference(member.ownerType);
@@ -88,8 +93,17 @@ export function templateRenameDestinationConflict(
         continue;
       }
 
+      const path = node.authoredScopePath;
+      if (edited) {
+        const qualifier = path == null ? '' : path.pathKind === AuthoredScopePathKind.CurrentBindingContext ? '$this' : '$parent';
+        const separator = path == null ? '' : path.optionalAccessSpan == null ? '.' : '?.';
+        // A new root spelling can parse as a global, literal or scope jump. A dot after $parent
+        // also admits another ancestor hop, whereas the same name after $this can be a property.
+        const kind = scopeAccessKind(qualifier + separator);
+        if (kind !== 'AccessScope') return `'${qualifier}${separator}${newName}' would not read the renamed member at ${source.label} (${kind}).`;
+      }
       const conflict = `Rename cannot preserve the binding of '${name}' at ${source.label} when changing '${oldName}' to '${newName}'.`;
-      if (bare && (resolution.callbackScopeDepth ?? 0) > 0) {
+      if (path == null && (resolution.callbackScopeDepth ?? 0) > 0) {
         const owner = renamedArrowParameterWins(store, arrows, resolution.expressionProductHandle, source, oldName, newName, isChanged);
         if (owner != null) {
           if (edited !== owner) return conflict;
