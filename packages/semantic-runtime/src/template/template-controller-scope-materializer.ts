@@ -618,7 +618,6 @@ export class TemplateControllerScopeMaterializer {
         scopeMaterializer,
         scopeNarrower,
         typeSupport,
-        bindingExpressionScopes,
         this.scopeIssuePublisher,
         this.constructScopeEffects.bind(this),
         this.constructRuntimeAssignmentStateForBinding.bind(this),

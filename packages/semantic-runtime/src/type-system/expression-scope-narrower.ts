@@ -44,7 +44,7 @@ import { readCheckerTypeShape } from './checker-type-shape-access.js';
 import { checkerRawTypeAssignable } from './checker-type-assignability.js';
 import { checkerUnionTypeOrNever } from './checker-type-union.js';
 import { checkerPropertySymbol, checkerSymbolValueType } from './checker-node-helpers.js';
-import { CheckerExpressionTypeEvaluationContext } from './expression-type-context.js';
+import type { CheckerExpressionTypeEvaluationContext } from './expression-type-context.js';
 import type { CheckerExpressionArgumentContextProjector } from './expression-argument-context-projector.js';
 import { checkerConstructReturnTypeUnion } from './checker-signature-parameters.js';
 
@@ -58,7 +58,7 @@ export const enum CheckerExpressionScopeNarrowingPolarity {
 export interface CheckerExpressionScopeNarrowingRequest {
   readonly localKey: string;
   readonly expression: ExpressionAstNode;
-  readonly scope: BindingScope;
+  readonly context: CheckerExpressionTypeEvaluationContext;
   readonly polarity: CheckerExpressionScopeNarrowingPolarity;
   readonly sourceAddressHandle: AddressHandle | null;
 }
@@ -94,7 +94,7 @@ export class CheckerExpressionScopeNarrower {
   narrow(input: CheckerExpressionScopeNarrowingRequest): CheckerExpressionScopeNarrowingResult | null {
     const result = this.narrowExpression(
       input.expression,
-      input.scope,
+      input.context,
       input.polarity,
       input.localKey,
       input.sourceAddressHandle,
@@ -127,29 +127,30 @@ export class CheckerExpressionScopeNarrower {
 
   private narrowExpression(
     expression: ExpressionAstNode,
-    scope: BindingScope,
+    context: CheckerExpressionTypeEvaluationContext,
     polarity: CheckerExpressionScopeNarrowingPolarity,
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
   ): CheckerExpressionScopeNarrowingResult | null {
+    const scope = context.scope;
     switch (expression.$kind) {
       case 'AccessScope':
         return expression.ancestor === 0
           ? this.narrowAccessScope(expression.name.name, scope, polarity, localKey, sourceAddressHandle)
           : null;
       case 'Paren':
-        return this.narrowExpression(expression.expression, scope, polarity, `${localKey}:paren`, sourceAddressHandle);
+        return this.narrowExpression(expression.expression, context, polarity, `${localKey}:paren`, sourceAddressHandle);
       case 'Unary':
         return expression.operation === '!'
-          ? this.narrowExpression(expression.expression, scope, invertPolarity(polarity), `${localKey}:not`, sourceAddressHandle)
+          ? this.narrowExpression(expression.expression, context, invertPolarity(polarity), `${localKey}:not`, sourceAddressHandle)
           : null;
       case 'CallScope':
       case 'CallMember':
       case 'CallFunction':
       case 'CallGlobal':
-        return this.narrowCallPredicate(expression, scope, polarity, localKey, sourceAddressHandle);
+        return this.narrowCallPredicate(expression, context, polarity, localKey, sourceAddressHandle);
       case 'Binary':
-        return this.narrowBinaryExpression(expression, scope, polarity, localKey, sourceAddressHandle);
+        return this.narrowBinaryExpression(expression, context, polarity, localKey, sourceAddressHandle);
       default:
         return null;
     }
@@ -157,19 +158,19 @@ export class CheckerExpressionScopeNarrower {
 
   private narrowCallPredicate(
     expression: Extract<ExpressionAstNode, { $kind: 'CallScope' | 'CallMember' | 'CallFunction' | 'CallGlobal' }>,
-    scope: BindingScope,
+    context: CheckerExpressionTypeEvaluationContext,
     polarity: CheckerExpressionScopeNarrowingPolarity,
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
   ): CheckerExpressionScopeNarrowingResult | null {
+    const scope = context.scope;
     if (polarity !== CheckerExpressionScopeNarrowingPolarity.Truthy && polarity !== CheckerExpressionScopeNarrowingPolarity.Falsy) return null;
     const shortCircuit = expression.$kind === 'CallMember'
       ? expression.optionalMember || expression.optionalCall
       : expression.$kind !== 'CallGlobal' && (expression.optional || (expression.$kind === 'CallScope' && expression.optionalAccess));
     if (shortCircuit && polarity === CheckerExpressionScopeNarrowingPolarity.Falsy) return null;
 
-    const predicate = this.readCallPredicate?.(expression,
-      CheckerExpressionTypeEvaluationContext.knownScope(expression, scope, localKey, sourceAddressHandle));
+    const predicate = this.readCallPredicate?.(expression, context.child(expression, 'predicate'));
     if (predicate == null) return null;
     const target = this.narrowableEqualityTarget(predicate.expression, scope, `${localKey}:predicate-argument`);
     if (target == null) return null;
@@ -195,22 +196,23 @@ export class CheckerExpressionScopeNarrower {
 
   private narrowBinaryExpression(
     expression: BinaryExpression,
-    scope: BindingScope,
+    context: CheckerExpressionTypeEvaluationContext,
     polarity: CheckerExpressionScopeNarrowingPolarity,
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
   ): CheckerExpressionScopeNarrowingResult | null {
+    const scope = context.scope;
     if (expression.operation === '&&' && polarity === CheckerExpressionScopeNarrowingPolarity.Truthy) {
       return combineNarrowings([
-        this.narrowExpression(expression.left, scope, polarity, `${localKey}:and:left`, sourceAddressHandle),
-        this.narrowExpression(expression.right, scope, polarity, `${localKey}:and:right`, sourceAddressHandle),
+        this.narrowExpression(expression.left, context, polarity, `${localKey}:and:left`, sourceAddressHandle),
+        this.narrowExpression(expression.right, context, polarity, `${localKey}:and:right`, sourceAddressHandle),
       ]);
     }
 
     if (expression.operation === '||' && polarity === CheckerExpressionScopeNarrowingPolarity.Falsy) {
       return combineNarrowings([
-        this.narrowExpression(expression.left, scope, polarity, `${localKey}:or:left`, sourceAddressHandle),
-        this.narrowExpression(expression.right, scope, polarity, `${localKey}:or:right`, sourceAddressHandle),
+        this.narrowExpression(expression.left, context, polarity, `${localKey}:or:left`, sourceAddressHandle),
+        this.narrowExpression(expression.right, context, polarity, `${localKey}:or:right`, sourceAddressHandle),
       ]);
     }
 
@@ -218,7 +220,7 @@ export class CheckerExpressionScopeNarrower {
     if (nullish != null) {
       return this.narrowExpression(
         nullish.expression,
-        scope,
+        context,
         nullish.polarity,
         `${localKey}:nullish-compare`,
         sourceAddressHandle,

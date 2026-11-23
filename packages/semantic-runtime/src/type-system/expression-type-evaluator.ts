@@ -230,23 +230,20 @@ export class CheckerExpressionTypeEvaluator {
       shortCircuitRightScope: (expression, context) =>
         this.branchScopes.shortCircuitRightScope(
           expression,
-          context.scope,
+          context,
           `${context.projectionLocalKey()}:member-owner:right-scope`,
-          context.sourceAddressHandle,
         ),
       conditionalBranchScope: (expression, branch, context) =>
         branch === 'truthy'
           ? this.branchScopes.truthyScope(
               expression.condition,
-              context.scope,
+              context,
               `${context.projectionLocalKey()}:member-owner:condition:truthy`,
-              context.sourceAddressHandle,
             )
           : this.branchScopes.falsyScope(
               expression.condition,
-              context.scope,
+              context,
               `${context.projectionLocalKey()}:member-owner:condition:falsy`,
-              context.sourceAddressHandle,
             ),
     });
   }
@@ -1147,7 +1144,6 @@ export class CheckerExpressionTypeEvaluator {
     expression: BinaryExpression,
     context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation {
-    const scope = context.scope;
     const localKey = context.projectionLocalKey();
     const sourceAddressHandle = context.sourceAddressHandle;
     const left = this.evaluateNode(context.child(expression.left, 'left'));
@@ -1164,7 +1160,7 @@ export class CheckerExpressionTypeEvaluator {
         leftResult = this.support.type(value, 'Non-nullish left operand of ??', sourceAddressHandle);
       }
     }
-    const rightScope = this.branchScopes.shortCircuitRightScope(expression, scope, `${localKey}:right-scope`, sourceAddressHandle);
+    const rightScope = this.branchScopes.shortCircuitRightScope(expression, context, `${localKey}:right-scope`);
     const right = this.evaluateNode(context.childInScope(expression.right, rightScope, 'right'));
     if (definitelyNullish || right.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return right;
@@ -1185,15 +1181,13 @@ export class CheckerExpressionTypeEvaluator {
     expression: ConditionalExpression,
     context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation {
-    const scope = context.scope;
     const localKey = context.projectionLocalKey();
     const sourceAddressHandle = context.sourceAddressHandle;
     const contextualType = context.contextualType;
     const yesScope = this.branchScopes.truthyScope(
       expression.condition,
-      scope,
+      context,
       `${localKey}:condition:truthy`,
-      sourceAddressHandle,
     );
     const yes = this.evaluateNode(context.childInScope(expression.yes, yesScope, 'yes', contextualType));
     if (yes.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
@@ -1201,9 +1195,8 @@ export class CheckerExpressionTypeEvaluator {
     }
     const noScope = this.branchScopes.falsyScope(
       expression.condition,
-      scope,
+      context,
       `${localKey}:condition:falsy`,
-      sourceAddressHandle,
     );
     const no = this.evaluateNode(context.childInScope(expression.no, noScope, 'no', contextualType));
     if (no.kind === CheckerExpressionTypeEvaluationResultKind.Open) {

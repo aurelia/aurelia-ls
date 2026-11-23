@@ -2,7 +2,7 @@ import type {
   BinaryExpression,
   ExpressionAstNode,
 } from '../expression/ast.js';
-import type { AddressHandle } from '../kernel/handles.js';
+import type { CheckerExpressionTypeEvaluationContext } from './expression-type-context.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { BindingScope } from '../configuration/scope.js';
 import {
@@ -20,81 +20,68 @@ export class CheckerExpressionBranchScopeProjector {
 
   truthyScope(
     expression: ExpressionAstNode,
-    scope: BindingScope,
+    context: CheckerExpressionTypeEvaluationContext,
     localKey: string,
-    sourceAddressHandle: AddressHandle | null,
   ): BindingScope {
     return this.narrowedScopeForExpression(
       expression,
-      scope,
+      context,
       CheckerExpressionScopeNarrowingPolarity.Truthy,
       localKey,
-      sourceAddressHandle,
     );
   }
 
   falsyScope(
     expression: ExpressionAstNode,
-    scope: BindingScope,
+    context: CheckerExpressionTypeEvaluationContext,
     localKey: string,
-    sourceAddressHandle: AddressHandle | null,
   ): BindingScope {
     return this.narrowedScopeForExpression(
       expression,
-      scope,
+      context,
       CheckerExpressionScopeNarrowingPolarity.Falsy,
       localKey,
-      sourceAddressHandle,
     );
   }
 
   nullishScope(
     expression: ExpressionAstNode,
-    scope: BindingScope,
+    context: CheckerExpressionTypeEvaluationContext,
     localKey: string,
-    sourceAddressHandle: AddressHandle | null,
   ): BindingScope {
     return this.narrowedScopeForExpression(
       expression,
-      scope,
+      context,
       CheckerExpressionScopeNarrowingPolarity.Nullish,
       localKey,
-      sourceAddressHandle,
     );
   }
 
   shortCircuitRightScope(
     expression: BinaryExpression,
-    scope: BindingScope,
+    context: CheckerExpressionTypeEvaluationContext,
     localKey: string,
-    sourceAddressHandle: AddressHandle | null,
   ): BindingScope {
     switch (expression.operation) {
       case '&&':
-        return this.truthyScope(expression.left, scope, `${localKey}:truthy-left`, sourceAddressHandle);
+        return this.truthyScope(expression.left, context, `${localKey}:truthy-left`);
       case '||':
-        return this.falsyScope(expression.left, scope, `${localKey}:falsy-left`, sourceAddressHandle);
+        return this.falsyScope(expression.left, context, `${localKey}:falsy-left`);
       case '??':
-        return this.nullishScope(expression.left, scope, `${localKey}:nullish-left`, sourceAddressHandle);
+        return this.nullishScope(expression.left, context, `${localKey}:nullish-left`);
       default:
-        return scope;
+        return context.scope;
     }
   }
 
   private narrowedScopeForExpression(
     expression: ExpressionAstNode,
-    scope: BindingScope,
+    context: CheckerExpressionTypeEvaluationContext,
     polarity: CheckerExpressionScopeNarrowingPolarity,
     localKey: string,
-    sourceAddressHandle: AddressHandle | null,
   ): BindingScope {
-    const narrowing = this.scopeNarrower.narrow({
-      localKey,
-      expression,
-      scope,
-      polarity,
-      sourceAddressHandle,
-    });
+    const { scope, sourceAddressHandle } = context;
+    const narrowing = this.scopeNarrower.narrow({ localKey, expression, context, polarity, sourceAddressHandle });
     return narrowing == null
       ? scope
       : speculativeBindingScopeOverlay(this.store, {

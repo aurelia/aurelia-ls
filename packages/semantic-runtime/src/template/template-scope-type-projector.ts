@@ -653,7 +653,8 @@ export class TemplateScopeTypeProjector {
     return input.expressionWorld.evaluator(resourceScope);
   }
 
-  private evaluationContextForRuntimeBinding(
+  /** Project the actual binding context, or the supplied authored Scope when no runtime binding exists. */
+  evaluationContextForRuntimeBinding(
     expression: ExpressionAstNode,
     input: TemplateScopeConstructionRequest,
     sourceScope: BindingScope,
