@@ -199,6 +199,64 @@ test('HTML character references preserve diagnostic and hover ranges across temp
   }
 }, 60_000);
 
+test('related files and a dirty neighbor remain current across HTML import aliases and re-exports', async () => {
+  const direct = "import template from './view.html?raw';";
+  const alias = "import markup from './view.html?raw'; const template = markup;";
+  const barrel = "import { template } from './barrel';";
+  const rootSource = (importLine: string) => [
+    "import { customElement } from 'aurelia';", "import { Neighbor } from './neighbor';", importLine,
+    "@customElement({ name: 'app-root', template, dependencies: [Neighbor] }) export class AppRoot { title = 'Hello'; }",
+  ].join('\n');
+  const neighborSource = [
+    "import { customElement } from 'aurelia';", "import template from './neighbor.html';",
+    "@customElement({ name: 'neighbor-card', template }) export class Neighbor { label = 'World'; }",
+  ].join('\n');
+  const rootHtml = '<p>${title}</p><neighbor-card></neighbor-card>';
+  const validNeighbor = '<p>${label}</p>';
+  const missingNeighbor = '<p>${missingNeighbor}</p>';
+  const fixture = createAureliaAppFixture({
+    'src/app.ts': rootSource(direct), 'src/view.html': rootHtml,
+    'src/barrel.ts': "export { default as template } from './view.html';",
+    'src/neighbor.ts': neighborSource, 'src/neighbor.html': missingNeighbor,
+  });
+  const { connection, child, getStderr, dispose } = startServer(fixture);
+  const diagnostics = createDiagnosticsRecorder(connection, child, getStderr);
+  const appUri = fileUri(fixture, 'src/app.ts');
+  const htmlUri = fileUri(fixture, 'src/view.html');
+  const neighborUri = fileUri(fixture, 'src/neighbor.html');
+  try {
+    await initialize(connection, child, getStderr, fixture);
+    openDocument(connection, appUri, 'typescript', rootSource(direct));
+    openDocument(connection, htmlUri, 'html', rootHtml);
+    openDocument(connection, neighborUri, 'html', missingNeighbor);
+    const phases = [
+      { importLine: direct, neighbor: missingNeighbor, missing: 'missingNeighbor' },
+      { importLine: alias, neighbor: validNeighbor, missing: null },
+      { importLine: barrel, neighbor: '<p>${otherMissing}</p>', missing: 'otherMissing' },
+      { importLine: direct, neighbor: validNeighbor, missing: null },
+    ];
+    for (const [index, phase] of phases.entries()) {
+      if (index > 0) {
+        changeDocument(connection, appUri, rootSource(phase.importLine), index + 1);
+        changeDocument(connection, neighborUri, phase.neighbor, index + 1);
+      }
+      expect(await connection.sendRequest('aurelia/getRelatedFiles', { uri: appUri }))
+        .toMatchObject([{ uri: htmlUri, role: 'component-template' }]);
+      expect(await connection.sendRequest('aurelia/getRelatedFiles', { uri: htmlUri }))
+        .toMatchObject([{ uri: appUri, role: 'component-source' }]);
+      const rows = await diagnostics.wait(neighborUri, 10_000) as LspDiagnosticLike[];
+      const missing = rows.filter(row => row.code === 'missing-expression-member');
+      expect(missing.map(row => row.range)).toEqual(phase.missing == null ? [] : [rangeFor(phase.neighbor, phase.missing)]);
+    }
+  } finally {
+    diagnostics.dispose();
+    dispose();
+    child.kill('SIGKILL');
+    await waitForExit(child);
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+}, 60_000);
+
 function onlyRecovery(rows: readonly unknown[]): LspDiagnosticLike {
   const recoveries = (rows as LspDiagnosticLike[]).filter(isHtmlRecoveryDiagnostic);
   expect(recoveries).toHaveLength(1);

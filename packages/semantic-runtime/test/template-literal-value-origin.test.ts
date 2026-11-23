@@ -15,7 +15,9 @@ describe('custom element template literal value origin', () => {
     const overlay = new MutableProjectSourceOverlay();
     const source = [
       "import { customElement } from '@aurelia/runtime-html';",
-      "import { importedTemplate } from './template-barrel';",
+      "import { importedTemplate, externalTemplate } from './template-barrel';",
+      "import physicalMarkup from './asset.html?raw';",
+      'const assetAlias = physicalMarkup;',
       "const sharedTemplate = '<p>${message}</p>';",
       'const template = sharedTemplate;',
       'const metadata = { template };',
@@ -34,20 +36,29 @@ describe('custom element template literal value origin', () => {
       'export class StaticShared { static template = sharedTemplate; message = "static"; }',
       "@customElement({ name: 'imported-literal', template: importedTemplate })",
       'export class ImportedLiteral { message = "imported"; }',
+      "@customElement({ name: 'asset-alias', template: assetAlias })",
+      'export class AssetAlias { message = "alias"; }',
+      "@customElement({ name: 'asset-barrel', template: externalTemplate })",
+      'export class AssetBarrel { message = "barrel"; }',
       "@customElement({ name: 'computed-template', template: '<p>' + 'computed</p>' })",
       'export class ComputedTemplate {}',
       "@customElement({ name: 'changed-template', template: sharedTemplate.replace('message', 'changed') })",
       'export class ChangedTemplate {}',
       "@customElement({ name: 'my-app', template: '', dependencies: [",
       '  DirectLiteral, FirstShared, SecondShared, PropertyShared, ReturnedShared, StaticShared, ImportedLiteral,',
-      '  ComputedTemplate, ChangedTemplate,',
+      '  AssetAlias, AssetBarrel, ComputedTemplate, ChangedTemplate,',
       '] })',
       'export class MyApp {}',
     ].join('\n');
     const importedSource = String.raw`export const escapedTemplate = '<span title="line\nnext">\u0024{message}</span>';`;
     overlay.write(path.join(fixtureRoot, 'src/my-app.ts'), source);
     overlay.write(path.join(fixtureRoot, 'src/template-origin.ts'), importedSource);
-    overlay.write(path.join(fixtureRoot, 'src/template-barrel.ts'), "export { escapedTemplate as importedTemplate } from './template-origin';");
+    const physicalMarkup = '<import from="./marker"></import>\r\n<div title="✓">${message}</div>';
+    overlay.write(path.join(fixtureRoot, 'src/asset.html'), physicalMarkup);
+    overlay.write(path.join(fixtureRoot, 'src/template-barrel.ts'), [
+      "export { escapedTemplate as importedTemplate } from './template-origin';",
+      "export { default as externalTemplate } from './asset.html';",
+    ].join('\n'));
     const inputAuthority = new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost(overlay));
     const runtime = await createSemanticRuntime({
       workspaceRoot: fixtureRoot,
@@ -104,6 +115,21 @@ describe('custom element template literal value origin', () => {
       expect(offsets?.[decoded.indexOf('\n')]).toBe(importedSource.indexOf('\\n'));
       expect(offsets?.[decoded.indexOf('${message}')]).toBe(importedSource.indexOf('\\u0024'));
       expect(offsets?.[decoded.length]).toBe(importedEnd);
+
+      for (const name of ['asset-alias', 'asset-barrel']) {
+        const { template, attachment } = selection(name);
+        expect(template.moduleRole, name).toBe(CustomElementTemplateModuleRole.TemplateValue);
+        expect(template.authoredSourceRevision, name).toBe(sourceTextContentRevision(physicalMarkup));
+        expect(attachment?.templateSource, name).toMatchObject({
+          sourcePath: 'src/asset.html',
+          start: 0,
+          end: physicalMarkup.length,
+          oldText: physicalMarkup,
+        });
+        expect(template.markup, name).toBe('\r\n<div title="✓">${message}</div>');
+        expect(template.sourceMap?.decodedToSourceOffsets[template.markup!.indexOf('message')], name)
+          .toBe(physicalMarkup.indexOf('message'));
+      }
 
       for (const name of ['computed-template', 'changed-template']) {
         const { template, attachment } = selection(name);

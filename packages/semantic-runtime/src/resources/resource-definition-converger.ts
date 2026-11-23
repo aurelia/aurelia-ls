@@ -3,7 +3,6 @@ import ts from 'typescript';
 import { resolveValueAlias } from '../evaluation/import-bindings.js';
 import type { SourceFileAdmission } from '../boot/frames.js';
 import type { AuthoredSourceTextCache } from '../kernel/authored-source-text.js';
-import { sourceTextContentRevision } from '../kernel/source-text-revision.js';
 import {
   SourceSpanRole,
 } from '../kernel/address.js';
@@ -1762,9 +1761,10 @@ function readTemplateField(
   local: string,
   sourceTextCache: AuthoredSourceTextCache,
 ): TemplateDefinitionRead {
-  const imported = read.node == null
+  const admission = importedHtmlTemplateAdmission(context, read);
+  const imported = admission == null
     ? null
-    : readImportedHtmlTemplate(store, context, read.node, importedRole, local, sourceTextCache);
+    : readAdmittedHtmlTemplate(store, context, admission, importedRole, local, sourceTextCache);
   const pressure = convergenceOpenForReadPressure('Custom element template metadata evaluation remained open.', read);
   if (imported != null) {
     return new TemplateDefinitionRead(
@@ -1807,7 +1807,9 @@ function readTemplateField(
     // field-read node identifies the consumer, not necessarily the authored markup.
     const sourceNode = value.node;
     const sourceContext = sourceNode == null ? null : context.readAdmittedNodeContext(sourceNode);
+    const authoredSource = sourceContext == null ? null : sourceTextCache.read(sourceContext.sourceFile.fileName);
     const source = sourceContext == null
+      || authoredSource?.text !== sourceContext.sourceFile.text
       || sourceNode == null
       || !ts.isStringLiteralLike(sourceNode)
       || sourceNode.text !== value.value
@@ -1820,7 +1822,7 @@ function readTemplateField(
         source == null ? null : value.value,
         source?.addressHandle ?? null,
         source?.sourceMap ?? null,
-        source == null ? null : sourceTextContentRevision(sourceContext!.sourceFile.text),
+        source == null ? null : authoredSource!.contentRevision,
       ),
       source?.records ?? [],
       new ResourceDependenciesRead([], []),
@@ -1882,65 +1884,45 @@ function readConventionalHtmlTemplate(
     return null;
   }
   const admission = readConventionalTemplateAdmission(context, targetClass);
-  if (admission == null) {
-    return null;
-  }
-  const absolutePath = path.resolve(context.projectRootDir ?? path.dirname(context.sourceFile.fileName), admission.path);
-  const authoredSource = sourceTextCache.read(absolutePath);
-  if (authoredSource == null) {
-    const source = externalTemplateSourceAddress(store, admission.addressHandle, 0, local);
-    return new TemplateDefinitionRead(
-      new CustomElementTemplateDefinition(
-        CustomElementTemplateKind.Open,
-        CustomElementTemplateModuleRole.DefinitionModule,
-        null,
-        source.addressHandle,
-      ),
-      source.records,
-    );
-  }
-  const rawMarkup = authoredSource.text;
-  const metadata = readHtmlTemplateMetadata(rawMarkup);
-  const source = externalTemplateSourceAddress(store, admission.addressHandle, rawMarkup.length, local, metadata.sourceMap);
-  return new TemplateDefinitionRead(
-    new CustomElementTemplateDefinition(
-      CustomElementTemplateKind.Markup,
-      CustomElementTemplateModuleRole.DefinitionModule,
-      metadata.markup,
-      source.addressHandle,
-      source.sourceMap,
-      authoredSource.contentRevision,
-    ),
-    source.records,
-    readHtmlTemplateDependencies(context, admission.path, metadata.imports),
+  return admission == null ? null : readAdmittedHtmlTemplate(
+    store, context, admission, CustomElementTemplateModuleRole.DefinitionModule, local, sourceTextCache,
   );
 }
 
-function readImportedHtmlTemplate(
+function importedHtmlTemplateAdmission(
+  context: ResourceRecognitionContext,
+  read: EvaluationRead<EvaluationValue>,
+): SourceFileAdmission | null {
+  const value = read.value;
+  if (value?.kind === EvaluationValueKind.String) {
+    if (value.node == null || !ts.isStringLiteralLike(value.node) || value.node.text !== value.value) return null;
+    // The evaluator preserves the producing literal through aliases, barrels and property reads.
+    // An HTML module supplies its physical file name even though its default export is synthetic TypeScript.
+    const fileName = value.node.getSourceFile().fileName;
+    return path.extname(fileName).toLowerCase() === '.html'
+      ? findTemplateAdmissionForAbsolutePath(context, fileName)
+      : null;
+  }
+
+  // A direct import can still identify an admitted asset when evaluation has no closed string witness.
+  const carrier = read.node == null ? null : templateCarrierExpression(read.node);
+  if (carrier == null) return null;
+  const specifier = htmlImportSpecifierForCarrier(context.sourceFile, carrier);
+  const templatePath = specifier == null ? null : htmlPathFromModuleSpecifier(specifier);
+  return templatePath == null ? null : findTemplateAdmissionForAbsolutePath(
+    context, path.resolve(path.dirname(context.sourceFile.fileName), templatePath),
+  );
+}
+
+function readAdmittedHtmlTemplate(
   store: KernelStore,
   context: ResourceRecognitionContext,
-  node: ts.Node,
+  admission: SourceFileAdmission,
   moduleRole: CustomElementTemplateModuleRole,
   local: string,
   sourceTextCache: AuthoredSourceTextCache,
-): TemplateDefinitionRead | null {
-  const carrier = templateCarrierExpression(node);
-  if (carrier == null) {
-    return null;
-  }
-  const importSpecifier = htmlImportSpecifierForCarrier(context.sourceFile, carrier);
-  if (importSpecifier == null) {
-    return null;
-  }
-  const templatePath = htmlPathFromModuleSpecifier(importSpecifier);
-  if (templatePath == null) {
-    return null;
-  }
-  const absolutePath = path.resolve(path.dirname(context.sourceFile.fileName), templatePath);
-  const admission = findTemplateAdmissionForAbsolutePath(context, absolutePath);
-  if (admission == null) {
-    return null;
-  }
+): TemplateDefinitionRead {
+  const absolutePath = path.resolve(context.projectRootDir ?? path.dirname(context.sourceFile.fileName), admission.path);
   const authoredSource = sourceTextCache.read(absolutePath);
   if (authoredSource == null) {
     const source = externalTemplateSourceAddress(store, admission.addressHandle, 0, local);
