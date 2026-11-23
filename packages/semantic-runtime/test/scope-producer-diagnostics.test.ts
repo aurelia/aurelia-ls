@@ -59,9 +59,12 @@ test('relates missing scope producers to consumers and keeps independent repairs
       { name: 'badFlag', children: [] },
       { name: 'separateTypo', children: [] },
     ]);
-    const actionsAt = (offset: number) => (app.ask({
-      kind: SemanticAppQueryKind.TemplateCodeActions, cursor: { filePath, offset },
-    }).value as SemanticTemplateCodeActionsResult).rows.map(action => action.title);
+    const actionsAt = (offset: number) => {
+      const prefix = html.slice(0, offset).split('\n');
+      const cursor = { filePath, offset, line: prefix.length - 1, character: prefix.at(-1)!.length };
+      return (app.ask({ kind: SemanticAppQueryKind.TemplateCodeActions, cursor })
+        .value as SemanticTemplateCodeActionsResult).rows.map(action => action.title);
+    };
     expect(actionsAt(html.indexOf('profile.name', html.indexOf('with.bind')))).toEqual([]);
     expect(actionsAt(html.indexOf('unrelated'))).toContain("Declare member 'unrelated' on App");
   } finally {
