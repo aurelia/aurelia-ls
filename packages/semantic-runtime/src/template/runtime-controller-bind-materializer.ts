@@ -70,10 +70,7 @@ import type {
   RuntimeControllerFrame,
 } from './runtime-controller.js';
 import type { TemplateScopeConstructionEmission } from './template-controller-scope-materializer.js';
-import {
-  HydrateAttributeInstruction,
-  HydrateElementInstruction,
-} from './instruction-ir.js';
+import { resolveRuntimeRefTarget } from './runtime-ref-target.js';
 import {
   RuntimeBindingSourceOperationTarget,
   RuntimeControllerBindPublisher,
@@ -255,9 +252,7 @@ class RuntimeControllerBindMaterializationHost implements RuntimeControllerBindH
   materializeSourceOperation(request: RuntimeBindingSourceOperationRequest): RuntimeBindingSourceOperation {
     return this.materializer.materializeSourceOperation(
       this.input,
-      this.observerLocator,
       request,
-      this.targetControllerByBinding.get(request.binding.productHandle) ?? null,
       this.source,
       this.records,
       this.claims,
@@ -538,22 +533,14 @@ export class RuntimeControllerBindMaterializer {
 
   materializeSourceOperation(
     input: RuntimeControllerBindMaterializationRequest,
-    observerLocator: ObserverLocator,
     request: RuntimeBindingSourceOperationRequest,
-    targetController: RuntimeControllerFrame | null,
     source: RuntimeControllerBindSourceSet,
     records: KernelStoreRecord[],
     claims: SemanticClaim[],
     sourceOperations: RuntimeBindingSourceOperation[],
     openSeams: OpenSeam[],
   ): RuntimeBindingSourceOperation {
-    const target = this.sourceOperationTarget(
-      input,
-      observerLocator,
-      request.binding,
-      request.targetName,
-      targetController,
-    );
+    const target = this.sourceOperationTarget(input, request.binding);
     const openReason = target.openReason;
     const operationKind = openReason == null
       ? request.operationKind
@@ -684,12 +671,9 @@ export class RuntimeControllerBindMaterializer {
     );
   }
 
-  sourceOperationTarget(
+  private sourceOperationTarget(
     input: RuntimeControllerBindMaterializationRequest,
-    observerLocator: ObserverLocator,
     binding: RuntimeBinding,
-    refTargetName: string,
-    targetController: RuntimeControllerFrame | null,
   ): RuntimeBindingSourceOperationTarget {
     if (binding instanceof StateDispatchBinding) {
       const renderContext = input.runtimeRendering.requireRenderContextForBinding(binding.productHandle);
@@ -714,171 +698,7 @@ export class RuntimeControllerBindMaterializer {
       );
     }
 
-    switch (refTargetName) {
-      case 'element':
-        return this.refElementTarget(input, observerLocator, binding);
-      case 'controller':
-        return this.refControllerTarget(input, binding, targetController);
-      case 'view':
-        return RuntimeBindingSourceOperationTarget.open('view.ref is not supported by Aurelia runtime-html.');
-      case 'component':
-        return this.refComponentTarget(input, binding, null, targetController);
-      default:
-        return this.refNamedControllerTarget(input, binding, refTargetName, targetController);
-    }
-  }
-
-  private refElementTarget(
-    input: RuntimeControllerBindMaterializationRequest,
-    observerLocator: ObserverLocator,
-    binding: RefBinding,
-  ): RuntimeBindingSourceOperationTarget {
-    const element = this.htmlElementFor(binding.node);
-    if (element == null) {
-      return RuntimeBindingSourceOperationTarget.open('RefBinding element target did not carry a closed authored HTMLElement target.');
-    }
-    const targetType = observerLocator.getAccessor(new ObserverLocatorLookupRequest(
-      `${input.localKey}:ref:${binding.productHandle}:element-target-type`,
-      RuntimeBindingTargetAccessLookup.Accessor,
-      RuntimeBindingTargetKind.Node,
-      'nodeType',
-      input.typeSystem,
-      null,
-      element.tagName,
-      element.namespace,
-      binding.sourceAddressHandle,
-    )).targetType;
-    return new RuntimeBindingSourceOperationTarget(
-      RuntimeBindingTargetKind.Node,
-      binding.node,
-      null,
-      targetType,
-      null,
-    );
-  }
-
-  private refControllerTarget(
-    input: RuntimeControllerBindMaterializationRequest,
-    binding: RefBinding,
-    targetController: RuntimeControllerFrame | null,
-  ): RuntimeBindingSourceOperationTarget {
-    const controller = targetController
-      ?? this.elementControllerForBinding(input, binding, null);
-    if (controller == null) {
-      return RuntimeBindingSourceOperationTarget.open(
-        'RefBinding controller target could not find a custom-element controller for the authored node.',
-      );
-    }
-    return new RuntimeBindingSourceOperationTarget(
-      RuntimeBindingTargetKind.Controller,
-      null,
-      controller.productHandle,
-      null,
-      null,
-    );
-  }
-
-  private refComponentTarget(
-    input: RuntimeControllerBindMaterializationRequest,
-    binding: RefBinding,
-    elementName: string | null,
-    targetController: RuntimeControllerFrame | null,
-  ): RuntimeBindingSourceOperationTarget {
-    const controller = elementName == null
-      ? targetController ?? this.elementControllerForBinding(input, binding, null)
-      : this.elementControllerForBinding(input, binding, elementName);
-    if (controller == null) {
-      return RuntimeBindingSourceOperationTarget.open(
-        elementName == null
-          ? 'RefBinding component target could not find a custom-element controller for the authored node.'
-          : `RefBinding named custom-element target '${elementName}' was not found on the authored node.`,
-      );
-    }
-    return new RuntimeBindingSourceOperationTarget(
-      RuntimeBindingTargetKind.ControllerViewModel,
-      null,
-      controller.productHandle,
-      controller.viewModel?.targetType ?? null,
-      null,
-    );
-  }
-
-  private refNamedControllerTarget(
-    input: RuntimeControllerBindMaterializationRequest,
-    binding: RefBinding,
-    targetName: string,
-    targetController: RuntimeControllerFrame | null,
-  ): RuntimeBindingSourceOperationTarget {
-    const attributeController = this.attributeControllerForBinding(input, binding, targetName);
-    if (attributeController != null) {
-      return new RuntimeBindingSourceOperationTarget(
-        RuntimeBindingTargetKind.ControllerViewModel,
-        null,
-        attributeController.productHandle,
-        attributeController.viewModel?.targetType ?? null,
-        null,
-      );
-    }
-    return this.refComponentTarget(input, binding, targetName, targetController);
-  }
-
-  private elementControllerForBinding(
-    input: RuntimeControllerBindMaterializationRequest,
-    binding: RefBinding,
-    elementName: string | null,
-  ): RuntimeControllerFrame | null {
-    const owner = input.runtimeRendering.requireRenderContextForBinding(binding.productHandle).renderingController;
-    for (const controller of owner.readChildren()) {
-      if (controller.instructionProductHandle == null) {
-        continue;
-      }
-      const instruction = this.publication.readProductDetail(
-        TemplateProductDetails.Instruction,
-        controller.instructionProductHandle,
-      );
-      if (!(instruction instanceof HydrateElementInstruction)) {
-        continue;
-      }
-      if (!sameNode(instruction.node, binding.node)) {
-        continue;
-      }
-      if (elementName == null || instruction.elementName === elementName || controller.name === elementName) {
-        return controller;
-      }
-    }
-    return null;
-  }
-
-  private attributeControllerForBinding(
-    input: RuntimeControllerBindMaterializationRequest,
-    binding: RefBinding,
-    attributeName: string,
-  ): RuntimeControllerFrame | null {
-    const owner = input.runtimeRendering.requireRenderContextForBinding(binding.productHandle).renderingController;
-    for (const controller of owner.readChildren()) {
-      if (controller.instructionProductHandle == null) {
-        continue;
-      }
-      const instruction = this.publication.readProductDetail(
-        TemplateProductDetails.Instruction,
-        controller.instructionProductHandle,
-      );
-      if (!(instruction instanceof HydrateAttributeInstruction)) {
-        continue;
-      }
-      if (sameNode(instruction.node, binding.node) && instruction.resourceName === attributeName) {
-        return controller;
-      }
-    }
-    return null;
-  }
-
-  private htmlElementFor(reference: RuntimeBindingTargetAccess['targetNode']): HtmlElement | null {
-    if (reference?.productHandle == null) {
-      return null;
-    }
-    const node = this.publication.readProductDetail(TemplateProductDetails.HtmlNode, reference.productHandle);
-    return node instanceof HtmlElement ? node : null;
+    return resolveRuntimeRefTarget(binding, input.runtimeRendering, input.expressionWorld.projector, input.typeSystem, input.localKey);
   }
 
   private htmlNodeFor(reference: RuntimeBindingTargetAccess['targetNode']): HtmlElement | HtmlText | null {
@@ -889,11 +709,4 @@ export class RuntimeControllerBindMaterializer {
     return node instanceof HtmlElement || node instanceof HtmlText ? node : null;
   }
 
-}
-
-function sameNode(
-  left: { productHandle: ProductHandle | null },
-  right: { productHandle: ProductHandle | null },
-): boolean {
-  return left.productHandle != null && left.productHandle === right.productHandle;
 }
