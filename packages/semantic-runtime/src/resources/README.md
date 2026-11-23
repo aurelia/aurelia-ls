@@ -244,7 +244,7 @@ Custom-element templates separately retain their runtime module role: `template-
 `definition-module` for a convention-generated view namespace, `inline-value`, `local-template`, `none`, or `open`.
 This is not markup provenance—the template address still owns that—and it must not be inferred later from carrier kind
 or the outer definition expression. Selection follows the build/runtime composition shape: a non-undefined authored
-definition field wins, an eligible paired view precedes `Type.template`, explicit null is terminal, and explicit
+definition field wins, a view paired by an evidenced convention transform precedes `Type.template`, explicit null is terminal, and explicit
 undefined falls through without reviving an overwritten paired view. Imported-template reads retain evaluator pressure
 instead of laundering a known import through an unknown spread. The detached source attachment carries the role so
 build consumers can distinguish a full view-definition module from a template-value import.

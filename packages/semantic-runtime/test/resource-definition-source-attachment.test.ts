@@ -387,6 +387,16 @@ describe('resource definition source attachment', () => {
         .toBe(CustomElementTemplateModuleRole.DefinitionModule);
       expect(attachment('value-pair').templateModuleRole)
         .toBe(CustomElementTemplateModuleRole.TemplateValue);
+
+      await writeFile(path.join(workspaceRoot, 'vite.config.ts'), 'export default {plugins:[]};');
+      const disabled = await runtime.openApp({ analysisDepth: 'binding-observation' });
+      const after = (name: string) => namedSelection(disabled.emission.resources.definitionSelections, name).sourceAttachment!;
+      for (const name of ['string-pair', 'static-pair', 'object-no-template']) {
+        expect(after(name)).toMatchObject({ templateModuleRole: CustomElementTemplateModuleRole.None, templateSource: null });
+      }
+      expect(after('value-pair').templateModuleRole).toBe(CustomElementTemplateModuleRole.TemplateValue);
+      expect(after('object-undefined-template').templateModuleRole).toBe(CustomElementTemplateModuleRole.InlineValue);
+      runtime.retireWorkspaceIncarnation();
     } finally {
       await rm(workspaceRoot, { force: true, recursive: true });
     }

@@ -1884,7 +1884,10 @@ function readConventionalHtmlTemplate(
     return null;
   }
   const admission = readConventionalTemplateAdmission(context, targetClass);
-  return admission == null ? null : readAdmittedHtmlTemplate(
+  // A name-only decorator or static definition registers a class, but only an active
+  // convention transform connects the separately authored template to that class.
+  if (admission == null || context.pairedConventionEvidence(admission).length === 0) return null;
+  return readAdmittedHtmlTemplate(
     store, context, admission, CustomElementTemplateModuleRole.DefinitionModule, local, sourceTextCache,
   );
 }
