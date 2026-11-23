@@ -4,10 +4,9 @@ import {
   SourceFileAddress,
   SourceFileRole,
   SourceSpanAddress,
-  SourceSpanRole,
+  type SourceSpanRole,
 } from '../kernel/address.js';
 import { TypeScriptDeclarationIdentity } from '../kernel/identity.js';
-import type { KernelRecordHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import {
   KernelPublicationPlan,
@@ -65,7 +64,7 @@ export function publishMissingCheckerSourceRecords(
   label: string,
 ): void {
   const missing = records.filter((record) =>
-    publication.read(record.handle as KernelRecordHandle) == null
+    publication.read(record.handle) == null
   );
   if (missing.length > 0) {
     publication.publish(new KernelPublicationPlan(new KernelStoreBatch(missing, label)));
@@ -158,8 +157,8 @@ export function checkerDeclarationSourceProjectKey(checker: ts.TypeChecker): str
 
 /** Scope checker-backed type carriers by their actual configured project's options and root visibility. */
 export function checkerTypeProjectionNamespace(checker: ts.TypeChecker): string {
-  const { projectKey, compilerConfigPath } = checkerDeclarationSourceContext(checker);
-  const project = `project:${localKeyPart(projectKey)}`;
+  const { compilerConfigPath } = checkerDeclarationSourceContext(checker);
+  const project = `project:${localKeyPart(checkerDeclarationSourceProjectKey(checker))}`;
   return compilerConfigPath == null ? project : `${project}:config:${localKeyPart(compilerConfigPath)}`;
 }
 

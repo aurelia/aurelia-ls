@@ -390,7 +390,7 @@ test("keeps sibling template checkers and overlay diagnostics with their configu
     "import { customElement } from 'aurelia';",
     "import template from './" + template + ".html';",
     "@customElement({name:'" + template + "-view',template}) export class " + name + " {",
-    "  message: string | null = Math.random() ? 'live' : null;",
+    "  message: string | null = 'live';",
     "  format(value: string) { return value; }",
     "}",
   ].join("\n");

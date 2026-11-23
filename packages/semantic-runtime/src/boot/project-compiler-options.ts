@@ -53,6 +53,7 @@ export interface ProjectCompilerConfiguration {
 
 export class ProjectCompilerOptionsResult {
   readonly revision: string;
+  readonly participatingConfigurations: ReadonlySet<ProjectCompilerConfiguration>;
 
   constructor(
     readonly options: ts.CompilerOptions,
@@ -64,13 +65,17 @@ export class ProjectCompilerOptionsResult {
     readonly configuredProjects: readonly ProjectCompilerConfiguration[],
     readonly nestedCompilerConfigPaths: readonly string[],
     private readonly configurationsByFile: ReadonlyMap<string, ProjectCompilerConfiguration>,
+    private readonly diagnosticConfigs: ReadonlyMap<ts.Diagnostic, string>,
   ) {
+    this.participatingConfigurations = new Set(configuredProjects.length <= 1 ? configuredProjects : configurationsByFile.values());
     this.revision = projectCompilerOptionsRevision(this);
   }
 
   /** Files shared across references follow nearest-config and declared reference order at boot. */
   configurationForFile(fileName: string): ProjectCompilerConfiguration | undefined {
-    return this.configurationsByFile.get(canonicalTypeSystemPath(fileName));
+    return this.configuredProjects.length <= 1
+      ? this.configuredProjects[0]
+      : this.configurationsByFile.get(canonicalTypeSystemPath(fileName));
   }
 
   /** Resolve from the configured project owning the importing file, including referenced projects. */
@@ -78,9 +83,8 @@ export class ProjectCompilerOptionsResult {
     return this.configurationsByFile.size === 0 ? this.options : this.configurationForFile(fileName)?.options ?? this.options;
   }
 
-  /** A single owner needs no additional checker. Distinct projects can differ even in their ambient declarations. */
-  get participatingConfigurations(): ReadonlySet<ProjectCompilerConfiguration> {
-    return new Set(this.configurationsByFile.values());
+  configPathForDiagnostic(diagnostic: ts.Diagnostic): string | null {
+    return this.diagnosticConfigs.get(diagnostic) ?? this.configFilePath;
   }
 
   readRegisteredInputs(): readonly ComputationRead[] {
@@ -101,7 +105,7 @@ export function buildProjectCompilerOptionsResult(
   const rootConfig = projectCompilerConfigurationFile(scope.host, rootDir);
   const configuredProjects: ProjectCompilerConfiguration[] = [];
   const configsByPath = new Map<string, ProjectCompilerConfiguration | null>();
-  const diagnostics: ts.Diagnostic[] = [];
+  const diagnosticConfigs = new Map<ts.Diagnostic, string>();
   const configurationsByFile = new Map<string, ProjectCompilerConfiguration>();
 
   function visit(file: string): void {
@@ -109,7 +113,7 @@ export function buildProjectCompilerOptionsResult(
     if (configsByPath.has(key)) return;
     configsByPath.set(key, null);
     const { parsed, diagnostics: errors } = readCompilerConfigInput(scope.host, file, environment.useCaseSensitiveFileNames);
-    diagnostics.push(...errors);
+    for (const error of errors) diagnosticConfigs.set(error, normalizePosixPath(file));
     if (parsed == null) return;
     const options = { ...defaults, ...parsed.options };
     if (parsed.options.lib == null) delete options.lib;
@@ -163,13 +167,14 @@ export function buildProjectCompilerOptionsResult(
   return new ProjectCompilerOptionsResult(
     primary?.options ?? defaults,
     primary?.configFilePath ?? rootConfig,
-    diagnostics,
+    [...diagnosticConfigs.keys()],
     roots,
     scope,
     environment,
     configuredProjects,
     nestedCompilerConfigPaths,
     configurationsByFile,
+    diagnosticConfigs,
   );
 }
 

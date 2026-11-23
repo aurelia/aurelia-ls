@@ -87,10 +87,12 @@ export function readTypeSystemProjectDiagnostics(
 function projectWideDiagnostics(typeSystem: TypeSystemProject): TypeSystemDiagnostic[] {
   return [
     ...typeSystem.configDiagnostics.map((diagnostic) =>
-      typeSystemDiagnostic('config', diagnostic, typeSystem.configFilePath)
+      typeSystemDiagnostic('config', diagnostic, typeSystem.project.compilerOptions.configPathForDiagnostic(diagnostic))
     ),
-    ...typeSystem.program.getGlobalDiagnostics().map((diagnostic) => typeSystemDiagnostic('global', diagnostic)),
-    ...typeSystem.program.getOptionsDiagnostics().map((diagnostic) => typeSystemDiagnostic('options', diagnostic)),
+    ...typeSystem.diagnosticPrograms().flatMap(project => [
+      ...project.program.getGlobalDiagnostics().map(diagnostic => typeSystemDiagnostic('global', diagnostic)),
+      ...project.program.getOptionsDiagnostics().map(diagnostic => typeSystemDiagnostic('options', diagnostic, project.configFilePath)),
+    ]),
   ];
 }
 

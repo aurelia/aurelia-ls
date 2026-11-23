@@ -47,8 +47,12 @@ materializers that consume admitted sources and emit their own evidence, claims,
 - Capture one immutable project-input host generation before an app open and build one compiler-options result on its
   `ProjectBootFrame`. Static evaluation and TypeSystem construction spend that same result, so tsconfig/jsconfig
   path-mapping shape cannot split within a candidate generation and no process-global project-root cache can outlive
-  changed input. An exact-root `tsconfig.json` takes precedence over `jsconfig.json`, matching TypeScript project
-  selection.
+  changed input. An exact-root `tsconfig.json` takes precedence over `jsconfig.json`.
+  A solution follows its declared TypeScript references and preserves each contributing config's source list and
+  options. A file under a subordinate compiler scope uses its nearest applicable config; inherited globs from
+  that scope cannot claim siblings outside it. The evaluator and checker resolve aliases from the importing file's
+  configuration. Distinct configured projects use distinct checker carriers for their component types, overlays and
+  source diagnostics while retaining the shared Aurelia application world.
 - Preserve any host-supplied discovery limit through `SourceDiscoveryResult`.
 - Emit source-file addresses, admission evidence, and direct provenance. Project frames likewise retain the complete,
   deterministic cause set for their admission and one kernel provenance record joining those witnesses.

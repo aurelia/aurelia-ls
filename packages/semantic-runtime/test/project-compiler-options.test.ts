@@ -83,6 +83,54 @@ describe('project compiler options', () => {
     });
   });
 
+  test('a nested config inheriting a broad include cannot override a sibling fileâ€™s actual parent config', async () => {
+    const root = await temporaryRoot();
+    const nested = path.join(root, 'src/feature');
+    await mkdir(nested, { recursive: true });
+    await writeProject(root, 'nested-compiler-scope');
+    await writeFile(path.join(root, 'vite.config.ts'), "import aurelia from '@aurelia/vite-plugin'; export default {plugins:[aurelia()]};");
+    await writeFile(path.join(root, 'src/outer.ts'), 'export const outer = 1;');
+    await writeFile(path.join(nested, 'inner.ts'), 'export const inner = 1;');
+    await writeJson(path.join(root, 'tsconfig.json'), { compilerOptions: { strict: false }, include: ['src'] });
+    await writeJson(path.join(nested, 'tsconfig.json'), { extends: '../../tsconfig.json', compilerOptions: { strict: true } });
+    const runtime = await createSemanticRuntime({ workspaceRoot: root });
+    try {
+      expect(runtime.workspace.projects).toHaveLength(1);
+      const config = runtime.workspace.projects[0]!.compilerOptions;
+      expect(config.optionsForFile(path.join(root, 'src/outer.ts')).strict).toBe(false);
+      expect(config.optionsForFile(path.join(nested, 'inner.ts')).strict).toBe(true);
+    } finally {
+      runtime.retireWorkspaceIncarnation();
+    }
+  });
+
+  test('attributes a referenced checker’s option diagnostic to its own configuration', async () => {
+    const root = await temporaryRoot();
+    const good = 'tsconfig.app.json';
+    const invalid = 'tsconfig.tool.json';
+    await mkdir(path.join(root, 'src'));
+    await writeFile(path.join(root, 'src/model.ts'), 'export const model = 1;');
+    await writeFile(path.join(root, 'vite.config.ts'), 'export default {};');
+    await writeJson(path.join(root, 'tsconfig.json'), { files: [], references: [{ path: './' + good }, { path: './' + invalid }] });
+    await writeJson(path.join(root, good), { compilerOptions: { module: 'ESNext' }, files: ['src/model.ts'] });
+    await writeJson(path.join(root, invalid), {
+      compilerOptions: { module: 'ESNext', moduleResolution: 'NodeNext' },
+      files: ['vite.config.ts'],
+    });
+    const runtime = await createSemanticRuntime({ workspaceRoot: root });
+    try {
+      const project = runtime.workspace.projects[0]!;
+      const evaluation = runtime.projectEvaluations.acquire(project, aureliaAppProjectEvaluationProfile).readBaseline();
+      const typeSystem = new TypeSystemProjectBuilder(runtime.frameworkSupport).build(project, evaluation);
+      const select = (name: string) => readTypeSystemProjectSourceDiagnostics(typeSystem, name).filter(row => row.code === 5110);
+      expect(select(good)).toHaveLength(0);
+      expect(select(invalid)).toHaveLength(1);
+      expect(readTypeSystemProjectDiagnostics(typeSystem).filter(row => row.code === 5110)).toHaveLength(1);
+    } finally {
+      runtime.retireWorkspaceIncarnation();
+    }
+  });
+
   test('uses the referenced project of each importing file for both checker and evaluator resolution', async () => {
     const root = await temporaryRoot();
     const sides = ['left', 'right'];

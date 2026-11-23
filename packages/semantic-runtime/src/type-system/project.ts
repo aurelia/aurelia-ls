@@ -287,6 +287,11 @@ export class TypeSystemProject {
     return config ? this.configuredCheckers.get(config) ?? this : this;
   }
 
+  /** Programs whose global and compiler option diagnostics apply to the authored project. */
+  diagnosticPrograms(): readonly TypeSystemProject[] {
+    return this.configuredCheckers.size === 0 ? [this] : [...this.configuredCheckers.values()];
+  }
+
   readRegisteredInputs(): readonly SemanticRuntimeProjectInputRead[] {
     return this.inputReadScope.readRegisteredInputs();
   }
@@ -791,13 +796,14 @@ export class TypeSystemProjectBuilder {
   ): TypeSystemProject {
     const inputs = project.inputGeneration.createReadScope('type-system-project');
     const checkers = new Map<ProjectCompilerConfiguration, TypeSystemProject>();
-    const primary = this.buildConfigured(project, evaluation, buildOptions, null, inputs, checkers);
+    const snapshot = typeSystemEvaluatedSourceSnapshot(evaluation);
+    const primary = this.buildConfigured(project, evaluation, snapshot, buildOptions, null, inputs, checkers);
     const configurations = project.compilerOptions.participatingConfigurations;
     if (configurations.size > 1) {
       // The aggregate is still available for app-wide operations. Each configured checker owns
       // its own roots and ambient scope, and contributes to the same validated input generation.
       for (const config of configurations) {
-        checkers.set(config, this.buildConfigured(project, evaluation, buildOptions, config, inputs, checkers));
+        checkers.set(config, this.buildConfigured(project, evaluation, snapshot, buildOptions, config, inputs, checkers));
       }
     }
     return primary;
@@ -806,6 +812,7 @@ export class TypeSystemProjectBuilder {
   private buildConfigured(
     project: ProjectBootFrame,
     evaluation: StaticProjectEvaluationResult,
+    evaluatedSourceSnapshot: TypeSystemEvaluatedSourceSnapshot,
     buildOptions: TypeSystemProjectBuildOptions,
     config: ProjectCompilerConfiguration | null,
     inputReadScope: SemanticRuntimeProjectInputReadScope,
@@ -815,7 +822,6 @@ export class TypeSystemProjectBuilder {
     const started = performance.now();
     const hostSourceFileCacheBefore = sharedCompilerHostSourceFileCache.snapshot();
     const phases: TypeSystemProjectPhaseTiming[] = [];
-    const evaluatedSourceSnapshot = typeSystemEvaluatedSourceSnapshot(evaluation);
     const evaluatedSources = measureTypeSystemProjectPhase(
       phases,
       'evaluated-source-index',
@@ -907,7 +913,7 @@ export class TypeSystemProjectBuilder {
       program,
       checker,
       projectOptions.configDiagnostics,
-      projectOptions.configFilePath,
+      config?.configFilePath ?? projectOptions.configFilePath,
       {
         totalMilliseconds: performance.now() - started,
         phases,
