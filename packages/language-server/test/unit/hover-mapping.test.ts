@@ -268,7 +268,7 @@ function diagnostic(
 }
 
 describe("bounded semantic hover mapping", () => {
-  test("requires an exact inquiry selection before reading an otherwise valid carrier", () => {
+  test("returns an empty hover for an answered query without an exact selection", () => {
     const test = harness("<template>${item}</template>", "item");
     const value = {
       selectedMemberName: "item",
@@ -277,9 +277,13 @@ describe("bounded semantic hover mapping", () => {
     for (const selection of ["absent", "ambiguous", "rerouted", "not-applicable"]) {
       expect(test.map(value, { selection })).toEqual({
         value: null,
-        failures: [`Semantic runtime returned hover selection=${selection}; exact selection is required.`],
+        failures: [],
       });
     }
+    expect(test.map(value, { result: "unsupported", selection: "absent" })).toEqual({
+      value: null,
+      failures: ["Semantic runtime returned hover result=unsupported."],
+    });
   });
 
   test("keeps a repeat local primary and omits its resource and bindable machinery", () => {
