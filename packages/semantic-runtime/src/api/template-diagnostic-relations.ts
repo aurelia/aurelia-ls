@@ -2,7 +2,9 @@ import {
   BindingScopeCreatorKind,
   type BindingScope,
 } from '../configuration/scope.js';
-import { ExpressionParseResultInspector } from '../expression/parse-result-inspection.js';
+import { ConfigurationProductDetails } from '../configuration/product-details.js';
+import type { ExpressionAstNode } from '../expression/ast.js';
+import { ExpressionParseResultInspector, type ExpressionScopeAccess } from '../expression/parse-result-inspection.js';
 import type { SourceSpan } from '../expression/source-span.js';
 import { FrameworkCapabilityAdmissionState, type FrameworkCapabilityDemand } from '../framework/capability-demand.js';
 import { capabilityForBuiltInSyntaxGroup } from '../framework/capability-demand-materializer.js';
@@ -15,6 +17,7 @@ import type { AttributeSyntax } from '../template/attribute-syntax.js';
 import { findUniqueBuiltInBindingCommandByName, parseBuiltInAttributeSyntax } from '../template/built-in-syntax.js';
 import {
   IteratorBindingScopeEffect,
+  LetBindingScopeEffect,
 } from '../template/runtime-binding.js';
 import {
   RuntimeBindingBehaviorIssueKind,
@@ -39,7 +42,12 @@ import {
   RuntimeExpressionAccessForm,
   type RuntimeExpressionAccessUse,
 } from '../runtime-expression/runtime-expression-access-use.js';
-import { SemanticDiagnosticRelationKind } from './contracts.js';
+import { TemplateProductDetails } from '../template/product-details.js';
+import { bindingExpressionAstForParse } from '../template/expression-parse-projection.js';
+import { HydrateTemplateControllerInstruction } from '../template/instruction-ir.js';
+import { BuiltInTemplateControllerName, frameworkTemplateControllerSemanticsForInstruction } from '../template/template-controller-semantics.js';
+import { templateControllerValueExpressionProductHandle } from '../template/template-controller-value.js';
+import { SemanticDiagnosticRelationKind, type SemanticTemplateDiagnosticRow } from './contracts.js';
 
 export interface TemplateDiagnosticRelationOrigin {
   readonly relationKind: SemanticDiagnosticRelationKind;
@@ -276,6 +284,56 @@ export class TemplateDiagnosticRelations {
       };
   }
 
+  /** The authored binding that supplied an otherwise untyped local, or an unresolved with-context root. */
+  scopeProducerForAccess(
+    scopeHandle: ProductHandle | null,
+    access: ExpressionScopeAccess | null,
+    missingRoot: boolean,
+  ): IdentityHandle | null {
+    if (scopeHandle == null || access == null) return null;
+    let scope: BindingScope | null = this.store.productDetails.read(ConfigurationProductDetails.BindingScope, scopeHandle);
+    for (let depth = access.ancestor; scope != null && depth > 0; depth--) scope = scope.runtimeParent;
+    while (scope != null) {
+      const slot = scope.overrideContext.lookup(access.name.name) ?? scope.bindingContext.lookup(access.name.name);
+      for (let state: BindingScope | null = scope; state != null; state = state.predecessor) {
+        for (const creator of state.scopeCreators) {
+          if (creator.assignedSlotNames.includes(access.name.name)) return null;
+          if (slot != null && creator.creatorKind === BindingScopeCreatorKind.RuntimeBindingScopeEffect) {
+            const effect = this.store.productDetails.read(TemplateProductDetails.RuntimeBindingScopeEffect, creator.productHandle);
+            if (effect instanceof LetBindingScopeEffect && effect.target === slot.name
+              && slot.sourceAddressHandle === (effect.targetSourceAddressHandle ?? effect.sourceAddressHandle)) {
+              return this.directScopeProducer(effect.expressionProductHandle);
+            }
+            if (effect instanceof IteratorBindingScopeEffect && creator.introducedSlotNames.includes(slot.name)) {
+              return this.directScopeProducer(effect.iterableExpressionProductHandle);
+            }
+          }
+          if (missingRoot && slot == null && creator.creatorKind === BindingScopeCreatorKind.TemplateControllerValueScope
+            && state.bindingContext.contextType == null) {
+            const instruction = this.store.productDetails.read(TemplateProductDetails.Instruction, creator.productHandle);
+            if (instruction instanceof HydrateTemplateControllerInstruction
+              && frameworkTemplateControllerSemanticsForInstruction(this.store, instruction)?.controllerName === BuiltInTemplateControllerName.With) {
+              return this.directScopeProducer(templateControllerValueExpressionProductHandle(this.store, instruction));
+            }
+          }
+          if (creator.introducedSlotNames.includes(access.name.name)) return null;
+        }
+      }
+      if (slot != null || scope.isBoundary || access.ancestor > 0) return null;
+      scope = scope.runtimeParent;
+    }
+    return null;
+  }
+
+  private directScopeProducer(handle: ProductHandle | null): IdentityHandle | null {
+    if (handle == null) return null;
+    const parse = this.store.productDetails.read(TemplateProductDetails.ExpressionParse, handle);
+    const ast = parse == null ? null : bindingExpressionAstForParse(parse);
+    // A fallback, conditional, or callback can produce a value independently of a missing root in its operand.
+    const access = directReceiverRoot(ast);
+    return access == null ? null : this.store.readProduct(handle)?.identityHandle ?? null;
+  }
+
   private scopesForContextAuthority(
     authorityProductHandle: ProductHandle,
   ): readonly BindingScope[] {
@@ -392,4 +450,52 @@ function setUniqueMapValue<TKey, TValue>(
   value: TValue,
 ): void {
   map.set(key, map.has(key) ? null : value);
+}
+
+/** Follow the receiver only. Roots used in call arguments or computed keys do not establish its identity. */
+export function directReceiverRoot(node: ExpressionAstNode | null): ExpressionScopeAccess | null {
+  while (node?.$kind === 'Paren' || node?.$kind === 'AccessMember'
+    || (node?.$kind === 'AccessKeyed' && node.key.$kind === 'PrimitiveLiteral')) {
+    node = node.$kind === 'Paren' ? node.expression : node.object;
+  }
+  return node?.$kind === 'AccessScope' ? node : null;
+}
+
+/** Promote a relation only when the actual admitted rows prove one unambiguous missing producer. */
+export function relateScopeProducerFailures(
+  rows: readonly SemanticTemplateDiagnosticRow[],
+  producers: ReadonlyMap<SemanticTemplateDiagnosticRow, IdentityHandle>,
+): readonly SemanticTemplateDiagnosticRow[] {
+  if (producers.size === 0) return rows;
+  const byIdentity = new Map<IdentityHandle, SemanticTemplateDiagnosticRow | null>();
+  for (const row of rows) {
+    if (row.diagnosticIdentityHandle != null) setUniqueMapValue(byIdentity, row.diagnosticIdentityHandle, row);
+  }
+  return rows.map(row => {
+    if (!producers.has(row)) return row;
+    let current = row;
+    let root: SemanticTemplateDiagnosticRow | null = null;
+    const visited = new Set<SemanticTemplateDiagnosticRow>([row]);
+    while (true) {
+      const target = producers.get(current);
+      if (target == null) break;
+      const cause = byIdentity.get(target);
+      if (cause == null) break;
+      if (cause.diagnosticKind === 'missing-expression-member') root = cause;
+      else if (cause.diagnosticKind !== 'weak-expression-member-owner'
+        || !cause.missingInputs.includes('expression-member-owner-type:missing-slot-type')) break;
+      if (visited.has(cause)) return row;
+      visited.add(cause);
+      current = cause;
+    }
+    if (root?.diagnosticIdentityHandle == null) return row;
+    return {
+      ...row,
+      suggestion: null,
+      diagnosticRelations: [{
+        relationKind: SemanticDiagnosticRelationKind.DerivedConsequence,
+        relatedDiagnosticIdentityHandle: root.diagnosticIdentityHandle,
+      }],
+    };
+  });
 }

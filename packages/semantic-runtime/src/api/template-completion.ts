@@ -255,6 +255,8 @@ import {
   type TemplateTypeSystemOverlayEmission,
 } from '../template/template-type-system-overlay.js';
 import {
+  directReceiverRoot,
+  relateScopeProducerFailures,
   TemplateDiagnosticRelations,
   type TemplateDiagnosticRelationOrigin,
 } from './template-diagnostic-relations.js';
@@ -333,6 +335,7 @@ interface TemplateDiagnosticsScanContext {
   readonly router: TemplateCompletionRouterContext;
   readonly i18nTranslationKeyProductHandles: readonly ProductHandle[];
   readonly sourceTextCache: AuthoredSourceTextCache;
+  readonly scopeProducerByRow: Map<SemanticTemplateDiagnosticRow, IdentityHandle>;
   readonly diagnosticRelationsByResource: WeakMap<TemplateResourceRuntimeAnalysisEmission, TemplateDiagnosticRelations>;
   readonly seenRows: Set<string>;
 }
@@ -1357,7 +1360,7 @@ export function readTemplateDiagnosticRows(
     .filter((row) => row.frameworkErrorCode === 'AUR4001')
     .map((row) => semanticExactSourceReference(row.source))
     .filter((source): source is NonNullable<typeof source> => source != null);
-  return rows.filter((row) =>
+  const admitted = rows.filter((row) =>
     !row.diagnosticRelations?.some((relation) =>
       relation.relationKind === 'derived-consequence'
       && uncertainCapabilityIdentities.has(relation.relatedDiagnosticIdentityHandle)
@@ -1380,6 +1383,7 @@ export function readTemplateDiagnosticRows(
     || (left.frameworkErrorCode ?? '').localeCompare(right.frameworkErrorCode ?? '')
     || left.diagnosticKind.localeCompare(right.diagnosticKind)
   );
+  return relateScopeProducerFailures(admitted, context.scopeProducerByRow);
 }
 
 function templateDiagnosticSelectionsForSource(
@@ -2100,6 +2104,7 @@ function templateDiagnosticsScanContext(
     router: templateCompletionRouterContext(emission),
     i18nTranslationKeyProductHandles: emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
     sourceTextCache: new AuthoredSourceTextCache(workspaceRootDir, emission.project.inputGeneration.host),
+    scopeProducerByRow: new Map(),
     diagnosticRelationsByResource: new WeakMap(),
     seenRows: new Set(),
   };
@@ -2199,7 +2204,7 @@ function templateDiagnosticRowsForMemberSite(
     null,
   );
   return cursorInfo.diagnostics.flatMap((diagnostic) =>
-    templateDiagnosticRowForDiagnostic(store, selection, diagnostic, cursorInfo, source.sourcePath, site, context)
+    templateDiagnosticRowForDiagnostic(store, selection, diagnostic, cursorInfo, source.sourcePath, site, context, cursorContext.query.bindingScopeProductHandle)
   );
 }
 
@@ -2211,6 +2216,7 @@ function templateDiagnosticRowForDiagnostic(
   filePath: string,
   site: ExpressionMemberDiagnosticSite,
   context: TemplateDiagnosticsScanContext,
+  scopeHandle: ProductHandle | null,
 ): readonly SemanticTemplateDiagnosticRow[] {
   const span = site.span;
   const source = sourceReferenceForSpan(filePath, span.nameSpan);
@@ -2219,7 +2225,7 @@ function templateDiagnosticRowForDiagnostic(
     return [];
   }
   context.seenRows.add(key);
-  return [{
+  const row: SemanticTemplateDiagnosticRow = {
     ...diagnostic,
     ...templateDiagnosticOriginFields(store, context.includeHandles, {
       phase: null,
@@ -2242,7 +2248,14 @@ function templateDiagnosticRowForDiagnostic(
     siteKind: cursorInfo.siteKind,
     valueSiteKind: cursorInfo.valueSite?.siteKind ?? null,
     template: cursorInfo.template,
-  }];
+  };
+  if (diagnostic.diagnosticKind === 'weak-expression-member-owner'
+    && diagnostic.missingInputs.includes('expression-member-owner-type:missing-slot-type') && row.diagnosticRelations == null) {
+    const owner = ExpressionParseResultInspector.memberOwnerAtOffset(site.parse.result, span.nameSpan.start);
+    const producer = templateDiagnosticRelations(selection, context).scopeProducerForAccess(scopeHandle, directReceiverRoot(owner), false);
+    if (producer != null) context.scopeProducerByRow.set(row, producer);
+  }
+  return [row];
 }
 
 function templateDiagnosticRowKey(
@@ -2443,7 +2456,7 @@ function expressionRootDiagnosticRowsForSelection(
       return [];
     }
     context.seenRows.add(key);
-    return [{
+    const row: SemanticTemplateDiagnosticRow = {
       ...diagnostic,
       ...templateDiagnosticOriginFields(store, context.includeHandles, {
         phase: null,
@@ -2457,7 +2470,14 @@ function expressionRootDiagnosticRowsForSelection(
         compilationLane: selection.lane,
         source: describeAddress(store, selection.sourceAddressHandle),
       },
-    }];
+    };
+    if (diagnostic.diagnosticKind === 'missing-expression-member') {
+      const producer = templateDiagnosticRelations(selection, context).scopeProducerForAccess(
+        cursorContext.query.bindingScopeProductHandle, site.access, true,
+      );
+      if (producer != null) context.scopeProducerByRow.set(row, producer);
+    }
+    return [row];
   });
 }
 
