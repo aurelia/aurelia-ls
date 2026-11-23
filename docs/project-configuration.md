@@ -56,6 +56,14 @@ add today.
 
 ## Authored-source exclusions
 
+Automatic discovery skips TypeScript `outDir` and `declarationDir` directories from the project's effective
+configurations. It also skips Vite's `build.outDir` when the selected config declares a literal path in an exported
+object or a `defineConfig` call. TypeScript `files` entries can explicitly name individual authored files inside a
+build output directory. Imported dependencies remain readable across this discovery boundary.
+
+For a build destination supplied by a command-line override, a dynamic configuration function or another build tool,
+declare its folder in `authoredSources.excludedRoots` to keep emitted bundles out of editor analysis.
+
 Each `excludedRoots` entry names one directory boundary relative to the project root. An accepted entry:
 
 - is a non-empty string without leading or trailing whitespace;
@@ -135,22 +143,20 @@ in VS Code settings:
 | `aurelia.project.json` | Authored-source membership and semantic finding presentation shared by semantic-runtime, the language server, and MCP. |
 | `aurelia.activationMode` | Whether the VS Code extension automatically admits, forcibly enables, or excludes a workspace folder. |
 | `aurelia.inlayHints.bindingMode` | VS Code presentation for binding-mode inlay hints. |
-| `aurelia.templateDiagnostics.suppressNative` | Opt-in suppression of VS Code's embedded CSS and JavaScript diagnostics for proved Aurelia templates. |
+| `aurelia.templateDiagnostics.suppressNative` | Disable embedded CSS and JavaScript diagnostics in proved Aurelia templates. The default validates interpolation-aware regions. |
 
 Extension activation, snippets, UI preferences, and logging stay in VS Code
 settings. Shared `authoredSources` and `findings` policy stays in
 `aurelia.project.json`.
 
-Native template-diagnostic suppression is disabled by default. Enabling it moves
-only exactly owned Aurelia templates into `aurelia-html`. This removes embedded
-CSS/JavaScript diagnostics and can change normal HTML editor behavior such as
-icons, scoped settings, snippets, or formatter selection. Unowned HTML stays in
-native `html` mode.
-
-Aurelia's bounded recovery Problems remain available in either mode, but they
-are not a general HTML validator. Enable suppression only when interpolation
-noise outweighs the lost CSS/JavaScript coverage, and replace that coverage with
-project lint or build checks.
+With the default setting, an owned template uses Aurelia HTML mode when an
+enabled embedded validator encounters a compiler-owned interpolation. The
+extension validates CSS and JavaScript against the original document ranges.
+Enabling suppression applies Aurelia HTML mode to every proved template and
+disables those embedded findings. In both cases Aurelia continues to diagnose
+supported malformed template markup. Unowned HTML keeps its native language mode;
+language-specific icons, snippets, formatting and editor settings follow the
+active language.
 
 The VS Code extension associates the exact filename with a separate, bundled
 editor-assistance schema. VS Code's JSONC service can report syntax and

@@ -170,6 +170,7 @@ function publishResolvedSourceWorldProject(
     project.baseExcludedSourceRootDirs,
     project.inputGeneration,
     project.projectConfiguration,
+    project.compilerOptions,
   );
 }
 

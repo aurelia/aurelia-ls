@@ -338,7 +338,42 @@ describe('semantic source-world currentness', () => {
     expect(rebound.projects[0]?.projectConfiguration).toBe(appliedConfiguration);
   });
 
-  test('leaves tsconfig-only changes to project and answer currentness', async () => {
+  test('discovers authored files outside declared output directories and follows changed output configuration', async () => {
+    const rootDir = await createWorkspace();
+    await writeWorkspaceFile(rootDir, 'src/main.ts', 'export const ready = true;');
+    await writeWorkspaceFile(rootDir, 'src/real.js', 'export const authored = true;');
+    await writeWorkspaceFile(rootDir, 'ts-output/emit.js', '/* compiled */');
+    await writeWorkspaceFile(rootDir, 'ts-output/named.ts', 'export const handAuthored = true;');
+    await writeWorkspaceFile(rootDir, 'types-output/emit.d.ts', 'export declare const ready: boolean;');
+    await writeWorkspaceFile(rootDir, 'web/output/bundle.js', '/* bundled */');
+    const tsconfig = await writeWorkspaceFile(rootDir, 'tsconfig.json', JSON.stringify({
+      files: ['src/main.ts', 'ts-output/named.ts'],
+      compilerOptions: { outDir: './ts-output', declarationDir: './types-output', declaration: true },
+    }));
+    const vite = await writeWorkspaceFile(rootDir, 'vite.config.ts',
+      "import { defineConfig as configure } from 'vite'; export default configure({root:'web',build:{outDir:'output'}});");
+    const input = { rootDir, projects: [{ rootDir }] };
+    const initial = resolveSemanticSourceWorld(input);
+    const files = (world: typeof initial) => world.projects[0]!.sourceFiles.map(file => file.path);
+    expect(files(initial)).toEqual(expect.arrayContaining(['src/real.js', 'ts-output/named.ts']));
+    expect(files(initial)).not.toContain('web/output/bundle.js');
+    expect(files(initial)).not.toContain('ts-output/emit.js');
+    expect(files(initial)).not.toContain('types-output/emit.d.ts');
+
+    // An authored host-supplied list still has its explicit meaning, including under an output root.
+    expect(files(resolveSemanticSourceWorld({ rootDir, projects: [{ rootDir, sourceFiles: [{ path: 'web/output/bundle.js' }] }] })))
+      .toEqual(['web/output/bundle.js']);
+    await writeFile(vite, "export default { root: 'web', build: { outDir: 'output', ...unknownOptions } };");
+    const changedVite = initial.resolveCurrent();
+    expect(changedVite.kind).toBe(SemanticSourceWorldCurrentnessKind.FreshBootRequired);
+    expect(files(changedVite.sourceWorld)).toContain('web/output/bundle.js');
+    await writeFile(tsconfig, '{"compilerOptions":{"outDir":"elsewhere"}}');
+    const changedTS = changedVite.sourceWorld.resolveCurrent();
+    expect(changedTS.kind).toBe(SemanticSourceWorldCurrentnessKind.FreshBootRequired);
+    expect(files(changedTS.sourceWorld)).toEqual(expect.arrayContaining(['ts-output/emit.js', 'types-output/emit.d.ts']));
+  });
+
+  test('retains equivalent source membership when only compiler strictness changes', async () => {
     const workspaceRoot = await createWorkspace();
     await writeWorkspaceFile(workspaceRoot, 'src/main.ts', 'export const main = true;\n');
     const tsconfigFile = await writeWorkspaceFile(
@@ -372,7 +407,8 @@ describe('semantic source-world currentness', () => {
     ]);
 
     const sourceAdmissionCurrentness = sourceWorld.resolveCurrent();
-    expect(sourceAdmissionCurrentness.kind).toBe(SemanticSourceWorldCurrentnessKind.Current);
+    expect(sourceAdmissionCurrentness.kind).toBe(SemanticSourceWorldCurrentnessKind.EquivalentPlan);
+    expect(sourceAdmissionCurrentness.sourceWorld.sourceWorldRevision).toBe(sourceWorld.sourceWorldRevision);
     const nextGeneration = authority.capture(firstProject);
     const nextProject = firstProject.forInputGeneration(nextGeneration);
     const nextAnswerBasis = (await runtime.answerAppQuery({

@@ -67,6 +67,7 @@ export interface BootProjectInput {
 
 /** Boot-owned project input after caller policy and automatic discovery have been resolved. */
 export interface ResolvedBootProjectInput extends BootProjectInput {
+  readonly nestedCompilerConfigPaths?: readonly string[];
   /** Complete deterministic cause set for admitting this exact project root. */
   readonly admissionOrigins: readonly ProjectRootAdmissionOrigin[];
 }
@@ -168,6 +169,7 @@ export class ProjectBootFrame {
     /** Exact source/config generation consumed by this project frame. */
     readonly inputGeneration: SemanticRuntimeProjectInputGeneration,
     projectConfiguration: ProjectConfigurationResult | null = null,
+    compilerOptions?: ProjectCompilerOptionsResult,
   ) {
     this.baseExcludedSourceRootDirs = new AuthoredSourceBoundary(rootDir, excludedSourceRoots).excludedRootDirs;
     this.projectConfiguration = projectConfiguration
@@ -177,7 +179,7 @@ export class ProjectBootFrame {
       ...this.projectConfiguration.excludedSourceRootDirs,
     ]);
     this.sourceOwnership = new ProjectSourceOwnershipIndex(workspaceRootDir, rootDir, sourceFiles);
-    this.compilerOptions = buildProjectCompilerOptionsResult(
+    this.compilerOptions = compilerOptions ?? buildProjectCompilerOptionsResult(
       inputGeneration,
       rootDir,
       this.authoredSources,
@@ -226,6 +228,7 @@ export class ProjectBootFrame {
       this.baseExcludedSourceRootDirs,
       inputGeneration,
       projectConfiguration,
+      buildProjectCompilerOptionsResult(inputGeneration, this.rootDir, currentAuthoredSources, this.compilerOptions.nestedCompilerConfigPaths),
     );
   }
 
@@ -254,6 +257,7 @@ export class ProjectBootFrame {
       project.baseExcludedSourceRootDirs,
       project.inputGeneration,
       project.projectConfiguration,
+      project.compilerOptions,
     );
   }
 

@@ -7,9 +7,11 @@ import type {
 import {
   SemanticRuntimeProjectInputAuthority,
   SemanticRuntimeProjectInputRead,
+  SemanticRuntimeProjectInputReadKind,
   type SemanticRuntimeInputReadScope,
   type SemanticRuntimeProjectInputGeneration,
 } from '../kernel/project-input.js';
+import { buildProjectCompilerOptionsResult, type ProjectCompilerOptionsResult } from './project-compiler-options.js';
 import { inferSourceFileRole, inferSourceLanguage } from '../kernel/source-classification.js';
 import { sourceTextContentRevision } from '../kernel/source-text-revision.js';
 import { canonicalTypeSystemPath } from '../type-system/source-file-path.js';
@@ -76,6 +78,7 @@ export interface ResolvedSemanticSourceWorldProject {
   readonly effectiveExcludedSourceRootDirs: readonly string[];
   readonly inputGeneration: SemanticRuntimeProjectInputGeneration;
   readonly projectConfiguration: ProjectConfigurationResult;
+  readonly compilerOptions: ProjectCompilerOptionsResult;
   readonly sourceDiscovery: SourceDiscoveryResult | null;
   readonly sourceFiles: readonly ResolvedSemanticSourceWorldFile[];
 }
@@ -291,6 +294,16 @@ export function resolveSemanticSourceWorldProject(
   const sourceDiscoveryScope = input.sourceFiles == null
     ? inputGeneration.createReadScope('semantic-source-world:source-discovery')
     : null;
+  const compilerOptions = buildProjectCompilerOptionsResult(inputGeneration, rootDir, authoredSources, input.nestedCompilerConfigPaths);
+  // Directory membership already has its own discovery reads. Output paths
+  // and explicit files depend on the selected config and its extends/references.
+  if (sourceDiscoveryScope != null) {
+    for (const read of compilerOptions.readRegisteredInputs()) {
+      if (read instanceof SemanticRuntimeProjectInputRead && read.descriptor.kind !== SemanticRuntimeProjectInputReadKind.MatchedFiles) {
+        sourceDiscoveryScope.observe(read);
+      }
+    }
+  }
   const sourceDiscovery = sourceDiscoveryScope == null
     ? null
     : discoverSourceFiles(
@@ -298,6 +311,7 @@ export function resolveSemanticSourceWorldProject(
         rootDir,
         authoredSources,
         input.sourceDiscoveryOptions,
+        compilerOptions,
       );
   const sourceFiles = (input.sourceFiles ?? sourceDiscovery?.sourceFiles ?? [])
     .filter((source) => authoredSources.contains(source.path))
@@ -310,6 +324,7 @@ export function resolveSemanticSourceWorldProject(
     effectiveExcludedSourceRootDirs: Object.freeze([...authoredSources.excludedRootDirs]),
     inputGeneration,
     projectConfiguration,
+    compilerOptions,
     sourceDiscovery,
     sourceFiles: Object.freeze(sourceFiles),
   } satisfies ResolvedSemanticSourceWorldProject & {
