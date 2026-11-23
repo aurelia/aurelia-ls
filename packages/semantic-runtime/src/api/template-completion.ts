@@ -554,7 +554,7 @@ function readTemplateCursorInfoValue(
         ? null
         : {
             emission: overlay,
-            typeSystem: cache.typeSystem,
+            typeSystem: overlay.overlaySource == null ? null : cache.typeSystem?.forSourceFile(overlay.overlaySource.fileName) ?? null,
             diagnostics: cache.allDiagnostics.filter((diagnostic) =>
               diagnostic.overlayOriginKey === overlay.overlaySource?.originKey
             ),

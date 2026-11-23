@@ -11,7 +11,7 @@ import { SourceFileRole } from '../kernel/address.js';
 import { inferSourceFileRole } from '../kernel/source-classification.js';
 import { canonicalTypeSystemPath } from '../type-system/source-file-path.js';
 import { readCompilerConfigInput } from './compiler-config-input.js';
-import { normalizePosixPath } from './host-files.js';
+import { isHostPathWithin, normalizePosixPath } from './host-files.js';
 import type { AuthoredSourceBoundary } from './source-boundary.js';
 
 /** Process/toolchain facts that participate in semantic-runtime's effective compiler options. */
@@ -48,6 +48,7 @@ export interface ProjectCompilerConfiguration {
   readonly options: ts.CompilerOptions;
   readonly rootFileNames: readonly string[];
   readonly explicitFileNames: readonly string[];
+  readonly references: readonly string[];
 }
 
 export class ProjectCompilerOptionsResult {
@@ -67,10 +68,19 @@ export class ProjectCompilerOptionsResult {
     this.revision = projectCompilerOptionsRevision(this);
   }
 
+  /** Files shared across references follow nearest-config and declared reference order at boot. */
+  configurationForFile(fileName: string): ProjectCompilerConfiguration | undefined {
+    return this.configurationsByFile.get(canonicalTypeSystemPath(fileName));
+  }
+
   /** Resolve from the configured project owning the importing file, including referenced projects. */
   optionsForFile(fileName: string): ts.CompilerOptions {
-    if (this.configurationsByFile.size === 0) return this.options;
-    return this.configurationsByFile.get(canonicalTypeSystemPath(fileName))?.options ?? this.options;
+    return this.configurationsByFile.size === 0 ? this.options : this.configurationForFile(fileName)?.options ?? this.options;
+  }
+
+  /** A single owner needs no additional checker. Distinct projects can differ even in their ambient declarations. */
+  get participatingConfigurations(): ReadonlySet<ProjectCompilerConfiguration> {
+    return new Set(this.configurationsByFile.values());
   }
 
   readRegisteredInputs(): readonly ComputationRead[] {
@@ -90,14 +100,14 @@ export function buildProjectCompilerOptionsResult(
   const defaults = defaultProjectCompilerOptions(environment);
   const rootConfig = projectCompilerConfigurationFile(scope.host, rootDir);
   const configuredProjects: ProjectCompilerConfiguration[] = [];
-  const visited = new Set<string>();
+  const configsByPath = new Map<string, ProjectCompilerConfiguration | null>();
   const diagnostics: ts.Diagnostic[] = [];
   const configurationsByFile = new Map<string, ProjectCompilerConfiguration>();
 
   function visit(file: string): void {
     const key = canonicalTypeSystemPath(file);
-    if (visited.has(key)) return;
-    visited.add(key);
+    if (configsByPath.has(key)) return;
+    configsByPath.set(key, null);
     const { parsed, diagnostics: errors } = readCompilerConfigInput(scope.host, file, environment.useCaseSensitiveFileNames);
     diagnostics.push(...errors);
     if (parsed == null) return;
@@ -107,6 +117,7 @@ export function buildProjectCompilerOptionsResult(
     const rawFiles = raw && typeof raw === 'object' && 'files' in raw ? raw.files : null;
     const config = {
       configFilePath: normalizePosixPath(file),
+      references: (parsed.projectReferences ?? []).map(reference => ts.resolveProjectReferencePath(reference)),
       options,
       rootFileNames: parsed.fileNames.filter(name => authoredSources.contains(name)),
       explicitFileNames: Array.isArray(rawFiles)
@@ -114,29 +125,37 @@ export function buildProjectCompilerOptionsResult(
           .map(name => normalizePosixPath(path.resolve(path.dirname(file), name))).filter(name => authoredSources.contains(name))
         : [],
     };
+    configsByPath.set(key, config);
     configuredProjects.push(config);
-    for (const ref of parsed.projectReferences ?? []) visit(ts.resolveProjectReferencePath(ref));
+    for (const ref of config.references) visit(ref);
   }
 
-  // A nearer physical tsconfig owns files it explicitly includes. Within a solution,
-  // walk references in the declared order after considering the configâ€™s own roots.
-  for (const nested of [...nestedCompilerConfigPaths].sort((a, b) => b.length - a.length || a.localeCompare(b))) visit(nested);
   if (rootConfig != null) visit(rootConfig);
-  const root = configuredProjects.find(config => config.configFilePath === rootConfig);
+  for (const nested of nestedCompilerConfigPaths) visit(nested);
+  const root = rootConfig == null ? null : configsByPath.get(canonicalTypeSystemPath(rootConfig));
   let primary = root ?? configuredProjects[0];
   if (configuredProjects.length > 1) {
     const appOwners = new Set<ProjectCompilerConfiguration>();
-    for (const config of configuredProjects) {
+    function assign(file: string, directory: string | null, seen: Set<ProjectCompilerConfiguration>) {
+      const config = configsByPath.get(canonicalTypeSystemPath(file));
+      if (!config || seen.has(config)) return;
+      seen.add(config);
       for (const fileName of config.rootFileNames) {
         const key = canonicalTypeSystemPath(fileName);
-        if (configurationsByFile.has(key)) continue;
+        if (configurationsByFile.has(key) || (directory && !isHostPathWithin(fileName, directory))) continue;
         configurationsByFile.set(key, config);
         if (inferSourceFileRole(path.relative(rootDir, fileName)) === SourceFileRole.AppSource) appOwners.add(config);
       }
+      for (const ref of config.references) assign(ref, directory, seen);
     }
-    // Vite's application and build configuration often have different TS options.
-    // Only choose an application-wide default when the actual app files have one owner.
-    if (appOwners.size === 1) primary = appOwners.values().next().value;
+    // A descendant's inherited glob can also include its siblings. Only files below that
+    // physical config can select it as their nearest ancestor. Follow explicit references
+    // in their declared order within each search, including the solution's own search.
+    for (const nested of [...nestedCompilerConfigPaths].sort((a, b) => b.length - a.length || a.localeCompare(b))) {
+      assign(nested, path.dirname(nested), new Set());
+    }
+    if (rootConfig != null) assign(rootConfig, null, new Set());
+    if (appOwners.size && (!primary || !appOwners.has(primary))) primary = appOwners.values().next().value;
   }
   const roots = configuredProjects.length <= 1
     ? configuredProjects[0]?.rootFileNames ?? null

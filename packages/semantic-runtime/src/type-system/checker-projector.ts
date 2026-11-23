@@ -69,7 +69,7 @@ import {
 } from './checker-member-surface.js';
 import {
   appendDeclarationSourceRecords,
-  checkerDeclarationSourceProjectKey,
+  checkerTypeProjectionNamespace,
   sourceSpanForCheckerDeclaration,
   type DeclarationSourcePublication,
 } from './declaration-source.js';
@@ -842,7 +842,7 @@ function checkerTypeSemanticIdentityForType(
 ): CheckerTypeSemanticIdentityDescriptor {
   const identity = checkerTypeLocalSemanticIdentityForType(checker, type, symbol, display, sourceNode, seen);
   return {
-    semanticKey: `project:${localKeyPart(checkerDeclarationSourceProjectKey(checker))}:${identity.semanticKey}`,
+    semanticKey: `${checkerTypeProjectionNamespace(checker)}:${identity.semanticKey}`,
     sourceIndependent: identity.sourceIndependent,
   };
 }

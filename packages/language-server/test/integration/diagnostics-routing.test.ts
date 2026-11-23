@@ -377,3 +377,66 @@ test("uses the referenced TypeScript project for inherited template members and 
     fs.rmSync(fixture, { recursive: true, force: true });
   }
 }, 30_000);
+
+test("keeps sibling template checkers and overlay diagnostics with their configured TypeScript projects", async () => {
+  const html = "<p>${message}</p><p>${format(message)}</p>";
+  const leaf = (strict: boolean, files: string[]) => JSON.stringify({
+    compilerOptions: { strict, moduleResolution: "Bundler", module: "ESNext", target: "ES2022" },
+    files: [...files, "src/aurelia-assets.d.ts"],
+  });
+  const appFiles = ["src/main.ts", "src/app.ts"];
+  const otherFiles = ["src/other.ts"];
+  const component = (name: string, template: string) => [
+    "import { customElement } from 'aurelia';",
+    "import template from './" + template + ".html';",
+    "@customElement({name:'" + template + "-view',template}) export class " + name + " {",
+    "  message: string | null = Math.random() ? 'live' : null;",
+    "  format(value: string) { return value; }",
+    "}",
+  ].join("\n");
+  const fixture = createAureliaAppFixture({
+    "tsconfig.json": JSON.stringify({ files: [], references: [{ path: "./tsconfig.app.json" }, { path: "./tsconfig.other.json" }] }),
+    "tsconfig.app.json": leaf(false, appFiles),
+    "tsconfig.other.json": leaf(true, otherFiles),
+    "src/app.ts": component("AppRoot", "app"),
+    "src/other.ts": component("OtherView", "other"),
+    "src/main.ts": "import Aurelia from 'aurelia'; import {AppRoot} from './app'; import {OtherView} from './other'; Aurelia.register(OtherView).app(AppRoot).start();",
+    "src/app.html": html,
+    "src/other.html": html,
+  });
+  const { connection, child, dispose, getStderr } = startServer(fixture);
+  const app = fileUri(fixture, "src/app.html"), other = fileUri(fixture, "src/other.html");
+  async function check(uri: string, strict: boolean) {
+    const { items } = await connection.sendRequest<{ items: LspDiagnostic[] }>("textDocument/diagnostic", {
+      identifier: "aurelia", textDocument: { uri },
+    });
+    expect(items.map(row => row.code)).toEqual(strict ? ["TS2345"] : []);
+    const hover = await connection.sendRequest("textDocument/hover", {
+      textDocument: { uri }, position: positionAt(html, html.indexOf("message")),
+    });
+    expect(JSON.stringify(hover)).toContain(strict ? "message: string | null" : "message: string");
+    if (!strict) expect(JSON.stringify(hover)).not.toContain("string | null");
+  }
+  try {
+    await initialize(connection, child, getStderr, fixture);
+    await openDocument(connection, app, "html", html);
+    await openDocument(connection, other, "html", html);
+    await check(app, false);
+    await check(other, true);
+    // Changing only the other project's options must retire its old carrier and preserve its live sibling.
+    const config = "tsconfig.other.json";
+    fs.writeFileSync(path.join(fixture, config), leaf(false, otherFiles));
+    await connection.sendNotification("workspace/didChangeWatchedFiles", { changes: [{ uri: fileUri(fixture, config), type: 2 }] });
+    await check(other, false);
+    await check(app, false);
+    fs.writeFileSync(path.join(fixture, config), leaf(true, otherFiles));
+    await connection.sendNotification("workspace/didChangeWatchedFiles", { changes: [{ uri: fileUri(fixture, config), type: 2 }] });
+    await check(other, true);
+    await check(app, false);
+  } finally {
+    dispose();
+    child.kill("SIGKILL");
+    await waitForExit(child);
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+}, 30_000);

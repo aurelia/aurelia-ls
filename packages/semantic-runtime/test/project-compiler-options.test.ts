@@ -9,6 +9,7 @@ import { createSemanticRuntime } from '../src/index.js';
 import { manifestWorkspacesIncludeProject } from '../src/boot/host-files.js';
 import { aureliaAppProjectEvaluationProfile } from '../src/configuration/aurelia-project-evaluation.js';
 import { TypeSystemProjectBuilder } from '../src/type-system/project.js';
+import { readTypeSystemProjectDiagnostics, readTypeSystemProjectSourceDiagnostics } from '../src/type-system/diagnostics.js';
 
 const temporaryRoots: string[] = [];
 
@@ -94,12 +95,13 @@ describe('project compiler options', () => {
       files: [],
       references: sides.map(side => ({ path: './tsconfig.' + side + '.json' })),
     });
+    await writeFile(path.join(root, 'src/right-globals.d.ts'), 'declare const rightOnly: number;');
     for (const side of sides) {
-      await writeFile(path.join(root, 'src', side + '.ts'), "import { marker } from '@model'; export const captured = marker;");
+      await writeFile(path.join(root, 'src', side + '.ts'), "import { marker } from '@model'; export const captured = marker; export const useGlobal = rightOnly;");
       await writeFile(path.join(root, 'src', side + '-model.ts'), "export const marker = '" + side + "' as const;");
       await writeJson(path.join(root, 'tsconfig.' + side + '.json'), {
         compilerOptions: { moduleResolution: 'Bundler', paths: { '@model': ['./src/' + side + '-model.ts'] } },
-        files: ['src/' + side + '.ts', 'src/' + side + '-model.ts'],
+        files: ['src/' + side + '.ts', 'src/' + side + '-model.ts', ...(side === 'right' ? ['src/right-globals.d.ts'] : [])],
       });
     }
     const runtime = await createSemanticRuntime({ workspaceRoot: root });
@@ -111,13 +113,17 @@ describe('project compiler options', () => {
         const relative = 'src/' + side + '.ts';
         const configured = project.compilerOptions.optionsForFile(path.join(root, relative));
         expect(path.normalize(String(configured.configFilePath))).toBe(path.join(root, 'tsconfig.' + side + '.json'));
-        const source = typeSystem.readProgramSourceFileByProjectPath(relative)!;
+        const scoped = typeSystem.forSourceFile(path.join(root, relative));
+        const source = scoped.readProgramSourceFileByProjectPath(relative)!;
         const statement = source.statements.find(ts.isVariableStatement)!;
-        const type = typeSystem.readProgramTypeAtLocation(statement.declarationList.declarations[0]!.name)!;
-        expect(typeSystem.checker.typeToString(type)).toBe(JSON.stringify(side));
+        const type = scoped.readProgramTypeAtLocation(statement.declarationList.declarations[0]!.name)!;
+        expect(scoped.checker.typeToString(type)).toBe(JSON.stringify(side));
+        const sourceDiagnostics = readTypeSystemProjectSourceDiagnostics(typeSystem, relative);
+        expect(sourceDiagnostics.filter(row => row.code === 2304)).toHaveLength(side === 'left' ? 1 : 0);
         const evaluated = evaluation.readEvaluatedSources().find(item => item.admission.path === relative);
         expect(evaluated?.evaluation.environment.readValue('captured')).toMatchObject({ value: side });
       }
+      expect(readTypeSystemProjectDiagnostics(typeSystem).filter(row => row.code === 2304)).toHaveLength(1);
     } finally {
       runtime.retireWorkspaceIncarnation();
     }

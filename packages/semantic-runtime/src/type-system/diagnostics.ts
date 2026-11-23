@@ -94,7 +94,10 @@ function projectWideDiagnostics(typeSystem: TypeSystemProject): TypeSystemDiagno
   ];
 }
 
-function programSourceDiagnostics(typeSystem: TypeSystemProject, sourceFile: ts.SourceFile): TypeSystemDiagnostic[] {
+function programSourceDiagnostics(typeSystem: TypeSystemProject, source: ts.SourceFile): TypeSystemDiagnostic[] {
+  typeSystem = typeSystem.forSourceFile(source.fileName);
+  const sourceFile = typeSystem.readProgramSourceFileByHostPath(source.fileName);
+  if (sourceFile == null) return [];
   return [
     ...typeSystem.program.getSyntacticDiagnostics(sourceFile).map((diagnostic) =>
       typeSystemDiagnostic('syntactic', diagnostic)
@@ -158,18 +161,19 @@ export function readTypeSystemOverlayDiagnostics(
     return cached;
   }
   const rows = typeSystem.readOverlaySources().flatMap((overlaySource) => {
-    const sourceFile = typeSystem.readProgramSourceFileByHostPath(overlaySource.fileName);
+    const scoped = typeSystem.forSourceFile(overlaySource.fileName);
+    const sourceFile = scoped.readProgramSourceFileByHostPath(overlaySource.fileName);
     if (sourceFile == null) {
       return [];
     }
     const diagnostics = [
-      ...typeSystem.program.getSyntacticDiagnostics(sourceFile).map((diagnostic) =>
+      ...scoped.program.getSyntacticDiagnostics(sourceFile).map((diagnostic) =>
         typeSystemDiagnostic('syntactic', diagnostic)
       ),
-      ...typeSystem.program.getSemanticDiagnostics(sourceFile).map((diagnostic) =>
+      ...scoped.program.getSemanticDiagnostics(sourceFile).map((diagnostic) =>
         typeSystemDiagnostic('semantic', diagnostic)
       ),
-      ...typeSystem.program.getDeclarationDiagnostics(sourceFile).map((diagnostic) =>
+      ...scoped.program.getDeclarationDiagnostics(sourceFile).map((diagnostic) =>
         typeSystemDiagnostic('declaration', diagnostic)
       ),
     ];

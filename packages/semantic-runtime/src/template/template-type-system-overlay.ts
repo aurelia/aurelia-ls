@@ -238,7 +238,7 @@ interface OverlayExpressionSpan {
   readonly chainIndex: number;
 }
 
-type ViewModelImport = TemplateTypeSystemOverlayPreludeViewModel;
+type ViewModelImport = TemplateTypeSystemOverlayPreludeViewModel & { readonly sourceFile: string };
 
 interface OverlayTypeExpression {
   readonly typeExpression: string;
@@ -397,6 +397,7 @@ export class TemplateTypeSystemOverlayBuilder {
       kind: 'semantic-checker-surface',
       fileName: overlayFileName,
       originKey: `template-type-system-overlay:${localKey}`,
+      compilerContextFile: viewModel.sourceFile,
     });
     const frame = this.overlayBuildFrame(resource, localKey, overlayFileName, builder);
 
@@ -1350,7 +1351,7 @@ export class TemplateTypeSystemOverlayBuilder {
       layers.length === 0
       && scope.scopeCreators.length > 0
       && scope.scopeCreators.every((creator) =>
-        creator.creatorKind === BindingScopeCreatorKind.RuntimeAssignment
+        (creator.creatorKind === BindingScopeCreatorKind.RuntimeAssignment || creator.creatorKind === BindingScopeCreatorKind.ReactiveWrite)
         && creator.assignedSlotNames.length === 0
       )
     ) {
@@ -1407,6 +1408,7 @@ export class TemplateTypeSystemOverlayBuilder {
         );
       case BindingScopeCreatorKind.StateBinding:
         return [this.typedBindingContextLayer(scope, overlayFileName, parentAlias)];
+      case BindingScopeCreatorKind.ReactiveWrite:
       case BindingScopeCreatorKind.RuntimeAssignment:
         return this.runtimeAssignmentCreatorLayer(scope, creator, overlayFileName);
       case BindingScopeCreatorKind.ListenerEvent:
@@ -2204,6 +2206,7 @@ export class TemplateTypeSystemOverlayBuilder {
     const targetFileName = path.resolve(this.project.rootDir, identity.moduleKey);
     return {
       typeName: identity.exportedName ?? identity.localName,
+      sourceFile: targetFileName,
       moduleSpecifier: moduleSpecifierForGeneratedTypeScriptSource(overlayFileName, targetFileName),
     };
   }

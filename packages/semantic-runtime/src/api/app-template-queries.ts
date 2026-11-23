@@ -2444,8 +2444,9 @@ function declareViewModelMemberEdit(
   if (classDecl == null) {
     return null;
   }
-  const instance = emission.typeSystem.readRuntimeTargetType(classDecl);
-  const checker = emission.typeSystem.checker;
+  const typeSystem = emission.typeSystem.forSourceFile(sourceFile.fileName);
+  const instance = typeSystem.readRuntimeTargetType(classDecl);
+  const checker = typeSystem.checker;
   if (instance == null
       || checkerPropertySymbol(checker, instance, memberName) != null
       || checkerClassHasUnresolvedBase(checker, instance)) {

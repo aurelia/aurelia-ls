@@ -116,6 +116,7 @@ export class CheckerDeclarationSourceContext {
     readonly programSources: TypeSystemProgramSourceCatalog,
     overlaySourcePaths: ReadonlySet<string>,
     private readonly admittedSourcesByPath: ReadonlyMap<string, SourceFileAdmission> = new Map(),
+    readonly compilerConfigPath: string | null = null,
   ) {
     this.overlaySourcePaths = new Set([...overlaySourcePaths].map(normalizeHostPath));
   }
@@ -150,9 +151,16 @@ export function registerIsolatedCheckerDeclarationSourceContext(
   );
 }
 
-/** Stable logical-project namespace for semantic identities projected from one checker generation. */
+/** Stable logical project owning declarations, independently of the configured checker observing them. */
 export function checkerDeclarationSourceProjectKey(checker: ts.TypeChecker): string {
   return checkerDeclarationSourceContext(checker).projectKey;
+}
+
+/** Scope checker-backed type carriers by their actual configured project's options and root visibility. */
+export function checkerTypeProjectionNamespace(checker: ts.TypeChecker): string {
+  const { projectKey, compilerConfigPath } = checkerDeclarationSourceContext(checker);
+  const project = `project:${localKeyPart(projectKey)}`;
+  return compilerConfigPath == null ? project : `${project}:config:${localKeyPart(compilerConfigPath)}`;
 }
 
 export function sourceSpanForCheckerDeclaration(

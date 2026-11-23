@@ -40,6 +40,7 @@ export interface TypeSystemOverlaySource {
   readonly scriptKind: ts.ScriptKind;
   readonly diagnosticPolicy: TypeSystemOverlayDiagnosticPolicy;
   readonly originKey: string;
+  readonly compilerContextFile?: string;
   readonly segments: readonly TypeSystemOverlaySourceSegment[];
 }
 
@@ -47,6 +48,7 @@ export interface TypeSystemOverlaySourceBuildOptions {
   readonly kind: TypeSystemOverlaySourceKind;
   readonly fileName: string;
   readonly originKey: string;
+  readonly compilerContextFile?: string;
   readonly scriptKind?: ts.ScriptKind;
   readonly diagnosticPolicy?: TypeSystemOverlayDiagnosticPolicy;
 }
@@ -105,6 +107,7 @@ export class TypeSystemOverlaySourceBuilder {
       scriptKind: this.options.scriptKind ?? ts.ScriptKind.TS,
       diagnosticPolicy: this.options.diagnosticPolicy ?? 'hidden-from-project-diagnostics',
       originKey: this.options.originKey,
+      ...(this.options.compilerContextFile == null ? {} : { compilerContextFile: this.options.compilerContextFile }),
       segments: this.segments,
     };
   }

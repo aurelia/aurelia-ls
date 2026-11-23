@@ -1,3 +1,4 @@
+import type { ProjectCompilerConfiguration } from '../boot/project-compiler-options.js';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import ts from 'typescript';
@@ -35,6 +36,7 @@ import {
 } from './compiler-host-source-file-cache.js';
 import {
   canonicalTypeSystemPath,
+  canonicalTypeSystemSourcePath,
   isDefaultLibrarySourceFile,
 } from './source-file-path.js';
 import {
@@ -260,6 +262,8 @@ export class TypeSystemProject {
     private readonly diagnosticSourcePaths: ReadonlySet<string> | null,
     private readonly inputReadScope: SemanticRuntimeProjectInputReadScope,
     private readonly moduleResolver: ProjectModuleResolver,
+    private readonly configuredCheckers: ReadonlyMap<ProjectCompilerConfiguration, TypeSystemProject> = new Map(),
+    compilerConfigPath: string | null = null,
   ) {
     this.bootSourceAdmissionsByPath = typeSystemBootSourceAdmissionIndex(project);
     this.sourceAdmissionsByPath = typeSystemEvaluationSourceAdmissionIndex(project, evaluation);
@@ -270,8 +274,17 @@ export class TypeSystemProject {
         programSources,
         overlaySourcePaths,
         this.sourceAdmissionsByPath,
+        compilerConfigPath == null ? null : canonicalTypeSystemSourcePath(path.relative(project.rootDir, compilerConfigPath)),
       ),
     );
+  }
+
+  /** Return the checker owning a source or the component behind a generated overlay. */
+  forSourceFile(fileName: string): TypeSystemProject {
+    if (this.configuredCheckers.size === 0) return this;
+    const owner = this.overlaySourcesByPath.get(canonicalTypeSystemPath(fileName))?.compilerContextFile ?? fileName;
+    const config = this.project.compilerOptions.configurationForFile(owner);
+    return config ? this.configuredCheckers.get(config) ?? this : this;
   }
 
   readRegisteredInputs(): readonly SemanticRuntimeProjectInputRead[] {
@@ -776,6 +789,29 @@ export class TypeSystemProjectBuilder {
     evaluation: StaticProjectEvaluationResult,
     buildOptions: TypeSystemProjectBuildOptions = {},
   ): TypeSystemProject {
+    const inputs = project.inputGeneration.createReadScope('type-system-project');
+    const checkers = new Map<ProjectCompilerConfiguration, TypeSystemProject>();
+    const primary = this.buildConfigured(project, evaluation, buildOptions, null, inputs, checkers);
+    const configurations = project.compilerOptions.participatingConfigurations;
+    if (configurations.size > 1) {
+      // The aggregate is still available for app-wide operations. Each configured checker owns
+      // its own roots and ambient scope, and contributes to the same validated input generation.
+      for (const config of configurations) {
+        checkers.set(config, this.buildConfigured(project, evaluation, buildOptions, config, inputs, checkers));
+      }
+    }
+    return primary;
+  }
+
+  private buildConfigured(
+    project: ProjectBootFrame,
+    evaluation: StaticProjectEvaluationResult,
+    buildOptions: TypeSystemProjectBuildOptions,
+    config: ProjectCompilerConfiguration | null,
+    inputReadScope: SemanticRuntimeProjectInputReadScope,
+    configuredCheckers: ReadonlyMap<ProjectCompilerConfiguration, TypeSystemProject>,
+  ): TypeSystemProject {
+    const options = config?.options ?? project.compilerOptions.options;
     const started = performance.now();
     const hostSourceFileCacheBefore = sharedCompilerHostSourceFileCache.snapshot();
     const phases: TypeSystemProjectPhaseTiming[] = [];
@@ -805,11 +841,12 @@ export class TypeSystemProjectBuilder {
       () => overlaySourceFiles.length,
     );
 
-    const options = projectOptions.compilerOptions;
-    const inputReadScope = project.inputGeneration.createReadScope('type-system-project');
     const moduleResolver = new ProjectModuleResolver(
       project.rootDir, options, inputReadScope.host,
-      fileName => project.compilerOptions.optionsForFile(fileName),
+      fileName => {
+        const owner = overlaySourcesByPath.get(canonicalTypeSystemPath(fileName))?.compilerContextFile ?? fileName;
+        return project.compilerOptions.configurationForFile(owner)?.options ?? options;
+      },
     );
     const host = measureTypeSystemProjectPhase(
       phases,
@@ -827,11 +864,16 @@ export class TypeSystemProjectBuilder {
 
     const rootNames = typeSystemProgramRootNames(
       project,
-      evaluatedSources,
-      projectOptions.configRootFileNames,
-      overlaySourceFiles,
+      config == null ? evaluatedSources : [],
+      config?.rootFileNames ?? projectOptions.configRootFileNames,
+      config == null ? overlaySourceFiles : overlaySourceFiles.filter(file => {
+        const owner = overlaySourcesByPath.get(canonicalTypeSystemPath(file.fileName))?.compilerContextFile;
+        return owner == null || project.compilerOptions.configurationForFile(owner) === config;
+      }),
     );
-    const previousProgram = reusablePreviousProgram(project, buildOptions.previousProject ?? null);
+    const previousProgram = config == null
+      ? reusablePreviousProgram(project, buildOptions.previousProject ?? null)
+      : undefined;
     const program = measureTypeSystemProjectPhase(
       phases,
       'program',
@@ -900,6 +942,8 @@ export class TypeSystemProjectBuilder {
       typeSystemDiagnosticSourcePaths(projectOptions.configRootFileNames),
       inputReadScope,
       moduleResolver,
+      configuredCheckers,
+      config?.configFilePath ?? null,
     );
   }
 }
