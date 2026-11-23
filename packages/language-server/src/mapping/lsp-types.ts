@@ -36,6 +36,7 @@ import type {
   SemanticTemplateCompletionResult,
   SemanticTemplateCodeActionsResult,
   SemanticTemplateCursorInfoResult,
+  SemanticTemplateCursorOwnerContext,
   SemanticTemplateDiagnosticRow,
   SemanticTemplateReferencesResult,
   SemanticTemplateRenameResult,
@@ -3169,11 +3170,30 @@ export function mapSemanticRuntimeTemplateDefinition(
     };
   }
 
-  const target = semanticRuntimeDefinitionTarget(answer.value, options.documentUris);
-  if (target == null) {
-    return { value: null, failures: [] };
+  const links: LocationLink[] = [];
+  const failures: string[] = [];
+  for (const context of answer.value.sharedOwnerContexts ?? [answer.value]) {
+    const target = semanticRuntimeDefinitionTarget(context, options.documentUris);
+    if (target == null) continue;
+    const mapping = mapDefinitionTarget(target, lookupDocument, options);
+    failures.push(...mapping.failures);
+    const link = mapping.value;
+    if (link == null) continue;
+    const duplicate = links.some(other =>
+      other.targetUri === link.targetUri && rangesEqual(other.targetSelectionRange, link.targetSelectionRange));
+    if (!duplicate) links.push(link);
   }
+  links.sort((left, right) => left.targetUri.localeCompare(right.targetUri)
+    || left.targetSelectionRange.start.line - right.targetSelectionRange.start.line
+    || left.targetSelectionRange.start.character - right.targetSelectionRange.start.character);
+  return { value: links.length > 0 ? links : null, failures };
+}
 
+function mapDefinitionTarget(
+  target: SemanticRuntimeDefinitionTarget,
+  lookupDocument: LookupReadableDocumentFn,
+  options: { readonly documentUris: WorkspaceDocumentUris; readonly originDocument: TextDocument },
+): SemanticRuntimeReadMapping<LocationLink | null> {
   const targetUri = semanticSourceReferenceUri(target.selectionSource, options.documentUris);
   if (targetUri == null) {
     return {
@@ -3213,11 +3233,11 @@ export function mapSemanticRuntimeTemplateDefinition(
   );
 
   return {
-    value: [{
+    value: {
       targetUri,
       targetRange,
       targetSelectionRange,
-    }],
+    },
     failures: [],
   };
 }
@@ -3228,7 +3248,7 @@ interface SemanticRuntimeDefinitionTarget {
 }
 
 function semanticRuntimeDefinitionTarget(
-  value: SemanticTemplateCursorInfoResult,
+  value: Omit<SemanticTemplateCursorOwnerContext, "ownerName" | "ownerSource">,
   documentUris: WorkspaceDocumentUris,
 ): SemanticRuntimeDefinitionTarget | null {
   const memberSource = firstSemanticRuntimeExactSourceReference([

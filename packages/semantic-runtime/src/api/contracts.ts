@@ -5540,7 +5540,17 @@ export interface SemanticTemplateCursorUncertainty {
   readonly affectedLocus: SemanticTemplateCursorUncertaintyAffectedLocus;
 }
 
+/** Resolution of one physical template token in one owning component or compilation context. */
+export interface SemanticTemplateCursorOwnerContext extends Pick<SemanticTemplateCursorInfoResult,
+  'activeSource' | 'selectedMember' | 'selectedDefinition' | 'selectedBindable' | 'selectedRouteTarget'
+> {
+  readonly ownerName: string | null;
+  readonly ownerSource: SemanticSourceReference | null;
+}
+
 export interface SemanticTemplateCursorInfoResult {
+  /** All equally specific owners when one authored position has more than one compilation context. */
+  readonly sharedOwnerContexts?: readonly SemanticTemplateCursorOwnerContext[];
   readonly displayText: string;
   readonly siteKind: TemplateCompletionSiteKind | `${TemplateCompletionSiteKind}`;
   /** Exact authored token selected by the cursor, or null when the cursor is between semantic tokens. */

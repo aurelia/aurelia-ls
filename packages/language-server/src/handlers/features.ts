@@ -170,10 +170,14 @@ export async function handleDefinition(
     originDocument: doc,
   });
   if (mapping.failures.length > 0) {
-    throw new ResponseError(
-      LSPErrorCodes.RequestFailed,
-      `Aurelia definition mapping was blocked: ${mapping.failures.join(" ")}`,
-    );
+    if (mapping.value == null) {
+      throw new ResponseError(LSPErrorCodes.RequestFailed, `Aurelia definition mapping was blocked: ${mapping.failures.join(" ")}`);
+    }
+    operation.deferEffect({
+      kind: "log",
+      level: "warn",
+      message: `[definition] omitted unmapped declaration targets: ${mapping.failures.join(" ")}`,
+    });
   }
   return mapping.value;
 }

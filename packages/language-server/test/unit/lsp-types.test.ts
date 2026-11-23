@@ -2467,6 +2467,32 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
     },
   );
 
+  test("returns each distinct shared-template declaration and skips owners without a target", () => {
+    const originDocument = TextDocument.create("file:///C:/projects/app/src/shared.html", "html", 1, "${message}");
+    const owners = ["Bravo", "Alpha"].map(name => {
+      const uri = `file:///C:/projects/app/src/${name}.ts`;
+      const text = `export class ${name} { message = ''; }`;
+      const start = text.indexOf("message");
+      return {
+        uri,
+        document: testSourceDocument(appDocumentUris.resolve(uri).uri, text),
+        context: { selectedMember: { declarationSource: sourceReference(uri, start, start + 7) } },
+      };
+    });
+    const docs: LookupReadableDocumentFn = uri => owners.find(owner => appDocumentUris.resolve(owner.uri).uri === uri)?.document ?? null;
+    const missing = { selectedMember: null, selectedDefinition: null };
+    const result = (contexts: unknown[]) => mapSemanticRuntimeTemplateDefinition({
+      result: "answered", value: { ...missing, sharedOwnerContexts: contexts },
+    } as never, docs, { documentUris: appDocumentUris, originDocument });
+
+    const [bravo, alpha] = owners;
+    expect(result([missing, bravo!.context, alpha!.context, bravo!.context])).toMatchObject({
+      failures: [], value: [{ targetUri: alpha!.uri }, { targetUri: bravo!.uri }],
+    });
+    expect(result([missing, bravo!.context]).value?.map(link => link.targetUri)).toEqual([bravo!.uri]);
+    expect(result([missing, missing])).toEqual({ value: null, failures: [] });
+  });
+
   test("prefers reached member declarations over scope-introduction sources", () => {
     const componentStart = definitionText.indexOf("Component");
     const messageStart = definitionText.indexOf("message");

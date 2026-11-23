@@ -176,6 +176,7 @@ import type {
   SemanticTemplateCursorExpressionRow,
   SemanticTemplateCursorHtmlRow,
   SemanticTemplateCursorInfoResult,
+  SemanticTemplateCursorOwnerContext,
   SemanticTemplateCursorMemberRow,
   SemanticTemplateCursorMemberTextRow,
   SemanticTemplateCursorRouteTargetRow,
@@ -312,6 +313,7 @@ interface TemplateCompletionReadResult {
 
 interface TemplateCompletionReadContext {
   readonly locus: SourceCursorInquiryLocus;
+  readonly selections: readonly TemplateResourceCursorSelection[];
   readonly selection: TemplateCompletionResourceSelection;
 }
 
@@ -441,19 +443,25 @@ export function readSemanticTemplateCursorInfo(
   if ('result' in readContext) {
     return missingTemplateCursorInfo(readContext);
   }
+  const includeHandles = detail === SemanticRuntimeDetail.Handles;
   const read = readTemplateCursorInfoValue(
     store,
     workspaceRootDir,
     projectRootDir,
     emission,
     readContext,
-    detail === SemanticRuntimeDetail.Handles,
+    includeHandles,
     diagnosticProjection,
+  );
+  const sharedOwnerContexts = readContext.selections.length === 1 ? undefined : readContext.selections.map(selection =>
+    selection === readContext.selection
+      ? ownerContext(store, selection, read.value)
+      : readTemplateCursorOwnerContext(store, emission, readContext.locus.cursor, selection, includeHandles),
   );
   return publicAnswer(
     SemanticRuntimeAnswerResult.Answered,
     `Resolved template cursor as ${read.value.siteKind}.`,
-    read.value,
+    sharedOwnerContexts == null ? read.value : { ...read.value, sharedOwnerContexts },
     {
       selection: SemanticRuntimeAnswerSelection.Exact,
       coverage: read.missingInputs.length === 0
@@ -461,6 +469,54 @@ export function readSemanticTemplateCursorInfo(
         : SemanticRuntimeAnswerCoverage.Open,
     },
   );
+}
+
+function queryForOwnerCursor(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  locus: SourceCursorInquiryLocus,
+  selection: TemplateResourceCursorSelection,
+): TemplateCompletionCursorContext {
+  return templateCompletionQueryForCursor(store, {
+    locus,
+    resource: selection.resource,
+    typeSystem: emission.typeSystem,
+    frameworkCapabilityDemands: emission.capabilityDemands.readDemands(),
+    page: new InquiryPageRequest(1, null),
+    router: templateCompletionRouterContext(emission),
+    i18nTranslationKeyProductHandles: emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
+  });
+}
+
+/** Project declaration evidence without computing hover signatures or rescanning document diagnostics. */
+export function readTemplateCursorOwnerContext(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  cursor: SourceTextCursor,
+  selection: TemplateResourceCursorSelection,
+  includeHandles = false,
+): SemanticTemplateCursorOwnerContext {
+  const locus = new SourceCursorInquiryLocus(cursor, selection.resource.compilation.unit.templateSource.sourceAddressHandle);
+  const context = queryForOwnerCursor(store, emission, locus, selection);
+  const fields = cursorDeclarationFields(
+    store, selection, context, cursorValueSiteRow(store, context, includeHandles),
+    cursorBindableUsageModeRow(store, selection.resource, context), includeHandles, false,
+  );
+  return ownerContext(store, selection, fields);
+}
+
+function ownerContext(
+  store: KernelStore,
+  selection: TemplateResourceCursorSelection,
+  { activeSource, selectedMember, selectedDefinition, selectedBindable, selectedRouteTarget }:
+    Omit<SemanticTemplateCursorOwnerContext, 'ownerName' | 'ownerSource'>,
+): SemanticTemplateCursorOwnerContext {
+  const definition = selection.resource.compilation.definition;
+  return {
+    ownerName: definition.target.localName ?? definition.name,
+    ownerSource: describeAddress(store, definition.target.declarationSourceAddressHandle),
+    activeSource, selectedMember, selectedDefinition, selectedBindable, selectedRouteTarget,
+  };
 }
 
 function readTemplateCursorInfoValue(
@@ -475,15 +531,7 @@ function readTemplateCursorInfoValue(
   readonly value: SemanticTemplateCursorInfoResult;
   readonly missingInputs: readonly string[];
 } {
-  const cursorContext = templateCompletionQueryForCursor(store, {
-    locus: readContext.locus,
-    resource: readContext.selection.resource,
-    typeSystem: emission.typeSystem,
-    frameworkCapabilityDemands: emission.capabilityDemands.readDemands(),
-    page: new InquiryPageRequest(1, null),
-    router: templateCompletionRouterContext(emission),
-    i18nTranslationKeyProductHandles: emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
-  });
+  const cursorContext = queryForOwnerCursor(store, emission, readContext.locus, readContext.selection);
   const selectedBindableUsageMode = cursorBindableUsageModeRow(
     store,
     readContext.selection.resource,
@@ -1249,7 +1297,8 @@ function readContextForCursor(
     );
   }
 
-  const selection = selectTemplateResourceForCursor(store, emission, resolvedCursor.filePath, offset);
+  const selections = templateResourceCursorSelections(store, emission, resolvedCursor.filePath, offset);
+  const selection = selections[0];
   if (selection == null) {
     return missingTemplateCompletion(page, ['template-resource'], 'No compiled template resource was available for the supplied source cursor.');
   }
@@ -1260,6 +1309,7 @@ function readContextForCursor(
       selection.resource.compilation.unit.templateSource.sourceAddressHandle,
     ),
     selection,
+    selections,
   };
 }
 
@@ -3515,36 +3565,21 @@ function missingTemplateCursorInfo(
     });
 }
 
-function templateCursorInfoResult(
+function cursorDeclarationFields(
   store: KernelStore,
-  selection: TemplateCompletionResourceSelection,
+  selection: TemplateResourceCursorSelection,
   cursorContext: TemplateCompletionCursorContext,
-  includeHandles: boolean,
-  missingInputs: readonly string[],
+  valueSite: SemanticTemplateCursorValueSiteRow | null,
   selectedBindableUsageMode: SemanticTemplateCursorBindableUsageModeFields,
+  includeHandles: boolean,
   includePresentationMetadata: boolean,
-  selectedCall: SemanticTemplateCursorInfoResult['selectedCall'],
-): SemanticTemplateCursorInfoResult {
+): Omit<SemanticTemplateCursorOwnerContext, 'ownerName' | 'ownerSource'> {
   const query = cursorContext.query;
-  const html = cursorHtmlRow(store, cursorContext, includeHandles);
-  const valueSite = cursorValueSiteRow(store, cursorContext, includeHandles);
   const selectedMember = cursorSelectedMemberRow(
     store,
     cursorContext,
     includeHandles,
     includePresentationMetadata,
-  );
-  const memberOwnerType = cursorMemberOwnerTypeRow(
-    store,
-    query.memberOwnerTypeProductHandle,
-    cursorContext.memberOwnerTypeSourceAddressHandle,
-    includeHandles,
-  );
-  const expectedValueType = templateDiagnosticExpectedValueTypeForCursor(
-    store,
-    selection,
-    query.locus.kind === InquiryLocusKind.SourceCursor ? query.locus.cursor.offset : null,
-    valueSite?.siteKind ?? null,
   );
   const expressionSource = query.expressionParseProductHandle == null
     ? null
@@ -3573,12 +3608,6 @@ function templateCursorInfoResult(
     selectedMember,
     query.locus.kind === InquiryLocusKind.SourceCursor ? query.locus.cursor : null,
   );
-  const selectedExpression = cursorSelectedExpressionRow(
-    store,
-    cursorContext,
-    activeSource,
-    includeHandles,
-  );
   const selectedDefinition = cursorDefinitionRow(
     store,
     query.selectedDefinitionProductHandle,
@@ -3597,6 +3626,42 @@ function templateCursorInfoResult(
     includeHandles,
   );
   const selectedRouteTarget = cursorRouteTargetRow(store, cursorContext, includeHandles);
+  return { activeSource, selectedMember, selectedDefinition, selectedBindable, selectedRouteTarget };
+}
+
+function templateCursorInfoResult(
+  store: KernelStore,
+  selection: TemplateCompletionResourceSelection,
+  cursorContext: TemplateCompletionCursorContext,
+  includeHandles: boolean,
+  missingInputs: readonly string[],
+  selectedBindableUsageMode: SemanticTemplateCursorBindableUsageModeFields,
+  includePresentationMetadata: boolean,
+  selectedCall: SemanticTemplateCursorInfoResult['selectedCall'],
+): SemanticTemplateCursorInfoResult {
+  const query = cursorContext.query;
+  const html = cursorHtmlRow(store, cursorContext, includeHandles);
+  const valueSite = cursorValueSiteRow(store, cursorContext, includeHandles);
+  const { activeSource, selectedMember, selectedDefinition, selectedBindable, selectedRouteTarget } =
+    cursorDeclarationFields(store, selection, cursorContext, valueSite, selectedBindableUsageMode, includeHandles, includePresentationMetadata);
+  const memberOwnerType = cursorMemberOwnerTypeRow(
+    store,
+    query.memberOwnerTypeProductHandle,
+    cursorContext.memberOwnerTypeSourceAddressHandle,
+    includeHandles,
+  );
+  const expectedValueType = templateDiagnosticExpectedValueTypeForCursor(
+    store,
+    selection,
+    query.locus.kind === InquiryLocusKind.SourceCursor ? query.locus.cursor.offset : null,
+    valueSite?.siteKind ?? null,
+  );
+  const selectedExpression = cursorSelectedExpressionRow(
+    store,
+    cursorContext,
+    activeSource,
+    includeHandles,
+  );
   const value: Omit<SemanticTemplateCursorInfoResult, 'displayText'> = {
     siteKind: query.siteKind,
     activeSource,
@@ -4752,15 +4817,6 @@ function emptyCursorHtmlRow(): SemanticTemplateCursorHtmlRow {
     attributeSource: null,
     attributeValueSource: null,
   };
-}
-
-function selectTemplateResourceForCursor(
-  store: KernelStore,
-  emission: AureliaAppWorldProjectEmission,
-  filePath: string,
-  offset: number,
-): TemplateCompletionResourceSelection | null {
-  return templateResourceCursorSelections(store, emission, filePath, offset)[0] ?? null;
 }
 
 /** Return every equally specific template/compiler-scope candidate at one authored cursor. */
