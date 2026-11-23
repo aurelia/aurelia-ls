@@ -58,6 +58,11 @@ const serverOptions = {
   ...commonOptions,
   entryPoints: [join(__dirname, "../language-server/out/main.js")],
   outfile: join(distDir, "server/main.cjs"),
+  // The CSS service's Node main loads its UMD dependencies through a require wrapper.
+  // Its ESM distribution exposes those same dependencies statically to the bundled Worker.
+  alias: {
+    "vscode-css-languageservice": join(__dirname, "../language-server/node_modules/vscode-css-languageservice/lib/esm/cssLanguageService.js"),
+  },
   external: ["typescript"],
 };
 
