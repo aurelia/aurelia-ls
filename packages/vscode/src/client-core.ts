@@ -307,6 +307,8 @@ export class AureliaLanguageClient {
   #sessions = new Map<string, AureliaLanguageClientSession>();
   #logger: ClientLogger;
   #vscode: VscodeApi;
+  readonly #nativeHtmlLibrary?: () => Promise<string | null>;
+
   readonly #createClient: LanguageClientFactory;
   readonly #supportReport: SupportReportService | undefined;
   readonly #nativeProblemOwnership = new WeakMap<LanguageClient, NativeTypeScriptProblemOwnership>();
@@ -343,6 +345,13 @@ export class AureliaLanguageClient {
   ) {
     this.#logger = logger;
     this.#vscode = vscode;
+    const html = vscode.extensions?.getExtension("vscode.html-language-features");
+    if (html) {
+      const library = vscode.Uri.joinPath(html.extensionUri, "server", "lib", "jquery.d.ts");
+      let value: Promise<string | null> | undefined;
+      this.#nativeHtmlLibrary = () => value ??= Promise.resolve(vscode.workspace.fs.readFile(library))
+        .then(bytes => new TextDecoder().decode(bytes), () => null);
+    }
     this.#createClient = options.createClient;
     this.#supportReport = options.supportReport;
     this.#sessionsChanged = new vscode.EventEmitter<readonly AureliaLanguageClientSession[]>();
@@ -1274,6 +1283,9 @@ export class AureliaLanguageClient {
         return null;
       }
       client = clientResult.value;
+      if (this.#nativeHtmlLibrary) {
+        client.onRequest(AureliaProtocolRequest.NativeHtmlScriptLibrary, this.#nativeHtmlLibrary);
+      }
       this.#nativeProblemOwnership.set(client, nativeOwnership);
       restartControl.delegate = typeof client.createDefaultErrorHandler === "function"
         ? client.createDefaultErrorHandler()

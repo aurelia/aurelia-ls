@@ -42,6 +42,7 @@ import type { Diagnostic, Position, Range, WorkspaceEdit } from "vscode-language
 export const AureliaProtocolRequest = {
   SupportSnapshot: "aurelia/supportSnapshot",
   SourceOwnership: "aurelia/sourceOwnership",
+  NativeHtmlScriptLibrary: "aurelia/getNativeHtmlScriptLibrary",
   AnalysisLimitations: "aurelia/analysisLimitations",
   FrameworkCapabilityExplanation: "aurelia/frameworkCapabilityExplanation",
   BindingUncertaintyExplanation: "aurelia/bindingUncertaintyExplanation",
@@ -1165,6 +1166,8 @@ export interface AnalysisLimitationsParams {
 
 /** Resource-scoped editor validation settings for a particular open template revision. */
 export interface EmbeddedValidationRequest {
+  /** The client can supply its own HTML service's fixed ambient declarations on demand. */
+  readonly useNativeHtmlScriptLibrary?: boolean;
   readonly revision: string;
   readonly styles: boolean;
   readonly scripts: boolean;

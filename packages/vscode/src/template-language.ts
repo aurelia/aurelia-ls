@@ -478,6 +478,7 @@ function embeddedValidationRequest(ctx: ClientContext, document: TextDocument): 
   return {
     revision: aureliaWorkspaceEditContentRevision(text), styles, scripts,
     css: { lint },
+    useNativeHtmlScriptLibrary: scripts && ctx.vscode.extensions?.getExtension("vscode.html-language-features") != null,
     javascript: {
       strictNullChecks: javascript.get<boolean>("implicitProjectConfig.strictNullChecks"),
       experimentalDecorators: javascript.get<boolean>("implicitProjectConfig.experimentalDecorators"),

@@ -689,6 +689,19 @@ export async function handleAnalysisLimitations(
   return { fingerprint: generation.fingerprint, projects };
 }
 
+const nativeScriptLibraries = new WeakMap<ServerContext, Promise<string | undefined>>();
+
+function readNativeHtmlScriptLibrary(ctx: ServerContext): Promise<string | undefined> {
+  let library = nativeScriptLibraries.get(ctx);
+  if (!library) {
+    // No path is supplied by the document. Each Worker asks its client once for the installed HTML provider's library.
+    library = ctx.connection.sendRequest<unknown>(AureliaProtocolRequest.NativeHtmlScriptLibrary)
+      .then(text => typeof text === "string" ? text : undefined, () => undefined);
+    nativeScriptLibraries.set(ctx, library);
+  }
+  return library;
+}
+
 export async function handleSourceOwnership(
   ctx: ServerContext,
   params: SourceOwnershipParams,
@@ -716,9 +729,13 @@ export async function handleSourceOwnership(
       const hasEnabledInterpolation = regions.some(region =>
         region.holes.length > 0 && (region.language === "css" ? request.styles : request.scripts)
       );
+      const nativeHtmlScriptLibrary = hasEnabledInterpolation && request.scripts && request.useNativeHtmlScriptLibrary
+        && regions.some(region => region.language === "javascript") ? await readNativeHtmlScriptLibrary(ctx) : undefined;
       embeddedValidation = {
         revision: request.revision,
-        diagnostics: hasEnabledInterpolation ? validateEmbeddedLanguages(document, regions, request) : null,
+        diagnostics: hasEnabledInterpolation
+          ? validateEmbeddedLanguages(document, regions, { ...request, nativeHtmlScriptLibrary })
+          : null,
       };
     }
   }

@@ -473,10 +473,13 @@ suite("extension-host product surface", () => {
         `style="width: \${selectionProgressPercent}%; color: ${nativeCssProbe}"`,
       );
       assert.notStrictEqual(mixedStyle, ownedBaseline);
-      const nativeFaultText = `${mixedStyle}\n<script>\n  ${nativeJavaScriptProbe}\n</script>\n`;
+      const jqueryBadArgument = "909137";
+      const jqueryControl = `<script type="module">\n// @ts-check\n$("p").hide(); $("p").hasClass(${jqueryBadArgument});\n</script>`;
+      const nativeFaultText = `${mixedStyle}\n<script>\n  ${nativeJavaScriptProbe}\n</script>\n${jqueryControl}\n`;
       await replaceDocumentText(owned, nativeFaultText);
       let legitimateCssDiagnostics = [];
       let legitimateJavaScriptDiagnostics = [];
+      let nativeJQueryArgument = [];
       await waitFor(
         () => {
           legitimateCssDiagnostics = diagnosticsTouchingText(
@@ -489,7 +492,11 @@ suite("extension-host product surface", () => {
             nativeJavaScriptDiagnostics(owned.uri),
             nativeJavaScriptProbe,
           );
+          nativeJQueryArgument = diagnosticsTouchingText(owned, nativeJavaScriptDiagnostics(owned.uri), jqueryBadArgument);
           return interpolationCssDiagnostics(owned).length === 0
+            && nativeJQueryArgument.length === 1
+            && nativeJQueryArgument[0].message.includes("number")
+            && nativeJQueryArgument[0].message.includes("string")
             && legitimateCssDiagnostics.length > 0
             && legitimateJavaScriptDiagnostics.length > 0;
         },
@@ -502,6 +509,7 @@ suite("extension-host product surface", () => {
         interpolationCount: interpolationCssDiagnostics(owned).length,
         legitimateCss: diagnosticPolicyEvidence(legitimateCssDiagnostics),
         legitimateJavaScript: diagnosticPolicyEvidence(legitimateJavaScriptDiagnostics),
+        typedJQueryArgument: diagnosticPolicyEvidence(nativeJQueryArgument),
       })}`);
 
       const htmlValidation = vscode.workspace.getConfiguration("html", ownedUri);

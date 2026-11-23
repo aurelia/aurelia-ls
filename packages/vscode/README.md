@@ -56,8 +56,8 @@ as `width: ${value}%` can render valid CSS after binding. Embedded validation us
 the authored regions and interpolation boundaries to report CSS and JavaScript
 findings at the original ranges. `html.validate.styles`, `html.validate.scripts` and
 the CSS validation settings apply to the template. Embedded JavaScript uses the bundled
-TypeScript compiler and browser types. Project-specific and legacy jQuery declarations
-should be checked in the project's script tooling. Plain HTML and unaffected
+TypeScript compiler and browser types. When available, the Worker obtains the installed HTML provider's jQuery declarations
+from the editor. Project-specific ambient declarations belong to the project's own script checker. Plain HTML and unaffected
 templates keep their ordinary native validators.
 
 Set `aurelia.templateDiagnostics.suppressNative=true` for a workspace folder to

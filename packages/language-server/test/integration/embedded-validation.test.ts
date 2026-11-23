@@ -14,10 +14,15 @@ test('selects embedded diagnostics only for the owned, exact source with an acti
   const { connection, child, dispose, getStderr } = startServer(root);
   const uri = fileUri(root, 'src/view.html');
   const unrelated = fileUri(root, 'src/unowned.html');
-  const read = (source: string, text: string, styles = true, scripts = true) =>
+  let libraryReads = 0;
+  connection.onRequest(AureliaProtocolRequest.NativeHtmlScriptLibrary, () => {
+    libraryReads++;
+    return "declare function $(selector: string): { hide(): void };";
+  });
+  const read = (source: string, text: string, styles = true, scripts = true, useNativeHtmlScriptLibrary = false) =>
     connection.sendRequest<SourceOwnershipResponse>(AureliaProtocolRequest.SourceOwnership, {
       uri: source,
-      embeddedValidation: { revision: aureliaWorkspaceEditContentRevision(text), styles, scripts },
+      embeddedValidation: { revision: aureliaWorkspaceEditContentRevision(text), styles, scripts, useNativeHtmlScriptLibrary },
     });
   try {
     await initialize(connection, child, getStderr, root);
@@ -38,6 +43,20 @@ test('selects embedded diagnostics only for the owned, exact source with an acti
     expect((await read(uri, staticText)).embeddedValidation?.diagnostics).toBeNull();
     changeDocument(connection, uri, html, 3);
     expect((await read(uri, html)).embeddedValidation).toEqual(response.embeddedValidation);
+    expect(libraryReads).toBe(0);
+
+    const jquery = html.replace('const real = ;', "// @ts-check\n$('p').hide(); $('p').notAPlugin();");
+    changeDocument(connection, uri, jquery, 4);
+    for (let i = 0; i < 2; i++) {
+      const jqueryDiagnostics = (await read(uri, jquery, true, true, true)).embeddedValidation?.diagnostics;
+      expect(jqueryDiagnostics?.filter(diagnostic => diagnostic.source === 'javascript')).toMatchObject([
+        { message: expect.stringContaining('notAPlugin'), range: {
+          start: { line: 2, character: jquery.split('\n')[2]!.indexOf('notAPlugin') },
+          end: { line: 2, character: jquery.split('\n')[2]!.indexOf('notAPlugin') + 'notAPlugin'.length },
+        } },
+      ]);
+    }
+    expect(libraryReads).toBe(1);
   } finally {
     await connection.sendRequest('shutdown');
     connection.sendNotification('exit');
