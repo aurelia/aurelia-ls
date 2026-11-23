@@ -357,7 +357,7 @@ suite("extension-host product surface", () => {
     await vscode.commands.executeCommand("aurelia.refreshResourceExplorer");
   });
 
-  test("suppresses native template diagnostics only through the scoped opt-in", async function() {
+  test("validates embedded template languages selectively and honors scoped suppression", async function() {
     this.timeout(600_000);
     const ownedUri = vscode.Uri.file(path.join(
       aureliaWorkspace,
@@ -381,7 +381,7 @@ suite("extension-host product surface", () => {
     const lifecycle = observeExactDocumentLifecycle(
       vscode.workspace,
       ownedUri,
-      "the opt-in native-diagnostic suppression journey",
+      "the selective and suppressed embedded-validation journey",
     );
     let owned;
     let ownedBaseline;
@@ -389,10 +389,8 @@ suite("extension-host product surface", () => {
     let ordinaryBaseline;
     try {
       owned = await vscode.workspace.openTextDocument(ownedUri);
-      assert.strictEqual(
-        owned.languageId,
-        "html",
-        "a proved Aurelia template must retain native HTML mode while suppression is disabled",
+      owned = await waitForExactDocumentLanguage(
+        vscode.workspace, ownedUri, "aurelia-html", "the owned template with CSS interpolation", waitFor,
       );
       assert.strictEqual(
         vscode.window.visibleTextEditors.some((editor) => editor.document.uri.toString() === ownedUri.toString()),
@@ -411,8 +409,8 @@ suite("extension-host product surface", () => {
       );
       await vscode.window.showTextDocument(owned, { preview: false });
       await waitFor(
-        () => hasExactNativeInterpolationDiagnostics(owned.uri),
-        () => `default native HTML mode should retain its interpolation diagnostic; observed ${diagnosticSummary(vscode.languages.getDiagnostics(owned.uri))}`,
+        () => nativeCssDiagnostics(owned.uri).length === 0,
+        () => `valid style interpolation should be clear under the default policy; observed ${diagnosticSummary(vscode.languages.getDiagnostics(owned.uri))}`,
         60_000,
       );
 
@@ -431,7 +429,7 @@ suite("extension-host product surface", () => {
         "native HTML recovery ownership should settle one current Aurelia diagnostic pull",
       );
       assert.strictEqual(receipt.itemCount, 1,
-        `native html should publish one bounded Aurelia recovery row; receipt ${JSON.stringify(receipt)}`);
+        `selective mode should publish one bounded Aurelia recovery row; receipt ${JSON.stringify(receipt)}`);
       let recoveryDiagnostics = [];
       await waitFor(
         () => {
@@ -460,17 +458,22 @@ suite("extension-host product surface", () => {
       assert.strictEqual(receipt.itemCount, 0,
         `native HTML recovery repair should remain clear; receipt ${JSON.stringify(receipt)}`);
       await waitFor(
-        () => hasExactNativeInterpolationDiagnostics(owned.uri)
+        () => nativeCssDiagnostics(owned.uri).length === 0
           && !vscode.languages.getDiagnostics(owned.uri).some((diagnostic) =>
             diagnostic.source === "aurelia" && diagnosticCode(diagnostic) === "html-syntax-recovery"
           ),
-        "native HTML recovery repair should restore only the known interpolation noise",
+        "repair should clear the markup finding without introducing interpolation noise",
         60_000,
       );
 
       const nativeCssProbe = "#12zz34";
       const nativeJavaScriptProbe = "const aureliaNativePolicyProbe = ;";
-      const nativeFaultText = `${ownedBaseline}\n<style>\n  .aurelia-native-policy-probe { color: ${nativeCssProbe}; }\n</style>\n<script>\n  ${nativeJavaScriptProbe}\n</script>\n`;
+      const mixedStyle = ownedBaseline.replace(
+        'style="width: ${selectionProgressPercent}%"',
+        `style="width: \${selectionProgressPercent}%; color: ${nativeCssProbe}"`,
+      );
+      assert.notStrictEqual(mixedStyle, ownedBaseline);
+      const nativeFaultText = `${mixedStyle}\n<script>\n  ${nativeJavaScriptProbe}\n</script>\n`;
       await replaceDocumentText(owned, nativeFaultText);
       let legitimateCssDiagnostics = [];
       let legitimateJavaScriptDiagnostics = [];
@@ -486,22 +489,37 @@ suite("extension-host product surface", () => {
             nativeJavaScriptDiagnostics(owned.uri),
             nativeJavaScriptProbe,
           );
-          return hasExactNativeInterpolationDiagnostics(owned.uri)
+          return interpolationCssDiagnostics(owned).length === 0
             && legitimateCssDiagnostics.length > 0
             && legitimateJavaScriptDiagnostics.length > 0;
         },
-        () => `native HTML mode should report interpolation noise plus legitimate CSS and JavaScript faults; observed ${diagnosticSummary(vscode.languages.getDiagnostics(owned.uri))}`,
+        () => `selective mode should preserve the CSS fault in the interpolated attribute and the JavaScript fault; observed ${diagnosticSummary(vscode.languages.getDiagnostics(owned.uri))}`,
         60_000,
       );
       console.log(`[aurelia-extension-host] native diagnostic policy ${JSON.stringify({
-        mode: "html",
-        interpolationCount: nativeCssDiagnostics(owned.uri).filter((diagnostic) => [
-          "css-propertyvalueexpected",
-          "css-ruleorselectorexpected",
-        ].includes(diagnosticCode(diagnostic))).length,
+        mode: owned.languageId,
+        policy: "selective",
+        interpolationCount: interpolationCssDiagnostics(owned).length,
         legitimateCss: diagnosticPolicyEvidence(legitimateCssDiagnostics),
         legitimateJavaScript: diagnosticPolicyEvidence(legitimateJavaScriptDiagnostics),
       })}`);
+
+      const htmlValidation = vscode.workspace.getConfiguration("html", ownedUri);
+      const scriptsBefore = htmlValidation.inspect("validate.scripts")?.workspaceFolderValue;
+      try {
+        await htmlValidation.update("validate.scripts", false, vscode.ConfigurationTarget.WorkspaceFolder);
+        await waitFor(
+          () => nativeJavaScriptDiagnostics(ownedUri).length === 0
+            && diagnosticsTouchingText(owned, nativeCssDiagnostics(ownedUri), nativeCssProbe).length > 0,
+          "folder-scoped script validation off should retain the genuine CSS fault", 60_000,
+        );
+      } finally {
+        await htmlValidation.update("validate.scripts", scriptsBefore, vscode.ConfigurationTarget.WorkspaceFolder);
+      }
+      await waitFor(
+        () => diagnosticsTouchingText(owned, nativeJavaScriptDiagnostics(ownedUri), nativeJavaScriptProbe).length > 0,
+        "restoring script validation should republish the original JavaScript fault", 60_000,
+      );
 
       await suppression.update("suppressNative", true, vscode.ConfigurationTarget.WorkspaceFolder);
       await waitFor(
@@ -535,7 +553,8 @@ suite("extension-host product surface", () => {
         `suppression should hide the legitimate JavaScript fault without an Aurelia replacement; observed ${diagnosticSummary(suppressedDiagnostics)}`,
       );
       console.log(`[aurelia-extension-host] native diagnostic policy ${JSON.stringify({
-        mode: "aurelia-html",
+        mode: owned.languageId,
+        policy: "suppressed",
         interpolationCount: 0,
         legitimateCss: { count: 0, diagnostics: [] },
         legitimateJavaScript: { count: 0, diagnostics: [] },
@@ -717,15 +736,32 @@ suite("extension-host product surface", () => {
       owned = await waitForExactDocumentLanguage(
         vscode.workspace,
         ownedUri,
-        "html",
-        "the proved Aurelia template after suppression is disabled",
+        "aurelia-html",
+        "the selective template after suppression is disabled",
         waitFor,
       );
       await vscode.window.showTextDocument(owned, { preview: false });
+      await replaceDocumentText(owned, nativeFaultText);
       await waitFor(
-        () => hasExactNativeInterpolationDiagnostics(owned.uri),
-        () => `disabling suppression should restore native CSS diagnostics; observed ${diagnosticSummary(vscode.languages.getDiagnostics(owned.uri))}`,
-        60_000,
+        () => interpolationCssDiagnostics(owned).length === 0
+          && diagnosticsTouchingText(owned, nativeCssDiagnostics(ownedUri), nativeCssProbe).length > 0
+          && diagnosticsTouchingText(owned, nativeJavaScriptDiagnostics(ownedUri), nativeJavaScriptProbe).length > 0,
+        "disabling suppression should restore both genuine embedded findings", 60_000,
+      );
+      const literalStyles = nativeFaultText.replaceAll("${selectionProgressPercent}", "42");
+      assert.notStrictEqual(literalStyles, nativeFaultText);
+      await replaceDocumentText(owned, literalStyles);
+      owned = await waitForExactDocumentLanguage(
+        vscode.workspace, ownedUri, "html", "the template after its last embedded interpolation is removed", waitFor,
+      );
+      await waitFor(
+        () => diagnosticsTouchingText(owned, nativeCssDiagnostics(ownedUri), nativeCssProbe).length > 0
+          && diagnosticsTouchingText(owned, nativeJavaScriptDiagnostics(ownedUri), nativeJavaScriptProbe).length > 0,
+        "ordinary HTML validation should own both source faults after interpolation is removed", 60_000,
+      );
+      await replaceDocumentText(owned, ownedBaseline);
+      owned = await waitForExactDocumentLanguage(
+        vscode.workspace, ownedUri, "aurelia-html", "the restored template with embedded interpolation", waitFor,
       );
       assert.strictEqual(ordinary.languageId, "html");
       assert.deepStrictEqual(
@@ -740,8 +776,10 @@ suite("extension-host product surface", () => {
           { phase: "open", languageId: "aurelia-html" },
           { phase: "close", languageId: "aurelia-html" },
           { phase: "open", languageId: "html" },
+          { phase: "close", languageId: "html" },
+          { phase: "open", languageId: "aurelia-html" },
         ],
-        "the scoped opt-in, ownership withdrawal/restore, and disable should produce exact reversible transitions",
+        "ownership and edits to embedded interpolation should produce exact reversible language transitions",
       );
     } finally {
       if (owned != null && ownedBaseline != null && !owned.isClosed && owned.getText() !== ownedBaseline) {
@@ -769,8 +807,8 @@ suite("extension-host product surface", () => {
         owned = await waitForExactDocumentLanguage(
           vscode.workspace,
           ownedUri,
-          "html",
-          "suppression cleanup should restore the proved template to native HTML mode",
+          "aurelia-html",
+          "suppression cleanup should restore the template's default selective mode",
           waitFor,
         );
       }
@@ -2882,8 +2920,8 @@ suite("extension-host product surface", () => {
     document = await waitForExactDocumentLanguage(
       vscode.workspace,
       documentUri,
-      "html",
-      "the primary template should start in default native HTML mode",
+      "aurelia-html",
+      "the primary template should start in default selective mode",
       waitFor,
     );
     const originalFolders = [...(vscode.workspace.workspaceFolders ?? [])]
@@ -2908,8 +2946,8 @@ suite("extension-host product surface", () => {
       secondaryDocument = await waitForExactDocumentLanguage(
         vscode.workspace,
         secondaryDocument.uri,
-        "html",
-        "the secondary template in default native HTML mode",
+        "aurelia-html",
+        "the secondary template in default selective mode",
         waitFor,
       );
       await waitForWorkspaceAnswer(
@@ -2939,7 +2977,7 @@ suite("extension-host product surface", () => {
         vscode.workspace,
         documentUri,
         "html",
-        "retiring the owning session should retain default native HTML mode",
+        "retiring the owning session should restore native HTML mode",
         waitFor,
       );
       await waitFor(
@@ -2981,8 +3019,8 @@ suite("extension-host product surface", () => {
       document = await waitForExactDocumentLanguage(
         vscode.workspace,
         documentUri,
-        "html",
-        "re-admitted primary template in default native HTML mode",
+        "aurelia-html",
+        "re-admitted primary template in default selective mode",
         waitFor,
       );
       await waitForWorkspaceAnswer(
@@ -2991,8 +3029,8 @@ suite("extension-host product surface", () => {
         "restoring the primary Aurelia root should re-admit its editor providers",
       );
       await waitFor(
-        () => hasExactNativeInterpolationDiagnostics(document.uri),
-        () => `re-admitted ownership should retain default native CSS diagnostics; language=${document.languageId}; diagnostics=${diagnosticSummary(vscode.languages.getDiagnostics(document.uri))}`,
+        () => nativeCssDiagnostics(document.uri).length === 0,
+        () => `re-admitted ownership should clear interpolation-only CSS diagnostics; language=${document.languageId}; diagnostics=${diagnosticSummary(vscode.languages.getDiagnostics(document.uri))}`,
         60_000,
       );
       await waitForWorkspaceAnswer(
@@ -6932,7 +6970,9 @@ async function showAureliaDocument(relativePath, workspaceRoot = aureliaWorkspac
   await vscode.window.showTextDocument(document, { preview: false });
   if (relativePath.endsWith(".html")) {
     const suppressNative = templateDiagnosticsSuppressNative(uri);
-    const expectedLanguageId = suppressNative ? "aurelia-html" : "html";
+    // The host fixtures use double-quoted inline style attributes for their native interpolation witness.
+    const interpolatedStyle = /\bstyle="[^"]*\$\{/.test(document.getText());
+    const expectedLanguageId = suppressNative || interpolatedStyle ? "aurelia-html" : "html";
     document = await waitForExactDocumentLanguage(
       vscode.workspace,
       uri,
@@ -7553,6 +7593,16 @@ function diagnosticsTouchingText(document, diagnostics, text) {
     const diagnosticStart = document.offsetAt(diagnostic.range.start);
     const diagnosticEnd = document.offsetAt(diagnostic.range.end);
     return diagnosticStart <= end && diagnosticEnd >= start;
+  });
+}
+
+function interpolationCssDiagnostics(document) {
+  const ranges = [...document.getText().matchAll(/\$\{selectionProgressPercent\}(?:%|px)/g)];
+  assert(ranges.length > 0, "Expected interpolation in the native CSS fixture.");
+  return nativeCssDiagnostics(document.uri).filter(diagnostic => {
+    const start = document.offsetAt(diagnostic.range.start);
+    const end = document.offsetAt(diagnostic.range.end);
+    return ranges.some(match => start < match.index + match[0].length && end >= match.index);
   });
 }
 
