@@ -12,7 +12,7 @@ import type { ProductHandle } from '../kernel/handles.js';
 import { bindingExpressionAstForProduct } from '../template/expression-parse-product.js';
 import { resourceLocalRuntimeBindingExpressionAccessResolutions } from '../template/runtime-resource-ownership.js';
 import { runtimeScopeNamedLookup, RuntimeScopeNamedLookupStatus } from '../template/runtime-scope-named-lookup.js';
-import { CheckerTypeShapeAccess } from '../type-system/checker-type-shape-access.js';
+import { CheckerTypeShapeAccess, CheckerTypeShapeMemberValueAccessKind } from '../type-system/checker-type-shape-access.js';
 import { checkerTypeMemberSourceAddressHandle } from '../type-system/checker-type-member-source.js';
 import { TypeSystemHotDetails } from '../type-system/product-details.js';
 import { canonicalTypeSystemPath } from '../type-system/source-file-path.js';
@@ -167,14 +167,22 @@ function scopeBindingMayChange(
   for (let depth = 0; current != null; depth++, current = current.runtimeParent) {
     if (depth < ancestor) continue;
     for (const context of [current.overrideContext, current.bindingContext]) {
+      const receivesRename = ownsRenamedSlot(context)
+        || (edited && previous?.scope === current && previous.context === context && previous.status === RuntimeScopeNamedLookupStatus.Context);
       if (existing?.scope === current && existing.context === context) {
         if (existing.status === RuntimeScopeNamedLookupStatus.Context) return edited;
-        if (existing.status === RuntimeScopeNamedLookupStatus.Open && edited) return true;
+        if (existing.status === RuntimeScopeNamedLookupStatus.Open && edited) {
+          // Open presence ahead of the declaration can capture a read. At the receiver being renamed,
+          // an interface or generated view-model can also report Open for every *absent* property.
+          if (!receivesRename || existing.slot != null) return true;
+          const owner = context.contextType == null ? null : typeAccess.resolveReference(context.contextType);
+          if (owner != null
+            && typeAccess.memberValueAccess(owner, newName, `rename-destination:${owner.productHandle}:${newName}`).accessKind !== CheckerTypeShapeMemberValueAccessKind.Missing) {
+            return true;
+          }
+        }
       }
-      if (ownsRenamedSlot(context)
-        || (edited && previous?.scope === current && previous.context === context && previous.status === RuntimeScopeNamedLookupStatus.Context)) {
-        return !edited;
-      }
+      if (receivesRename) return !edited;
     }
     if (ancestor > 0 || current.isBoundary) break;
   }

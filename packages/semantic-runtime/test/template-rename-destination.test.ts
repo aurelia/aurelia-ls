@@ -70,3 +70,32 @@ test('renaming a TypeScript member or template local preserves bound names at ed
     runtime.retireWorkspaceIncarnation();
   }
 });
+
+test('distinguishes an occupied local bindable from an absent name in the same generated view-model', async () => {
+  const workspaceRoot = path.resolve(import.meta.dirname, '../fixtures/pressure/resource-registration-local-templates');
+  const file = path.join(workspaceRoot, 'src/local-templates-app.html');
+  const original = readFileSync(file, 'utf8');
+  const authored = original.replace('<bindable name="label"', '<bindable name="taken"></bindable><bindable name="label"');
+  const runtime = await createSemanticRuntime({
+    workspaceRoot,
+    projectInputAuthority: new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost({
+      readFile: filename => path.resolve(filename) === file ? authored : undefined,
+      fileExists: filename => path.resolve(filename) === file || undefined,
+    })),
+  });
+  try {
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const marker = 'label"></local-icon>';
+    const offset = authored.indexOf(marker);
+    expect(offset).toBeGreaterThan(0);
+    const rename = (newName: string) => app.ask({
+      kind: SemanticAppQueryKind.TemplateRename,
+      cursor: { filePath: file, offset, line: 0, character: 0 },
+      newName,
+    }).value as SemanticTemplateRenameResult;
+    expect(rename('taken')).toMatchObject({ status: 'not-available', reason: 'name-conflict', edits: [] });
+    expect(rename('caption')).toMatchObject({ status: 'available' });
+  } finally {
+    runtime.retireWorkspaceIncarnation();
+  }
+});
