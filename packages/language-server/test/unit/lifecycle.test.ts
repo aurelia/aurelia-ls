@@ -61,6 +61,7 @@ function createLifecycleHarness() {
 
   const semanticRuntime = {
     configureWorkspace: vi.fn(),
+    mayDependOnFileContent: vi.fn((_filePath: string) => true),
     recordProjectTopologyChanged: vi.fn(() => {
       generation = createGeneration(generation.sourceGeneration + 1, generation.workspaceGeneration + 1);
       return generation;
@@ -825,6 +826,44 @@ describe("workspace source events", () => {
 
       expect(harness.semanticRuntime.recordSourceTextChanged).toHaveBeenCalledOnce();
       expect(harness.connection.languages.diagnostics.refresh).toHaveBeenCalledOnce();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  test("irrelevant closed output writes cannot postpone a pending authored repair", async () => {
+    vi.useFakeTimers();
+    try {
+      const harness = createLifecycleHarness();
+      harness.clientSupport.diagnosticRefresh = true;
+      harness.semanticRuntime.mayDependOnFileContent.mockReturnValue(false);
+      const active = document();
+      harness.synchronize(active);
+      for (let index = 0; index < 6; index++) {
+        await vi.advanceTimersByTimeAsync(100);
+        harness.watch([{ uri: workspaceFileUri("dist/pulse.js"), type: FileChangeType.Changed }]);
+      }
+      expect(harness.semanticRuntime.recordSourceTextChanged).toHaveBeenCalledTimes(1);
+      expect(harness.connection.languages.diagnostics.refresh).toHaveBeenCalledOnce();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  test("a stream of consumed input changes still publishes a bounded refresh", async () => {
+    vi.useFakeTimers();
+    try {
+      const harness = createLifecycleHarness();
+      harness.clientSupport.diagnosticRefresh = true;
+      for (let index = 0; index < 15; index++) {
+        harness.watch([{ uri: workspaceFileUri("src/app.ts"), type: FileChangeType.Changed }]);
+        await vi.advanceTimersByTimeAsync(100);
+      }
+      expect(harness.connection.languages.diagnostics.refresh).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(300);
+      expect(harness.connection.languages.diagnostics.refresh).toHaveBeenCalledTimes(2);
     } finally {
       vi.clearAllTimers();
       vi.useRealTimers();

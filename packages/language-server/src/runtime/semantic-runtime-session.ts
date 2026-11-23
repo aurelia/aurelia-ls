@@ -517,6 +517,15 @@ export class SemanticRuntimeLspSession {
         )));
   }
 
+  mayDependOnFileContent(filePath: string): boolean {
+    if (this.workspace?.session.mayDependOnFileContent(filePath) !== false) return true;
+    const readKey = this.projectInputAuthority.fileContentReadKey(filePath);
+    for (const entry of this.diagnosticCache.values()) {
+      if (entry.receipt.observesProjectInput(readKey)) return true;
+    }
+    return false;
+  }
+
   recordSourceTextChanged(filePaths: readonly string[]): void {
     if (filePaths.length === 0) {
       throw new Error("A source-text change must identify at least one workspace file.");

@@ -35,6 +35,7 @@ import { SEMANTIC_TOKENS_LEGEND } from "./semantic-tokens.js";
 
 /** Quiet period before publishing workspace-wide derived analysis. */
 const ANALYSIS_REFRESH_DEBOUNCE_MS = 300;
+const MAX_ANALYSIS_REFRESH_WAIT_MS = 1_000;
 
 interface LifecycleRefreshState {
   readonly tasks: Set<Promise<unknown>>;
@@ -42,6 +43,7 @@ interface LifecycleRefreshState {
   readonly pendingAnalysisChangedSourceUris: Map<string, string>;
   lifecycleRegistered: boolean;
   pendingAnalysisRefresh: ReturnType<typeof setTimeout> | null;
+  analysisRefreshDeadline: number;
   pendingAnalysisChangeKind: AnalysisChangedPayload["changeKind"] | null;
   shutdown: Promise<void> | null;
   readonly supportCounters: MutableLifecycleSupportCounters;
@@ -81,6 +83,7 @@ function closedAnalyzedSourceContentPaths(
     if (ctx.openWorkspaceDocument(change.uri) != null) continue;
     const filePath = ctx.documentUris.workspaceHostPath(change.uri);
     if (filePath == null || isProjectTopologyConfigurationPath(filePath)) continue;
+    if (!ctx.semanticRuntime.mayDependOnFileContent(filePath)) continue;
     filePaths.push(filePath);
   }
   return filePaths;
@@ -197,6 +200,8 @@ function scheduleAnalysisRefresh(
   if (state.pendingAnalysisRefresh != null) {
     state.supportCounters.analysisRefreshCoalesces += 1;
     clearTimeout(state.pendingAnalysisRefresh);
+  } else {
+    state.analysisRefreshDeadline = Date.now() + MAX_ANALYSIS_REFRESH_WAIT_MS;
   }
   state.pendingAnalysisRefresh = setTimeout(() => {
     state.pendingAnalysisRefresh = null;
@@ -209,7 +214,7 @@ function scheduleAnalysisRefresh(
     ctx.logger.log(`[workspace] processing settled analysis (${reason})`);
     runLifecycleTask(ctx, "workspace analysis refresh", () =>
       notifyAnalysisChanged(ctx, settledChangeKind, settledChangedSourceUris));
-  }, ANALYSIS_REFRESH_DEBOUNCE_MS);
+  }, Math.max(0, Math.min(ANALYSIS_REFRESH_DEBOUNCE_MS, state.analysisRefreshDeadline - Date.now())));
 }
 
 /**
@@ -402,10 +407,9 @@ function rememberOpenDocumentHostValue(
   uri: string,
   filePath: string,
 ): void {
-  lifecycleRefreshState(ctx).openDocumentEffectiveValues.set(
-    ctx.documentUris.key(uri),
-    { text: editorComparableWorkspaceHostText(ctx, filePath) },
-  );
+  const values = lifecycleRefreshState(ctx).openDocumentEffectiveValues;
+  const key = ctx.documentUris.key(uri);
+  if (!values.has(key)) values.set(key, { text: editorComparableWorkspaceHostText(ctx, filePath) });
 }
 
 function synchronizedDocumentValueChanged(
@@ -431,6 +435,15 @@ function closedDocumentValueChanged(
   const state = lifecycleRefreshState(ctx);
   const key = ctx.documentUris.key(uri);
   const previous = state.openDocumentEffectiveValues.get(key)?.text ?? synchronizedText;
+  // A second presentation URI may still own this file. The overlay has
+  // already processed didClose and selected the remaining synchronized buffer.
+  const remaining = ctx.openWorkspaceDocument(uri);
+  const document = remaining == null ? null : ctx.documents.get(remaining.uri);
+  if (document != null) {
+    const text = document.getText();
+    state.openDocumentEffectiveValues.set(key, { text });
+    return previous !== text;
+  }
   state.openDocumentEffectiveValues.delete(key);
   return previous !== editorComparableWorkspaceHostText(ctx, filePath);
 }
@@ -735,6 +748,7 @@ function lifecycleRefreshState(ctx: ServerContext): LifecycleRefreshState {
     pendingAnalysisChangedSourceUris: new Map(),
     lifecycleRegistered: false,
     pendingAnalysisRefresh: null,
+    analysisRefreshDeadline: 0,
     pendingAnalysisChangeKind: null,
     shutdown: null,
     supportCounters: createLifecycleSupportCounters(),

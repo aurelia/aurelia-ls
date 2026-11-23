@@ -121,6 +121,24 @@ const managedSemanticWorkspaceAnalysisReceipts = new WeakMap<
 export class ManagedSemanticWorkspaceOperationReceipt {
   private constructor(readonly analysisBasis: SemanticRuntimeAnalysisBasis) {}
 
+  /** Whether this sealed operation consumed an exact input, including presentation-only mapping reads. */
+  observesProjectInput(readKey: string): boolean {
+    const reads = managedSemanticWorkspaceAnalysisReceipts.get(this)?.projectInputReads;
+    if (reads == null) return false;
+    // The receipt builder seals reads in readKey order. Avoid a second retained
+    // index for every cached diagnostic report.
+    let first = 0;
+    let end = reads.length;
+    while (first < end) {
+      const middle = first + Math.floor((end - first) / 2);
+      const order = reads[middle]!.readKey.localeCompare(readKey);
+      if (order === 0) return true;
+      if (order < 0) first = middle + 1;
+      else end = middle;
+    }
+    return false;
+  }
+
   dispose(): void {
     const receipt = managedSemanticWorkspaceAnalysisReceipts.get(this);
     if (receipt == null) {
@@ -259,6 +277,15 @@ export class ManagedSemanticWorkspaceSession {
     }
     this.descriptor = semanticWorkspaceDescriptorForRuntimeOptions(options);
     this.projectInputAuthority = options.projectInputAuthority ?? new SemanticRuntimeProjectInputAuthority();
+  }
+
+  /** A value-only change can affect an authored file or a dependency consumed by the retained workspace. */
+  mayDependOnFileContent(fileName: string): boolean {
+    const current = this.activeIncarnation;
+    if (current == null || !current.acceptingOperations || current.activeOperationCount > 0
+      || current.invalidation != null || this.queuedTransitionCount > 0) return true;
+    return current.runtime.workspace.projects.some(project => project.sourceOwnership.admissionForHostPath(fileName) != null)
+      || this.projectInputAuthority.hasCapturedFileContent(fileName);
   }
 
   /**

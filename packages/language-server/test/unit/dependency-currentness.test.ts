@@ -82,6 +82,9 @@ describe("language-server dependency currentness", () => {
       throw new Error("Expected the first diagnostic pull to return a full report.");
     }
     expect(first.items.some((item) => diagnosticMessage(item.message).includes("required"))).toBe(true);
+    expect(ctx.semanticRuntime.mayDependOnFileContent(templatePath)).toBe(true);
+    expect(ctx.semanticRuntime.mayDependOnFileContent(dependencyPath)).toBe(true);
+    expect(ctx.semanticRuntime.mayDependOnFileContent(path.join(workspaceRoot, "dist/unused.js"))).toBe(false);
 
     fs.writeFileSync(
       dependencyPath,

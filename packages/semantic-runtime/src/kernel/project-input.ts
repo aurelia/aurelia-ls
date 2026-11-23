@@ -630,6 +630,10 @@ class CapturedSemanticRuntimeProjectInputHost implements SemanticRuntimeProjectI
     return [...this.readsByKey.values()].sort((left, right) => left.readKey.localeCompare(right.readKey));
   }
 
+  hasRead(readKey: string): boolean {
+    return this.readsByKey.has(readKey);
+  }
+
   validatePullValidatedInScope(validationScope: ComputationReadValidationScope): readonly ComputationReadValidation[] {
     return [...this.pullValidatedReadsByKey.values()]
       .sort((left, right) => left.readKey.localeCompare(right.readKey))
@@ -776,6 +780,10 @@ abstract class SemanticRuntimeInputGeneration implements GenerationAuthority {
 
   readRegisteredInputs(): readonly SemanticRuntimeProjectInputRead[] {
     return this.capturedHost.readAll();
+  }
+
+  hasCapturedRead(readKey: string): boolean {
+    return this.capturedHost.hasRead(readKey);
   }
 
   /** Validate the captured values by exact read relevance, independently from computation-generation retirement. */
@@ -1042,6 +1050,18 @@ export class SemanticRuntimeProjectInputAuthority {
       SemanticRuntimeProjectInputReadKind.FileContent,
       fileName,
     );
+  }
+
+  /** Check the retained input manifests without re-reading a changed dependency from disk. */
+  hasCapturedFileContent(fileName: string): boolean {
+    const key = this.fileContentReadKey(fileName);
+    for (const generation of this.generationsByProjectKey.values()) {
+      if (generation.hasCapturedRead(key)) return true;
+    }
+    for (const generation of this.workspaceGenerationsByKey.values()) {
+      if (generation.hasCapturedRead(key)) return true;
+    }
+    return false;
   }
 
   /**

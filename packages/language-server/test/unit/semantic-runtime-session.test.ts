@@ -2827,6 +2827,8 @@ describe("SemanticRuntimeLspSession diagnostic receipt cache", () => {
     }]);
 
     const first = await session.runDiagnosticRequest(null, diagnosticRequest(htmlUri), render);
+    expect(session.mayDependOnFileContent(externalPath)).toBe(true);
+    expect(session.mayDependOnFileContent(path.join(externalRoot, "unobserved.js"))).toBe(false);
     if (first.kind !== "full") throw new Error("Expected a full diagnostic report.");
 
     expect(first.items).toEqual([{

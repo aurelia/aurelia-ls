@@ -162,6 +162,37 @@ test("diagnostics clear and reappear when authored-source configuration membersh
   }
 }, 60_000);
 
+test("closing either presentation URI restores the remaining buffer or disk diagnostics", async () => {
+  const fixture = createLifecycleFixture();
+  const { connection, child, dispose, getStderr } = startServer(fixture);
+  const uri = fileUri(fixture, "src/components/lifecycle-card.html");
+  const alias = uri.replace("lifecycle-card.html", "%6Cifecycle-card.html");
+  const disk = "<template>${missingLifecycle}</template>";
+  const open = (u: string, text: string) => connection.sendNotification("textDocument/didOpen", {
+    textDocument: { uri: u, languageId: "html", version: 1, text },
+  });
+  const close = (u: string) => connection.sendNotification("textDocument/didClose", { textDocument: { uri: u } });
+  try {
+    await initialize(connection, child, getStderr, fixture);
+    for (const closeOriginalFirst of [false, true]) {
+      await open(uri, disk.replace("missingLifecycle", "existing"));
+      await expectExplicitClear(connection, uri, null);
+      await open(alias, disk);
+      await expectDiagnostic(connection, uri, "missingLifecycle");
+      await close(closeOriginalFirst ? uri : alias);
+      if (closeOriginalFirst) await expectDiagnostic(connection, alias, "missingLifecycle");
+      else await expectExplicitClear(connection, uri, null);
+      await close(closeOriginalFirst ? alias : uri);
+      await expectDiagnostic(connection, uri, "missingLifecycle");
+    }
+  } finally {
+    dispose();
+    child.kill("SIGKILL");
+    await waitForExit(child);
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+}, 45_000);
+
 function createLifecycleFixture(): string {
   return createAureliaAppFixture({
     "aurelia.project.json": JSON.stringify({ version: 1 }),
