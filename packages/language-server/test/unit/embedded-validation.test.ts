@@ -24,11 +24,11 @@ describe("embedded validation on a template with a compiler-owned interpolation"
   test("keeps a genuine colour error in the same style attribute and an independent script syntax error", () => {
     const style = "width: ${amount}%; border-color:#${hex}; color: #12zz34";
     const script = "const real = ;";
-    const document = html(`<p title="ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬" style="${style}"></p>\r\n<script>\r\n${script}\r\n</script>`);
+    const document = html(`<p title="\u{1F600}" style="${style}"></p>\r\n<script>\r\n${script}\r\n</script>`);
     const regions = [region(document, "css", "attribute", style), region(document, "javascript", "element", script)];
     const diagnostics = validateEmbeddedLanguages(document, regions, settings);
     expect(diagnostics.map(d => [d.source, document.getText(d.range)])).toEqual([["css", "#12zz34"], ["javascript", ";"]]);
-    expect(diagnostics[0]).toMatchObject({ severity: 1, code: "css-propertyvalueexpected" });
+    expect(diagnostics[0]).toMatchObject({ severity: 1, code: "css-propertyvalueexpected", range: { start: { line: 0, character: 69 } } });
     expect(diagnostics[1]).toMatchObject({ severity: 1, message: "Expression expected.", range: { start: { line: 2 } } });
     expect(validateEmbeddedLanguages(document, regions, { styles: false, scripts: true }).map(d => d.source)).toEqual(["javascript"]);
     expect(validateEmbeddedLanguages(document, regions, { styles: true, scripts: false, css: { validate: false } })).toEqual([]);
@@ -51,7 +51,7 @@ describe("embedded validation on a template with a compiler-owned interpolation"
   });
 
   test("maps browser-decoded attribute diagnostics back across HTML entities and an astral character", () => {
-    const raw = "width: ${w}%; content:&quot;ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬&quot;; color:#12zz34";
+    const raw = "width: ${w}%; content:&quot;\u{1F600}&quot;; color:#12zz34";
     const document = html(`<div\r\n  style='${raw}'></div>`);
     const source = region(document, "css", "attribute", raw);
     const value = raw.replaceAll("&quot;", '"');
@@ -64,7 +64,10 @@ describe("embedded validation on a template with a compiler-owned interpolation"
     const [diagnostic] = validateEmbeddedLanguages(document, [{ ...source, value, offsets }], settings);
     expect(diagnostic).toBeDefined();
     expect(document.getText(diagnostic!.range)).toBe("#12zz34");
-    expect(diagnostic!.range.start).toEqual(document.positionAt(source.start + raw.indexOf("#12zz34")));
+    const emojiStart = raw.indexOf("\u{1F600}");
+    expect(raw.codePointAt(emojiStart)).toBe(0x1F600);
+    expect(raw.indexOf("&quot;", emojiStart) - emojiStart).toBe(2);
+    expect(diagnostic!.range.start).toEqual({ line: 1, character: 53 });
   });
 
   test("preserves shared classic script scope and checks each module independently", () => {
