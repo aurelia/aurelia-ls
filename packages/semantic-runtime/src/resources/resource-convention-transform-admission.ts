@@ -286,8 +286,12 @@ export class ResourceConventionToolingEvaluationContext {
     resolveIdentifier: identifier => {
       if (identifier.text !== '__dirname') return null;
       const source = identifier.getSourceFile();
-      if (!isWebpackConfigPath(source.fileName)
-        || !(source.impliedNodeFormat === ts.ModuleKind.CommonJS || /\.c[jt]s$/iu.test(source.fileName))) return null;
+      if (!isWebpackConfigPath(source.fileName)) return null;
+      // Bundler-mode Programs can leave plain JS unclassified. Only the actual CommonJS export
+      // of such a script is accepted below, after checking the config's Node package scope.
+      const commonJs = /\.c[jt]s$/iu.test(source.fileName) || source.impliedNodeFormat === ts.ModuleKind.CommonJS
+        || (source.impliedNodeFormat == null && /\.js$/iu.test(source.fileName) && !ts.isExternalModule(source));
+      if (!commonJs) return null;
       return new EvaluationStringValue(path.dirname(source.fileName), identifier);
     },
     resolveCommonJsRequire: (_moduleKey, moduleSpecifier, node) => {
@@ -591,14 +595,14 @@ export class ResourceConventionTransformAdmissionMaterializer {
     }
     const baseline = evaluationAccess.readBaseline();
     const configs = conventionConfigSources(baseline);
-    const evaluation = configs.some(source => exportedConfigValue(source)?.kind === EvaluationValueKind.Function)
+    const evaluation = configs.some(source => exportedConfigValue(source, project)?.kind === EvaluationValueKind.Function)
       ? evaluationAccess.forkSession() : baseline;
     const toolingHost = evaluationAccess.readBaselineContext();
     const configured = new Map<string, ResourceConventionTransformEmission[]>();
     const openRecords: KernelStoreRecord[] = [];
     for (const source of evaluation === baseline ? configs : conventionConfigSources(evaluation)) {
       const webpack = isWebpackConfigPath(source.admission.path);
-      const exported = exportedConfigValue(source);
+      const exported = exportedConfigValue(source, project);
       const factory = exported?.kind === EvaluationValueKind.Function
         ? new StaticEvaluator(source.evaluation.policy, source.evaluation.runtimeHost).evaluateFunctionValue(
             exported, exported.declaration, source.moduleKey,
@@ -744,9 +748,17 @@ function readWebpackTransforms(source: ts.SourceFile, exported: EvaluationValue 
   return new ResourceConventionTransformReadResult(admissions, opens);
 }
 
-function exportedConfigValue(source: EvaluatedProjectSource): EvaluationValue | null {
+function exportedConfigValue(source: EvaluatedProjectSource, project: ProjectBootFrame): EvaluationValue | null {
   const environment = source.evaluation.environment;
-  return environment.readValue('default') ?? readStaticCommonJsExportValue(environment, 'default');
+  const exported = environment.readValue('default');
+  if (exported != null) return exported;
+  if (isWebpackConfigPath(source.admission.path)) {
+    // Node loads the config in its own package scope even if the application uses bundler resolution.
+    const format = ts.getImpliedNodeFormatForFile(source.sourceFile.fileName, undefined, project.inputGeneration.host,
+      { module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext });
+    if (format === ts.ModuleKind.ESNext) return null;
+  }
+  return readStaticCommonJsExportValue(environment, 'default');
 }
 
 function readConventionTransforms(

@@ -11,12 +11,17 @@ afterEach(() => {
 
 const loader = "'@aurelia/webpack-loader'";
 
-async function recognized(configFile: string, config: string, additionalConfigs: Readonly<Record<string, string>> = {}) {
+async function recognized(
+  configFile: string,
+  config: string,
+  additionalConfigs: Readonly<Record<string, string>> = {},
+  packageType: 'module' | 'commonjs' | null = 'module',
+) {
   const root = mkdtempSync(path.join(tmpdir(), 'aurelia-webpack-conventions-'));
   roots.push(root);
   mkdirSync(path.join(root, 'src'));
   writeFileSync(path.join(root, 'package.json'), JSON.stringify({
-    name: 'webpack-convention-test', private: true, type: 'module',
+    name: 'webpack-convention-test', private: true, ...(packageType == null ? {} : { type: packageType }),
     dependencies: { aurelia: '^2.0.0-rc.2' }, devDependencies: { '@aurelia/webpack-loader': '^2.0.0-rc.2' },
   }));
   writeFileSync(path.join(root, configFile), config);
@@ -80,12 +85,17 @@ test('preserves an uncertain first match and an independently known adjacent loa
   expect(pressure.length).toBeGreaterThan(0);
 });
 
-test('matches configured CommonJS path filters only in the config directory', async () => {
-  const { names } = await recognized('webpack.config.cjs', `const path=require('node:path');
+test.each([
+  ['webpack.config.cjs', 'module', true],
+  ['webpack.config.js', 'commonjs', true],
+  ['webpack.config.js', null, true],
+  ['webpack.config.js', 'module', false],
+] as const)('uses CommonJS path filters in %s with package type %s only when Node can load them', async (configFile, packageType, admitted) => {
+  const { names } = await recognized(configFile, `const path=require('node:path');
     module.exports={module:{rules:[{test:/\\.(js|ts|html)$/, include:path.resolve(__dirname,'src'),
-      exclude:path.join(__dirname,'src','script-skipped'), use:${loader}}]}};`);
-  expect(names).toContain('app-root');
-  expect(names).toContain('view-skipped');
+      exclude:path.join(__dirname,'src','script-skipped'), use:${loader}}]}};`, {}, packageType);
+  expect(names.includes('app-root')).toBe(admitted);
+  expect(names.includes('view-skipped')).toBe(admitted);
   expect(names).not.toContain('script-skipped');
 });
 
