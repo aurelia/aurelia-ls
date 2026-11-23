@@ -10,6 +10,7 @@ import type { AureliaLanguageClient } from "./client-core.js";
 import type { ClientLogger } from "./log.js";
 import type { VscodeApi } from "./vscode-api.js";
 import { createClientContext, type ClientContext } from "./core/context.js";
+import { INITIAL_CONTEXT_READINESS_TIMEOUT_MS, settlesBeforeDeadline } from "./core/context-readiness.js";
 import { ErrorReporter } from "./core/errors.js";
 import type { ClientFeature } from "./core/feature.js";
 import { LspFacade } from "./core/lsp-facade.js";
@@ -22,7 +23,6 @@ import {
 import { emitWorkerRestartContextObservation } from "./worker-restart-host-control.js";
 import type { SupportReportService } from "./support-report.js";
 
-const INITIAL_CONTEXT_READINESS_TIMEOUT_MS = 15_000;
 const INITIAL_CONTEXT_RETRY_DELAY_MS = 1_000;
 
 class ContextTransitionCancelledError extends Error {
@@ -483,21 +483,6 @@ async function untilContextCancellation<T>(
     return await Promise.race([operation, cancellation]);
   } finally {
     subscription?.dispose();
-  }
-}
-
-async function settlesBeforeDeadline(operation: Promise<unknown>, milliseconds: number): Promise<boolean> {
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  const deadline = new Promise<false>((resolve) => {
-    timeout = setTimeout(() => resolve(false), milliseconds);
-  });
-  try {
-    return await Promise.race([
-      operation.then(() => true, () => true),
-      deadline,
-    ]);
-  } finally {
-    if (timeout != null) clearTimeout(timeout);
   }
 }
 

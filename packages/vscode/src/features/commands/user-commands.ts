@@ -8,6 +8,7 @@ import {
 } from "@aurelia-ls/language-server/protocol";
 import type { QuickPickItem, QuickPickItemKind, TextDocument, TextEditor } from "vscode";
 import { createHash } from "node:crypto";
+import { RelatedFileContext } from "../../related-file-context.js";
 import type { ClientFeature } from "../../core/feature.js";
 import type { ClientContext } from "../../core/context.js";
 import type { AureliaLanguageClientSession } from "../../client-core.js";
@@ -170,6 +171,8 @@ export const UserCommandsFeature: ClientFeature = {
     const lsp = ctx.lsp;
     const vscode = ctx.vscode;
     const errors = ctx.errors;
+    const relatedFiles = new RelatedFileContext(ctx);
+    own(relatedFiles);
 
     const run = <T>(id: string, fn: () => Promise<T>) =>
       errors.capture(`command.${id}`, fn, { context: { command: id } });
@@ -515,36 +518,48 @@ export const UserCommandsFeature: ClientFeature = {
         const uri = originDocument.uri.toString();
         const originVersion = originDocument.version;
         const originSession = ctx.languageClient.sessionForUri(originDocument.uri);
+        if (!originSession) {
+          vscode.window.showInformationMessage("The active file has no Aurelia workspace session");
+          return;
+        }
+        const current = () => {
+          if (relatedFileInvocationIsCurrent(ctx, originDocument, uri, originVersion, originSession)) return true;
+          vscode.window.showInformationMessage("The active Aurelia source changed; run Open Related File again");
+          return false;
+        };
         const candidates = await lsp.getRelatedFiles(uri);
-        if (!relatedFileInvocationIsCurrent(ctx, originDocument, uri, originVersion, originSession)) return;
+        if (!current()) return;
         if (candidates.length === 0) {
           vscode.window.showInformationMessage("No related Aurelia file found");
           return;
         }
 
-        const related = candidates.length === 1
-          ? candidates[0]
-          : await pickRelatedFile(vscode, candidates);
-        if (related == null) return;
-
-        if (!relatedFileInvocationIsCurrent(ctx, originDocument, uri, originVersion, originSession)) {
-          vscode.window.showInformationMessage("The active Aurelia source changed; run Open Related File again");
-          return;
-        }
-        const currentCandidates = await lsp.getRelatedFiles(uri);
-        if (!relatedFileInvocationIsCurrent(ctx, originDocument, uri, originVersion, originSession)) return;
-        const currentRelated = currentCandidates.find((candidate) => sameRelatedFileCandidate(candidate, related));
-        if (currentRelated == null) {
+        const related = candidates.length === 1 ? candidates[0] : await pickRelatedFile(vscode, candidates);
+        if (!related || !current()) return;
+        const confirmTarget = async () => {
+          const fresh = await lsp.getRelatedFiles(uri);
+          if (!current()) return false;
+          if (fresh.some(candidate => sameRelatedFileCandidate(candidate, related))) return true;
           vscode.window.showInformationMessage("The related Aurelia file changed; run Open Related File again");
-          return;
-        }
+          return false;
+        };
+        // The initial answer is current when delivered. Only a real wait for input warrants re-reading it.
+        if (candidates.length > 1 && !await confirmTarget()) return;
 
-        const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(currentRelated.uri));
-        if (!relatedFileInvocationIsCurrent(ctx, originDocument, uri, originVersion, originSession)) {
-          return;
+        let changedWhileOpening = false;
+        const changes = lsp.onAnalysisChanged(event => {
+          if (event.workspace.key === originSession.workspace.key) changedWhileOpening = true;
+        });
+        try {
+          const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(related.uri));
+          if (!current()) return;
+          if (changedWhileOpening && !await confirmTarget()) return;
+          await vscode.window.showTextDocument(doc);
+        } finally {
+          changes.dispose();
         }
-        await vscode.window.showTextDocument(doc);
       })));
+    return relatedFiles.waitForActiveWorkspace();
   },
 };
 
@@ -571,10 +586,7 @@ function relatedFileInvocationIsCurrent(
 }
 
 function sameRelatedFileCandidate(left: RelatedFileCandidate, right: RelatedFileCandidate): boolean {
-  return left.uri === right.uri
-    && left.role === right.role
-    && left.elementName === right.elementName
-    && left.className === right.className;
+  return left.uri === right.uri && left.role === right.role;
 }
 
 function inventoryQuickPickModel(

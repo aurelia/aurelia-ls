@@ -1507,6 +1507,12 @@ export interface RelatedFileCandidate {
 
 export type RelatedFilesResponse = readonly RelatedFileCandidate[];
 
+/** Omit the unchanged URI list when the client already holds this exact set of navigable files. */
+export interface RelatedFileSourcesResponse {
+  readonly resultId: string;
+  readonly uris: readonly string[] | null;
+}
+
 export type RenameFromTsParams = {
   uri: string;
   position: Position;

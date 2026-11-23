@@ -545,14 +545,14 @@ describe("VS Code product contract", () => {
     const supportedLanguageClause = `(${supportedLanguages
       .map((languageId) => `editorLangId == ${languageId}`)
       .join(" || ")})`;
-    const commandContext = `aurelia.active && aurelia.documentOwned && ${supportedLanguageClause}`;
+    const commandContext = `aurelia.active && resource in aurelia.relatedFileUris && ${supportedLanguageClause}`;
 
     expect(menu?.when).toBe(commandContext);
     expect(palette?.when).toBe(commandContext);
     expect(keybinding).toEqual({
       command: AureliaCommand.OpenRelatedFile,
       key: "alt+r",
-      when: `aurelia.active && aurelia.documentOwned && editorTextFocus && ${supportedLanguageClause}`,
+      when: `aurelia.active && resource in aurelia.relatedFileUris && editorTextFocus && !findWidgetVisible && ${supportedLanguageClause}`,
     });
   });
 

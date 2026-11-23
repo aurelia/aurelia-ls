@@ -376,14 +376,19 @@ function createHarness(input: {
     input.availability?.(...args) ?? exactAvailability()
   );
   const getRelatedFiles = vi.fn(async () => input.related ?? []);
-  const languageSession = { client: {}, incarnation: 1 };
+  const languageSession = { workspace: { key: "repo" }, client: {}, incarnation: 1 };
+  let changed: (() => void) | undefined;
+  const onAnalysisChanged = (listener: (event: { workspace: { key: string } }) => void) => {
+    changed = () => listener({ workspace: languageSession.workspace });
+    return { dispose: () => { changed = undefined; } };
+  };
   const ctx = {
     extension: stubExtensionContext(stubVscode),
     vscode,
     logger,
     errors,
-    lsp: { getResourceInventory, getTemplateResourceAvailability, getRelatedFiles },
-    languageClient: { sessionForUri: () => languageSession },
+    lsp: { getResourceInventory, getTemplateResourceAvailability, getRelatedFiles, onAnalysisChanged },
+    languageClient: { sessions: [], sessionForUri: () => languageSession, onDidChangeSessions: () => ({dispose() {}}) },
   };
   UserCommandsFeature.activate(ctx as never, (contribution) => contribution);
 
@@ -398,6 +403,7 @@ function createHarness(input: {
     getTemplateResourceAvailability,
     getRelatedFiles,
     languageSession,
+    analysisChanged: () => changed?.(),
     vscode: stubVscode,
   };
 }
@@ -2290,6 +2296,49 @@ describe("UserCommandsFeature", () => {
     expect(harness.recorded.openedDocuments.at(-1)?.uri.toString()).toBe("file:///secondary.html");
   });
 
+  test("tells the author when an edit supersedes an in-flight related-file lookup", async () => {
+    const harness = createHarness();
+    const pending = deferred<unknown[]>();
+    harness.getRelatedFiles.mockImplementationOnce(() => pending.promise);
+    const command = harness.recorded.commandHandlers.get(AureliaCommand.OpenRelatedFile)?.();
+    (harness.vscode.window.activeTextEditor as { document: { version: number } }).document.version++;
+    pending.resolve([{ uri: "file:///repo/src/my-app.ts", role: "component-source" }]);
+    await command;
+    expect(harness.recorded.infoMessages).toContain("The active Aurelia source changed; run Open Related File again");
+    expect(harness.recorded.openedDocuments).toEqual([]);
+    expect(harness.getRelatedFiles).toHaveBeenCalledTimes(1);
+  });
+
+  test("uses one lookup for an immediate destination and revalidates after a change during open", async () => {
+    const target = { uri: "file:///repo/src/my-app.ts", role: "component-source", elementName: "my-app", className: "MyApp" };
+    const harness = createHarness({ related: [target] });
+    await harness.recorded.commandHandlers.get(AureliaCommand.OpenRelatedFile)?.();
+    expect(harness.getRelatedFiles).toHaveBeenCalledTimes(1);
+    expect(harness.recorded.shownDocuments.at(-1)?.doc.uri.toString()).toBe(target.uri);
+
+    const other = createHarness({ related: [target] });
+    const open = other.vscode.workspace.openTextDocument.bind(other.vscode.workspace);
+    other.vscode.workspace.openTextDocument = vi.fn(async uri => {
+      other.analysisChanged();
+      return open(uri);
+    });
+    other.getRelatedFiles.mockResolvedValueOnce([target]).mockResolvedValueOnce([]);
+    await other.recorded.commandHandlers.get(AureliaCommand.OpenRelatedFile)?.();
+    expect(other.getRelatedFiles).toHaveBeenCalledTimes(2);
+    expect(other.recorded.shownDocuments).toEqual([]);
+    expect(other.recorded.infoMessages).toContain("The related Aurelia file changed; run Open Related File again");
+  });
+
+  test("keeps a chosen destination when its representative resource label changes", async () => {
+    const first = { uri: "file:///repo/src/a.ts", role: "component-source", elementName: "a-item", className: "A" };
+    const picked = { uri: "file:///repo/src/b.ts", role: "component-source", elementName: "b-item", className: "B" };
+    const harness = createHarness({ relatedPickIndex: 1 });
+    harness.getRelatedFiles.mockResolvedValueOnce([first, picked])
+      .mockResolvedValueOnce([{ ...picked, elementName: "other-b", className: "OtherB" }]);
+    await harness.recorded.commandHandlers.get(AureliaCommand.OpenRelatedFile)?.();
+    expect(harness.recorded.shownDocuments.at(-1)?.doc.uri.toString()).toBe(picked.uri);
+  });
+
   test("refuses a related-file choice that disappears while the picker is open", async () => {
     const primary = {
       uri: "file:///primary.html",
@@ -2352,7 +2401,7 @@ describe("UserCommandsFeature", () => {
     releaseOpen.resolve(undefined);
     await command;
 
-    expect(harness.getRelatedFiles).toHaveBeenCalledTimes(2);
+    expect(harness.getRelatedFiles).toHaveBeenCalledTimes(1);
     expect(harness.recorded.shownDocuments).toEqual([]);
   });
 });

@@ -42,6 +42,7 @@ import type {
   FrameworkCapabilityExplanationRefusalKind,
   FrameworkCapabilityExplanationResponse,
   RelatedFilesResponse,
+  RelatedFileSourcesResponse,
   RenameCandidateLocation,
   RenameFromTsParams,
   RenameFromTsResponse,
@@ -104,7 +105,8 @@ import {
   mapTemplateResourceAvailabilityItem,
   mapTemplateResourceScopeCandidate,
 } from "../mapping/resource-discovery.js";
-import { relatedFileCandidates } from "../mapping/related-files.js";
+import { createHash } from "node:crypto";
+import { relatedFileCandidates, relatedFileSourceUris } from "../mapping/related-files.js";
 import {
   semanticSourceReferenceFilePath,
 } from "../mapping/source-locations.js";
@@ -1112,6 +1114,24 @@ function renameFromTsBlocked(
   };
 }
 
+/** File URIs whose current project has an actual navigable counterpart. */
+export async function handleRelatedFileSources(
+  ctx: ServerContext,
+  operation: SemanticRuntimeLspOperation,
+  previousResultId?: string,
+): Promise<RelatedFileSourcesResponse> {
+  const summary = await operation.workspaceSummary(true);
+  const sources = new Set<string>();
+  for (const project of summary.value.projects) {
+    if (project.analysisKind !== "app-world" && project.analysisKind !== "resource-library-authoring") continue;
+    const ownership = await operation.templateDocumentOwnership(project.projectKey);
+    for (const uri of relatedFileSourceUris(ownership.value, ctx.documentUris)) sources.add(uri);
+  }
+  const uris = [...sources].sort();
+  const resultId = createHash("sha256").update(JSON.stringify(uris)).digest("hex");
+  return { resultId, uris: previousResultId === resultId ? null : uris };
+}
+
 export async function handleGetRelatedFiles(
   ctx: ServerContext,
   params: DocumentUriParams,
@@ -1214,6 +1234,9 @@ export function registerCustomHandlers(ctx: ServerContext): void {
         }),
         (guard) => handleTemplateResourceAvailability(ctx, params, guard)),
   );
+  ctx.connection.onRequest(AureliaProtocolRequest.RelatedFileSources, (params: { previousResultId?: string } | null, token: CancellationToken) =>
+    request(ctx, "relatedFileSources", token, undefined, (guard) => handleRelatedFileSources(ctx, guard, params?.previousResultId)));
+
   ctx.connection.onRequest(AureliaProtocolRequest.RelatedFiles, (params: DocumentUriParams, token: CancellationToken) =>
     documentRequest(ctx, "getRelatedFiles", token, params.uri,
       () => [],

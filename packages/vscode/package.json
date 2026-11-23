@@ -264,7 +264,7 @@
       {
         "command": "aurelia.openRelatedFile",
         "key": "alt+r",
-        "when": "aurelia.active && aurelia.documentOwned && editorTextFocus && (editorLangId == html || editorLangId == aurelia-html || editorLangId == typescript || editorLangId == typescriptreact || editorLangId == javascript || editorLangId == javascriptreact)"
+        "when": "aurelia.active && resource in aurelia.relatedFileUris && editorTextFocus && !findWidgetVisible && (editorLangId == html || editorLangId == aurelia-html || editorLangId == typescript || editorLangId == typescriptreact || editorLangId == javascript || editorLangId == javascriptreact)"
       }
     ],
     "menus": {
@@ -335,7 +335,7 @@
         },
         {
           "command": "aurelia.openRelatedFile",
-          "when": "aurelia.active && aurelia.documentOwned && (editorLangId == html || editorLangId == aurelia-html || editorLangId == typescript || editorLangId == typescriptreact || editorLangId == javascript || editorLangId == javascriptreact)",
+          "when": "aurelia.active && resource in aurelia.relatedFileUris && (editorLangId == html || editorLangId == aurelia-html || editorLangId == typescript || editorLangId == typescriptreact || editorLangId == javascript || editorLangId == javascriptreact)",
           "group": "aurelia@2"
         }
       ],
@@ -373,7 +373,7 @@
         },
         {
           "command": "aurelia.openRelatedFile",
-          "when": "aurelia.active && aurelia.documentOwned && (editorLangId == html || editorLangId == aurelia-html || editorLangId == typescript || editorLangId == typescriptreact || editorLangId == javascript || editorLangId == javascriptreact)"
+          "when": "aurelia.active && resource in aurelia.relatedFileUris && (editorLangId == html || editorLangId == aurelia-html || editorLangId == typescript || editorLangId == typescriptreact || editorLangId == javascript || editorLangId == javascriptreact)"
         },
         {
           "command": "aurelia.openResourceDeclaration",

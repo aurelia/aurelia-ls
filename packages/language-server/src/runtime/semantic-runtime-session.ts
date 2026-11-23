@@ -97,7 +97,7 @@ export interface SemanticRuntimeLspOperation {
   readonly documents: SemanticRuntimeLspOperationDocuments;
 
   deferEffect(effect: SemanticRuntimeLspDeferredEffect): void;
-  workspaceSummary(): Promise<SemanticRuntimeAnswer<SemanticRuntimeSummary>>;
+  workspaceSummary(includeProjects?: boolean): Promise<SemanticRuntimeAnswer<SemanticRuntimeSummary>>;
   authoredSourceOwnership(uri: DocumentUri): Promise<SemanticRuntimeAnswer<SemanticAuthoredSourceOwnershipResult>>;
   nativeProjectConfigurations(sourceUris: readonly DocumentUri[]): Promise<SemanticRuntimeAnswer<SemanticNativeProjectConfigurationsResult>>;
   analysisLimitations(projectKey: string): Promise<SemanticRuntimeAnswer<SemanticAnalysisLimitationsResult>>;
@@ -943,7 +943,7 @@ export class SemanticRuntimeLspSession {
         this.assertRequestTokenActive(token);
         token.effects.push(normalizeSemanticRuntimeLspDeferredEffect(effect));
       },
-      workspaceSummary: () => this.workspaceSummary(token),
+      workspaceSummary: (includeProjects) => this.workspaceSummary(token, includeProjects),
       authoredSourceOwnership: (uri) => this.authoredSourceOwnership(uri, token),
       nativeProjectConfigurations: (sourceUris) => this.nativeProjectConfigurations(sourceUris, token),
       analysisLimitations: (projectKey) => this.analysisLimitations(projectKey, token),
@@ -1070,8 +1070,18 @@ export class SemanticRuntimeLspSession {
 
   private workspaceSummary(
     token: SemanticRuntimeLspRequestToken,
+    includeProjects = false,
   ): Promise<SemanticRuntimeAnswer<SemanticRuntimeSummary>> {
     const runtime = this.runtimeForOperation(token);
+    if (includeProjects) {
+      return drainSemanticRuntimePages({
+        label: "workspace project",
+        assertActive: () => this.assertRequestTokenActive(token),
+        readPage: (cursor) => Promise.resolve(runtime.summary({ projectPage: { size: 200, cursor }, inquiryProfile: "lsp-cursor" })),
+        rowsForValue: (value) => value.projects,
+        mergeValue: (value, projects) => ({ ...value, projects }),
+      });
+    }
     const answer = runtime.summary({ projectPage: { size: 0 }, inquiryProfile: "lsp-cursor" });
     this.assertRequestTokenActive(token);
     return Promise.resolve(answer);

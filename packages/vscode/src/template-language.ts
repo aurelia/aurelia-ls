@@ -415,7 +415,7 @@ function templateDiagnosticsSuppressNative(ctx: ClientContext, document: TextDoc
     .get<boolean>("templateDiagnostics.suppressNative", false) === true;
 }
 
-function analysisCanChangeTemplateOwnership(
+export function analysisCanChangeTemplateOwnership(
   ctx: ClientContext,
   payload: WorkspaceNotificationPayload<AnalysisChangedPayload>,
 ): boolean {

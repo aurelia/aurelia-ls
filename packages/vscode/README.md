@@ -301,9 +301,10 @@ unsupported, and remote development is outside the release-tested host envelope.
 
 ## Commands
 
-The extension assigns `Alt+R` to **Open Related File** while a supported Aurelia-owned HTML or script editor has text
-focus. This is a configurable VS Code default: use the Keyboard Shortcuts editor to replace or remove it. Other Aurelia
-commands remain unbound unless you assign them.
+The extension assigns `Alt+R` to **Open Related File** when the focused script or HTML file has a file-backed
+component or template counterpart. The workbench matches the focused file's URI, so switching between known
+components does not wait for another ownership request. Find keeps its ordinary shortcuts while the Find widget is
+visible. Use the Keyboard Shortcuts editor to replace or remove this default.
 
 | Command | Shortcut | Description |
 |---------|----------|-------------|

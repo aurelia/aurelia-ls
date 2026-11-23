@@ -232,6 +232,13 @@ test("related files follow a deeply nested convention pair in both directions", 
     openDocument(connection, sourceUri, "typescript", fs.readFileSync(sourcePath, "utf8"));
     openDocument(connection, templateUri, "html", fs.readFileSync(templatePath, "utf8"));
 
+    const { uris: eligible, resultId } = await connection.sendRequest<{ uris: string[]; resultId: string }>(AureliaProtocolRequest.RelatedFileSources, {});
+    expect(eligible).toEqual(expect.arrayContaining([templateUri, sourceUri]));
+    expect(new Set(eligible).size).toBe(eligible.length);
+    expect(eligible).not.toContain(fileUri(fixture, "src/main.ts"));
+    expect(await connection.sendRequest(AureliaProtocolRequest.RelatedFileSources, { previousResultId: resultId }))
+      .toEqual({ uris: null, resultId });
+
     expect(await connection.sendRequest<RelatedFilesResponse>(
       AureliaProtocolRequest.RelatedFiles,
       { uri: sourceUri },

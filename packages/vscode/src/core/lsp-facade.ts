@@ -16,6 +16,7 @@ import {
   type ResourceAvailabilityExplanationResponse,
   type ResourceInventoryParams,
   type ResourceInventoryResponse,
+  type RelatedFileSourcesResponse,
   type SourceOwnershipResponse,
   type TemplateResourceAvailabilityResponse,
 } from "@aurelia-ls/language-server/protocol";
@@ -331,6 +332,16 @@ export class LspFacade implements Disposable {
       "read-currentness",
     );
     return { ...response, workspace: session.workspace };
+  }
+
+  async getRelatedFileSources(
+    session: AureliaLanguageClientSession,
+    token: CancellationToken,
+    previousResultId?: string,
+  ): Promise<RelatedFileSourcesResponse> {
+    return this.#sendRequest<RelatedFileSourcesResponse>(
+      session, AureliaProtocolRequest.RelatedFileSources, { previousResultId }, token, "read-currentness",
+    );
   }
 
   async getRelatedFiles(uri: string): Promise<RelatedFilesResponse> {
