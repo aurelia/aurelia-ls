@@ -559,7 +559,7 @@ export const UserCommandsFeature: ClientFeature = {
           changes.dispose();
         }
       })));
-    return relatedFiles.waitForActiveWorkspace();
+    return relatedFiles.waitForInitialSources();
   },
 };
 

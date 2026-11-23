@@ -16,7 +16,8 @@ test("keys Open Related to exact resource URIs across focus changes, reproof and
   type Change = { workspace: { key: string }; changeKind: "source-text" | "topology"; changedSourceUris: string[] };
   let publishChange!: (change: Change) => void;
   let finishRead!: (answer: { resultId: string; uris: readonly string[] }) => void;
-  const read = vi.fn(async () => ({ resultId: "first", uris: [html, script, excluded, otherAuthority] as readonly string[] }));
+  type Answer = { resultId: string; uris: readonly string[] };
+  const read = vi.fn(async (): Promise<Answer> => new Promise(resolve => { finishRead = resolve; }));
   const ctx = {
     vscode,
     logger: { warn: vi.fn() },
@@ -34,7 +35,13 @@ test("keys Open Related to exact resource URIs across focus changes, reproof and
   const context = new RelatedFileContext(ctx as unknown as ClientContext);
   const value = () => recorded.contextValues.get("aurelia.relatedFileUris");
   try {
-    await vi.waitFor(() => expect(value()).toEqual({ [html]: true, [script]: true }));
+    let ready = false;
+    const initial = context.waitForInitialSources().then(() => { ready = true; });
+    await Promise.resolve();
+    expect(ready).toBe(false);
+    finishRead({ resultId: "first", uris: [html, script, excluded, otherAuthority] });
+    await initial;
+    expect(value()).toEqual({ [html]: true, [script]: true });
     // The native workbench can now test either editor's resource URI without waiting for an extension-host round trip.
     expect(read).toHaveBeenCalledTimes(1);
     read.mockImplementationOnce(() => new Promise(resolve => { finishRead = resolve; }));

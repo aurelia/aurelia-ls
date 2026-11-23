@@ -33,11 +33,20 @@ export class RelatedFileContext implements Disposable {
     this.#reconcile();
   }
 
-  async waitForActiveWorkspace(): Promise<void> {
-    const uri = this.ctx.vscode.window.activeTextEditor?.document.uri;
-    const session = uri && this.ctx.languageClient.sessionForUri(uri);
-    const ready = session && this.#sources.get(session.workspace.key)?.ready;
-    if (ready) await settlesBeforeDeadline(ready, INITIAL_CONTEXT_READINESS_TIMEOUT_MS);
+  async waitForInitialSources(): Promise<void> {
+    const deadline = Date.now() + INITIAL_CONTEXT_READINESS_TIMEOUT_MS;
+    while (true) {
+      const uri = this.ctx.vscode.window.activeTextEditor?.document.uri;
+      const session = uri && this.ctx.languageClient.sessionForUri(uri);
+      // Startup can precede the first editor. In that case await the already-issued reads so a newly opened
+      // file does not inherit an extension-ready state with no workbench keybinding context yet.
+      const workspaces = session ? [this.#sources.get(session.workspace.key)] : [...this.#sources.values()];
+      const reads = workspaces.flatMap(entry => entry?.pending && entry.ready && !entry.resultId ? [entry.ready] : []);
+      if (reads.length === 0) return;
+      const remaining = deadline - Date.now();
+      if (remaining <= 0 || !await settlesBeforeDeadline(Promise.all(reads), remaining)) return;
+      // A session change or analysis notification may have superseded an initial read while it was pending.
+    }
   }
 
   dispose(): void {
