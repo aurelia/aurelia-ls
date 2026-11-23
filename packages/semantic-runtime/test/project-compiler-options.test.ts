@@ -83,7 +83,7 @@ describe('project compiler options', () => {
     });
   });
 
-  test('a nested config inheriting a broad include cannot override a sibling fileâ€™s actual parent config', async () => {
+  test('a nested config inheriting a broad include cannot override the actual parent config of a sibling file', async () => {
     const root = await temporaryRoot();
     const nested = path.join(root, 'src/feature');
     await mkdir(nested, { recursive: true });
