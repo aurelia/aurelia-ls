@@ -103,7 +103,7 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/resource-definition-converger.ts",
-          "symbolName": "readImportedHtmlTemplate",
+          "symbolName": "readAdmittedHtmlTemplate",
           "summary": "Resource convergence reads imported/conventional external HTML through the shared cache before metadata stripping."
         },
         {
