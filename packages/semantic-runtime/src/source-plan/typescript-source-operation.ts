@@ -168,9 +168,8 @@ function registerChainEdit(
   }
   const prefix = sourceFile.text.slice(lineStartOffset(sourceFile.text, dotOffset), dotOffset);
   const inline = prefix.trim().length > 0;
-  const newText = inline
-    ? aureliaRegisterCallText(registrationExpressions)
-    : `${aureliaRegisterCallText(registrationExpressions)}${detectNewline(sourceFile.text)}${prefix}`;
+  const registration = `.register(${registrationExpressions.join(', ')})`;
+  const newText = inline ? registration : registration + detectNewline(sourceFile.text) + prefix;
   return {
     editKind: TypeScriptSourceOperationEditKind.AureliaRegisterChain,
     sourceFilePath: sourceFile.fileName,
@@ -419,15 +418,6 @@ function registerChainAlreadyContainsExpression(
     }
     receiver = receiver.expression.expression;
   }
-}
-
-function aureliaRegisterCallText(
-  expressions: readonly string[],
-): string {
-  if (expressions.length === 1 && !expressions[0]!.includes('\n')) {
-    return `.register(${expressions[0]})`;
-  }
-  return `.register(${expressions.join(', ')})`;
 }
 
 function dotOffsetBeforePropertyName(
