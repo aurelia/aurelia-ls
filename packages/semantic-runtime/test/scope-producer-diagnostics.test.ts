@@ -23,6 +23,7 @@ test('relates missing scope producers to consumers and keeps independent repairs
     '<div with.bind="badWith"><p>${profile.name}</p><p>${amount}</p><p>${$parent.parentTypo}</p></div>',
     '<div repeat.for="order of orders">${order.realTypo}</div>',
     '<p>${unrelated}</p>',
+    '<div with.bind="badFlag ? orders[0] : orders[0]">${separateTypo}</div>',
   ].join('\n');
   const overlay = new MutableProjectSourceOverlay();
   const filePath = 'src/app.html';
@@ -55,6 +56,8 @@ test('relates missing scope producers to consumers and keeps independent repairs
       { name: 'parentTypo', children: [] },
       { name: 'realTypo', children: [] },
       { name: 'unrelated', children: [] },
+      { name: 'badFlag', children: [] },
+      { name: 'separateTypo', children: [] },
     ]);
     const actionsAt = (offset: number) => (app.ask({
       kind: SemanticAppQueryKind.TemplateCodeActions, cursor: { filePath, offset },
