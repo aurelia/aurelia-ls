@@ -1259,9 +1259,12 @@ arity mismatch, nullish access, and unknown-owner access remain primary. Templat
 diagnostic severity mapping as ordinary TypeScript diagnostic rows so unified diagnostic answers do not drift by lane.
 Presentation also carries explicit answer-local `withheld` references for context-only weak-owner facts that remain after
 all causal, semantic, and checker grouping passes. Index-signature, `any`, and no-members inspection facts stay in raw
-rows and may remain contextual, but do not become standalone Problems. A weak owner with
-`expression-member-owner-type:missing-slot-type` remains primary because its exact scope-slot locus supports a
-`declare-scope-slot-type` repair. Presentation conserves every raw row exactly once across group primary rows, contextual
+rows and may remain contextual, but do not become standalone Problems. A missing slot type can be the main
+finding when the producer is open. If an ordinary `let`, `repeat` or `with` reads a missing scope root, consumers
+trace their runtime scope and its creator back to that producer. When the admitted diagnostics identify one cause,
+the missing-member Error owns the Problem and downstream facts appear as related information. A downstream
+name in an unresolved `with` context then has no preferred view-model declaration edit. Shadowing and explicit
+ancestor access use their own scope, and an ambiguous producer retains separate findings. Presentation conserves every raw row exactly once across group primary rows, contextual
 rows, and withheld references: `rawRowCount === primaryCount + contextualCount + withheldCount`; no raw row index may be
 missing or appear in more than one role. Problems adapters must honor a present presentation instead of republishing raw
 rows. A presentation built for an incomplete page is answer-local and must be recomputed after page reassembly.
