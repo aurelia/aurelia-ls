@@ -12835,13 +12835,14 @@
               "name": "binding data flow",
               "query": { "kind": "binding-data-flows", "fetchAllPages": true, "cursor": false, "options": { "detail": "handles", "page": { "size": 100 } } },
               "rows": [
-                { "fields": { "direction": "two-way", "sourceName": "count", "sourceType": "number", "targetValueType": "string", "sourceToTargetAssignable": false, "targetToSourceAssignable": false, "sourceAssignmentReasonKinds": ["target-to-source-type-mismatch"] }, "source": { "marker": "value.two-way=\"count\"", "token": "value.two-way=\"count\"" }, "count": 1 }
+                { "fields": { "direction": "two-way", "sourceName": "count", "sourceType": "number", "targetValueType": "string", "sourceToTargetAssignable": true, "targetToSourceAssignable": false, "sourceAssignmentReasonKinds": ["target-to-source-type-mismatch"] }, "source": { "marker": "value.two-way=\"count\"", "token": "value.two-way=\"count\"" }, "count": 1 }
               ]
             },
             {
               "name": "template diagnostic",
               "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
               "rows": [
+                { "fields": { "diagnosticKind": "binding-target-assignment-strictness", "missingInput": "binding-target-assignment:source-to-target-type-mismatch", "selectedMemberName": "count" }, "source": { "marker": "value.two-way=\"count\"", "token": "count" }, "count": 0 },
                 { "fields": { "diagnosticKind": "binding-source-assignment-strictness", "missingInput": "binding-source-assignment:target-to-source-type-mismatch", "selectedMemberName": "count" }, "source": { "marker": "value.two-way=\"count\"", "token": "count" }, "count": 1 }
               ]
             }

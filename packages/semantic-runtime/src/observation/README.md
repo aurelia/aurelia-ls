@@ -249,6 +249,9 @@ static type surfaces rather than hydrated runtime values.
   collaborators own target value type selection, source-expression projection, and shared TypeChecker member access.
   `binding-data-flow-direction.ts` owns directional source-to-target/target-to-source transport checks, while
   `binding-data-flow-assignability.ts` owns source/target assignability after observer value-channel policy is applied.
+  For native input string reflectors, input/textarea `value`, and HTML element `textContent`, forward writes follow
+  the DOMString setter's primitive conversion. Readback retains the getter type, including string-valued numeric inputs.
+  A bound input type can enter file-upload mode, so its value setter remains conditional.
   `binding-data-flow-source-info.ts` owns assignment-target source classification, source display names, spread-source
   retargeting, and value-converter `fromView` writeback hints.
   `binding-data-flow-source-assignment.ts` owns the final source-assignment classification that joins direction,

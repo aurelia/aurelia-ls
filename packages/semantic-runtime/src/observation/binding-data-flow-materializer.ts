@@ -532,6 +532,7 @@ export class RuntimeBindingDataFlowMaterializer {
       draftMaterializer: new RuntimeBindingDataFlowDraftMaterializer(
         this.store,
         input.expressionWorld.projector,
+        input.controllerBind,
       ),
     });
   }
@@ -1004,10 +1005,11 @@ class RuntimeBindingDataFlowDraftMaterializer {
   constructor(
     private readonly store: KernelStore,
     private readonly typeProjector: CheckerTypeProjector,
+    controllerBind: RuntimeControllerBindEmission,
   ) {
     this.typeAccess = new BindingDataFlowTypeAccess(store, typeProjector);
     this.sourceProjector = new BindingDataFlowSourceProjector(store, this.typeAccess);
-    this.assignability = new BindingDataFlowAssignabilityEvaluator(this.typeAccess);
+    this.assignability = new BindingDataFlowAssignabilityEvaluator(this.typeAccess, controllerBind.targetAccesses);
   }
 
   dataFlowDraftForBinding(
@@ -1049,6 +1051,7 @@ class RuntimeBindingDataFlowDraftMaterializer {
       sourceProjection.sourceAssignmentValueType,
       sourceProjection.targetToSourceValueType,
       target.valueChannel,
+      target.targetAccess,
     );
     const sourceAssignment = sourceAssignmentForDataFlow({
       direction,

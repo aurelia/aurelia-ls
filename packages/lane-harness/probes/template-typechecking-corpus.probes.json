@@ -13,7 +13,7 @@
         "id": "typechecking-write-bindings",
         "file": "src/write-bindings.html",
         "verdict": "correct",
-        "reason": "The full document-diagnostic pull returns distinct assignment-policy diagnostics for non-writable sources, source-to-target mismatch, nullish-to-required targets, and target-to-source writeback mismatch at the authored binding expressions.",
+        "reason": "The full pull keeps invalid writes to readonly view-model members and the string readback into a number. The numeric source-to-DOM value write is accepted.",
         "note": "NEW 2026-07-12. Representative adapter replay for binding direction, writeability, and bidirectional type compatibility."
       },
       {

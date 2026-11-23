@@ -35,17 +35,23 @@ import {
   CheckerTypeProjectionOrigin,
   CheckerTypeShapeKind,
 } from '../type-system/type-shape.js';
-import type {
-  KernelStore,
-} from '../kernel/store.js';
 import type { ProductDetailReadView } from '../kernel/product-details.js';
-import { RuntimeNodeObserverConfigFieldState } from '../template/runtime-binding.js';
+import type { ProductHandle } from '../kernel/handles.js';
+import {
+  RuntimeBindingTargetAccessStrategy,
+  RuntimeBindingTargetKind,
+  RuntimeBindingTargetTypeSource,
+  RuntimeNodeObserverConfigFieldState,
+  type RuntimeBindingTargetAccess,
+} from '../template/runtime-binding.js';
+import { HtmlElement, HtmlNamespaceKind } from '../template/html-ir.js';
+import { TemplateProductDetails } from '../template/product-details.js';
 import {
   runtimeBindingPrimitiveValueAssignableToType,
   runtimeBindingStringPrimitiveDomain,
 } from './runtime-binding-primitive-value.js';
 import {
-  RuntimeBindingDataFlowDirection,
+  type RuntimeBindingDataFlowDirection,
   RuntimeBindingDataFlowTypeMismatchKind,
   type RuntimeBindingPrimitiveValue,
   type RuntimeBindingValueChannel,
@@ -76,9 +82,27 @@ interface StringIndexedTargetValue {
   readonly carrier: CheckerTypeCarrier | null;
 }
 
+// HTMLInputElement DOMString reflectors from the HTML Standard's input IDL.
+// Their setters convert a supplied primitive before reflecting it into the attribute.
+const inputDomStringReflectors = new Set([
+  'accept', 'alt', 'autocomplete', 'defaultValue', 'dirName', 'formTarget', 'max', 'min', 'name', 'pattern', 'placeholder', 'step',
+]);
+
 /** Evaluates source/target assignability using observer value-channel and TypeChecker facts. */
 export class BindingDataFlowAssignabilityEvaluator {
-  constructor(private readonly typeAccess: BindingDataFlowAssignabilityTypeAccess) {}
+  private readonly nodesWithBoundType = new Set<ProductHandle>();
+
+  constructor(
+    private readonly typeAccess: BindingDataFlowAssignabilityTypeAccess,
+    targetAccesses: readonly RuntimeBindingTargetAccess[],
+  ) {
+    for (const target of targetAccesses) {
+      if (target.targetProperty === 'type' && target.targetNode?.productHandle != null
+        && (target.targetKind === RuntimeBindingTargetKind.Node || target.targetKind === RuntimeBindingTargetKind.Host)) {
+        this.nodesWithBoundType.add(target.targetNode.productHandle);
+      }
+    }
+  }
 
   dataFlowAssignability(
     direction: RuntimeBindingDataFlowDirection,
@@ -87,9 +111,10 @@ export class BindingDataFlowAssignabilityEvaluator {
     sourceAssignmentValueType: CheckerTypeReference | null,
     targetToSourceValueType: CheckerTypeReference | null,
     valueChannel: RuntimeBindingValueChannel | null,
+    targetAccess: RuntimeBindingTargetAccess | null,
   ): BindingDataFlowAssignability {
     const sourceToTargetAssignable = bindingDataFlowDirectionIncludesSourceToTarget(direction)
-      ? this.isSourceAssignableToTarget(sourceType, targetValueType, valueChannel)
+      ? this.isSourceAssignableToTarget(sourceType, targetValueType, valueChannel, targetAccess)
       : null;
     const targetToSourceAssignable = bindingDataFlowDirectionIncludesTargetToSource(direction)
       ? this.isTargetAssignableToSource(targetToSourceValueType, sourceAssignmentValueType, valueChannel)
@@ -138,7 +163,20 @@ export class BindingDataFlowAssignabilityEvaluator {
     sourceType: CheckerTypeReference | null,
     targetType: CheckerTypeReference | null,
     valueChannel: RuntimeBindingValueChannel | null,
+    targetAccess: RuntimeBindingTargetAccess | null,
   ): boolean | null {
+    const setter = this.nativeDomStringSetter(targetAccess, valueChannel);
+    if (setter === 'type-dependent') return null;
+    if (setter === 'dom-string') {
+      const carrier = this.typeAccess.readTypeShape(sourceType)?.carrier;
+      if (carrier == null) return null;
+      if (valueChannel?.channelKind === RuntimeBindingValueChannelKind.ValueAttributeObserverProperty
+        && valueChannel.nullishDefaultState === RuntimeNodeObserverConfigFieldState.Open
+        && checkerTypeNullishPresence(carrier.checker, carrier.type) !== CheckerTypeNullishPresence.None) {
+        return null;
+      }
+      return domStringConversionAcceptance(carrier.type);
+    }
     if (
       valueChannel?.realization === RuntimeOperationRealization.Open
       && this.typeAccess.readTypeShape(sourceType)?.shapeKind === CheckerTypeShapeKind.Unknown
@@ -170,6 +208,41 @@ export class BindingDataFlowAssignabilityEvaluator {
       return null;
     }
     return this.isTypeAssignableToStringDomain(sourceType, valueDomain);
+  }
+
+  /** A native property setter can convert values independently of its DOM getter's declaration type. */
+  private nativeDomStringSetter(
+    target: RuntimeBindingTargetAccess | null,
+    channel: RuntimeBindingValueChannel | null,
+  ): 'dom-string' | 'type-dependent' | null {
+    if (target?.targetNode?.productHandle == null
+      || (target.targetKind !== RuntimeBindingTargetKind.Node && target.targetKind !== RuntimeBindingTargetKind.Host)
+      || (target.targetTypeSource !== RuntimeBindingTargetTypeSource.DomTagNameMap
+        && target.targetTypeSource !== RuntimeBindingTargetTypeSource.DomGlobalFallback)
+      || (channel?.channelKind !== RuntimeBindingValueChannelKind.RawProperty
+        && channel?.channelKind !== RuntimeBindingValueChannelKind.ValueAttributeObserverProperty)
+      || (target.strategy !== RuntimeBindingTargetAccessStrategy.ElementPropertyAccessor
+        && target.strategy !== RuntimeBindingTargetAccessStrategy.ValueAttributeObserver)) {
+      return null;
+    }
+    const property = target.targetProperty;
+    if (property !== 'value' && property !== 'textContent' && !inputDomStringReflectors.has(property)) return null;
+    const read = this.typeAccess.publication;
+    const element = read.readProductDetail(TemplateProductDetails.HtmlNode, target.targetNode.productHandle);
+    if (!(element instanceof HtmlElement) || element.namespace !== HtmlNamespaceKind.Html) return null;
+    const tag = element.tagName.toLowerCase();
+    if (tag.includes('-') || tag === 'script') return null;
+    if (property !== 'textContent' && tag !== 'input' && !(tag === 'textarea' && property === 'value')) return null;
+    if (tag === 'input' && property === 'value' && this.nodesWithBoundType.has(element.productHandle)) return 'type-dependent';
+    for (const ref of element.attributes) {
+      const attr = ref.productHandle == null ? null : read.readProductDetail(TemplateProductDetails.HtmlAttribute, ref.productHandle);
+      if (attr == null) return null;
+      const name = attr.rawName.toLowerCase();
+      if (name === 'is') return null;
+      // File inputs reject non-empty programmatic values. A bound type can enter that state.
+      if (tag === 'input' && property === 'value' && name === 'type' && attr.rawValue.toLowerCase() === 'file') return null;
+    }
+    return 'dom-string';
   }
 
   private sourceToTargetRuntimeAcceptance(
@@ -576,6 +649,18 @@ function valueChannelHasCoupling(
   coupling: RuntimeBindingValueChannelCouplingKind,
 ): boolean {
   return valueChannel?.observerCouplings.includes(coupling) === true;
+}
+
+/** Web IDL DOMString applies ToString. Object coercion can run user code, and symbols throw. */
+function domStringConversionAcceptance(type: ts.Type): boolean | null {
+  if (type.isUnion()) {
+    const values = type.types.map(domStringConversionAcceptance);
+    return values.every(value => value === true) ? true : values.every(value => value === false) ? false : null;
+  }
+  if ((type.flags & ts.TypeFlags.ESSymbolLike) !== 0) return false;
+  const primitives = ts.TypeFlags.StringLike | ts.TypeFlags.NumberLike | ts.TypeFlags.BigIntLike
+    | ts.TypeFlags.BooleanLike | ts.TypeFlags.Null | ts.TypeFlags.Undefined | ts.TypeFlags.Void | ts.TypeFlags.Never;
+  return (type.flags & primitives) !== 0 ? true : null;
 }
 
 function valueChannelUsesMapMutation(

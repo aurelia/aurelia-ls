@@ -1300,7 +1300,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 10,
+  "diagnosticCount": 9,
   "diagnostics": [
     {
       "anomaly": null,
@@ -1474,68 +1474,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "typeScriptDiagnosticCode": null
       },
       "message": "TypeChecker target-to-source assignment is not assignable after observer and value-converter writeback (string -> number); Aurelia runtime still passes the observer value to astAssign.",
-      "range": {
-        "end": {
-          "character": 67,
-          "line": 6
-        },
-        "start": {
-          "character": 62,
-          "line": 6
-        }
-      },
-      "rangeText": "count",
-      "relatedInformation": [],
-      "severity": "warning",
-      "source": "aurelia"
-    },
-    {
-      "anomaly": null,
-      "code": "binding-target-assignment-strictness",
-      "data": {
-        "diagnosticAuthority": "semantic-runtime-product",
-        "diagnosticDomain": "template",
-        "diagnosticKind": "binding-target-assignment-strictness",
-        "frameworkErrorCode": null,
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "binding-target-assignment:source-to-target-type-mismatch",
-        "missingInputs": [
-          "binding-target-assignment:source-to-target-type-mismatch"
-        ],
-        "phase": null,
-        "presentation": {
-          "contextual": [],
-          "maxRawSeverity": "warning",
-          "primarySeverity": "warning",
-          "rawRowCount": 1
-        },
-        "relatedInformation": [],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "rewrite-expression",
-          "actionability": "guided",
-          "changeDomain": "app-source",
-          "planKind": "template-expression-rewrite",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
-        },
-        "sourceRole": "template",
-        "subject": {
-          "source": {
-            "end": 458,
-            "kind": "source-span-address",
-            "label": "src/write-bindings.html@453..458",
-            "path": "src/write-bindings.html",
-            "role": "binding-source-assignment",
-            "start": 453
-          },
-          "span": null,
-          "subjectKind": "template-expression",
-          "uri": null
-        },
-        "typeScriptDiagnosticCode": null
-      },
-      "message": "Binding source type number is not assignable to target 'value' of type string.",
       "range": {
         "end": {
           "character": 67,
