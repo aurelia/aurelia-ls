@@ -17,6 +17,58 @@ afterEach(async () => {
 });
 
 describe('boot project discovery', () => {
+  test('retains application ownership across nested module-format and compiler scopes', async () => {
+    const root = await createWorkspace();
+    await writeWorkspaceFile(root, 'package.json', JSON.stringify({ name: 'workspace', workspaces: ['src/member'] }));
+    await writeWorkspaceFile(root, 'tsconfig.json', JSON.stringify({ include: ['src'] }));
+    await writeWorkspaceFile(root, 'vite.config.ts', 'export default {};');
+    const source = await writeWorkspaceFile(root, 'src/page.ts', 'export class Page {}');
+    await writeWorkspaceFile(root, 'src/package.json', '{"type":"module"}');
+    await writeWorkspaceFile(root, 'src/tsconfig.json', '{"extends":"../tsconfig.json","include":["page.ts"]}');
+
+    // Genuine package, workspace, build, host and native-config boundaries still win, even inside `include`.
+    for (const [directory, marker, value] of [
+      ['src/package', 'package.json', '{"name":"independent"}'],
+      ['src/member', 'package.json', '{"type":"module"}'],
+      ['src/other-build', 'tsconfig.json', '{}'],
+      ['src/hinted', 'package.json', '{"type":"commonjs"}'],
+      ['src/native', 'aurelia.project.json', '{"version":1}'],
+      ['outside', 'tsconfig.json', '{"include":["index.ts"]}'],
+      ['invalid', 'tsconfig.json', '{"compilerOptions":'],
+    ] as const) {
+      await writeWorkspaceFile(root, `${directory}/${marker}`, value);
+      await writeWorkspaceFile(root, `${directory}/index.ts`, 'export {};');
+    }
+    await writeWorkspaceFile(root, 'src/other-build/vite.config.ts', 'export default {};');
+    const runtime = await createSemanticRuntime({ workspaceRoot: root, projectRootHints: ['src/hinted'] });
+    try {
+      expect(authoredProjectRootsFor(runtime, source)).toEqual([path.normalize(root)]);
+      for (const directory of ['src/package', 'src/member', 'src/other-build', 'src/hinted', 'src/native', 'outside', 'invalid']) {
+        const independent = path.join(root, directory);
+        expect(authoredProjectRootsFor(runtime, path.join(independent, 'index.ts'))).toEqual([path.normalize(independent)]);
+      }
+    } finally {
+      runtime.retireWorkspaceIncarnation();
+    }
+  });
+
+  test('a Vite application can contain a source directory selected through TypeScript project references', async () => {
+    const root = await createWorkspace();
+    await writeWorkspaceFile(root, 'package.json', '{"name":"app"}');
+    await writeWorkspaceFile(root, 'vite.config.mts', 'export default {};');
+    await writeWorkspaceFile(root, 'tsconfig.json', '{"files":[],"references":[{"path":"./tsconfig.solution.json"}]}');
+    await writeWorkspaceFile(root, 'tsconfig.solution.json', '{"files":[],"references":[{"path":"./src"}]}');
+    await writeWorkspaceFile(root, 'src/tsconfig.json', '{"include":["*.ts"]}');
+    const source = await writeWorkspaceFile(root, 'src/main.ts', 'export {};');
+    const runtime = await createSemanticRuntime({ workspaceRoot: root });
+    try {
+      expect(projectRoots(runtime)).toEqual([path.normalize(root)]);
+      expect(authoredProjectRootsFor(runtime, source)).toEqual([path.normalize(root)]);
+    } finally {
+      runtime.retireWorkspaceIncarnation();
+    }
+  });
+
   test('boots every exact project marker once and gives every nested boundary its own frame', async () => {
     const workspaceRoot = await createWorkspace();
     await writeWorkspaceFile(workspaceRoot, 'package.json', JSON.stringify({ name: 'workspace' }));

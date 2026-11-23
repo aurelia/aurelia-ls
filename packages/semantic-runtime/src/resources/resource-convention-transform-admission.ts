@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { isViteConfigPath } from '../kernel/source-classification.js';
 
 import { createFilter } from '@rollup/pluginutils';
 import ts from 'typescript';
@@ -920,8 +921,4 @@ function conventionTransformSourcePatternIdentity(
   return typeof pattern === 'string'
     ? ['string', pattern]
     : ['regexp', pattern.source, pattern.flags];
-}
-
-function isViteConfigPath(sourcePath: string): boolean {
-  return /^vite\.config\.[cm]?[jt]sx?$/u.test(path.basename(sourcePath).toLowerCase());
 }

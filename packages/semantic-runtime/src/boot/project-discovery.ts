@@ -1,11 +1,16 @@
 import path from 'node:path';
+import ts from 'typescript';
 import type { SemanticRuntimeProjectInputHost } from '../kernel/project-input.js';
+import { isViteConfigPath } from '../kernel/source-classification.js';
+import { readCompilerConfigInput } from './compiler-config-input.js';
 import {
   BootProjectDiscoveryMode,
   type ResolvedBootProjectInput,
 } from './frames.js';
 import {
   readPackageName,
+  readPackageManifest,
+  manifestWorkspacesIncludeProject,
   safeIsDirectory,
   safeReadDirectory,
   isHostPathWithin,
@@ -44,7 +49,7 @@ interface DiscoveredProjectRoot {
   readonly admissionOrigins: readonly ProjectRootAdmissionOrigin[];
 }
 
-/** Discover boot project frames from exact project-root markers without interpreting their contents. */
+/** Discover project boundaries and retain nested package/compiler scopes that belong to their enclosing app. */
 export function discoverBootProjects(
   rootDir: string,
   host: SemanticRuntimeProjectInputHost,
@@ -72,7 +77,7 @@ export function discoverBootProjects(
     projectRootHints,
   );
   const discovery = discoverProjectRoots(host, workspaceBoundary, hintedRoots);
-  const discoveredRoots = mergeDiscoveredProjectRoots([
+  const markerRoots = mergeDiscoveredProjectRoots([
     ...(discovery.workspaceScanOrigins.length === 0
       ? [{
           rootDir: absoluteRoot,
@@ -85,6 +90,36 @@ export function discoverBootProjects(
     })),
     ...discoveredProjectRootsForMarkerOrigins(discovery.hintedScanOrigins),
   ]);
+  const scopedConfigs = new Map<string, string[]>();
+  const retained = new Map<string, DiscoveredProjectRoot>();
+  const configs = new Map<string, ts.ParsedCommandLine | null>();
+  const readConfig = (file: string): ts.ParsedCommandLine | null => {
+    if (!configs.has(file)) configs.set(file, readCompilerConfigInput(host, file).parsed);
+    return configs.get(file) ?? null;
+  };
+  for (const candidate of markerRoots) {
+    // Marker roots are sorted by canonical path, so their ancestors have already been resolved.
+    const ancestors: DiscoveredProjectRoot[] = [];
+    let dir = candidate.rootDir;
+    while (dir !== path.dirname(dir)) {
+      dir = path.dirname(dir);
+      const root = retained.get(canonicalTypeSystemPath(dir));
+      if (root) ancestors.push(root);
+      if (dir === absoluteRoot) break;
+    }
+    const parent = ancestors[0];
+    const config = compilerConfigMarker(candidate);
+    if (parent && belongsToContainingProject(host, candidate, ancestors, config, readConfig)) {
+      if (config) {
+        const nested = scopedConfigs.get(parent.rootDir) ?? [];
+        nested.push(config);
+        scopedConfigs.set(parent.rootDir, nested);
+      }
+    } else {
+      retained.set(canonicalTypeSystemPath(candidate.rootDir), candidate);
+    }
+  }
+  const discoveredRoots = [...retained.values()];
   const keyCounts = new Map<string, number>();
   return discoveredRoots.map((project) => {
     const baseKey = projectKeyForRoot(host, absoluteRoot, project.rootDir);
@@ -102,8 +137,77 @@ export function discoverBootProjects(
         ...nestedProjectRoots,
       ],
       admissionOrigins: project.admissionOrigins,
+      nestedCompilerConfigPaths: scopedConfigs.get(project.rootDir),
     };
   });
+}
+
+function compilerConfigMarker(project: DiscoveredProjectRoot): string | null {
+  for (const kind of [ProjectRootAdmissionOriginKind.TsconfigJsonMarker, ProjectRootAdmissionOriginKind.JsconfigJsonMarker] as const) {
+    for (const origin of project.admissionOrigins) {
+      if (origin.kind === kind) return origin.sourceFilePath;
+    }
+  }
+  return null;
+}
+
+function belongsToContainingProject(
+  host: SemanticRuntimeProjectInputHost,
+  candidate: DiscoveredProjectRoot,
+  ancestors: readonly DiscoveredProjectRoot[],
+  config: string | null,
+  readConfig: (file: string) => ts.ParsedCommandLine | null,
+): boolean {
+  if (candidate.admissionOrigins.some(origin =>
+    origin.kind === ProjectRootAdmissionOriginKind.HostProjectRootHint
+    || origin.kind === ProjectRootAdmissionOriginKind.AureliaProjectJsonMarker)) return false;
+  const hasManifest = candidate.admissionOrigins.some(origin => origin.kind === ProjectRootAdmissionOriginKind.PackageJsonMarker);
+  if (hasManifest) {
+    // A package.json whose only directive is Node's module format scopes .js resolution.
+    // A named package, one with its own dependencies, or an invalid manifest still owns its frame.
+    const manifest = readPackageManifest(host, candidate.rootDir);
+    if (!manifest || (manifest.type !== 'module' && manifest.type !== 'commonjs')
+      || Object.keys(manifest).some(key => key !== 'type' && key !== '$schema')) return false;
+  }
+  if (ancestors.some(ancestor => {
+    const manifest = readPackageManifest(host, ancestor.rootDir);
+    return manifest && manifestWorkspacesIncludeProject(manifest, ancestor.rootDir, candidate.rootDir);
+  }) || hasViteConfig(host, candidate.rootDir)) return false;
+  if (!config) return hasManifest;
+
+  const owner = ancestors[0]!;
+  const parentConfig = compilerConfigMarker(owner);
+  if (!parentConfig) return false;
+  const child = readConfig(config);
+  if (!child || child.errors.length > 0) return false;
+  const childSources = child.fileNames.filter(file => isHostPathWithin(file, candidate.rootDir));
+  if (childSources.length === 0) return false;
+  const pending = [parentConfig];
+  const seen = new Set<string>();
+  while (pending.length > 0) {
+    const file = pending.pop()!;
+    const key = canonicalTypeSystemPath(file);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    // A Vite build rooted at a solution can own source selected by one of its referenced configs.
+    if (key === canonicalTypeSystemPath(config)) {
+      if (hasViteConfig(host, owner.rootDir)) return true;
+      continue;
+    }
+    const parent = readConfig(file);
+    if (!parent || parent.errors.length > 0) continue;
+    const ownerSources = new Set(parent.fileNames.map(canonicalTypeSystemPath));
+    if (childSources.every(source => ownerSources.has(canonicalTypeSystemPath(source)))) return true;
+    for (const reference of parent.projectReferences ?? []) {
+      const referenced = ts.resolveProjectReferencePath(reference);
+      if (isHostPathWithin(referenced, owner.rootDir)) pending.push(referenced);
+    }
+  }
+  return false;
+}
+
+function hasViteConfig(host: SemanticRuntimeProjectInputHost, root: string): boolean {
+  return host.readDirectory(root).some(entry => isViteConfigPath(entry) && !host.directoryExists(path.join(root, entry)));
 }
 
 function normalizeProjectRootHints(

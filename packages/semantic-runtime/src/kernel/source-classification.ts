@@ -1,4 +1,4 @@
-import { extname } from 'node:path';
+import { basename, extname } from 'node:path';
 import {
   SourceFileRole,
   SourceLanguage,
@@ -129,6 +129,10 @@ function isExampleSourcePath(segments: readonly string[], baseName: string): boo
     ) ||
     /\.(story|stories)\.[cm]?[tj]sx?$/.test(baseName)
   );
+}
+
+export function isViteConfigPath(sourcePath: string): boolean {
+  return /^vite\.config\.[cm]?[jt]sx?$/u.test(basename(sourcePath).toLowerCase());
 }
 
 function isToolingConfigPath(baseName: string): boolean {

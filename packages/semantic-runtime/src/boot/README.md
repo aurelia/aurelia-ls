@@ -14,9 +14,9 @@ materializers that consume admitted sources and emit their own evidence, claims,
 
 - Create a `KernelStore` or populate a supplied one.
 - Admit workspace/project/source frames in deterministic order.
-- Discover project frames from the union of exact-root `package.json`, `tsconfig.json`, `jsconfig.json`, and
-  `aurelia.project.json` markers when the host does not supply explicit projects, while preserving a `single-root`
-  mode for callers that need one project frame. The default `project-markers` mode names that union directly.
+- Discover project frames from exact `package.json`, `tsconfig.json`, `jsconfig.json`, and
+  `aurelia.project.json` markers. Nested module-format and compiler scopes can belong to the same application.
+  A host can also supply explicit projects or request a `single-root` frame.
 - Merge `projectRootHints` supplied by a host into that automatic topology. Hints identify existing project boundaries;
   they do not choose project keys, imply Aurelia shape, or override configuration semantics.
 - Parse exact-root `aurelia.project.json` through the captured project-input generation before source admission. The
@@ -77,11 +77,14 @@ no-tsconfig fallback mode so ambient modules and local type support participate 
 static-evaluation entrypoints. The classifier should stay conservative: a user-authored `config.ts` or generated-looking
 app module is still app source unless it matches a known tool/artifact lane.
 
-Project discovery is also admission policy. A mixed monorepo should boot every exact package, TypeScript/JavaScript
-configuration, or native Aurelia configuration marker root as a separate project frame so no nested project is either
-absorbed into a parent app world or excluded without receiving its own frame. Marker contents do not decide topology:
-invalid configuration still owns a frame and its diagnostics. Nested project roots are excluded from their parent
-frame's filesystem source discovery. Child workspace packages may inherit Aurelia dependency context from an
+Project discovery is also admission policy. A nested `package.json` declaring only Node's module format can scope
+JavaScript resolution inside its containing project. A nested compiler config belongs to the containing project when
+its local source files are already selected by a containing compiler config. A Vite build can also own the source of
+a referenced compiler project within the build root. Boot retains the nested compiler config path for source-specific
+checker options. Named packages, declared workspace members, host project hints, native Aurelia configurations and
+separate Vite roots retain independent frames. Invalid marker files retain their frame for diagnostics. Each
+independent child root is excluded from its parent's filesystem source discovery. Child workspace packages may
+inherit Aurelia dependency context from an
 ancestor `workspaces` manifest, but that only affects shape triage: a child package with HTML/CSS resource-surface
 source files becomes a resource-library authoring candidate, while activation calls are still required before the
 package is treated as an app-world. Ordinary IDE/MCP consumers that know the intended app package should select its
