@@ -955,6 +955,51 @@ describe("mapSemanticRuntimeTemplateCodeActions", () => {
     expect((failure as Error).message).toContain("semantic runtime returned result=failed");
   });
 
+  test("matches shared-template repairs to the owning Problem when both classes are named View", () => {
+    const doc = TextDocument.create("file:///C:/projects/app/src/shared.html", "html", 1, "label");
+    const range = { start: doc.positionAt(0), end: doc.positionAt(5) };
+    const source = { kind: "source-span-address", label: "label", path: doc.uri, start: 0, end: 5 };
+    const fixtures = ["alpha", "bravo"].map(resourceName => {
+      const declaration = { kind: "typescript-node", path: `src/${resourceName}.ts`, start: 12, end: 28 };
+      const diagnostic = {
+        diagnosticKind: "missing-expression-member",
+        diagnosticAuthority: "semantic-authoring-policy",
+        source,
+        template: { owner: { name: "View", resourceName, declaration, sharedTemplate: true } },
+      };
+      return {
+        row: {
+          title: "Declare label on View",
+          kind: "quickfix",
+          diagnostics: [diagnostic],
+          edits: [semanticEditAt(doc.uri, doc.getText(), 0, 0, "declared")],
+          repair: {},
+        },
+        problem: {
+          range,
+          message: `Missing label on ${resourceName}`,
+          data: { semanticRuntime: {
+            diagnosticKind: diagnostic.diagnosticKind,
+            diagnosticAuthority: diagnostic.diagnosticAuthority,
+            relatedInformation: [{ code: "template-owner", source: declaration }],
+          } },
+        },
+      };
+    });
+    const answer = { result: "answered", value: { rows: fixtures.map(fixture => fixture.row) } } as never;
+    const options = { documentUris: appDocumentUris, originDocument: doc };
+    const actions = mapSemanticRuntimeTemplateCodeActions(answer, () => null, {
+      ...options, diagnostics: fixtures.map(fixture => fixture.problem),
+    });
+    expect(actions?.map(action => action.diagnostics)).toEqual(fixtures.map(fixture => [fixture.problem]));
+    expect(new Set(actions?.map(action => (action.data as { semanticRuntime: { actionIdentity: string } }).semanticRuntime.actionIdentity)).size).toBe(2);
+
+    const selected = mapSemanticRuntimeTemplateCodeActions(answer, () => null, {
+      ...options, diagnostics: [fixtures[0]!.problem],
+    });
+    expect(selected?.map(action => action.diagnostics)).toEqual([[fixtures[0]!.problem]]);
+  });
+
   test("attaches every LSP diagnostic contributing to one semantic edit plan", () => {
     const doc = TextDocument.create(
       "file:///C:/projects/app/src/component.html",

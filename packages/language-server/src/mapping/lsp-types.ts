@@ -3793,6 +3793,10 @@ export function mapSemanticRuntimeTemplateCodeActions(
       continue;
     }
     const diagnostics = semanticRuntimeTemplateCodeActionDiagnostics(row, options.diagnostics ?? [], options.originDocument);
+    if (options.diagnostics?.length && diagnostics.length === 0
+      && row.diagnostics.some(diagnostic => diagnostic.template?.owner?.sharedTemplate)) {
+      continue;
+    }
     actions.push({
       title: row.title,
       kind: row.kind,
@@ -4034,7 +4038,7 @@ function semanticRuntimeTemplateCodeActionIdentity(
           : { typeScriptDiagnosticCode: diagnostic.typeScriptDiagnosticCode }),
         missingInput: diagnostic.missingInput,
         selectedMemberName: diagnostic.selectedMemberName,
-        ...(diagnostic.template.owner == null ? {} : {
+        ...(diagnostic.template?.owner == null ? {} : {
           owner: [diagnostic.template.owner.resourceName, diagnostic.template.owner.name, diagnostic.template.owner.declaration.path],
         }),
         source: source == null
@@ -4131,7 +4135,7 @@ function semanticRuntimeTemplateCodeActionDiagnosticMatches(
   if (runtime?.["diagnosticKind"] !== sourceDiagnostic.diagnosticKind) {
     return false;
   }
-  const owner = sourceDiagnostic.template.owner;
+  const owner = sourceDiagnostic.template?.owner;
   if (owner?.sharedTemplate) {
     const related: unknown = runtime["relatedInformation"];
     if (!Array.isArray(related) || !related.some((item: unknown) => {

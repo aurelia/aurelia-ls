@@ -148,7 +148,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "targetSourceCoverage": "all"
           },
           "resolve": {
-            "actionIdentity": "template-code-action:sha256:c38f83d2fcfbcfcf692204a7067ddc4070cea8b168bafb1715dfe1665df804a7",
+            "actionIdentity": "template-code-action:sha256:207c6f48542d75780211bb05c9f3e8abd443260647ca6b61559e07813915051d",
             "position": {
               "character": 6,
               "line": 0
@@ -579,7 +579,7 @@ _No in-memory diff._
             "targetSourceCoverage": "all"
           },
           "resolve": {
-            "actionIdentity": "template-code-action:sha256:a83f90814f6ecac135fa9e5c43ec97caec71397244ece5ed978e55804bb0b7ad",
+            "actionIdentity": "template-code-action:sha256:a69a55d0112b8c10d3e15aec1bf78e4c5f9c1ac55baf174e74009dd1c6ed5fc5",
             "position": {
               "character": 22,
               "line": 3
