@@ -24,7 +24,7 @@ describe("embedded validation on a template with a compiler-owned interpolation"
   test("keeps a genuine colour error in the same style attribute and an independent script syntax error", () => {
     const style = "width: ${amount}%; border-color:#${hex}; color: #12zz34";
     const script = "const real = ;";
-    const document = html(`<p title="ÃƒÂ°Ã…Â¸Ã…Â¡Ã¢â€šÂ¬" style="${style}"></p>\r\n<script>\r\n${script}\r\n</script>`);
+    const document = html(`<p title="ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬" style="${style}"></p>\r\n<script>\r\n${script}\r\n</script>`);
     const regions = [region(document, "css", "attribute", style), region(document, "javascript", "element", script)];
     const diagnostics = validateEmbeddedLanguages(document, regions, settings);
     expect(diagnostics.map(d => [d.source, document.getText(d.range)])).toEqual([["css", "#12zz34"], ["javascript", ";"]]);
@@ -51,7 +51,7 @@ describe("embedded validation on a template with a compiler-owned interpolation"
   });
 
   test("maps browser-decoded attribute diagnostics back across HTML entities and an astral character", () => {
-    const raw = "width: ${w}%; content:&quot;ÃƒÂ°Ã…Â¸Ã…Â¡Ã¢â€šÂ¬&quot;; color:#12zz34";
+    const raw = "width: ${w}%; content:&quot;ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬&quot;; color:#12zz34";
     const document = html(`<div\r\n  style='${raw}'></div>`);
     const source = region(document, "css", "attribute", raw);
     const value = raw.replaceAll("&quot;", '"');
@@ -95,6 +95,27 @@ describe("embedded validation on a template with a compiler-owned interpolation"
     const script = "// @ts-check\nconst __aureliaInterpolation = 3; const supplied = ${value}; supplied.load();";
     const doc = html(`<script>${script}</script>`);
     expect(validateEmbeddedLanguages(doc, [region(doc, "javascript", "element", script)], settings)).toEqual([]);
+  });
+
+  test("revalidates unchanged scripts when implicit compiler options change", () => {
+    const script = '// @ts-check\nconst node = document.querySelector("p"); node.textContent;\nfunction mark(...args) {} class C { method(@mark x) {} }';
+    const doc = html(`<script>${script}</script>`);
+    const regions = [region(doc, "javascript", "element", script)];
+    const errors = (strictNullChecks: boolean, experimentalDecorators: boolean) =>
+      validateEmbeddedLanguages(doc, regions, { ...settings, javascript: { strictNullChecks, experimentalDecorators } }).map(d => String(d.message));
+    expect(errors(true, true).some(m => m.includes("possibly 'null'"))).toBe(true);
+    expect(errors(false, false).some(m => m.includes("possibly 'null'"))).toBe(false);
+    expect(errors(false, false).some(m => m.includes("Decorators are not valid here"))).toBe(true);
+    expect(errors(true, true).some(m => m.includes("Decorators are not valid here"))).toBe(false);
+  });
+
+  test("leaves HTML's ambient jQuery names open while preserving actual local and DOM faults", () => {
+    const script = '// @ts-check\n$("p").hide(); jQuery(document); document.missingDomProperty; { const $=4; $(); }';
+    const doc = html(`<script>${script}</script>`);
+    const diagnostics = validateEmbeddedLanguages(doc, [region(doc, "javascript", "element", script)], settings);
+    expect(diagnostics.map(d => [doc.getText(d.range), String(d.message).includes("not callable")])).toEqual([
+      ["missingDomProperty", false], ["$", true],
+    ]);
   });
 
   test("maps an expected value at a generated attribute terminator to the authored end of the declaration", () => {

@@ -9,6 +9,7 @@ export interface EmbeddedValidationOptions {
   readonly styles: boolean;
   readonly scripts: boolean;
   readonly css?: LanguageSettings;
+  readonly javascript?: Pick<ts.CompilerOptions, "strictNullChecks" | "experimentalDecorators">;
 }
 
 interface LiteralSegment {
@@ -147,7 +148,7 @@ function cssDiagnostics(
 // Like VS Code's HTML validator, analyze the document's inline JavaScript in its own script context.
 // Only the shipped TypeScript declaration libraries are readable by this host.
 function createScriptValidator() {
-  const options: ts.CompilerOptions = {
+  let options: ts.CompilerOptions = {
     target: ts.ScriptTarget.Latest,
     module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler,
@@ -175,7 +176,11 @@ function createScriptValidator() {
     readFile,
     fileExists: file => file === fileName || (isLibrary(file) && ts.sys.fileExists(file)),
   });
-  return (text: string) => {
+  return (text: string, settings: EmbeddedValidationOptions["javascript"]) => {
+    if (options.strictNullChecks !== settings?.strictNullChecks || options.experimentalDecorators !== settings?.experimentalDecorators) {
+      options = { ...options, strictNullChecks: settings?.strictNullChecks, experimentalDecorators: settings?.experimentalDecorators };
+      version++;
+    }
     if (source !== text) {
       source = text;
       version++;
@@ -186,13 +191,21 @@ function createScriptValidator() {
 
 let validateScript: ReturnType<typeof createScriptValidator> | undefined;
 
-function javascriptDiagnostics(document: TextDocument, regions: readonly EmbeddedLanguageRegion[], module: boolean): Diagnostic[] {
+function javascriptDiagnostics(
+  document: TextDocument,
+  regions: readonly EmbeddedLanguageRegion[],
+  module: boolean,
+  settings: EmbeddedValidationOptions["javascript"],
+): Diagnostic[] {
   const projection = project(regions, module);
   validateScript ??= createScriptValidator();
   const diagnostics: Diagnostic[] = [];
-  for (const d of validateScript(projection.text)) {
+  for (const d of validateScript(projection.text, settings)) {
     // Inline event handlers can return, and a script tag's module graph is outside this document.
     if (d.start === undefined || d.length === undefined || d.code === 1108 || d.code === 2307 || d.code === 2792) continue;
+    // VS Code's HTML service supplies legacy ambient jQuery declarations. This isolated
+    // DOM/ES project has no evidence for a missing-name Problem at one of those globals.
+    if ((d.code === 2304 || d.code === 2592) && ["$", "jQuery"].includes(projection.text.slice(d.start, d.start + d.length))) continue;
     const range = authoredRange(document, projection, d.start, d.start + d.length, true);
     if (range) diagnostics.push({
       range, source: "javascript", severity: DiagnosticSeverity.Error, message: ts.flattenDiagnosticMessageText(d.messageText, "\n"),
@@ -214,9 +227,9 @@ export function validateEmbeddedLanguages(
   if (options.scripts) {
     const scripts = regions.filter(region => region.language === "javascript");
     const classic = scripts.filter(region => !region.module);
-    if (classic.length) diagnostics.push(...javascriptDiagnostics(document, classic, false));
+    if (classic.length) diagnostics.push(...javascriptDiagnostics(document, classic, false, options.javascript));
     for (const region of scripts) {
-      if (region.module) diagnostics.push(...javascriptDiagnostics(document, [region], true));
+      if (region.module) diagnostics.push(...javascriptDiagnostics(document, [region], true, options.javascript));
     }
   }
   return diagnostics;
