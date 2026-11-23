@@ -10,6 +10,10 @@
       "import": "./out/index.js",
       "types": "./out/index.d.ts"
     },
+    "./embedded-languages": {
+      "import": "./out/template/embedded-languages.js",
+      "types": "./out/template/embedded-languages.d.ts"
+    },
     "./browser-template": {
       "import": "./out/template/browser-template.js",
       "types": "./out/template/browser-template.d.ts"
