@@ -95,7 +95,7 @@ for (const answer of [lengthPrepare, lengthRename]) {
   assert.match(answer.value.displayText, /standard TypeScript library/i);
 }
 
-assertInferredShorthandClosure();
+assertTypeScriptMemberRenameSemantics();
 
 console.log(JSON.stringify({
   ok: true,
@@ -106,6 +106,7 @@ console.log(JSON.stringify({
   ),
   nativeMemberRefusal: 'Array.length',
   inferredShorthandClosure: true,
+  destinationCollisionGuards: true,
 }, null, 2));
 
 async function assertMemberFamily(memberCase) {
@@ -224,7 +225,7 @@ function tokenStart(source, carrier, token) {
   return carrierStart + tokenOffset;
 }
 
-function assertInferredShorthandClosure() {
+function assertTypeScriptMemberRenameSemantics() {
   const fileName = 'C:/virtual/inferred-shorthand.ts';
   const source = `
 const local = '';
@@ -233,6 +234,23 @@ inferred.local;
 const orphanLocal = '';
 const orphan = { orphanLocal };
 void orphan;
+
+interface Contract { label: string; }
+class Base { title = ''; inherited = ''; }
+class Child extends Base implements Contract {
+  static staticOnly = 1;
+  label = '';
+  items = 2;
+  constructor(public arg: number, used: string) { super(); }
+}
+class Unrelated { title = ''; elsewhere = ''; }
+const mixed = { local, occupied: 1 };
+const contextualMember: Contract = { label: '', ...{ spreadKey: 1 } };
+const Alias = class { static oldStatic = 1; static nextStatic = 1; instanceOnly = 2; };
+interface Plain { standalone: string; }
+interface SiblingContract { other: number; }
+interface Composite extends Contract, SiblingContract {}
+
 `;
   const options = { strict: true, noLib: true, noEmit: true, target: ts.ScriptTarget.ESNext };
   const host = ts.createCompilerHost(options);
@@ -279,4 +297,33 @@ void orphan;
     orphanFamily.family?.rename.sites.map((site) => [site.start, site.prefixText, site.suffixText]),
     [[orphanShorthand, null, ': orphanLocal']],
   );
+  function checkDestination(carrier, oldName, newName, expected) {
+    const start = tokenStart(source, carrier, oldName);
+    const read = readTypeSystemRelatedMemberFamily({
+      program, sourceFile, start, end: start + oldName.length, newName,
+      editableSourceFiles: [sourceFile], sourceFileRole: () => 'app-source',
+    });
+    assert.equal(read.family?.rename.state, expected, JSON.stringify({ carrier, oldName, newName, read }));
+    if (expected === 'destination-conflict') {
+      assert.deepEqual(read.family.rename.sites, []);
+      assert.ok(read.family.rename.reason.includes(fileName));
+      assert.ok(read.family.rename.reason.includes(newName));
+    }
+  }
+  checkDestination("class Base { title", 'title', 'inherited', 'destination-conflict');
+  checkDestination("class Base { title", 'title', 'items', 'destination-conflict');
+  checkDestination("label = '';\n  items", 'label', 'inherited', 'destination-conflict');
+  checkDestination('interface Contract { label', 'label', 'other', 'destination-conflict');
+  checkDestination('interface Contract { label', 'label', 'spreadKey', 'destination-conflict');
+  checkDestination('public arg: number', 'arg', 'used', 'destination-conflict');
+  checkDestination('mixed = { local', 'local', 'occupied', 'destination-conflict');
+  checkDestination('static oldStatic', 'oldStatic', 'nextStatic', 'destination-conflict');
+  checkDestination('static oldStatic', 'oldStatic', 'instanceOnly', 'available');
+  checkDestination("class Base { title", 'title', 'constructor', 'destination-conflict');
+  checkDestination('static oldStatic', 'oldStatic', 'prototype', 'destination-conflict');
+  checkDestination('interface Plain { standalone', 'standalone', 'constructor', 'available');
+  checkDestination("class Base { title", 'title', 'staticOnly', 'available');
+  checkDestination("class Base { title", 'title', 'elsewhere', 'available');
+  checkDestination("class Base { title", 'title', 'title', 'available');
+  checkDestination('orphan = { orphanLocal', 'orphanLocal', 'occupied', 'available');
 }

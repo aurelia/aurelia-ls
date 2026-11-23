@@ -538,6 +538,7 @@ export class TypeSystemProject {
     fileName: string,
     start: number,
     end: number,
+    newName?: string,
   ): TypeSystemRelatedMemberFamilyRead {
     const sourceFile = this.readProgramSourceFileByHostPath(fileName);
     if (sourceFile == null) {
@@ -552,6 +553,7 @@ export class TypeSystemProject {
       sourceFile,
       start,
       end,
+      ...(newName != null ? { newName } : {}),
       editableSourceFiles: this.readProjectEditableProgramSourceFiles(),
       sourceFileRole: (hostPath) => this.readProgramSourceFileRoleByHostPath(hostPath),
     });

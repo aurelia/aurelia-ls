@@ -463,7 +463,9 @@ engine against the existing `TypeSystemProject.program`; it must not create a se
 adapter preserves every declaration site, TypeScript's prefix/suffix rename rewrites, source-file role, and whether each
 rename source belongs to the current editable project set. References may expose dependency and standard-library
 declarations, but rename is all-or-nothing: TypeScript denial, an unavailable engine, or any non-editable related source
-blocks the plan rather than shrinking it.
+blocks the plan rather than shrinking it. When a destination name is supplied, the owner also checks the family's
+member declarations, actual use-site receivers and inheriting project types for an existing member with that name.
+Static and instance members have separate destination namespaces. A conflict returns its source location and no edits.
 
 The related-symbol engine is runtime-exported TypeScript implementation API rather than declared public API. Keep the
 semantic-runtime and root TypeScript dependency pinned, keep the runtime shape guard, and run both

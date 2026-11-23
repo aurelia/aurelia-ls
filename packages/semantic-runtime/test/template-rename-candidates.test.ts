@@ -150,6 +150,45 @@ describe('template rename candidates', () => {
     )).toBe(false);
   }, 60_000);
 
+  test('checks new implicit bindable callbacks on the selected component', async () => {
+    const root = path.join(pressureRoot, 'aliased-bindable-surfaces');
+    const htmlPath = path.join(root, 'src/app.html');
+    const tsPath = path.join(root, 'src/product-card.ts');
+    const html = await readFile(htmlPath, 'utf8');
+    const component = await readFile(tsPath, 'utf8');
+    for (const explicit of [false, true]) {
+      const source = component.replace("@bindable title = '';",
+        `${explicit ? "@bindable({ callback: 'selectedHandler' })" : '@bindable'} title = '';\n  selectedHandler() {}\n  headlineChanged() {}`);
+      const runtime = await createSemanticRuntime({
+        workspaceRoot: root,
+        projectInputAuthority: new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost({
+          readFile: file => path.resolve(file) === tsPath ? source : undefined,
+          fileExists: file => path.resolve(file) === tsPath ? true : undefined,
+        })),
+      });
+      try {
+        for (const [kind, filePath, cursor] of [
+          [SemanticAppQueryKind.TemplateRename, htmlPath, cursorInside(html, htmlPath, 'title.bind', 'title')],
+          [SemanticAppQueryKind.TemplateRenameFromTypeScript, tsPath, cursorInside(source, tsPath, "title = ''", 'title')],
+        ] as const) {
+          const answer = await runtime.answerAppQuery({
+            kind, sourceFilePath: filePath, cursor, newName: 'headline',
+            analysisDepth: 'binding-observation', appRetention: 'retain-app',
+          });
+          const plan = answer.value as SemanticTemplateRenameResult;
+          expect(plan.status).toBe(explicit ? 'available' : 'not-available');
+          if (!explicit) {
+            expect(plan.reason).toBe('name-conflict');
+            expect(plan.displayText).toContain('headlineChanged');
+            expect(plan.edits).toEqual([]);
+          }
+        }
+      } finally {
+        runtime.retireWorkspaceIncarnation();
+      }
+    }
+  }, 60_000);
+
   test('renames only the selected exact converter or behavior key', async () => {
     const root = path.join(pressureRoot, 'hover-name-normalization');
     const filePath = path.join(root, 'src/hover-name-normalization-app.html');

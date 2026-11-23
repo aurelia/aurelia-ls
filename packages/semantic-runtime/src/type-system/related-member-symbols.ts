@@ -1,6 +1,7 @@
 import ts from 'typescript';
 import type { SourceFileRole } from '../kernel/address.js';
 import { checkerPropertySymbol } from './checker-node-helpers.js';
+import { relatedMemberRenameDestinationConflict } from './related-member-rename-destination.js';
 import { canonicalTypeSystemPath } from './source-file-path.js';
 
 export enum TypeSystemRelatedMemberFamilyReadState {
@@ -11,6 +12,7 @@ export enum TypeSystemRelatedMemberFamilyReadState {
 
 export enum TypeSystemRelatedMemberRenameState {
   Available = 'available',
+  DestinationConflict = 'destination-conflict',
   TypeScriptDenied = 'typescript-denied',
   NonEditableSource = 'non-editable-source',
 }
@@ -58,6 +60,7 @@ export interface TypeSystemRelatedMemberFamilyInput {
   readonly sourceFile: ts.SourceFile;
   readonly start: number;
   readonly end: number;
+  readonly newName?: string;
   readonly editableSourceFiles: readonly ts.SourceFile[];
   readonly sourceFileRole: (fileName: string) => SourceFileRole | null;
 }
@@ -175,41 +178,67 @@ export function readTypeSystemRelatedMemberFamily(
     return shorthandOnlyRelatedMemberFamily(input, api, checker, sourceFiles, targetNode, targetSymbol);
   }
 
-  const references = relatedMemberReferenceSites(
-    input,
-    api.findAllReferences,
+  const groups = api.findAllReferences.Core.getReferencedSymbolsForNode(
+    anchor.getStart(anchor.getSourceFile()),
     anchor,
+    input.program,
     sourceFiles,
+    NOOP_CANCELLATION_TOKEN,
+    { use: api.findAllReferences.FindReferencesUse.References },
   );
-  if (references == null) {
+  const references = groups == null ? null : relatedMemberReferenceSites(input, api.findAllReferences, groups);
+  if (references == null || groups == null) {
     return unavailableRead(
       TypeSystemRelatedMemberFamilyReadState.EngineUnavailable,
       `TypeScript ${ts.version} returned a member family without symbol-backed declaration groups.`,
     );
   }
+
   const rename = relatedMemberRename(input, api, anchor);
+  return completeRelatedMemberFamily(input, targetNode, targetSymbol, groups, { references, rename });
+}
+
+function completeRelatedMemberFamily(
+  input: TypeSystemRelatedMemberFamilyInput,
+  targetNode: ts.Identifier,
+  targetSymbol: ts.Symbol,
+  groups: readonly TypeScriptRelatedSymbolGroup[],
+  family: TypeSystemRelatedMemberFamily,
+): TypeSystemRelatedMemberFamilyRead {
+  let rename = family.rename;
+  if (rename.state === TypeSystemRelatedMemberRenameState.Available && input.newName != null && input.newName !== targetNode.text) {
+    const conflict = relatedMemberRenameDestinationConflict(
+      input.program.getTypeChecker(),
+      input.editableSourceFiles,
+      targetNode.text,
+      input.newName,
+      [targetSymbol, ...groups.flatMap(group => group.definition?.symbol ?? [])],
+      groups.flatMap(group => group.references.flatMap(entry => entry.node ?? [])),
+    );
+    if (conflict != null) {
+      const source = conflict.getSourceFile();
+      const { line, character } = source.getLineAndCharacterOfPosition(conflict.getStart(source));
+      rename = {
+        state: TypeSystemRelatedMemberRenameState.DestinationConflict,
+        reason: `'${input.newName}' already has a different meaning at ${source.fileName}:${line + 1}:${character + 1}.`,
+        sites: [],
+        nonEditableFileNames: [],
+      };
+    }
+  }
   return {
     state: TypeSystemRelatedMemberFamilyReadState.Complete,
     reason: null,
-    family: { references, rename },
+    family: { references: family.references, rename },
   };
 }
 
 function relatedMemberReferenceSites(
   input: TypeSystemRelatedMemberFamilyInput,
   api: TypeScriptFindAllReferencesApi,
-  anchor: ts.Node,
-  sourceFiles: readonly ts.SourceFile[],
+  groups: readonly TypeScriptRelatedSymbolGroup[],
 ): readonly TypeSystemRelatedMemberReferenceSite[] | null {
-  const groups = api.Core.getReferencedSymbolsForNode(
-    anchor.getStart(anchor.getSourceFile()),
-    anchor,
-    input.program,
-    sourceFiles,
-    NOOP_CANCELLATION_TOKEN,
-    { use: api.FindReferencesUse.References },
-  );
-  if (groups == null || groups.length === 0 || groups.some((group) => group.definition?.symbol == null)) {
+  if (groups.length === 0 || groups.some((group) => group.definition?.symbol == null)) {
     return null;
   }
 
@@ -336,7 +365,7 @@ function shorthandOnlyRelatedMemberFamily(
           TypeSystemRelatedMemberFamilyReadState.EngineUnavailable,
           `TypeScript did not retain property intent for shorthand member ${targetNode.text}.`,
         )
-      : completeShorthandMemberFamily(declarationSites, renameSites);
+      : completeRelatedMemberFamily(input, targetNode, targetSymbol, [], shorthandMemberFamily(declarationSites, renameSites));
   }
 
   const referenceSites = group.references.flatMap((entry) => {
@@ -374,7 +403,7 @@ function shorthandOnlyRelatedMemberFamily(
       `TypeScript returned no shorthand member rename locations.`,
     );
   }
-  return completeShorthandMemberFamily(references, renameSites);
+  return completeRelatedMemberFamily(input, targetNode, targetSymbol, [group], shorthandMemberFamily(references, renameSites));
 }
 
 function shorthandDeclarationRenameSites(
@@ -404,10 +433,10 @@ function shorthandDeclarationRenameSites(
   }));
 }
 
-function completeShorthandMemberFamily(
+function shorthandMemberFamily(
   references: readonly TypeSystemRelatedMemberReferenceSite[],
   renameSites: readonly TypeSystemRelatedMemberRenameSite[],
-): TypeSystemRelatedMemberFamilyRead {
+): TypeSystemRelatedMemberFamily {
   const nonEditableFileNames = uniqueStrings(
     renameSites.filter((site) => !site.editable).map((site) => site.fileName),
   );
@@ -424,11 +453,7 @@ function completeShorthandMemberFamily(
         sites: renameSites,
         nonEditableFileNames: [],
       } as const;
-  return {
-    state: TypeSystemRelatedMemberFamilyReadState.Complete,
-    reason: null,
-    family: { references: uniqueReferenceSites(references), rename },
-  };
+  return { references: uniqueReferenceSites(references), rename };
 }
 
 function relatedMemberAnchor(
