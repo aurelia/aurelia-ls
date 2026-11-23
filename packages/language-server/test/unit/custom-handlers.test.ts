@@ -233,16 +233,12 @@ describe("handleSourceOwnership", () => {
         },
         page: null,
       })),
-      appTopology: vi.fn(() => {
-        throw new Error("Source ownership must not materialize application topology.");
-      }),
     });
 
     const response = await handleSourceOwnership(ctx as never, { uri }, operation);
 
     expect(response.templateOwned).toBe(expected);
     expect(operation.templateDocumentOwnership).toHaveBeenCalledWith("app");
-    expect(operation.appTopology).not.toHaveBeenCalled();
   });
 
   test("checks every exact overlapping project owner without projecting topology", async () => {
@@ -285,16 +281,12 @@ describe("handleSourceOwnership", () => {
         page: null,
       })),
       templateDocumentOwnership,
-      appTopology: vi.fn(() => {
-        throw new Error("Source ownership must not materialize application topology.");
-      }),
     });
 
     const response = await handleSourceOwnership(ctx as never, { uri }, operation);
 
     expect(response.templateOwned).toBe(true);
     expect(templateDocumentOwnership.mock.calls).toEqual([["first"], ["second"]]);
-    expect(operation.appTopology).not.toHaveBeenCalled();
   });
 });
 

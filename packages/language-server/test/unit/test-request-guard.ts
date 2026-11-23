@@ -51,7 +51,6 @@ export function createTestOperation(
     projectsOwningDocument: unsupportedTestOperationMethod,
     templateResourceAvailability: unsupportedTestOperationMethod,
     resourceAvailabilityExplanation: unsupportedTestOperationMethod,
-    appTopology: unsupportedTestOperationMethod,
     templateDocumentOwnership: unsupportedTestOperationMethod,
     templateInlayHints: unsupportedTestOperationMethod,
     templateSemanticTokens: unsupportedTestOperationMethod,

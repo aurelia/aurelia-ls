@@ -41,7 +41,6 @@ import type {
   FrameworkCapabilityExplanationContender,
   FrameworkCapabilityExplanationRefusalKind,
   FrameworkCapabilityExplanationResponse,
-  RelatedFileCandidate,
   RelatedFilesResponse,
   RenameCandidateLocation,
   RenameFromTsParams,
@@ -105,6 +104,7 @@ import {
   mapTemplateResourceAvailabilityItem,
   mapTemplateResourceScopeCandidate,
 } from "../mapping/resource-discovery.js";
+import { relatedFileCandidates } from "../mapping/related-files.js";
 import {
   semanticSourceReferenceFilePath,
 } from "../mapping/source-locations.js";
@@ -1121,40 +1121,8 @@ export async function handleGetRelatedFiles(
   if (!uri) return [];
   const filePath = ctx.documentUris.authoredHostPath(uri);
   if (filePath == null) return [];
-  const topology = await operation.appTopology({ sourceFilePath: filePath });
-  const requested = canonicalTypeSystemPath(filePath);
-  const candidates: RelatedFileCandidate[] = [];
-  for (const component of topology.value.components) {
-    const componentFile = semanticSourceReferenceFilePath(component.source, ctx.documentUris);
-    const templateFile = semanticSourceReferenceFilePath(component.template?.source ?? null, ctx.documentUris);
-    if (componentFile == null || templateFile == null) {
-      continue;
-    }
-    if (canonicalTypeSystemPath(componentFile) === canonicalTypeSystemPath(templateFile)) {
-      continue;
-    }
-    if (canonicalTypeSystemPath(templateFile) === requested) {
-      candidates.push({
-        uri: ctx.documentUris.uriForHostPath(componentFile),
-        role: "component-source",
-        elementName: component.elementName,
-        className: component.className,
-      });
-    }
-    if (canonicalTypeSystemPath(componentFile) === requested) {
-      candidates.push({
-        uri: ctx.documentUris.uriForHostPath(templateFile),
-        role: "component-template",
-        elementName: component.elementName,
-        className: component.className,
-      });
-    }
-  }
-  return candidates.sort((left, right) =>
-    left.uri.localeCompare(right.uri)
-    || left.elementName.localeCompare(right.elementName)
-    || (left.className ?? "").localeCompare(right.className ?? "")
-  );
+  const ownership = await operation.templateDocumentOwnership({ sourceFilePath: filePath });
+  return relatedFileCandidates(ownership.value, filePath, ctx.documentUris);
 }
 
 /**

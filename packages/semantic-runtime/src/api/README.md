@@ -1444,6 +1444,10 @@ scope can still provide useful candidates, locals, and types when its capability
 capability remains in `missingInputs` and answer coverage stays open. The diagnostic projection may present the same
 fact as an actionable error; it is not the source of the cursor answer's epistemic state.
 
+`TemplateDocumentOwnership` exposes exact template file anchors in `sources` and the corresponding component file
+relationships in `components`. Each relationship carries the resource registration, the backing class declaration
+when known, and the retained template file. A registration can reference a class declared in another file.
+
 `AppTopology` is the first app-building projection. It composes already-materialized configuration, resource, compiler,
 template, authored router facts, and source CSS imports into app roots, components, route configs, bindables,
 component dependencies, external template assets, component/global style asset rows, component-role rows, roleful source

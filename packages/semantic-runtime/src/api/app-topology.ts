@@ -367,6 +367,16 @@ export interface SemanticTemplateDocumentOwnershipResult {
   readonly projectKey: string;
   readonly rootDir: string;
   readonly sources: readonly SemanticSourceReference[];
+  readonly components: readonly SemanticComponentFileOwnership[];
+}
+
+/** Physical file sources for one component, preserving the definition and its backing declaration separately. */
+export interface SemanticComponentFileOwnership {
+  readonly elementName: string;
+  readonly className: string | null;
+  readonly registrationSource: SemanticSourceReference | null;
+  readonly targetDeclarationSource: SemanticSourceReference | null;
+  readonly templateSource: SemanticSourceReference;
 }
 
 /** Test one exact authored document against a bounded template-document ownership answer. */
@@ -389,20 +399,24 @@ export function readSemanticTemplateDocumentOwnership(
   emission: AureliaAppWorldProjectEmission,
 ): SemanticTemplateDocumentOwnershipResult {
   const sources = new Map<string, SemanticSourceReference>();
+  const components: SemanticComponentFileOwnership[] = [];
+  const fileSource = (handle: AddressHandle | null): SemanticSourceReference | null => {
+    const source = describeAddress(store, handle);
+    return source?.path == null ? null : source.anchor ?? source;
+  };
   for (const definition of uniqueCustomElementDefinitions(emission)) {
     const compilation = templateCompilationsForDefinition(emission, definition)[0] ?? null;
-    const source = describeAddress(
-      store,
-      compilation?.compilation.definition.template?.addressHandle
-        ?? definition.template?.addressHandle
-        ?? null,
-    );
-    if (source?.path == null) {
-      continue;
-    }
-    if (!sources.has(source.path)) {
-      sources.set(source.path, source.anchor ?? source);
-    }
+    const template = fileSource(compilation?.compilation.definition.template?.addressHandle
+      ?? definition.template?.addressHandle ?? null);
+    if (template?.path == null) continue;
+    if (!sources.has(template.path)) sources.set(template.path, template);
+    components.push({
+      elementName: definition.name,
+      className: definition.target.localName,
+      registrationSource: fileSource(definition.sourceAddressHandle),
+      targetDeclarationSource: fileSource(definition.target.declarationSourceAddressHandle),
+      templateSource: template,
+    });
   }
   return {
     projectKey: emission.project.projectKey,
@@ -410,6 +424,10 @@ export function readSemanticTemplateDocumentOwnership(
     sources: [...sources.entries()]
       .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
       .map(([, source]) => source),
+    components: components.sort((left, right) =>
+      left.elementName.localeCompare(right.elementName)
+      || (left.className ?? '').localeCompare(right.className ?? '')
+    ),
   };
 }
 

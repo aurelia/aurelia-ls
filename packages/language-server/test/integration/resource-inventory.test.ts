@@ -258,6 +258,56 @@ test("related files follow a deeply nested convention pair in both directions", 
   }
 }, 30_000);
 
+test("related files distinguish backing classes from registrations and offer each destination once", async () => {
+  const fixture = copyFixtureDirectory(helloWorldFixture);
+  const sources = {
+    "src/main.ts": `import Aurelia, { customElement } from "aurelia";
+import { One, Two, Three } from "./registrations";
+@customElement({ name: "test-app", dependencies: [One, Two, Three], template: "<one-card></one-card>" })
+class App {}
+Aurelia.app({ host: document.body, component: App }).start();
+`,
+    "src/registrations.ts": `import { CustomElement } from "aurelia";
+import { First, Second } from "./cards";
+import { Third } from "./other";
+import template from "./shared.html";
+export const One = CustomElement.define({ name: "one-card", template }, First);
+export const Two = CustomElement.define({ name: "two-card", template }, Second);
+export const Three = CustomElement.define({ name: "third-card", template }, Third);
+`,
+    "src/cards.ts": "export class First {}\nexport class Second {}\n",
+    "src/other.ts": "export class Third {}\n",
+    "src/shared.html": "<template>Shared template</template>\n",
+  };
+  for (const [file, text] of Object.entries(sources)) {
+    fs.writeFileSync(path.join(fixture, file), text, "utf8");
+  }
+  fs.appendFileSync(path.join(fixture, "src/aurelia-shim.d.ts"),
+    '\ndeclare module "aurelia" { export const CustomElement: { define<T>(definition: object, target: T): T }; }\n');
+  const { connection, child, dispose, getStderr } = startServer(fixture);
+  try {
+    await initialize(connection, child, getStderr, fixture);
+    const related = (file: keyof typeof sources) => connection.sendRequest<RelatedFilesResponse>(
+      AureliaProtocolRequest.RelatedFiles, { uri: fileUri(fixture, file) },
+    );
+    expect(await related("src/shared.html")).toEqual([
+      { uri: fileUri(fixture, "src/cards.ts"), role: "component-source", elementName: "one-card", className: "First" },
+      { uri: fileUri(fixture, "src/other.ts"), role: "component-source", elementName: "third-card", className: "Third" },
+    ]);
+    for (const file of ["src/cards.ts", "src/other.ts", "src/registrations.ts"] as const) {
+      expect(await related(file)).toEqual([
+        expect.objectContaining({ uri: fileUri(fixture, "src/shared.html"), role: "component-template" }),
+      ]);
+    }
+    expect(await related("src/main.ts")).toEqual([]);
+  } finally {
+    dispose();
+    child.kill("SIGKILL");
+    await waitForExit(child);
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+}, 30_000);
+
 function seedAdversarialResourceDiscovery(fixture: string): void {
   const cardPath = path.join(fixture, "src/components/product-card.ts");
   const card = fs.readFileSync(cardPath, "utf8").replace(

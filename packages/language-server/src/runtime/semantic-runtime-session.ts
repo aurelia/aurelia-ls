@@ -19,7 +19,6 @@ import {
   type SemanticAttributeInterpretationExplanationResult,
   type SemanticAnalysisLimitationsResult,
   type SemanticApplicationEntrypointPolicy,
-  type SemanticApplicationTopologyResult,
   type SemanticTemplateDocumentOwnershipResult,
   type SemanticBindingUncertaintyExplanationResult,
   type ManagedSemanticWorkspaceOperationContext,
@@ -147,11 +146,8 @@ export interface SemanticRuntimeLspOperation {
     resourceIdentityKey: string,
     templateResourceScopeIdentityKey: string | null,
   ): Promise<SemanticRuntimeAnswer<SemanticResourceAvailabilityExplanationResult>>;
-  appTopology(
-    selection: { readonly projectKey: string } | { readonly sourceFilePath: string },
-  ): Promise<SemanticRuntimeAnswer<SemanticApplicationTopologyResult>>;
   templateDocumentOwnership(
-    projectKey: string,
+    project: string | { readonly sourceFilePath: string },
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateDocumentOwnershipResult>>;
   templateInlayHints(document: TextDocument): Promise<SemanticRuntimeAnswer<SemanticTemplateInlayHintsResult>>;
   templateSemanticTokens(document: TextDocument): Promise<SemanticRuntimeAnswer<SemanticTemplateSemanticTokensResult>>;
@@ -991,8 +987,7 @@ export class SemanticRuntimeLspSession {
         templateResourceScopeIdentityKey,
         token,
       ),
-      appTopology: (selection) => this.appTopology(selection, token),
-      templateDocumentOwnership: (projectKey) => this.templateDocumentOwnership(projectKey, token),
+      templateDocumentOwnership: (project) => this.templateDocumentOwnership(project, token),
       templateInlayHints: (document) => this.templateInlayHints(document, token),
       templateSemanticTokens: (document) => this.templateSemanticTokens(document, token),
       templateFoldingRanges: (document) => this.templateFoldingRanges(document, token),
@@ -1487,25 +1482,8 @@ export class SemanticRuntimeLspSession {
     return answer;
   }
 
-  private async appTopology(
-    selection: { readonly projectKey: string } | { readonly sourceFilePath: string },
-    token: SemanticRuntimeLspRequestToken,
-  ): Promise<SemanticRuntimeAnswer<SemanticApplicationTopologyResult>> {
-    const runtime = this.runtimeForOperation(token);
-    const answer = await runtime.answerAppQuery({
-      kind: SemanticAppQueryKind.AppTopology,
-      ...selection,
-      inquiryProfile: "lsp-cursor",
-      analysisDepth: "runtime-topology",
-      includeAuthoringTemplates: true,
-      appRetention: "retain-app",
-    }) as SemanticRuntimeAnswer<SemanticApplicationTopologyResult>;
-    this.assertRequestTokenActive(token);
-    return answer;
-  }
-
   private async templateDocumentOwnership(
-    projectKey: string,
+    project: string | { readonly sourceFilePath: string },
     token: SemanticRuntimeLspRequestToken,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateDocumentOwnershipResult>> {
     const runtime = this.runtimeForOperation(token);
@@ -1514,7 +1492,7 @@ export class SemanticRuntimeLspSession {
     // project-shaped query identity let every ownership check in this generation reuse both the app and bounded answer.
     const answer = await runtime.answerAppQuery({
       kind: SemanticAppQueryKind.TemplateDocumentOwnership,
-      projectKey,
+      ...(typeof project === "string" ? { projectKey: project } : project),
       inquiryProfile: "lsp-cursor",
       analysisDepth: "runtime-topology",
       templateAnalysisBreadth: "resource-local",
