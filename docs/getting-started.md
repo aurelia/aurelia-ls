@@ -58,19 +58,21 @@ the editor and MCP:
 The file is optional. See [Project Configuration](./project-configuration.md)
 for the complete V1 reference.
 
-### Optional native-diagnostic suppression
+### Embedded CSS and JavaScript diagnostics
 
-Aurelia templates stay in VS Code's native `html` mode by default, including
-embedded CSS and JavaScript diagnostics. If those validators report false
-Problems for valid interpolation, set
-`aurelia.templateDiagnostics.suppressNative` to `true` for the affected
-workspace folder.
+A proved template with Aurelia interpolation in an enabled embedded CSS or
+JavaScript region uses **Aurelia HTML** mode. You can write expressions such
+as `style="width: ${progress}%"` while keeping Problems for malformed CSS and
+JavaScript at their authored locations. Removing the last such interpolation
+returns the template to normal HTML mode. Unowned HTML uses VS Code's normal
+validators.
 
-Only exactly owned templates move into **Aurelia HTML** mode. This suppresses
-embedded CSS/JavaScript diagnostics, including legitimate findings, and may
-change native HTML editor behavior. Keep the default unless interpolation noise
-outweighs that loss, and preserve the disabled checks in project lint or build
-tooling.
+To turn off embedded CSS and JavaScript Problems throughout a workspace
+folder's owned templates, set `aurelia.templateDiagnostics.suppressNative`
+to `true`. This also suppresses genuine embedded findings. **Aurelia HTML**
+participates in HTML editing features, but language-scoped settings, snippets
+and formatter selection can differ. The per-language validation settings and
+the full policy are described in the [extension's diagnostic reference](../packages/vscode/README.md#diagnostics).
 
 ## Using the MCP Release
 
