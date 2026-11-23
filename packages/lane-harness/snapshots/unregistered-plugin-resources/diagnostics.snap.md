@@ -527,47 +527,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "contextual": [
             {
               "diagnostic": {
-                "diagnosticAuthority": "semantic-runtime-product",
-                "diagnosticDomain": "template",
-                "diagnosticKind": "binding-target-assignment-strictness",
-                "frameworkErrorCode": null,
-                "frameworkRawErrorAuthority": null,
-                "missingInput": "binding-target-assignment:source-to-target-type-mismatch",
-                "missingInputs": [
-                  "binding-target-assignment:source-to-target-type-mismatch"
-                ],
-                "phase": null,
-                "relatedInformation": [],
-                "relatedQueryKind": "template-diagnostics",
-                "repairAffordance": {
-                  "actionKind": "rewrite-expression",
-                  "actionability": "guided",
-                  "changeDomain": "app-source",
-                  "planKind": "template-expression-rewrite",
-                  "readiness": "ready-to-plan",
-                  "targetSourceCoverage": "all"
-                },
-                "severity": "warning",
-                "sourceRole": "template",
-                "subject": {
-                  "source": {
-                    "end": 343,
-                    "kind": "source-span-address",
-                    "label": "src/unregistered-plugin-resources-app.html@321..343",
-                    "path": "src/unregistered-plugin-resources-app.html",
-                    "role": "binding-source-expression",
-                    "start": 321
-                  },
-                  "span": null,
-                  "subjectKind": "template-expression",
-                  "uri": null
-                },
-                "typeScriptDiagnosticCode": null
-              },
-              "relation": "derived-consequence"
-            },
-            {
-              "diagnostic": {
                 "diagnosticAuthority": "framework-error-code",
                 "diagnosticDomain": "template",
                 "diagnosticKind": "runtime-binding-behavior-framework-error",
@@ -598,7 +557,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           ],
           "maxRawSeverity": "error",
           "primarySeverity": "error",
-          "rawRowCount": 3
+          "rawRowCount": 2
         },
         "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
@@ -627,23 +586,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       },
       "rangeText": "state",
       "relatedInformation": [
-        {
-          "anomaly": null,
-          "file": "src/unregistered-plugin-resources-app.html",
-          "message": "Binding source type { ready: boolean; } is not assignable to target 'textContent' of type string.",
-          "range": {
-            "end": {
-              "character": 49,
-              "line": 13
-            },
-            "start": {
-              "character": 27,
-              "line": 13
-            }
-          },
-          "rangeText": "dashboardState & state",
-          "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
-        },
         {
           "anomaly": null,
           "file": "src/unregistered-plugin-resources-app.html",
