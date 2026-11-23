@@ -40,13 +40,16 @@ describe('custom element template literal value origin', () => {
       'export class AssetAlias { message = "alias"; }',
       "@customElement({ name: 'asset-barrel', template: externalTemplate })",
       'export class AssetBarrel { message = "barrel"; }',
+      "function scopedOptions(physicalMarkup: string) { return { name: 'shadowed-asset', template: physicalMarkup }; }",
+      "@customElement(scopedOptions('<strong>local literal</strong>'))",
+      'export class ShadowedAsset {}',
       "@customElement({ name: 'computed-template', template: '<p>' + 'computed</p>' })",
       'export class ComputedTemplate {}',
       "@customElement({ name: 'changed-template', template: sharedTemplate.replace('message', 'changed') })",
       'export class ChangedTemplate {}',
       "@customElement({ name: 'my-app', template: '', dependencies: [",
       '  DirectLiteral, FirstShared, SecondShared, PropertyShared, ReturnedShared, StaticShared, ImportedLiteral,',
-      '  AssetAlias, AssetBarrel, ComputedTemplate, ChangedTemplate,',
+      '  AssetAlias, AssetBarrel, ShadowedAsset, ComputedTemplate, ChangedTemplate,',
       '] })',
       'export class MyApp {}',
     ].join('\n');
@@ -130,6 +133,18 @@ describe('custom element template literal value origin', () => {
         expect(template.sourceMap?.decodedToSourceOffsets[template.markup!.indexOf('message')], name)
           .toBe(physicalMarkup.indexOf('message'));
       }
+
+      const shadowed = selection('shadowed-asset');
+      const localMarkup = '<strong>local literal</strong>';
+      expect(shadowed.template.moduleRole).toBe(CustomElementTemplateModuleRole.InlineValue);
+      expect(shadowed.template.markup).toBe(localMarkup);
+      expect(shadowed.template.authoredSourceRevision).toBe(sourceTextContentRevision(source));
+      expect(shadowed.attachment?.templateSource).toMatchObject({
+        sourcePath: 'src/my-app.ts',
+        start: source.indexOf(localMarkup),
+        end: source.indexOf(localMarkup) + localMarkup.length,
+        oldText: localMarkup,
+      });
 
       for (const name of ['computed-template', 'changed-template']) {
         const { template, attachment } = selection(name);
