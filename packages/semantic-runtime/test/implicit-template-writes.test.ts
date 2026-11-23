@@ -13,7 +13,8 @@ test('projects framework writes onto live reads in their owning binding context,
   const script = path.join(root, 'src/router-active-link-state-app.ts');
   const component = readFileSync(script, 'utf8')
     .replace('@route({', "@customElement({name: 'foreign-ref', template: '<input ref=neverWritten>'}) class ForeignRef {}\n@route({")
-    .replace("name: 'router-active-link-state-app', template", "name: 'router-active-link-state-app', template, dependencies: [ForeignRef]");
+    .replace("name: 'router-active-link-state-app', template", "name: 'router-active-link-state-app', template, dependencies: [ForeignRef]")
+    .replace('class RouterActiveLinkStateApp {', 'class RouterActiveLinkStateApp { acceptCount(value: number) { return value; }');
   const lines = [
     '<main><output>${field?.tagName}</output>',
     '  <input ref="field"><output>${field.tagName}</output>',
@@ -21,7 +22,7 @@ test('projects framework writes onto live reads in their owning binding context,
     '  <li active.class="_current"><a load="route: home; active.bind: _current">Home</a></li>',
     '  <output>${_current}</output>',
     '  <div if.bind="homeActive"><input ref="shared"></div><div else><textarea ref="shared"></textarea></div><output>${shared?.tagName}</output>',
-    '  <foreign-ref></foreign-ref><span>${neverWritten}</span><au-viewport></au-viewport></main>',
+    '  <foreign-ref></foreign-ref><span>${neverWritten}</span><output>${acceptCount(\'wrong\')}</output><au-viewport></au-viewport></main>',
   ];
   const markup = lines.join('\n');
   const files = new Map([[file, markup], [script, component]]);
@@ -36,8 +37,11 @@ test('projects framework writes onto live reads in their owning binding context,
     const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
     const rows = (app.ask({ kind: SemanticAppQueryKind.TemplateDiagnostics, sourceFile: { filePath: file },
       page: { size: 100 } }).value as SemanticTemplateDiagnosticsResult).rows;
+    expect(rows.filter(r => r.source?.start != null && r.source.start < markup.indexOf('<foreign-ref>'))).toEqual([]);
     expect(rows.filter(r => r.diagnosticKind === 'missing-expression-member')
       .map(r => markup.slice(r.source?.start ?? 0, r.source?.end ?? 0))).toEqual(['neverWritten']);
+    expect(rows.filter(r => r.typeScriptDiagnosticCode === 2345)
+      .map(r => markup.slice(r.source?.start ?? 0, r.source?.end ?? 0))).toEqual(["'wrong'"]);
     const selected = (line: number, character: number) => {
       const offset = lines.slice(0, line).reduce((s, text) => s + text.length + 1, character);
       const result = app.ask({ kind: SemanticAppQueryKind.TemplateCursorInfo, cursor: { filePath: file, line, character, offset } });

@@ -27,6 +27,8 @@ export const enum BindingScopeOwnerKind {
 export const enum BindingScopeCreatorKind {
   RuntimeBindingScopeEffect = 'runtime-binding-scope-effect',
   RuntimeAssignment = 'runtime-assignment',
+  /** A live binding may observe a property introduced by an exact framework writer at another point in its lifetime. */
+  ReactiveWrite = 'reactive-write',
   ListenerEvent = 'listener-event',
   StateBinding = 'state-binding',
   StateBindingBehavior = 'state-binding-behavior',

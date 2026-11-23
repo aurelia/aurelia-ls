@@ -1,6 +1,8 @@
 import {
   BindingContextSlotDraft,
   BindingScope,
+  BindingScopeCreator,
+  BindingScopeCreatorKind,
 } from '../configuration/scope.js';
 import type { IdentityHandle, ProductHandle } from '../kernel/handles.js';
 import type { TemplateScopeConstructionFrame } from './template-controller-scope-materializer.js';
@@ -69,12 +71,31 @@ export class TemplateImplicitWriteScopes {
         slotsByContext.set(context.identityHandle, declarations);
       }
       const missing = declarations.filter(slot => context.lookup(slot.name) == null);
-      const result = missing.length === 0 && parent === scope.runtimeParent ? scope
-        : frame.addDerivedScope(frame.services.scopeMaterializer.prepare(BindingScope.fromNarrowedBindingScope({
+      if (missing.length === 0 && parent === scope.runtimeParent) {
+        cache.set(scope, scope);
+        return scope;
+      }
+      const creators: BindingScopeCreator[] = [];
+      for (const slot of missing) {
+        const writes = this.writers.get(context.identityHandle)!.get(slot.name)!;
+        // Replay each local once. Additional possible writers retain provenance, without redeclaring it.
+        let names: string[] = [slot.name];
+        for (const [binding, writer] of writes) {
+          creators.push(new BindingScopeCreator(BindingScopeCreatorKind.ReactiveWrite, binding,
+            writer.slot.sourceAddressHandle, null, names, names, context.contextKind));
+          names = [];
+        }
+      }
+      if (creators.length === 0 && parent != null) {
+        const cause = parent.scopeCreators.find(creator => creator.creatorKind === BindingScopeCreatorKind.ReactiveWrite);
+        if (cause != null) creators.push(new BindingScopeCreator(BindingScopeCreatorKind.ReactiveWrite, cause.productHandle, cause.sourceAddressHandle));
+      }
+      const result = frame.addDerivedScope(frame.services.scopeMaterializer.prepare(BindingScope.fromNarrowedBindingScope({
           localKey: `${frame.input.localKey}:scope:reactive-writers:${scope.productHandle}`,
           base: scope,
           runtimeParent: parent,
           bindingContextSlots: missing,
+          scopeCreators: creators,
           ownerProductHandle: scope.productHandle,
           ownerIdentityHandle: scope.identityHandle,
           sourceAddressHandle: scope.sourceAddressHandle,

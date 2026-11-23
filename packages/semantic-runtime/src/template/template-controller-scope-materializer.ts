@@ -2000,7 +2000,11 @@ export class TemplateControllerScopeMaterializer {
           runtimeBinding,
         )
       : assignedValueTypeOverride;
-    const assignmentOnly = runtimeBindingSourceLifecycle(runtimeBinding, frame.input.expressionResourcePlan).evaluationKind === RuntimeBindingSourceEvaluationKind.AssignmentOnly;
+    // A promise controller's then/catch output belongs to its settlement branch, whose own
+    // scope creator already projects it. It cannot declare a name throughout the component.
+    const assignmentOnly = assignedValueTypeOverride === undefined
+      && !(ownerInstruction instanceof HydrateTemplateControllerInstruction)
+      && runtimeBindingSourceLifecycle(runtimeBinding, frame.input.expressionResourcePlan).evaluationKind === RuntimeBindingSourceEvaluationKind.AssignmentOnly;
     return this.applyRuntimeAssignment(frame, parent, binding, localSuffix, target, parse?.sourceAddressHandle ?? null,
       assignedValueType, targetMember, targetMemberValueType, assignmentOnly ? 'from-view' : null);
   }

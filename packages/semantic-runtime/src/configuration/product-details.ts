@@ -124,6 +124,7 @@ function scopeCreatorReferences(
     switch (creator.creatorKind) {
       case BindingScopeCreatorKind.RuntimeBindingScopeEffect:
         return TemplateDetailDescriptors.RuntimeBindingScopeEffect;
+      case BindingScopeCreatorKind.ReactiveWrite:
       case BindingScopeCreatorKind.RuntimeAssignment:
       case BindingScopeCreatorKind.ListenerEvent:
       case BindingScopeCreatorKind.StateBinding:
