@@ -7,6 +7,10 @@ import type {
   SemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputReadScope,
 } from '../kernel/project-input.js';
+import { SourceFileRole } from '../kernel/address.js';
+import { inferSourceFileRole } from '../kernel/source-classification.js';
+import { canonicalTypeSystemPath } from '../type-system/source-file-path.js';
+import { readCompilerConfigInput } from './compiler-config-input.js';
 import { normalizePosixPath } from './host-files.js';
 import type { AuthoredSourceBoundary } from './source-boundary.js';
 
@@ -19,7 +23,7 @@ export class ProjectCompilerOptionsEnvironment implements ComputationRead {
   constructor(
     readonly typeScriptVersion: string,
     readonly useCaseSensitiveFileNames: boolean,
-    readonly platform: NodeJS.Platform,
+    readonly platform: typeof process.platform,
   ) {
     this.observedRevision = compilerOptionsEnvironmentRevision(this);
   }
@@ -39,6 +43,13 @@ export class ProjectCompilerOptionsEnvironment implements ComputationRead {
   }
 }
 
+export interface ProjectCompilerConfiguration {
+  readonly configFilePath: string;
+  readonly options: ts.CompilerOptions;
+  readonly rootFileNames: readonly string[];
+  readonly explicitFileNames: readonly string[];
+}
+
 export class ProjectCompilerOptionsResult {
   readonly revision: string;
 
@@ -49,8 +60,17 @@ export class ProjectCompilerOptionsResult {
     readonly rootFileNames: readonly string[] | null,
     private readonly inputReadScope: SemanticRuntimeProjectInputReadScope,
     readonly environment: ProjectCompilerOptionsEnvironment,
+    readonly configuredProjects: readonly ProjectCompilerConfiguration[],
+    readonly nestedCompilerConfigPaths: readonly string[],
+    private readonly configurationsByFile: ReadonlyMap<string, ProjectCompilerConfiguration>,
   ) {
     this.revision = projectCompilerOptionsRevision(this);
+  }
+
+  /** Resolve from the configured project owning the importing file, including referenced projects. */
+  optionsForFile(fileName: string): ts.CompilerOptions {
+    if (this.configurationsByFile.size === 0) return this.options;
+    return this.configurationsByFile.get(canonicalTypeSystemPath(fileName))?.options ?? this.options;
   }
 
   readRegisteredInputs(): readonly ComputationRead[] {
@@ -58,90 +78,80 @@ export class ProjectCompilerOptionsResult {
   }
 }
 
-interface ProjectCompilerOptionsValues {
-  readonly options: ts.CompilerOptions;
-  readonly configFilePath: string | null;
-  readonly diagnostics: readonly ts.Diagnostic[];
-  readonly rootFileNames: readonly string[] | null;
-}
-
-/** Read compiler options with semantic-runtime defaults and exact-root TypeScript/JavaScript config overrides. */
+/** Capture the effective TypeScript projects and source membership once for evaluation and checker consumers. */
 export function buildProjectCompilerOptionsResult(
   inputGeneration: SemanticRuntimeProjectInputGeneration,
   rootDir: string,
   authoredSources: AuthoredSourceBoundary,
+  nestedCompilerConfigPaths: readonly string[] = [],
 ): ProjectCompilerOptionsResult {
-  const inputReadScope = inputGeneration.createReadScope('project-compiler-options');
+  const scope = inputGeneration.createReadScope('project-compiler-options');
   const environment = readProjectCompilerOptionsEnvironment();
-  const values = readProjectCompilerOptions(
-    inputReadScope.host,
-    rootDir,
-    environment,
-    authoredSources,
-  );
-  return new ProjectCompilerOptionsResult(
-    values.options,
-    values.configFilePath,
-    values.diagnostics,
-    values.rootFileNames,
-    inputReadScope,
-    environment,
-  );
-}
-
-function readProjectCompilerOptions(
-  host: SemanticRuntimeProjectInputHost,
-  rootDir: string,
-  environment: ProjectCompilerOptionsEnvironment,
-  authoredSources: AuthoredSourceBoundary,
-): ProjectCompilerOptionsValues {
   const defaults = defaultProjectCompilerOptions(environment);
-  const configFile = projectCompilerConfigurationFile(host, rootDir);
-  if (configFile == null) {
-    return {
-      options: defaults,
-      configFilePath: null,
-      diagnostics: [],
-      rootFileNames: null,
+  const rootConfig = projectCompilerConfigurationFile(scope.host, rootDir);
+  const configuredProjects: ProjectCompilerConfiguration[] = [];
+  const visited = new Set<string>();
+  const diagnostics: ts.Diagnostic[] = [];
+  const configurationsByFile = new Map<string, ProjectCompilerConfiguration>();
+
+  function visit(file: string): void {
+    const key = canonicalTypeSystemPath(file);
+    if (visited.has(key)) return;
+    visited.add(key);
+    const { parsed, diagnostics: errors } = readCompilerConfigInput(scope.host, file, environment.useCaseSensitiveFileNames);
+    diagnostics.push(...errors);
+    if (parsed == null) return;
+    const options = { ...defaults, ...parsed.options };
+    if (parsed.options.lib == null) delete options.lib;
+    const raw: unknown = parsed.raw;
+    const rawFiles = raw && typeof raw === 'object' && 'files' in raw ? raw.files : null;
+    const config = {
+      configFilePath: normalizePosixPath(file),
+      options,
+      rootFileNames: parsed.fileNames.filter(name => authoredSources.contains(name)),
+      explicitFileNames: Array.isArray(rawFiles)
+        ? rawFiles.filter((name): name is string => typeof name === 'string')
+          .map(name => normalizePosixPath(path.resolve(path.dirname(file), name))).filter(name => authoredSources.contains(name))
+        : [],
     };
+    configuredProjects.push(config);
+    for (const ref of parsed.projectReferences ?? []) visit(ts.resolveProjectReferencePath(ref));
   }
 
-  const read = ts.readConfigFile(configFile, (fileName) => host.readFile(fileName));
-  if (read.error != null || read.config == null) {
-    return {
-      options: defaults,
-      configFilePath: configFile,
-      diagnostics: read.error == null ? [] : [read.error],
-      rootFileNames: null,
-    };
+  // A nearer physical tsconfig owns files it explicitly includes. Within a solution,
+  // walk references in the declared order after considering the configâ€™s own roots.
+  for (const nested of [...nestedCompilerConfigPaths].sort((a, b) => b.length - a.length || a.localeCompare(b))) visit(nested);
+  if (rootConfig != null) visit(rootConfig);
+  const root = configuredProjects.find(config => config.configFilePath === rootConfig);
+  let primary = root ?? configuredProjects[0];
+  if (configuredProjects.length > 1) {
+    const appOwners = new Set<ProjectCompilerConfiguration>();
+    for (const config of configuredProjects) {
+      for (const fileName of config.rootFileNames) {
+        const key = canonicalTypeSystemPath(fileName);
+        if (configurationsByFile.has(key)) continue;
+        configurationsByFile.set(key, config);
+        if (inferSourceFileRole(path.relative(rootDir, fileName)) === SourceFileRole.AppSource) appOwners.add(config);
+      }
+    }
+    // Vite's application and build configuration often have different TS options.
+    // Only choose an application-wide default when the actual app files have one owner.
+    if (appOwners.size === 1) primary = appOwners.values().next().value;
   }
-
-  const parsed = ts.parseJsonConfigFileContent(
-    read.config,
-    {
-      useCaseSensitiveFileNames: environment.useCaseSensitiveFileNames,
-      readDirectory: (directoryName, extensions, excludes, includes, depth) =>
-        [...host.matchFiles(directoryName, extensions, excludes, includes, depth)],
-      fileExists: (fileName) => host.fileExists(fileName),
-      readFile: (fileName) => host.readFile(fileName),
-    },
-    path.dirname(configFile),
-    undefined,
-    configFile,
+  const roots = configuredProjects.length <= 1
+    ? configuredProjects[0]?.rootFileNames ?? null
+    : [...new Set(configuredProjects.flatMap(config => config.rootFileNames))];
+  return new ProjectCompilerOptionsResult(
+    primary?.options ?? defaults,
+    primary?.configFilePath ?? rootConfig,
+    diagnostics,
+    roots,
+    scope,
+    environment,
+    configuredProjects,
+    nestedCompilerConfigPaths,
+    configurationsByFile,
   );
-  const merged = {
-    ...defaults,
-    ...parsed.options,
-  };
-  if (parsed.options.lib == null) {
-    delete merged.lib;
-  }
-  return {
-    options: merged,
-    configFilePath: configFile,
-    diagnostics: parsed.errors,
-    rootFileNames: parsed.fileNames.filter((fileName) => authoredSources.contains(fileName)),
-  };
 }
 
 function projectCompilerConfigurationFile(

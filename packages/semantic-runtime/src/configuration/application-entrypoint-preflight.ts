@@ -223,6 +223,7 @@ export function readSemanticApplicationEntrypointSourcePreflight(
       project.compilerOptions.options,
       moduleResolutionPolicy,
       project.authoredSources,
+      fileName => project.compilerOptions.optionsForFile(fileName),
     );
     const graph = buildEvaluationModuleGraphForEntries(entryModuleKeys, host).graph;
     const reachability = entryModuleKeys.map((entryModuleKey) => ({
@@ -231,7 +232,7 @@ export function readSemanticApplicationEntrypointSourcePreflight(
     }));
     const openExecutableModuleEdgeCount = countPotentialLocalNullModuleEdges(
       graph,
-      project.compilerOptions.options,
+      project,
     ) + countNonLiteralDynamicModuleEdges(graph);
     return {
       requiresCurrentnessProof: true,
@@ -335,10 +336,11 @@ function countNonLiteralDynamicModuleEdges(graph: EvaluationModuleGraph): number
 
 function countPotentialLocalNullModuleEdges(
   graph: EvaluationModuleGraph,
-  compilerOptions: ts.CompilerOptions,
+  project: ProjectBootFrame,
 ): number {
   let count = 0;
   for (const module of graph.readModules()) {
+    const options = project.compilerOptions.optionsForFile(path.resolve(project.rootDir, module.moduleKey));
     const edges = [
       ...module.imports.map((entry) => ({
         moduleSpecifier: entry.moduleSpecifier,
@@ -351,7 +353,7 @@ function countPotentialLocalNullModuleEdges(
     for (const edge of edges) {
       if (
         graph.readLinkedModule(module.moduleKey, edge.moduleSpecifier, edge.resolutionMode) == null
-        && potentialProjectLocalModuleSpecifier(edge.moduleSpecifier, compilerOptions)
+        && potentialProjectLocalModuleSpecifier(edge.moduleSpecifier, options)
       ) {
         count += 1;
       }

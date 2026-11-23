@@ -321,3 +321,59 @@ test("hover/definition map through semantic-runtime provenance and rename succee
     fs.rmSync(fixture, { recursive: true, force: true });
   }
 });
+
+test("uses the referenced TypeScript project for inherited template members and refreshes its path mapping", async () => {
+  const htmlText = '<p>${message}</p><p>${typo}</p>';
+  const config = (base: string) => JSON.stringify({
+    compilerOptions: {
+      target: "ES2022", module: "ESNext", moduleResolution: "Bundler", strict: true,
+      paths: { "@model": [base] },
+    },
+    include: ["src"],
+  });
+  const aliasConfig = "tsconfig.app.json";
+  const fixture = createAureliaAppFixture({
+    "tsconfig.json": JSON.stringify({ files: [], references: [{ path: "./" + aliasConfig }] }),
+    [aliasConfig]: config("./src/base.ts"),
+    "src/app.html": htmlText,
+    "src/app.ts": [
+      "import { Base } from '@model';",
+      "import { customElement } from 'aurelia';",
+      "import template from './app.html';",
+      "@customElement({ name: 'app-root', template }) export class AppRoot extends Base {}",
+    ].join("\n"),
+    "src/base.ts": "export class Base { message = 'working'; }",
+    "src/other.ts": "export class Base { replacement = true; }",
+  });
+  const { connection, child, dispose, getStderr } = startServer(fixture);
+  const uri = fileUri(fixture, "src/app.html");
+  const position = positionAt(htmlText, htmlText.indexOf("message"));
+  const target = () => connection.sendRequest("textDocument/definition", { textDocument: { uri }, position });
+  const missingNames = async () => {
+    const result = await connection.sendRequest<{ items: LspDiagnostic[] }>("textDocument/diagnostic", {
+      identifier: "aurelia", textDocument: { uri },
+    });
+    return result.items.filter(row => row.code === "missing-expression-member").map(row =>
+      htmlText.slice(row.range.start.character, row.range.end.character)).sort();
+  };
+  async function retarget(base: string) {
+    fs.writeFileSync(path.join(fixture, aliasConfig), config(base));
+    await connection.sendNotification("workspace/didChangeWatchedFiles", { changes: [{ uri: fileUri(fixture, aliasConfig), type: 2 }] });
+  }
+  try {
+    await initialize(connection, child, getStderr, fixture);
+    await openDocument(connection, uri, "html", htmlText);
+    expect(await missingNames()).toEqual(["typo"]);
+    expect(definitionTarget(await target(), fileUri(fixture, "src/base.ts"))).not.toBeNull();
+    await retarget("./src/other.ts");
+    expect(await missingNames()).toEqual(["message", "typo"]);
+    await retarget("./src/base.ts");
+    expect(await missingNames()).toEqual(["typo"]);
+    expect(definitionTarget(await target(), fileUri(fixture, "src/base.ts"))).not.toBeNull();
+  } finally {
+    dispose();
+    child.kill("SIGKILL");
+    await waitForExit(child);
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+}, 30_000);

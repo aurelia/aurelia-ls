@@ -807,7 +807,10 @@ export class TypeSystemProjectBuilder {
 
     const options = projectOptions.compilerOptions;
     const inputReadScope = project.inputGeneration.createReadScope('type-system-project');
-    const moduleResolver = new ProjectModuleResolver(project.rootDir, options, inputReadScope.host);
+    const moduleResolver = new ProjectModuleResolver(
+      project.rootDir, options, inputReadScope.host,
+      fileName => project.compilerOptions.optionsForFile(fileName),
+    );
     const host = measureTypeSystemProjectPhase(
       phases,
       'compiler-host',
@@ -1489,13 +1492,15 @@ function createTypeSystemCompilerHost(
     moduleLiterals,
     containingFile,
     redirectedReference,
-    resolutionOptions,
+    _resolutionOptions,
     containingSourceFile,
   ) => moduleLiterals.map((moduleLiteral) => moduleResolver.resolveModuleName(
     moduleLiteral.text,
     containingFile,
     redirectedReference,
-    ts.getModeForUsageLocation(containingSourceFile, moduleLiteral, resolutionOptions),
+    ts.getModeForUsageLocation(
+      containingSourceFile, moduleLiteral, redirectedReference?.commandLine.options ?? moduleResolver.optionsForFile(containingFile),
+    ),
   ).typescript);
   compilerHost.getModuleResolutionCache = () => moduleResolver.getModuleResolutionCache();
   // A fresh resolver is scoped to the fresh input receipt. Never let Program reuse retain an edge from an older

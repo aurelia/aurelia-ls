@@ -1342,6 +1342,7 @@ class StaticProjectEvaluationFrame {
       this.project.compilerOptions.options,
       this.options.moduleResolutionPolicy,
       this.project.authoredSources,
+      fileName => this.project.compilerOptions.optionsForFile(fileName),
     );
     const ambientGlobals = this.ambientAccess == null
       ? measureStaticProjectEvaluationPhase(

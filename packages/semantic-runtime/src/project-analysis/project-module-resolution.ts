@@ -146,7 +146,7 @@ interface LinkedPackageResolutionContext {
  */
 export class ProjectModuleResolver {
   private readonly moduleResolutionHost: ts.ModuleResolutionHost;
-  private readonly moduleResolutionCache: ts.ModuleResolutionCache;
+  private readonly moduleResolutionCaches = new Map<ts.CompilerOptions, ts.ModuleResolutionCache>();
   private readonly packageLocator: ProjectPackageLocator;
   private readonly resolutions = new Map<string, ProjectModuleResolution>();
   private readonly knownLinkedPackages = new Map<string, KnownLinkedPackage>();
@@ -156,18 +156,23 @@ export class ProjectModuleResolver {
     private readonly rootDir: string,
     private readonly compilerOptions: ts.CompilerOptions,
     private readonly inputHost: SemanticRuntimeProjectInputHost,
+    private readonly sourceOptions?: (fileName: string) => ts.CompilerOptions,
   ) {
     this.moduleResolutionHost = projectModuleResolutionHost(rootDir, inputHost);
-    this.moduleResolutionCache = ts.createModuleResolutionCache(
-      rootDir,
-      projectModuleHostPathKey,
-      compilerOptions,
-    );
     this.packageLocator = new ProjectPackageLocator(inputHost);
   }
 
-  getModuleResolutionCache(): ts.ModuleResolutionCache {
-    return this.moduleResolutionCache;
+  getModuleResolutionCache(options = this.compilerOptions): ts.ModuleResolutionCache {
+    let cache = this.moduleResolutionCaches.get(options);
+    if (cache == null) {
+      cache = ts.createModuleResolutionCache(this.rootDir, projectModuleHostPathKey, options);
+      this.moduleResolutionCaches.set(options, cache);
+    }
+    return cache;
+  }
+
+  optionsForFile(fileName: string): ts.CompilerOptions {
+    return this.sourceOptions?.(fileName) ?? this.compilerOptions;
   }
 
   /** Resolve physical dependencies while retaining the authored locator space inside this project root. */
@@ -176,11 +181,12 @@ export class ProjectModuleResolver {
   }
 
   getImpliedNodeFormatForFile(fileName: string): ts.ResolutionMode {
+    const options = this.optionsForFile(fileName);
     return ts.getImpliedNodeFormatForFile(
       path.resolve(fileName),
-      this.moduleResolutionCache.getPackageJsonInfoCache(),
+      this.getModuleResolutionCache(options).getPackageJsonInfoCache(),
       this.moduleResolutionHost,
-      this.compilerOptions,
+      options,
     );
   }
 
@@ -201,12 +207,13 @@ export class ProjectModuleResolver {
     if (cached != null) {
       return cached;
     }
+    const options = this.optionsForFile(absoluteContainingFile);
     const ordinary = ts.resolveModuleName(
       moduleSpecifier,
       absoluteContainingFile,
-      this.compilerOptions,
+      options,
       this.moduleResolutionHost,
-      this.moduleResolutionCache,
+      this.getModuleResolutionCache(options),
       redirectedReference,
       resolutionMode,
     );
@@ -237,7 +244,9 @@ export class ProjectModuleResolver {
   ): ts.ResolvedModuleFull | null {
     const roots = [...new Set(packageRoots.map((root) => path.resolve(root)))];
     if (roots.length === 0) return null;
+    const options = this.optionsForFile(containingFile);
     const cacheKey = JSON.stringify([
+      options.configFilePath ?? null,
       roots.map(projectModuleHostPathKey).sort(),
       resolutionMode ?? null,
     ]);
@@ -246,7 +255,7 @@ export class ProjectModuleResolver {
       cache = ts.createModuleResolutionCache(
         this.rootDir,
         projectModuleHostPathKey,
-        this.compilerOptions,
+        options,
       );
       this.runtimeResolutionCaches.set(cacheKey, cache);
     }
@@ -259,7 +268,7 @@ export class ProjectModuleResolver {
     const resolved = ts.resolveModuleName(
       moduleSpecifier,
       path.resolve(containingFile),
-      this.compilerOptions,
+      options,
       host,
       cache,
       undefined,
@@ -289,6 +298,7 @@ export class ProjectModuleResolver {
     redirectedReference: ts.ResolvedProjectReference | undefined,
     resolutionMode: ts.ResolutionMode | undefined,
   ): ProjectModuleResolution {
+    const options = this.optionsForFile(containingFile);
     const context = this.linkedPackageResolutionContext(moduleSpecifier, containingFile);
     if (context == null) {
       return new ProjectModuleResolution(ProjectModuleResolutionKind.Unresolved, ordinary);
@@ -300,7 +310,7 @@ export class ProjectModuleResolver {
       knownPackage,
     } = context;
     const resolutionContainingFile = knownPackage != null
-      && this.compilerOptions.preserveSymlinks !== true
+      && options.preserveSymlinks !== true
       ? canonicalPhysicalModulePath(this.inputHost, containingFile)
       : containingFile;
     if (
@@ -357,7 +367,7 @@ export class ProjectModuleResolver {
     const selected = ts.resolveModuleName(
       moduleSpecifier,
       resolutionContainingFile,
-      this.compilerOptions,
+      options,
       syntheticHost,
       undefined,
       redirectedReference,
@@ -467,7 +477,7 @@ export class ProjectModuleResolver {
       selected.packageId ?? null,
       physicalPackageRoot,
       logicalPackageRoot,
-      this.compilerOptions.preserveSymlinks === true,
+      options.preserveSymlinks === true,
     );
     if (
       packageInstance == null
@@ -498,8 +508,8 @@ export class ProjectModuleResolver {
       logicalSourcePath,
       physicalSourcePath,
     );
-    this.registerKnownLinkedPackage(sourceLink);
-    const resolvedFileName = this.compilerOptions.preserveSymlinks === true
+    this.registerKnownLinkedPackage(sourceLink, options.preserveSymlinks === true);
+    const resolvedFileName = options.preserveSymlinks === true
       ? logicalSourcePath
       : physicalSourcePath;
     const resolvedModule: ts.ResolvedModuleFull = {
@@ -554,7 +564,7 @@ export class ProjectModuleResolver {
       return null;
     }
     const absoluteContainingFile = path.resolve(containingFile);
-    const packageIdentityContainingFile = this.compilerOptions.preserveSymlinks === true
+    const packageIdentityContainingFile = this.optionsForFile(absoluteContainingFile).preserveSymlinks === true
       ? absoluteContainingFile
       : canonicalPhysicalModulePath(this.inputHost, absoluteContainingFile);
     const nestedPackageRoot = externalPackageRootForPath(packageIdentityContainingFile);
@@ -591,8 +601,7 @@ export class ProjectModuleResolver {
     return selected.candidate;
   }
 
-  private registerKnownLinkedPackage(sourceLink: ResolvedProjectModuleSourceLink): void {
-    const preserveLogicalIdentity = this.compilerOptions.preserveSymlinks === true;
+  private registerKnownLinkedPackage(sourceLink: ResolvedProjectModuleSourceLink, preserveLogicalIdentity: boolean): void {
     const knownPackage = {
       packageInstance: sourceLink.packageInstance,
       logicalPackageRoot: preserveLogicalIdentity

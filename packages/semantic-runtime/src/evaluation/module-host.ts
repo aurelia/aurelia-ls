@@ -329,12 +329,14 @@ export class FileSystemEvaluationModuleSourceHost implements EvaluationModuleSou
     readonly moduleResolutionPolicy: EvaluationModuleResolutionPolicy = DefaultEvaluationModuleResolutionPolicy,
     /** Shared source-world membership authority; exact boot ownership/editability remains separate. */
     readonly authoredSources: AuthoredSourceBoundary | null = null,
+    sourceOptions?: (fileName: string) => ts.CompilerOptions,
   ) {
     this.fileSystem = new CachedEvaluationModuleHostFileSystem(inputHost);
     this.projectModules = new ProjectModuleResolver(
       this.rootDir,
       this.compilerOptions,
       inputHost,
+      sourceOptions,
     );
     this.packageSources = new EvaluationPackageSourceResolver(
       this.rootDir,
@@ -514,7 +516,7 @@ export class FileSystemEvaluationModuleSourceHost implements EvaluationModuleSou
       modulePathSpecifier,
       resolved != null
         && !resolved.isExternalLibraryImport
-        && compilerOptionsPathsCanResolve(this.compilerOptions, modulePathSpecifier),
+        && compilerOptionsPathsCanResolve(this.projectModules.optionsForFile(fromAbsolute), modulePathSpecifier),
       resolutionMode,
       resolved == null
         ? null
