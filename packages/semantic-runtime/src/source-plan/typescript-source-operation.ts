@@ -1,4 +1,7 @@
 import ts from 'typescript';
+import type { TypeSystemProject } from '../type-system/project.js';
+import { resolveValueAlias } from '../evaluation/import-bindings.js';
+import type { AureliaFrameworkRegistrationAdmissionSource } from './aurelia-framework-registration-admission-source.js';
 import {
   aureliaEntrypointRegistrationExpressionText,
   type AureliaEntrypointRegistrationExpression,
@@ -44,16 +47,115 @@ export function planTypeScriptImportSourceOperations(
   return edits;
 }
 
+/** Bind the framework value at the selected bootstrap call before proposing a registration. */
+export function planFrameworkRegistrationSourceOperations(
+  sourceFile: ts.SourceFile,
+  typeSystem: TypeSystemProject,
+  admission: AureliaFrameworkRegistrationAdmissionSource,
+  appCallStart: number,
+  appCallEnd: number,
+): readonly TypeScriptSourceOperationEdit[] | null {
+  const call = findAppCallExpression(sourceFile, appCallStart, appCallEnd);
+  if (call == null) return null;
+  // The framework admission manifest spends one exported registration value per capability.
+  const [requirement] = admission.entrypointImports;
+  const [expression] = admission.registrationExpressions;
+  if (!requirement || !expression) return null;
+  const name = aureliaEntrypointRegistrationExpressionText(expression);
+  if (requirement.namedImports?.length !== 1 || requirement.namedImports[0] !== name) return null;
+
+  const matchingModule = importDeclarationsForModule(sourceFile, requirement.moduleSpecifier)[0];
+  const moduleSymbol = matchingModule && typeSystem.readProgramSymbolAtLocation(matchingModule.moduleSpecifier);
+  const expected = moduleSymbol
+    ? resolveValueAlias(typeSystem.checker, typeSystem.checker.getExportsOfModule(moduleSymbol).find(s => s.name === name))
+    : typeSystem.readProgramExportedSymbol(requirement.moduleSpecifier, name);
+  const matches = (specifier: ts.ImportSpecifier) => registrationImportMatches(typeSystem, specifier, requirement.moduleSpecifier, name, expected);
+  const binding = visibleRegistrationImport(typeSystem, sourceFile, call, matches);
+  let use = name;
+  let edits: readonly TypeScriptSourceOperationEdit[] | null;
+  if (binding) {
+    use = binding.name.text;
+    const clause = binding.parent.parent;
+    if (clause.isTypeOnly && clause.name) return null;
+    edits = clause.isTypeOnly || binding.isTypeOnly
+      ? promoteNamedValueImports(sourceFile, clause, binding.parent, new Set([use]))
+      : [];
+  } else {
+    const occupied = (node: ts.Node) => typeSystem.checker.resolveName(name, node,
+      ts.SymbolFlags.Value | ts.SymbolFlags.Type | ts.SymbolFlags.Alias, false);
+    const moduleBinding = occupied(sourceFile);
+    if (occupied(call) || moduleBinding) {
+      if (moduleBinding?.declarations?.some(d => ts.isImportSpecifier(d) && !matches(d))) return null;
+      const identifiers = new Set<string>();
+      visit(sourceFile, node => { if (ts.isIdentifier(node)) identifiers.add(node.text); });
+      const base = `aurelia${name}`;
+      use = base;
+      for (let suffix = 2; identifiers.has(use); suffix++) use = `${base}${suffix}`;
+    }
+    edits = planTypeScriptImportSourceOperation(sourceFile, {
+      moduleSpecifier: requirement.moduleSpecifier,
+      namedImports: [use === name ? name : `${name} as ${use}`],
+    });
+  }
+  const register = registerChainEdit(sourceFile, call, [use]);
+  return edits && register ? [...edits, register] : null;
+}
+
+function visibleRegistrationImport(
+  project: TypeSystemProject,
+  file: ts.SourceFile,
+  call: ts.CallExpression,
+  matches: (binding: ts.ImportSpecifier) => boolean,
+): ts.ImportSpecifier | null {
+  for (const statement of file.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) continue;
+    for (const specifier of bindings.elements) {
+      if (!matches(specifier)) continue;
+      const local = project.readProgramSymbolAtLocation(specifier.name);
+      if (local && project.checker.resolveName(specifier.name.text, call, ts.SymbolFlags.Value | ts.SymbolFlags.Alias, false) === local) {
+        return specifier;
+      }
+    }
+  }
+  return null;
+}
+
+function registrationImportMatches(
+  project: TypeSystemProject,
+  specifier: ts.ImportSpecifier,
+  moduleSpecifier: string,
+  name: string,
+  expected: ts.Symbol | null,
+): boolean {
+  const source = specifier.parent.parent.parent.moduleSpecifier;
+  if (!ts.isStringLiteral(source)) return false;
+  const exported = (specifier.propertyName ?? specifier.name).text;
+  if (source.text === moduleSpecifier && exported === name) return true;
+  if (!expected) return false;
+  // Authenticate the export at the module, independently of a local import type modifier.
+  const owner = project.readProgramSymbolAtLocation(source);
+  const symbol = owner && project.checker.getExportsOfModule(owner).find(s => s.name === exported);
+  return resolveValueAlias(project.checker, symbol) === expected;
+}
+
 /** Plan a `.register(...)` chain insertion immediately before the app-root `.app(...)` call. */
 export function planAureliaRegisterChainSourceOperation(
   sourceFile: ts.SourceFile,
   model: AureliaRegisterChainEditModel,
 ): TypeScriptSourceOperationEdit | null {
   const appCall = findAppCallExpression(sourceFile, model.appCallStart ?? null, model.appCallEnd ?? null);
-  if (appCall == null || !ts.isPropertyAccessExpression(appCall.expression)) {
-    return null;
-  }
-  const registrationExpressions = model.registrationExpressions
+  return appCall == null ? null : registerChainEdit(sourceFile, appCall, model.registrationExpressions);
+}
+
+function registerChainEdit(
+  sourceFile: ts.SourceFile,
+  appCall: ts.CallExpression,
+  expressions: readonly AureliaEntrypointRegistrationExpression[],
+): TypeScriptSourceOperationEdit | null {
+  if (!ts.isPropertyAccessExpression(appCall.expression)) return null;
+  const registrationExpressions = expressions
     .map((expression) => aureliaEntrypointRegistrationExpressionText(expression).trim())
     .filter((expression) => expression.length > 0)
     .filter((expression) => !registerChainAlreadyContainsExpression(sourceFile, appCall, expression));
@@ -101,20 +203,9 @@ function planTypeScriptImportSourceOperation(
       || needed.some(specifier => specifier.propertyName != null && specifier.propertyName.text !== specifier.name.text)) {
       return null;
     }
-    if (clause.isTypeOnly) {
-      if (clause.name != null) return null;
-      promotions.push(removeImportTypeModifier(sourceFile, clause));
-      for (const specifier of bindings.elements) {
-        if (!missing.has(specifier.name.text) && !specifier.isTypeOnly) {
-          const start = specifier.getStart(sourceFile);
-          promotions.push(editForRange(sourceFile, TypeScriptSourceOperationEditKind.ImportDeclaration, start, start, 'type '));
-        }
-      }
-    }
-    for (const specifier of needed) {
-      missing.delete(specifier.name.text);
-      if (specifier.isTypeOnly) promotions.push(removeImportTypeModifier(sourceFile, specifier));
-    }
+    if (clause.isTypeOnly && clause.name != null) return null;
+    promotions.push(...promoteNamedValueImports(sourceFile, clause, bindings, new Set(needed.map(s => s.name.text))));
+    for (const specifier of needed) missing.delete(specifier.name.text);
   }
   const missingNamedImports = [...missing];
   const missingDefaultImport = importRequirement.defaultImport != null
@@ -138,6 +229,24 @@ function planTypeScriptImportSourceOperation(
     defaultImport: missingDefaultImport ? importRequirement.defaultImport : undefined,
     namedImports: missingNamedImports.length === 0 ? undefined : missingNamedImports,
   })];
+}
+
+function promoteNamedValueImports(
+  file: ts.SourceFile,
+  clause: ts.ImportClause,
+  bindings: ts.NamedImports,
+  needed: ReadonlySet<string>,
+): TypeScriptSourceOperationEdit[] {
+  const edits = clause.isTypeOnly ? [removeImportTypeModifier(file, clause)] : [];
+  for (const specifier of bindings.elements) {
+    if (needed.has(specifier.name.text)) {
+      if (specifier.isTypeOnly) edits.push(removeImportTypeModifier(file, specifier));
+    } else if (clause.isTypeOnly && !specifier.isTypeOnly) {
+      const start = specifier.getStart(file);
+      edits.push(editForRange(file, TypeScriptSourceOperationEditKind.ImportDeclaration, start, start, 'type '));
+    }
+  }
+  return edits;
 }
 
 function removeImportTypeModifier(sourceFile: ts.SourceFile, node: ts.ImportClause | ts.ImportSpecifier): TypeScriptSourceOperationEdit {
@@ -186,21 +295,25 @@ function updateImportDeclaration(
   const namedBindings = clause.namedBindings != null && ts.isNamedImports(clause.namedBindings)
     ? clause.namedBindings
     : null;
-  const existingNamed = namedBindings == null
-    ? []
-    : namedBindings.elements.map((element) => element.getText(sourceFile));
-  const namedImports = [...existingNamed, ...(importRequirement.namedImports ?? [])];
-  const importClauseText = [
-    clause.name?.getText(sourceFile) ?? importRequirement.defaultImport,
-    namedImports.length === 0 ? null : `{ ${namedImports.join(', ')} }`,
-  ].filter((part): part is string => part != null && part.length > 0).join(', ');
-  return editForRange(
-    sourceFile,
-    TypeScriptSourceOperationEditKind.ImportDeclaration,
-    clause.getStart(sourceFile),
-    clause.getEnd(),
-    importClauseText,
-  );
+  // Insert into the authored text rather than reprinting specifiers, which loses comments.
+  let clauseText = clause.getText(sourceFile);
+  if (namedBindings && importRequirement.namedImports?.length) {
+    const last = namedBindings.elements.at(-1);
+    const start = namedBindings.getStart(sourceFile) + 1;
+    const tail = last && sourceFile.text.slice(last.end, namedBindings.end - 1);
+    const multiline = /[\r\n]/u.test(namedBindings.getText(sourceFile));
+    const prepend = multiline || (tail != null && tail.trim().length > 0);
+    const offset = (prepend || !last ? start : last.end) - clause.getStart(sourceFile);
+    const padding = multiline ? /^\s*/u.exec(sourceFile.text.slice(start, namedBindings.end - 1))![0] : ' ';
+    const additions = importRequirement.namedImports.join(', ');
+    const inserted = !last ? ` ${additions}` : prepend ? `${padding}${additions},` : `, ${additions}`;
+    clauseText = clauseText.slice(0, offset) + inserted + clauseText.slice(offset);
+  } else if (importRequirement.namedImports?.length) {
+    clauseText += `, { ${importRequirement.namedImports.join(', ')} }`;
+  }
+  if (!clause.name && importRequirement.defaultImport) clauseText = `${importRequirement.defaultImport}, ${clauseText}`;
+  return editForRange(sourceFile, TypeScriptSourceOperationEditKind.ImportDeclaration,
+    clause.getStart(sourceFile), clause.end, clauseText);
 }
 
 function insertImportDeclaration(
@@ -209,19 +322,23 @@ function insertImportDeclaration(
 ): TypeScriptSourceOperationEdit {
   const imports = sourceFile.statements.filter(ts.isImportDeclaration);
   const statement = typeScriptImportStatement(importRequirement);
-  if (imports.length === 0) {
-    return {
-      editKind: TypeScriptSourceOperationEditKind.ImportDeclaration,
-      sourceFilePath: sourceFile.fileName,
-      start: 0,
-      end: 0,
-      oldText: '',
-      newText: `${statement}${detectNewline(sourceFile.text)}`,
-    };
+  // Keep shebangs, directive prologues and trailing import comments attached to the original code.
+  const lastImport = imports.at(-1);
+  let anchor: ts.Statement | undefined = lastImport;
+  if (!anchor) {
+    for (const statement of sourceFile.statements) {
+      if (!ts.isExpressionStatement(statement) || !ts.isStringLiteral(statement.expression)) break;
+      anchor = statement;
+    }
   }
-
-  const lastImport = imports[imports.length - 1]!;
-  const insertion = lastImport.getEnd();
+  if (!anchor) {
+    const shebang = ts.getShebang(sourceFile.text);
+    const start = shebang == null ? 0 : shebang.length;
+    const newline = detectNewline(sourceFile.text);
+    return editForRange(sourceFile, TypeScriptSourceOperationEditKind.ImportDeclaration, start, start,
+      shebang == null ? `${statement}${newline}` : `${newline}${statement}${newline}`);
+  }
+  const insertion = ts.getTrailingCommentRanges(sourceFile.text, anchor.end)?.at(-1)?.end ?? anchor.end;
   return {
     editKind: TypeScriptSourceOperationEditKind.ImportDeclaration,
     sourceFilePath: sourceFile.fileName,

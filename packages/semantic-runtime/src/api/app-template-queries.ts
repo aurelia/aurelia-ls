@@ -39,8 +39,7 @@ import {
   type AureliaFrameworkRegistrationAdmissionSource,
 } from '../source-plan/aurelia-framework-registration-admission-source.js';
 import {
-  planAureliaRegisterChainSourceOperation,
-  planTypeScriptImportSourceOperations,
+  planFrameworkRegistrationSourceOperations,
   type TypeScriptSourceOperationEdit,
 } from '../source-plan/typescript-source-operation.js';
 import {
@@ -2302,20 +2301,8 @@ function frameworkRegistrationAdmissionEdits(
   if (sourceFile == null) {
     return null;
   }
-  const importEdits = planTypeScriptImportSourceOperations(sourceFile, admission.entrypointImports);
-  if (importEdits == null) return null;
-  const registerEdit = planAureliaRegisterChainSourceOperation(sourceFile, {
-    appCallStart: appSource.start,
-    appCallEnd: appSource.end,
-    registrationExpressions: admission.registrationExpressions,
-  });
-  if (registerEdit == null) {
-    return null;
-  }
-  return nonEmptyTemplateCodeActionEdits([
-    ...importEdits,
-    registerEdit,
-  ].map(frameworkRegistrationAdmissionCodeActionEdit));
+  const operations = planFrameworkRegistrationSourceOperations(sourceFile, emission.typeSystem, admission, appSource.start, appSource.end);
+  return operations == null ? null : nonEmptyTemplateCodeActionEdits(operations.map(frameworkRegistrationAdmissionCodeActionEdit));
 }
 
 function nonEmptyTemplateCodeActionEdits(
