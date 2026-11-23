@@ -35,6 +35,8 @@ export const enum RuntimeBindingValueChannelKind {
   RawProperty = 'raw-property',
   /** Property transport governed by ValueAttributeObserver nullish/default and readonly policy. */
   ValueAttributeObserverProperty = 'value-attribute-observer-property',
+  /** A framework custom attribute tests source truthiness; its stored or returned value can have a different type. */
+  TruthinessInput = 'truthiness-input',
   RefTarget = 'ref-target',
   ScopeSlot = 'scope-slot',
   TextContent = 'text-content',
@@ -73,6 +75,7 @@ export const enum RuntimeBindingValueChannelKind {
 export const RUNTIME_BINDING_VALUE_CHANNEL_KINDS = [
   RuntimeBindingValueChannelKind.RawProperty,
   RuntimeBindingValueChannelKind.ValueAttributeObserverProperty,
+  RuntimeBindingValueChannelKind.TruthinessInput,
   RuntimeBindingValueChannelKind.RefTarget,
   RuntimeBindingValueChannelKind.ScopeSlot,
   RuntimeBindingValueChannelKind.TextContent,

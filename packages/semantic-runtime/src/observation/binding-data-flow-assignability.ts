@@ -185,6 +185,7 @@ export class BindingDataFlowAssignabilityEvaluator {
       case RuntimeBindingValueChannelKind.AttributeValue:
       case RuntimeBindingValueChannelKind.ClassAttributeTokens:
       case RuntimeBindingValueChannelKind.ClassToggle:
+      case RuntimeBindingValueChannelKind.TruthinessInput:
       case RuntimeBindingValueChannelKind.StyleAttributeRules:
       case RuntimeBindingValueChannelKind.StylePropertyValue:
         // Runtime-html accepts arbitrary values here and applies truthiness, removal, or stringification itself.

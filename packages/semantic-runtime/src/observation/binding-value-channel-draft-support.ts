@@ -16,6 +16,8 @@ import {
 } from '../template/html-ir.js';
 import { bindingExpressionAstForProduct } from '../template/expression-parse-product.js';
 import { TemplateProductDetails } from '../template/product-details.js';
+import { HydrateAttributeInstruction } from '../template/instruction-ir.js';
+import { readBuiltInVisibleTemplateResource } from '../template/compiler-resource-lookup.js';
 import {
   PropertyBinding,
   RuntimeBindingTargetKind,
@@ -843,6 +845,19 @@ export class RuntimeBindingValueChannelDraftSupport {
     return context.input.runtimeBindings.controllers.find((candidate) =>
       candidate.productHandle === targetAccess.targetControllerProductHandle
     ) ?? null;
+  }
+
+  builtInCustomAttributeForTargetAccess(
+    targetAccess: RuntimeBindingTargetAccess,
+    context: BindingValueChannelDraftContext,
+  ) {
+    const handle = this.controllerForTargetAccess(targetAccess, context)?.instructionProductHandle;
+    if (handle == null) return null;
+    const publication = this.typeProjector.publication;
+    const instruction = publication.readProductDetail(TemplateProductDetails.Instruction, handle);
+    return instruction instanceof HydrateAttributeInstruction
+      ? readBuiltInVisibleTemplateResource(publication, instruction.resource)
+      : null;
   }
 
   promiseFulfilledValueTypeForTemplateControllerBranch(
