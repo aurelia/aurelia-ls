@@ -211,6 +211,22 @@ for (const [source, preserved, next] of [
   assert.ok(updated.indexOf(preserved) >= 0 && updated.indexOf(preserved) < updated.indexOf('import { ShortHandBindingSyntax }'));
   assert.ok(updated.indexOf('import { ShortHandBindingSyntax }') < updated.indexOf(next));
 }
+// A second local default binding requires a distinct declaration. Existing type bindings can be promoted.
+for (const [before, expected] of [
+  ["import Other from 'm';", "import Other from 'm';\nimport Chosen from 'm';"],
+  ["import type Chosen from 'm';", "import Chosen from 'm';"],
+  ["import type {default as Chosen, Other} from 'm';", "import {default as Chosen, type Other} from 'm';"],
+]) {
+  const source = ts.createSourceFile('main.ts', before, ts.ScriptTarget.Latest, true);
+  const edits = planTypeScriptImportSourceOperations(source, [{ moduleSpecifier: 'm', defaultImport: 'Chosen' }]);
+  assert.ok(edits);
+  let result = before;
+  for (const e of [...edits].sort((a, b) => b.start - a.start)) result = result.slice(0, e.start) + e.newText + result.slice(e.end);
+  assert.equal(result, expected);
+}
+const conflictingDefault = ts.createSourceFile('main.ts', "import {other as Chosen} from 'x';", ts.ScriptTarget.Latest, true);
+assert.equal(planTypeScriptImportSourceOperations(conflictingDefault, [{ moduleSpecifier: 'm', defaultImport: 'Chosen' }]), null);
+
 const occupiedName = ts.createSourceFile('main.ts', "import { Other as ShortHandBindingSyntax } from '@aurelia/runtime-html';", ts.ScriptTarget.Latest, true);
 assert.equal(planTypeScriptImportSourceOperations(occupiedName, shorthandAdmission.entrypointImports), null);
 

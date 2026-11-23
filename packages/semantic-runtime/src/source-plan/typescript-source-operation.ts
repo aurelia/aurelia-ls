@@ -186,36 +186,49 @@ function planTypeScriptImportSourceOperation(
   importRequirement: TypeScriptImportRequirement,
 ): readonly TypeScriptSourceOperationEdit[] | null {
   const missing = new Set(importRequirement.namedImports);
+  const defaultName = importRequirement.defaultImport;
+  if (defaultName && missing.has(defaultName)) return null;
+  let missingDefaultImport = defaultName != null;
   const promotions: TypeScriptSourceOperationEdit[] = [];
   for (const declaration of sourceFile.statements.filter(ts.isImportDeclaration)) {
     const clause = declaration.importClause;
-    if (clause == null) continue;
-    if (missing.has(clause.name?.text ?? '')) return null;
+    if (!clause) continue;
+    const sameModule = ts.isStringLiteral(declaration.moduleSpecifier)
+      && declaration.moduleSpecifier.text === importRequirement.moduleSpecifier;
+    if (clause.name) {
+      if (missing.has(clause.name.text)) return null;
+      if (clause.name.text === defaultName) {
+        if (!sameModule || (clause.isTypeOnly && clause.namedBindings)) return null;
+        if (clause.isTypeOnly) promotions.push(removeImportTypeModifier(sourceFile, clause));
+        missingDefaultImport = false;
+      }
+    }
     const bindings = clause.namedBindings;
-    if (bindings == null) continue;
+    if (!bindings) continue;
     if (ts.isNamespaceImport(bindings)) {
-      if (missing.has(bindings.name.text)) return null;
+      if (missing.has(bindings.name.text) || bindings.name.text === defaultName) return null;
       continue;
     }
-    const needed = bindings.elements.filter(specifier => missing.has(specifier.name.text));
-    if (needed.length === 0) continue;
-    if (!ts.isStringLiteral(declaration.moduleSpecifier) || declaration.moduleSpecifier.text !== importRequirement.moduleSpecifier
-      || needed.some(specifier => specifier.propertyName != null && specifier.propertyName.text !== specifier.name.text)) {
-      return null;
+    const needed = new Set<string>();
+    for (const specifier of bindings.elements) {
+      const name = specifier.name.text;
+      if (!missing.has(name) && name !== defaultName) continue;
+      const requested = name === defaultName ? 'default' : name;
+      if (!sameModule || (specifier.propertyName ?? specifier.name).text !== requested) return null;
+      if (clause.isTypeOnly && clause.name) return null;
+      needed.add(name);
+      if (name === defaultName) missingDefaultImport = false;
+      missing.delete(name);
     }
-    if (clause.isTypeOnly && clause.name != null) return null;
-    promotions.push(...promoteNamedValueImports(sourceFile, clause, bindings, new Set(needed.map(s => s.name.text))));
-    for (const specifier of needed) missing.delete(specifier.name.text);
+    if (needed.size) promotions.push(...promoteNamedValueImports(sourceFile, clause, bindings, needed));
   }
   const missingNamedImports = [...missing];
-  const missingDefaultImport = importRequirement.defaultImport != null
-    && !hasValueDefaultImport(sourceFile, importRequirement.moduleSpecifier, importRequirement.defaultImport);
   if (missingNamedImports.length === 0 && !missingDefaultImport) {
     return promotions;
   }
 
   // An additional declaration keeps the new bindings disjoint from any type-token edits above.
-  const editableImport = promotions.length === 0 ? findEditableValueImport(sourceFile, importRequirement.moduleSpecifier) : null;
+  const editableImport = promotions.length === 0 ? findEditableValueImport(sourceFile, importRequirement.moduleSpecifier, missingDefaultImport) : null;
   if (editableImport != null) {
     return [updateImportDeclaration(sourceFile, editableImport, {
       ...importRequirement,
@@ -256,25 +269,15 @@ function removeImportTypeModifier(sourceFile: ts.SourceFile, node: ts.ImportClau
   return editForRange(sourceFile, TypeScriptSourceOperationEditKind.ImportDeclaration, start, end, '');
 }
 
-function hasValueDefaultImport(
-  sourceFile: ts.SourceFile,
-  moduleSpecifier: string,
-  name: string,
-): boolean {
-  return importDeclarationsForModule(sourceFile, moduleSpecifier).some((declaration) =>
-    declaration.importClause != null
-    && !declaration.importClause.isTypeOnly
-    && declaration.importClause.name?.text === name
-  );
-}
-
 function findEditableValueImport(
   sourceFile: ts.SourceFile,
   moduleSpecifier: string,
+  needsDefault: boolean,
 ): ts.ImportDeclaration | null {
   const declarations = importDeclarationsForModule(sourceFile, moduleSpecifier).filter((declaration) =>
     declaration.importClause != null
     && !declaration.importClause.isTypeOnly
+    && (!needsDefault || !declaration.importClause.name)
     && (
       declaration.importClause.namedBindings == null
       || ts.isNamedImports(declaration.importClause.namedBindings)
