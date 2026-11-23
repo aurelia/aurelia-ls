@@ -84,6 +84,9 @@ test("separates authored source admission from exact template-document ownership
       }));
       expect(response.templateOwned).toBe(templateOwned);
       if (relativePath === "src/unrelated.html") {
+        await expect(connection.sendRequest("textDocument/hover", {
+          textDocument: { uri }, position: { line: 0, character: 10 },
+        })).resolves.toBeNull();
         const diagnostics = await connection.sendRequest<{ kind: string; items: readonly unknown[] }>(
           "textDocument/diagnostic",
           { textDocument: { uri } },

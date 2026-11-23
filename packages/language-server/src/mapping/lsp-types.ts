@@ -804,10 +804,8 @@ export function mapSemanticRuntimeTemplateHover(
     };
   }
   if (answer.selection !== SemanticRuntimeAnswerSelection.Exact) {
-    return {
-      value: null,
-      failures: [`Semantic runtime returned hover selection=${answer.selection}; exact selection is required.`],
-    };
+    // Hover is a single optional card. A successful query can legitimately have no unique subject.
+    return { value: null, failures: [] };
   }
 
   const value = answer.value;
