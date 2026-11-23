@@ -34,6 +34,19 @@ export interface AureliaSupportDiagnosticFailure extends AureliaDiagnosticFailur
   readonly code: number;
 }
 
+/** Two stale diagnostic pulls observed for one open document version and one request epoch. */
+export interface AureliaSupportRepeatedStaleDiagnostic {
+  readonly documentId: string;
+  readonly documentVersion: number;
+  readonly requestEpoch: number;
+  readonly stage: AureliaDiagnosticStage;
+  readonly firstSequence: number;
+  readonly repeatedSequence: number;
+  readonly nextSuccessfulSequence: number | null;
+  readonly changedInputCount: number;
+  readonly fileContentMismatch: boolean;
+}
+
 export const maximumDiagnosticFailureFrames = 3;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -68,6 +81,24 @@ export function readAureliaDiagnosticFailureData(data: unknown): AureliaDiagnost
 
 function positiveInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+
+/** A configured server may return arbitrary JSON. Project only the report-local identity and bounded facts. */
+export function readAureliaSupportRepeatedStaleDiagnostic(value: unknown): AureliaSupportRepeatedStaleDiagnostic | null {
+  if (!isRecord(value)
+    || typeof value.documentId !== "string" || !/^document:[\da-f]{20}$/u.test(value.documentId)
+    || !Number.isSafeInteger(value.documentVersion) || typeof value.documentVersion !== "number"
+    || !(value.requestEpoch === 0 || positiveInteger(value.requestEpoch))
+    || !isMember(value.stage, stages) || !positiveInteger(value.firstSequence)
+    || !positiveInteger(value.repeatedSequence) || value.repeatedSequence <= value.firstSequence
+    || !(value.nextSuccessfulSequence === null || (positiveInteger(value.nextSuccessfulSequence) && value.nextSuccessfulSequence > value.repeatedSequence))
+    || !positiveInteger(value.changedInputCount) || typeof value.fileContentMismatch !== "boolean") return null;
+  return {
+    documentId: value.documentId, documentVersion: value.documentVersion, requestEpoch: value.requestEpoch,
+    stage: value.stage, firstSequence: value.firstSequence, repeatedSequence: value.repeatedSequence,
+    nextSuccessfulSequence: value.nextSuccessfulSequence, changedInputCount: value.changedInputCount,
+    fileContentMismatch: value.fileContentMismatch,
+  };
 }
 
 function diagnosticFailureCause(value: Record<string, unknown>): AureliaDiagnosticFailureCause | null {

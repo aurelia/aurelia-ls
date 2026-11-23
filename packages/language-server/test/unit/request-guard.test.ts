@@ -16,7 +16,7 @@ import {
 import { SemanticRuntimeLspRequestAbortedError } from "../../src/runtime/semantic-runtime-session.js";
 import { LanguageServerSupportLedger } from "../../src/support-snapshot.js";
 import { diagnosticBundleFrames } from "../../src/diagnostic-failure.js";
-import { readAureliaDiagnosticFailureData, readAureliaSupportDiagnosticFailure } from "../../src/protocol.js";
+import { readAureliaDiagnosticFailureData, readAureliaSupportDiagnosticFailure, readAureliaSupportRepeatedStaleDiagnostic } from "../../src/protocol.js";
 
 function context() {
   const generation = {
@@ -407,6 +407,62 @@ describe("semantic-runtime request boundary", () => {
       data: { retriggerRequest: true },
     });
     expect(ctx.logger.log).toHaveBeenCalledWith(expect.stringContaining("stale"));
+  });
+
+  test("retains repeated stale diagnostic evidence without treating input changes or cancellations as failures", async () => {
+    let version = 1;
+    let epoch = 4;
+    const ctx = context();
+    const host = {
+      ...ctx,
+      documents: { get: () => ({ version }) },
+      semanticRuntime: { ...ctx.semanticRuntime, supportState: () => ({ requestEpoch: epoch }) },
+    };
+    const pull = (key: string | null, cancelled = false) => runSemanticRuntimeDiagnosticRequest(
+      host as never, { ...token, isCancellationRequested: cancelled } as never, diagnosticRequest,
+      (_op, stage) => {
+        stage("analysis");
+        if (key != null) throw new SemanticRuntimeLspRequestAbortedError("stale", new SemanticRuntimeAnalysisCurrentnessError({
+          message: "PRIVATE_CAUSE", reason: "computation-inputs-changed", changedReadKeys: [key], changedFacets: ["file-content"],
+        }));
+        return [];
+      },
+    );
+    const stale = async (key: string) => {
+      await expect(pull(key)).rejects.toMatchObject({ code: LSPErrorCodes.ServerCancelled, data: { retriggerRequest: true } });
+    };
+    const salt = new Uint8Array(32).fill(1);
+    const report = () => ctx.supportLedger.snapshot(salt);
+    const dependency = "project-input:file-content:/private/customer/template.html";
+    await stale(dependency);
+    version++;
+    await stale(dependency);
+    epoch++;
+    await stale(dependency);
+    await stale("different input");
+    await expect(pull(dependency, true)).rejects.toMatchObject({ code: LSPErrorCodes.RequestCancelled });
+    await stale(dependency);
+    await pull(null);
+    await stale(dependency);
+    expect(report().firstRepeatedStaleDiagnostic).toBeNull();
+
+    await stale(dependency);
+    const first = report().firstRepeatedStaleDiagnostic;
+    expect(first).toEqual({
+      firstSequence: 8, repeatedSequence: 9, nextSuccessfulSequence: null,
+      stage: "analysis", documentId: report().recentTerminals.at(-1)?.documentId,
+      documentVersion: 2, requestEpoch: 5, changedInputCount: 1, fileContentMismatch: true,
+    });
+    expect(readAureliaSupportRepeatedStaleDiagnostic({ ...first, path: dependency })).toEqual(first);
+    expect(readAureliaSupportRepeatedStaleDiagnostic({ ...first, stage: "PRIVATE_CAUSE" })).toBeNull();
+    expect(ctx.supportLedger.snapshot(new Uint8Array(32).fill(2)).firstRepeatedStaleDiagnostic?.documentId).not.toBe(first?.documentId);
+    await pull(null);
+    for (let i = 0; i < 150; i++) ctx.supportLedger.beginRequest("hover").finish({ outcome: "succeeded" });
+    expect(report().firstRepeatedStaleDiagnostic).toEqual({ ...first, nextSuccessfulSequence: 10 });
+    expect(report().firstDiagnosticFailure).toBeNull();
+    const json = JSON.stringify(report());
+    expect(json).not.toContain(dependency);
+    expect(json).not.toContain("PRIVATE_CAUSE");
   });
 
   test("preserves client cancellation semantics for diagnostic pulls", async () => {

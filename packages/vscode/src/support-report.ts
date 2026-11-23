@@ -12,6 +12,7 @@ import {
   AureliaProtocolRequest,
   readAureliaDiagnosticFailureData,
   readAureliaSupportDiagnosticFailure,
+  readAureliaSupportRepeatedStaleDiagnostic,
   readAureliaSupportTypeScriptEnvironment,
   readAureliaWorkerProgressSnapshot,
   type AureliaDiagnosticFailureData,
@@ -793,8 +794,13 @@ function projectServerSnapshot(value: unknown): AureliaSupportSnapshotResponse |
     }
   }
   const requests = "requests" in value ? value.requests : null;
-  if (requests != null && typeof requests === "object" && "firstDiagnosticFailure" in requests) {
-    return { ...projected, requests: { ...projected.requests, firstDiagnosticFailure: readAureliaSupportDiagnosticFailure(requests.firstDiagnosticFailure) } };
+  if (requests != null && typeof requests === "object" && ("firstDiagnosticFailure" in requests || "firstRepeatedStaleDiagnostic" in requests)) {
+    return { ...projected, requests: { ...projected.requests,
+      ...("firstDiagnosticFailure" in requests && { firstDiagnosticFailure: readAureliaSupportDiagnosticFailure(requests.firstDiagnosticFailure) }),
+      ...("firstRepeatedStaleDiagnostic" in requests && {
+        firstRepeatedStaleDiagnostic: readAureliaSupportRepeatedStaleDiagnostic(requests.firstRepeatedStaleDiagnostic),
+      }),
+    } };
   }
   return projected;
 }

@@ -317,6 +317,13 @@ If VS Code shows `Request textDocument/diagnostic failed`, or an Aurelia Problem
 keep the affected file active and run **Aurelia: Create Support Report** from the Command Palette **before reloading
 the window**. Reloading starts a new session and clears in-memory evidence.
 
+When a Problem stays on repaired text, check the affected server snapshot's
+`requests.firstRepeatedStaleDiagnostic`. It identifies two diagnostic pulls that were invalidated by the
+same set of input reads at the same stage, open document version and request epoch. Match its masked
+`documentId` to the active document in that report. `fileContentMismatch` identifies a rejected file-content
+validation. If possible, include how the component obtains its template when reporting this field.
+`nextSuccessfulSequence` records the next successful pull for that document if one occurs.
+
 Use the same command if an Aurelia workspace fails to start. The report records the first startup exception
 in this window, the stage that failed, the activation evidence and a recognized error code when available.
 The active document identifies its nearest configured workspace folder. Use `workspaceId` to correlate

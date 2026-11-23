@@ -2,7 +2,7 @@ import { sourceTextContentRevision } from "@aurelia-ls/semantic-runtime/source-t
 export { decodeSourceText } from "@aurelia-ls/semantic-runtime/source-text";
 export * from "./worker-progress-protocol.js";
 export * from "./diagnostic-failure-protocol.js";
-import type { AureliaSupportDiagnosticFailure } from "./diagnostic-failure-protocol.js";
+import type { AureliaSupportDiagnosticFailure, AureliaSupportRepeatedStaleDiagnostic } from "./diagnostic-failure-protocol.js";
 import type {
   ApplicationFileRole,
   SemanticAttributeInterpretationExplanation,
@@ -50,6 +50,7 @@ export const AureliaProtocolRequest = {
   TemplateResourceAvailability: "aurelia/templateResourceAvailability",
   ResourceAvailabilityExplanation: "aurelia/resourceAvailabilityExplanation",
   RelatedFiles: "aurelia/getRelatedFiles",
+  RelatedFileSources: "aurelia/getRelatedFileSources",
   WorkspaceStatus: "aurelia/workspaceStatus",
   RenameFromTypeScript: "aurelia/renameFromTs",
 } as const;
@@ -115,6 +116,8 @@ export interface AureliaSupportInFlightRequest {
 export interface AureliaSupportRequestSnapshot {
   /** First unexpected diagnostic failure to finish in this server session. Older servers omit this field. */
   readonly firstDiagnosticFailure?: AureliaSupportDiagnosticFailure | null;
+  /** Retained independently of exceptions and of the rotating terminal history. */
+  readonly firstRepeatedStaleDiagnostic?: AureliaSupportRepeatedStaleDiagnostic | null;
   readonly aggregateCount: number;
   readonly aggregates: readonly AureliaSupportRequestAggregate[];
   readonly omittedAggregateCount: number;

@@ -16,6 +16,7 @@ import {
   type AureliaSupportCountRow,
   type AureliaSupportKernelSnapshot,
   type AureliaSupportRequestOutcome,
+  type AureliaSupportRepeatedStaleDiagnostic,
   type AureliaSupportRequestSnapshot,
   type AureliaSupportRequestStaleFacts,
   type AureliaSupportSnapshotParams,
@@ -56,7 +57,14 @@ interface InternalTerminalEvent {
   readonly clientCancellationRequested: boolean;
   readonly underlyingStale: boolean;
   readonly staleFacts: AureliaSupportRequestStaleFacts | null;
+  readonly staleDiagnostic: StaleDiagnosticObservation | null;
 }
+
+/** The private equality key never crosses the report boundary. */
+type StaleDiagnosticObservation = Pick<AureliaSupportRepeatedStaleDiagnostic,
+  "stage" | "documentVersion" | "requestEpoch" | "fileContentMismatch" | "changedInputCount"> & {
+  readonly inputSignature: string;
+};
 
 interface InternalInFlightRequest {
   readonly sequence: number;
@@ -71,6 +79,7 @@ export interface LanguageServerRequestTerminalFacts {
   readonly clientCancellationRequested?: boolean;
   readonly underlyingStale?: boolean;
   readonly staleFacts?: AureliaSupportRequestStaleFacts | null;
+  readonly staleDiagnostic?: StaleDiagnosticObservation;
 }
 
 export interface LanguageServerRequestObservation {
@@ -90,6 +99,7 @@ export class LanguageServerSupportLedger {
   readonly #recentTerminals: InternalTerminalEvent[] = [];
   readonly #inFlight = new Map<number, InternalInFlightRequest>();
   #firstDiagnosticFailure: { sequence: number; documentUri: string | null; facts: DiagnosticFailureFacts } | null = null;
+  #firstRepeatedStaleDiagnostic: (Omit<AureliaSupportRepeatedStaleDiagnostic, "documentId"> & { documentUri: string }) | null = null;
   #nextSequence = 1;
   readonly #omittedFeatures = new Set<string>();
   #omittedRecentTerminalCount = 0;
@@ -147,7 +157,7 @@ export class LanguageServerSupportLedger {
           aggregate.maximumDurationMilliseconds,
           durationMilliseconds,
         );
-        this.#recentTerminals.push(Object.freeze({
+        const event: InternalTerminalEvent = Object.freeze({
           sequence,
           feature: aggregate.feature,
           outcome: facts.outcome,
@@ -156,7 +166,10 @@ export class LanguageServerSupportLedger {
           clientCancellationRequested: facts.clientCancellationRequested === true,
           underlyingStale: facts.underlyingStale === true,
           staleFacts: facts.staleFacts == null ? null : Object.freeze({ ...facts.staleFacts }),
-        }));
+          staleDiagnostic: facts.staleDiagnostic == null ? null : Object.freeze({ ...facts.staleDiagnostic }),
+        });
+        if (event.feature === "diagnostics") this.#observeDiagnostic(event);
+        this.#recentTerminals.push(event);
         if (this.#recentTerminals.length > SUPPORT_SNAPSHOT_MAXIMUM_RECENT_TERMINALS) {
           this.#recentTerminals.shift();
           this.#omittedRecentTerminalCount += 1;
@@ -192,8 +205,20 @@ export class LanguageServerSupportLedger {
     const aggregates = [...this.#aggregates.values()]
       .sort((left, right) => left.feature.localeCompare(right.feature))
       .map((aggregate) => Object.freeze({ ...aggregate }));
+    const repeat = this.#firstRepeatedStaleDiagnostic;
     return Object.freeze({
       aggregateCount: aggregates.length,
+      firstRepeatedStaleDiagnostic: repeat == null ? null : {
+        documentId: reportIdentity(identitySalt, "document", repeat.documentUri),
+        documentVersion: repeat.documentVersion,
+        requestEpoch: repeat.requestEpoch,
+        stage: repeat.stage,
+        firstSequence: repeat.firstSequence,
+        repeatedSequence: repeat.repeatedSequence,
+        nextSuccessfulSequence: repeat.nextSuccessfulSequence,
+        changedInputCount: repeat.changedInputCount,
+        fileContentMismatch: repeat.fileContentMismatch,
+      },
       firstDiagnosticFailure: this.#firstDiagnosticFailure == null ? null : {
         ...this.#firstDiagnosticFailure.facts,
         sequence: this.#firstDiagnosticFailure.sequence,
@@ -220,6 +245,30 @@ export class LanguageServerSupportLedger {
       inFlight: Object.freeze(inFlightRows),
       omittedInFlightCount: Math.max(0, inFlightCount - inFlightRows.length),
     });
+  }
+
+  #observeDiagnostic(event: InternalTerminalEvent): void {
+    const retained = this.#firstRepeatedStaleDiagnostic;
+    if (retained != null) {
+      if (retained.nextSuccessfulSequence == null && event.outcome === "succeeded"
+        && event.documentUri === retained.documentUri && event.sequence > retained.repeatedSequence) {
+        this.#firstRepeatedStaleDiagnostic = { ...retained, nextSuccessfulSequence: event.sequence };
+      }
+      return;
+    }
+    const evidence = event.staleDiagnostic;
+    if (event.documentUri == null || event.outcome !== "stale" || evidence == null) return;
+    const previous = this.#recentTerminals.findLast(row =>
+      row.feature === "diagnostics" && row.documentUri === event.documentUri);
+    const prior = previous?.staleDiagnostic;
+    if (previous == null || previous.sequence >= event.sequence || previous.outcome !== "stale" || prior == null
+      || prior.documentVersion !== evidence.documentVersion || prior.requestEpoch !== evidence.requestEpoch
+      || prior.stage !== evidence.stage || prior.inputSignature !== evidence.inputSignature) return;
+    this.#firstRepeatedStaleDiagnostic = {
+      documentUri: event.documentUri, documentVersion: evidence.documentVersion, requestEpoch: evidence.requestEpoch,
+      stage: evidence.stage, firstSequence: previous.sequence, repeatedSequence: event.sequence,
+      nextSuccessfulSequence: null, changedInputCount: evidence.changedInputCount, fileContentMismatch: evidence.fileContentMismatch,
+    };
   }
 
   #aggregateFor(feature: string): MutableRequestAggregate {

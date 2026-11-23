@@ -417,6 +417,11 @@ describe("SupportReportService", () => {
                   frames: [{ line: 12, column: 3, path: "DO_NOT_EMBED_SERVER_OVERRIDE_SOURCE" }],
                   stack: "DO_NOT_EMBED_SERVER_OVERRIDE_SOURCE",
                 },
+                firstRepeatedStaleDiagnostic: {
+                  documentId: "document:0123456789abcdef0123", documentVersion: 5, requestEpoch: 3,
+                  stage: "ownership", firstSequence: 2, repeatedSequence: 3, nextSuccessfulSequence: 4,
+                  changedInputCount: 1, fileContentMismatch: true, path: "DO_NOT_EMBED_SERVER_OVERRIDE_SOURCE",
+                },
                 recentTerminals: [{
                   documentId: `document:${createHmac("sha256", identitySalt)
                     .update("document")
@@ -465,6 +470,11 @@ describe("SupportReportService", () => {
     expect(report.servers.snapshots[0].snapshot.requests.firstDiagnosticFailure).toMatchObject({
       incidentId: "0ee15932-3502-4363-b5b1-87ed63080f58", stage: "analysis",
       serverBundleSha256: "a".repeat(64), frames: [{ line: 12, column: 3 }],
+    });
+    expect(report.servers.snapshots[0].snapshot.requests.firstRepeatedStaleDiagnostic).toEqual({
+      documentId: "document:0123456789abcdef0123", documentVersion: 5, requestEpoch: 3,
+      stage: "ownership", firstSequence: 2, repeatedSequence: 3, nextSuccessfulSequence: 4,
+      changedInputCount: 1, fileContentMismatch: true,
     });
     const requestSalt = (requests[0]?.params as { identitySalt: string }).identitySalt;
     expect(JSON.stringify(report)).not.toContain(requestSalt);

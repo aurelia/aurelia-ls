@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   isSemanticRuntimeAnalysisCurrentnessError,
   ManagedSemanticWorkspaceOperationStaleError,
@@ -127,6 +128,8 @@ export async function runSemanticRuntimeDiagnosticRequest<TItem>(
   ) => ReturnType<SemanticRuntimeLspDiagnosticRenderer<TItem>>,
 ): Promise<SemanticRuntimeLspDiagnosticReport<TItem>> {
   const observation = beginSupportObservation(ctx, "diagnostics", request.uri);
+  const documentVersion = ctx.documents?.get(request.uri)?.version;
+  const requestEpoch = documentVersion == null ? undefined : ctx.semanticRuntime.supportState?.().requestEpoch;
   let stage: AureliaDiagnosticStage = "session";
   try {
     const result = await runServerOperation(ctx, () =>
@@ -153,7 +156,11 @@ export async function runSemanticRuntimeDiagnosticRequest<TItem>(
       ctx.logger.error(`[diagnostics] incident ${incident.facts.incidentId} (${stage}, code ${incident.facts.code}) for ${request.uri}: ${incident.localDetail}`);
       throw incident.response;
     }
-    observation.finish(terminal);
+    const staleDiagnostic = terminal.outcome === "stale" && documentVersion != null && requestEpoch != null
+      && ctx.documents.get(request.uri)?.version === documentVersion && ctx.semanticRuntime.supportState().requestEpoch === requestEpoch
+      ? diagnosticInputStaleness(failure, stage, documentVersion, requestEpoch)
+      : undefined;
+    observation.finish({ ...terminal, staleDiagnostic });
     if (isSemanticRuntimeRequestStale(failure)) {
       ctx.logger.log(
         `[diagnostics] stale semantic-runtime request for ${request.uri}${semanticRuntimeStaleFacts(failure)}`,
@@ -217,6 +224,25 @@ function isSemanticRuntimeRequestStale(error: unknown): boolean {
 }
 
 const STALE_EVIDENCE_ITEM_LIMIT = 8;
+
+/** Recognize the same bounded input-validation cause without retaining file paths in the request ledger. */
+function diagnosticInputStaleness(error: unknown, stage: AureliaDiagnosticStage, documentVersion: number, requestEpoch: number) {
+  const cause = isSemanticRuntimeLspRequestAborted(error) ? error.cause : error;
+  if (!(cause instanceof ManagedSemanticWorkspaceOperationStaleError) && !isSemanticRuntimeAnalysisCurrentnessError(cause)) return;
+  const { changedReadKeys, changedFacets, changedSemanticFactKeys } = cause;
+  const currentness = cause instanceof ManagedSemanticWorkspaceOperationStaleError ? cause.analysisCurrentness : cause;
+  const invalidGenerations = currentness?.invalidGenerationKeys ?? [];
+  if (changedReadKeys.length === 0 || [changedReadKeys, changedFacets, changedSemanticFactKeys, invalidGenerations]
+    .some(keys => keys.length > STALE_EVIDENCE_ITEM_LIMIT)) return;
+  const inputSignature = createHash("sha256").update(JSON.stringify([
+    cause.name, cause.reason, currentness?.reason, currentness?.answerLeaseKind,
+    ...(cause instanceof ManagedSemanticWorkspaceOperationStaleError
+      ? [cause.currentnessKind, cause.previousSourceWorldRevision, cause.nextSourceWorldRevision, cause.analysisBasisRevision] : []),
+    [...changedReadKeys].sort(), [...changedFacets].sort(), [...changedSemanticFactKeys].sort(), [...invalidGenerations].sort(),
+  ])).digest("hex");
+  return { stage, documentVersion, requestEpoch, inputSignature,
+    changedInputCount: changedReadKeys.length, fileContentMismatch: changedFacets.includes("file-content") };
+}
 
 function semanticRuntimeStaleFacts(error: unknown): string {
   if (error instanceof ManagedSemanticWorkspaceOperationStaleError) {
