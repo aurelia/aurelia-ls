@@ -267,7 +267,7 @@ import {
 } from './app-diagnostics.js';
 import { appDiagnosticPresentation } from './diagnostic-presentation.js';
 import type { SemanticSourceReference } from './source-reference.js';
-import { sameTypeSystemSourcePath } from '../type-system/source-file-path.js';
+import { canonicalTypeSystemSourcePath, sameTypeSystemSourcePath } from '../type-system/source-file-path.js';
 import { exactTemplateSourceTextForSourceSpan } from '../resources/template-source-text.js';
 
 type TemplateCompilationLane = SemanticTemplateCompilationRow['compilationLane'];
@@ -338,6 +338,7 @@ interface TemplateDiagnosticsScanContext {
   readonly scopeProducerByRow: Map<SemanticTemplateDiagnosticRow, IdentityHandle>;
   readonly diagnosticRelationsByResource: WeakMap<TemplateResourceRuntimeAnalysisEmission, TemplateDiagnosticRelations>;
   readonly seenRows: Set<string>;
+  readonly sharedTemplates: ReadonlyMap<string, readonly SharedTemplateSource[]>;
 }
 
 function templateCompletionRouterContext(
@@ -1327,8 +1328,8 @@ export function readTemplateDiagnosticRows(
   diagnosticProjection: SemanticDiagnosticProjectionPolicy | `${SemanticDiagnosticProjectionPolicy}` | null | undefined = SemanticDiagnosticProjectionPolicy.TypeProjection,
 ): readonly SemanticTemplateDiagnosticRow[] {
   const projectionPolicy = normalizeSemanticDiagnosticProjectionPolicy(diagnosticProjection);
-  const context = templateDiagnosticsScanContext(store, workspaceRootDir, emission, includeHandles);
   const selections = templateDiagnosticSelectionsForSource(store, emission, sourceFile);
+  const context = templateDiagnosticsScanContext(store, workspaceRootDir, emission, includeHandles, selections);
   const htmlRecovery = htmlRecoveryDiagnosticProjection(store, selections, sourceFile, context);
   const rows = [
     ...htmlRecovery.rows,
@@ -2095,6 +2096,7 @@ function templateDiagnosticsScanContext(
   workspaceRootDir: string,
   emission: AureliaAppWorldProjectEmission,
   includeHandles: boolean,
+  selections: readonly TemplateResourceCursorSelection[],
 ): TemplateDiagnosticsScanContext {
   return {
     store,
@@ -2107,6 +2109,7 @@ function templateDiagnosticsScanContext(
     scopeProducerByRow: new Map(),
     diagnosticRelationsByResource: new WeakMap(),
     seenRows: new Set(),
+    sharedTemplates: sharedTemplateSources(store, emission, selections),
   };
 }
 
@@ -2447,11 +2450,24 @@ function expressionRootDiagnosticRowsForSelection(
       return [];
     }
     const rootName = site.access.name.name;
+    const definition = selection.resource.compilation.definition;
+    const declaration = semanticExactSourceReference(describeAddress(store, definition.target.declarationSourceAddressHandle));
+    const shared = context.sharedTemplates.get(canonicalTypeSystemSourcePath(authoredSource.sourcePath))
+      ?.some(({ range }) => range.start <= span.start && span.end <= range.end) === true;
+    const owner = declaration == null ? undefined : {
+      name: definition.target.localName ?? definition.name,
+      resourceName: definition.name,
+      declaration,
+      sharedTemplate: shared,
+    };
     const diagnostic = typeSystemGlobalThisValueExists(emission.typeSystem, rootName)
       && !isAureliaExpressionGlobalName(rootName)
       ? unsupportedExpressionGlobalDiagnostic(rootName, source)
-      : missingExpressionRootDiagnostic(rootName, source);
-    const key = templateDiagnosticRowKey(diagnostic, source);
+      : missingExpressionRootDiagnostic(rootName, source, shared ? owner?.resourceName : undefined);
+    const rowKey = templateDiagnosticRowKey(diagnostic, source);
+    const key = shared && diagnostic.diagnosticKind === 'missing-expression-member'
+      ? JSON.stringify([rowKey, definition.target.declarationSourceAddressHandle ?? definition.productHandle])
+      : rowKey;
     if (context.seenRows.has(key)) {
       return [];
     }
@@ -2466,9 +2482,17 @@ function expressionRootDiagnosticRowsForSelection(
       siteKind: TemplateCompletionSiteKind.Expression,
       valueSiteKind: site.parse.site.siteKind,
       subject: templateExpressionDiagnosticSubject(store, selection.resource, site.parse.productHandle, source),
+      ...(shared && owner != null && diagnostic.diagnosticKind === 'missing-expression-member' ? {
+        relatedInformation: [{
+          code: 'template-owner',
+          message: `This binding was checked on ${owner.name} (<${owner.resourceName}>).`,
+          source: owner.declaration,
+        }],
+      } : {}),
       template: {
         compilationLane: selection.lane,
         source: describeAddress(store, selection.sourceAddressHandle),
+        ...(diagnostic.diagnosticKind === 'missing-expression-member' && owner != null ? { owner } : {}),
       },
     };
     if (diagnostic.diagnosticKind === 'missing-expression-member') {
@@ -4918,6 +4942,45 @@ function sourceSpanForHandle(
 ): SourceSpanAddress | null {
   const address = handle == null ? null : store.readAddress(handle);
   return address?.kind === 'source-span-address' ? address : null;
+}
+
+interface SharedTemplateSource {
+  readonly range: SourceSpanAddress;
+  readonly owners: readonly TemplateResourceCursorSelection[];
+}
+
+/** Keep every compilation consuming one physical template. Many single-owner views never enter the result. */
+export function sharedTemplateSources(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  selections = templateResourceSelections(store, emission),
+): ReadonlyMap<string, readonly SharedTemplateSource[]> {
+  const sources = new Map<string, { path: string; range: SourceSpanAddress; owners: TemplateResourceCursorSelection[] }>();
+  for (const selection of selections) {
+    const range = templateSourceSpan(store, selection.resource);
+    if (range == null) continue;
+    const file = store.readAddress(range.fileHandle);
+    if (file == null || !isSourceFileAddress(file)) continue;
+    const path = canonicalTypeSystemSourcePath(file.path);
+    const key = JSON.stringify([path, range.start, range.end]);
+    const group = sources.get(key);
+    if (group == null) {
+      sources.set(key, { path, range, owners: [selection] });
+    } else if (!group.owners.some(other =>
+      other.resource.compilation.analysisContextProductHandle === selection.resource.compilation.analysisContextProductHandle
+      && other.resource.compilation.definition.productHandle === selection.resource.compilation.definition.productHandle
+    )) {
+      group.owners.push(selection);
+    }
+  }
+  const shared = new Map<string, SharedTemplateSource[]>();
+  for (const group of sources.values()) {
+    if (group.owners.length < 2) continue;
+    const groups = shared.get(group.path) ?? [];
+    groups.push(group);
+    shared.set(group.path, groups);
+  }
+  return shared;
 }
 
 function templateSourceSpan(

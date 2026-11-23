@@ -979,7 +979,7 @@ export async function handleRenameFromTs(
         candidates,
       };
     }
-    if (reason === "unresolved-candidates") {
+    if (reason === "unresolved-candidates" || reason === "name-conflict" || reason === "shared-template-targets") {
       return {
         status: "refused",
         reason,

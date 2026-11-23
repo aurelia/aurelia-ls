@@ -1234,13 +1234,14 @@ export function expressionRuntimeEvaluationErrorDiagnostic(
 export function missingExpressionRootDiagnostic(
   rootName: string,
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+  sharedViewOwner?: string,
 ): SemanticTemplateCursorDiagnosticRow {
   return {
     diagnosticKind: 'missing-expression-member',
     diagnosticAuthority: 'semantic-authoring-policy',
     frameworkErrorCode: null,
     severity: 'error',
-    summary: `Template expression root "${rootName}" is not available on the current binding scope.`,
+    summary: `Template expression root "${rootName}" is not available on ${sharedViewOwner == null ? 'the current binding scope' : `component <${sharedViewOwner}>`}.`,
     missingInput: 'expression-member:selected-member-missing',
     missingInputs: ['expression-member:selected-member-missing'],
     source,

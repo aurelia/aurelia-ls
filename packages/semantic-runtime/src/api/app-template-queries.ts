@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { templateRenameDestinationConflict } from './template-rename-destination.js';
 import ts from 'typescript';
 import type { ProjectBootFrame } from '../boot/frames.js';
 import {
@@ -9,6 +10,7 @@ import type { KernelStore } from '../kernel/store.js';
 import { SourceFileRole } from '../kernel/address.js';
 import {
   AuthoredSourceTextCache,
+  authoredSourcePositionForOffset,
 } from '../kernel/authored-source-text.js';
 import type {
   AddressHandle,
@@ -48,7 +50,11 @@ import {
   readSemanticTemplateDiagnosticCoverage,
   readSemanticTemplateDiagnostics,
   readTemplateDiagnosticRows,
+  readTemplateCursorOwnerContext,
+  sharedTemplateSources,
 } from './template-completion.js';
+import { SourceTextCursor } from '../inquiry/locus.js';
+import { canonicalTypeSystemSourcePath } from '../type-system/source-file-path.js';
 import { resolveSemanticSourceCursor } from './source-cursor.js';
 import {
   compilerWorldLabel,
@@ -85,6 +91,7 @@ import {
   type SemanticTemplateCodeActionRow,
   type SemanticTemplateCodeActionsResult,
   type SemanticTemplateCursorInfoResult,
+  type SemanticTemplateCursorOwnerContext,
   type SemanticTemplateDiagnosticRow,
   type SemanticTemplateDiagnosticsResult,
   type SemanticTemplateFoldingRangesResult,
@@ -421,11 +428,11 @@ export class SemanticAppTemplateQueries {
       );
     }
     const relatedMemberRead = context.includeTypeScriptReferences
-      ? typeScriptRelatedMemberFamilyRead(this.emission, context.targetSource)
+      ? typeScriptRelatedMemberFamilyRead(this.emission, context.targetSource, newName ?? undefined)
       : null;
     const callbackFamilyReads = isBindablePropertyRenameSurface(context.renameSurface)
       ? context.bindableConventionCallbackTargetSources.map((targetSource) =>
-          typeScriptRelatedMemberFamilyRead(this.emission, targetSource)
+          typeScriptRelatedMemberFamilyRead(this.emission, targetSource, newName == null ? undefined : `${newName}Changed`)
         )
       : [];
     if (context.candidateRows.length > 0) {
@@ -471,8 +478,8 @@ export class SemanticAppTemplateQueries {
     const editRefusal = this.renameRowRefusal(renameRows, 'Rename');
     if (editRefusal != null) {
       return templateRenameUnavailable(
-        SemanticTemplateRenameUnavailableReason.SourceNotEditable,
-        editRefusal,
+        editRefusal.reason,
+        editRefusal.summary,
         context.selectedMemberName,
         context.targetSource,
         activeSource,
@@ -534,6 +541,13 @@ export class SemanticAppTemplateQueries {
         || left.editKind.localeCompare(right.editKind)
       );
 
+    if (isBindablePropertyRenameSurface(context.renameSurface)) {
+      const conflict = templateRenameDestinationConflict(this.store, this.emission, placeholder, newName, context.targetSource, edits);
+      if (conflict != null) return templateRenameUnavailable(
+        SemanticTemplateRenameUnavailableReason.NameConflict, conflict, placeholder, context.targetSource, activeSource,
+      );
+    }
+
     return answer(
       SemanticRuntimeAnswerResult.Answered,
       `Prepared ${edits.length} rename edit(s) for ${placeholder}.`,
@@ -557,14 +571,50 @@ export class SemanticAppTemplateQueries {
     );
   }
 
-  private renameRowRefusal(rows: readonly SemanticTemplateReferenceRow[], operation: string): string | null {
+  private renameRowRefusal(
+    rows: readonly SemanticTemplateReferenceRow[],
+    operation: string,
+  ): { reason: SemanticTemplateRenameUnavailableReason; summary: string } | null {
+    const shared = sharedTemplateSources(this.store, this.emission);
     for (const row of rows) {
       if (!semanticEditSourceIsEditable(this.emission, row.source)) {
-        return `${operation} would edit readable source '${row.source?.path ?? '(unknown)'}' that this project does not own for edits.`;
+        return {
+          reason: SemanticTemplateRenameUnavailableReason.SourceNotEditable,
+          summary: `${operation} would edit readable source '${row.source?.path ?? '(unknown)'}' that this project does not own for edits.`,
+        };
       }
       if (row.referenceKind === SemanticTemplateReferenceKind.TemplateUsage && this.authoredTextForSource(row.source) !== row.name) {
-        return `${operation} could not verify the authored expression token '${row.name}' in '${row.source?.path ?? '(unknown)'}'.`;
+        return {
+          reason: SemanticTemplateRenameUnavailableReason.SourceNotEditable,
+          summary: `${operation} could not verify the authored expression token '${row.name}' in '${row.source?.path ?? '(unknown)'}'.`,
+        };
       }
+      const source = semanticExactSourceReference(row.source);
+      if (source?.path == null || source.start == null || source.end == null) continue;
+      const { path, start, end } = source;
+      const selections = shared.get(canonicalTypeSystemSourcePath(path))
+        ?.filter(({ range }) => range.start <= start && end <= range.end)
+        .flatMap(group => group.owners);
+      if (!selections?.length) continue;
+
+      // The same physical token must keep its intended declaration in every component using this view.
+      const offset = start + Math.floor((end - start) / 2);
+      const hostPath = semanticSourceReferenceHostPath(this.workspaceRootDir, source);
+      const authored = hostPath == null ? null : this.sourceTextCache.read(hostPath);
+      if (authored != null) {
+        const pos = authoredSourcePositionForOffset(authored, offset);
+        const cursor = new SourceTextCursor(path, pos.line, pos.character, offset);
+        const agrees = selections.every(selection => {
+          const owner = readTemplateCursorOwnerContext(this.store, this.emission, cursor, selection);
+          return templateOwnerResolvesReference(owner, row);
+        });
+        if (agrees) continue;
+      }
+      const owners = [...new Set(selections.map(selection => selection.resource.compilation.definition.name))].sort();
+      return {
+        reason: SemanticTemplateRenameUnavailableReason.SharedTemplateTargets,
+        summary: `${operation} cannot safely edit '${row.name}' in shared template '${path}'. Its component contexts (${owners.join(', ')}) do not all resolve that token to the selected declaration.`,
+      };
     }
     return null;
   }
@@ -625,9 +675,9 @@ export class SemanticAppTemplateQueries {
         SemanticTemplateRenameStatus.InvalidName,
       );
     }
-    const relatedMemberRead = typeScriptRelatedMemberFamilyRead(this.emission, context.targetSource);
+    const relatedMemberRead = typeScriptRelatedMemberFamilyRead(this.emission, context.targetSource, newName ?? undefined);
     const callbackFamilyReads = context.bindableConventionCallbackTargetSources.map((targetSource) =>
-      typeScriptRelatedMemberFamilyRead(this.emission, targetSource)
+      typeScriptRelatedMemberFamilyRead(this.emission, targetSource, newName == null ? undefined : `${newName}Changed`)
     );
     if (context.candidateRows.length > 0) {
       return templateRenameUnavailable(
@@ -691,8 +741,8 @@ export class SemanticAppTemplateQueries {
     const editRefusal = this.renameRowRefusal(propagationRows, 'Cross-domain rename');
     if (editRefusal != null) {
       return templateRenameUnavailable(
-        SemanticTemplateRenameUnavailableReason.SourceNotEditable,
-        editRefusal,
+        editRefusal.reason,
+        editRefusal.summary,
         context.selectedMemberName,
         context.targetSource,
         context.activeSource,
@@ -742,6 +792,11 @@ export class SemanticAppTemplateQueries {
         (left.source?.path ?? '').localeCompare(right.source?.path ?? '')
         || (left.source?.start ?? -1) - (right.source?.start ?? -1)
       );
+
+    const conflict = templateRenameDestinationConflict(this.store, this.emission, placeholder, newName, context.targetSource, uniqueEdits);
+    if (conflict != null) return templateRenameUnavailable(
+      SemanticTemplateRenameUnavailableReason.NameConflict, conflict, placeholder, context.targetSource, context.activeSource,
+    );
 
     return answer(
       SemanticRuntimeAnswerResult.Answered,
@@ -2122,12 +2177,11 @@ function templateCodeActionForDiagnostic(
   emission: AureliaAppWorldProjectEmission,
   diagnostic: SemanticTemplateDiagnosticRow,
 ): SemanticTemplateCodeActionRow | null {
-  return declareViewModelMemberCodeActionForDiagnostic(store, emission, diagnostic)
+  return declareViewModelMemberCodeActionForDiagnostic(emission, diagnostic)
     ?? registerFrameworkCapabilityCodeActionForDiagnostic(store, emission, diagnostic);
 }
 
 function declareViewModelMemberCodeActionForDiagnostic(
-  store: KernelStore,
   emission: AureliaAppWorldProjectEmission,
   diagnostic: SemanticTemplateDiagnosticRow,
 ): SemanticTemplateCodeActionRow | null {
@@ -2144,12 +2198,9 @@ function declareViewModelMemberCodeActionForDiagnostic(
     return null;
   }
 
-  const actionSource = semanticExactSourceReference(suggestion.actionTarget?.source ?? null);
-  const resource = templateResourceForDiagnosticSource(store, emission, actionSource);
-  if (resource == null) {
-    return null;
-  }
-  const edit = declareViewModelMemberEdit(store, emission, resource, memberName);
+  const owner = diagnostic.template.owner;
+  if (owner == null) return null;
+  const edit = declareViewModelMemberEdit(emission, owner.declaration, memberName);
   if (edit == null) {
     return null;
   }
@@ -2159,7 +2210,7 @@ function declareViewModelMemberCodeActionForDiagnostic(
   }
 
   return {
-    title: `Declare member '${memberName}' on ${resource.compilation.definition.target.localName ?? resource.compilation.definition.name}`,
+    title: `Declare member '${memberName}' on ${owner.name}${owner.sharedTemplate ? ` (<${owner.resourceName}>)` : ''}`,
     kind: 'quickfix',
     diagnostics: [diagnostic],
     repair,
@@ -2379,48 +2430,12 @@ function diagnosticHasViewModelMemberDeclarationPlan(
     && suggestion.actionTarget.memberName === (suggestion.targetMemberName ?? diagnostic.selectedMemberName);
 }
 
-function templateResourceForDiagnosticSource(
-  store: KernelStore,
-  emission: AureliaAppWorldProjectEmission,
-  diagnosticSource: SemanticSourceReference | null,
-): TemplateResourceEmission | null {
-  const source = semanticExactSourceReference(diagnosticSource);
-  if (source?.path == null || source.start == null || source.end == null) {
-    return null;
-  }
-  for (const resource of [...emission.templates.resources, ...emission.templates.authoringResources]) {
-    const templateSource = semanticExactSourceReference(
-      describeAddress(
-        store,
-        resource.compilation.definition.template?.addressHandle ?? resource.compilation.definition.sourceAddressHandle,
-      ),
-    );
-    if (
-      templateSource?.path != null
-      && templateSource.start != null
-      && templateSource.end != null
-      && semanticSourceReferenceMatchesFilePath(templateSource, source.path)
-      && semanticSourceReferenceMatchesFilePath(source, templateSource.path)
-      && source.start >= templateSource.start
-      && source.end <= templateSource.end
-    ) {
-      return resource;
-    }
-  }
-  return null;
-}
-
 function declareViewModelMemberEdit(
-  store: KernelStore,
   emission: AureliaAppWorldProjectEmission,
-  resource: TemplateResourceEmission,
+  declaration: SemanticSourceReference,
   memberName: string,
 ): SemanticTemplateCodeActionEditRow | null {
-  const definition = resource.compilation.definition;
-  const declaration = semanticExactSourceReference(describeAddress(store, definition.target.declarationSourceAddressHandle));
-  if (declaration?.start == null || declaration.end == null) {
-    return null;
-  }
+  if (declaration.start == null || declaration.end == null) return null;
   const sourceFile = semanticEditProgramSourceFile(emission, declaration);
   if (sourceFile == null) {
     return null;
@@ -2665,6 +2680,21 @@ function activeTemplateReferenceContext(
   return null;
 }
 
+function templateOwnerResolvesReference(
+  owner: SemanticTemplateCursorOwnerContext,
+  row: SemanticTemplateReferenceRow,
+): boolean {
+  const matches = (target: SemanticSourceReference | null | undefined) => sourceReferencesMatchExactSpan(target ?? null, row.targetSource);
+  switch (row.referenceKind) {
+    case SemanticTemplateReferenceKind.ResourceUsage:
+      return matches(owner.selectedDefinition?.matchedNameSource ?? owner.selectedDefinition?.nameSource);
+    case SemanticTemplateReferenceKind.BindableAttribute:
+      return [owner.selectedBindable?.propertySource, owner.selectedBindable?.attributeSource, owner.selectedBindable?.nameSource].some(matches);
+    default:
+      return matches(owner.selectedMember?.declarationSource ?? owner.selectedMember?.source);
+  }
+}
+
 function activeTemplateRenameContext(
   contexts: readonly TemplateReferenceContext[],
   cursor: SemanticAppQuery['cursor'],
@@ -2780,7 +2810,10 @@ function isValidTemplateAddressableResourceName(value: string): boolean {
 }
 
 function isValidRenameIdentifier(value: string): boolean {
-  return /^[A-Za-z_$][0-9A-Za-z_$]*$/u.test(value) && !TYPESCRIPT_RESERVED_IDENTIFIER_WORDS.has(value);
+  if (value.length === 0 || TYPESCRIPT_RESERVED_IDENTIFIER_WORDS.has(value)) return false;
+  const [first, ...rest] = value;
+  return ts.isIdentifierStart(first!.codePointAt(0)!, ts.ScriptTarget.Latest)
+    && rest.every(character => ts.isIdentifierPart(character.codePointAt(0)!, ts.ScriptTarget.Latest));
 }
 
 const TYPESCRIPT_RESERVED_IDENTIFIER_WORDS = new Set([
@@ -2841,6 +2874,7 @@ interface TypeScriptRenameBlocker {
 function typeScriptRelatedMemberFamilyRead(
   emission: AureliaAppWorldProjectEmission,
   targetSource: SemanticSourceReference,
+  newName?: string,
 ): TypeSystemRelatedMemberFamilyRead {
   const exact = semanticExactSourceReference(targetSource);
   if (exact?.path == null || exact.start == null || exact.end == null) {
@@ -2858,7 +2892,7 @@ function typeScriptRelatedMemberFamilyRead(
       family: null,
     };
   }
-  return emission.typeSystem.readProgramRelatedMemberFamilyByHostPath(fileName, exact.start, exact.end);
+  return emission.typeSystem.readProgramRelatedMemberFamilyByHostPath(fileName, exact.start, exact.end, newName);
 }
 
 function typeScriptRelatedMemberReferenceRows(
@@ -2930,6 +2964,12 @@ function typeScriptRenameBlocker(
   switch (read.family.rename.state) {
     case TypeSystemRelatedMemberRenameState.Available:
       return null;
+    case TypeSystemRelatedMemberRenameState.DestinationConflict:
+      return {
+        reason: SemanticTemplateRenameUnavailableReason.NameConflict,
+        summary: read.family.rename.reason ?? `The proposed name for ${subject} is already in use.`,
+        coverage: SemanticRuntimeAnswerCoverage.Complete,
+      };
     case TypeSystemRelatedMemberRenameState.TypeScriptDenied:
       return {
         reason: SemanticTemplateRenameUnavailableReason.TypeScriptRenameNotAllowed,

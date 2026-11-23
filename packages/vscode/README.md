@@ -133,6 +133,8 @@ Navigate from template usage to source definition. This works for custom element
 bindables, expression identifiers, local scope variables, and source-resolvable router `load` paths and route ids. It
 crosses the HTML/TypeScript boundary.
 
+For a template used by multiple components, Go to Definition lists every distinct declaration found at the selected token. A missing-member Problem identifies the component, and its declaration Quick Fix edits that component.
+
 ### Find References
 
 Find verified usages of source-backed template members and Aurelia resources
@@ -149,7 +151,7 @@ admitted templates after the complete current transaction is verified.
 
 An unverified candidate, stale target, excluded target, or physical file
 mismatch refuses the whole transaction. Supported VS Code F2 journeys apply a
-multi-file rename as one undo unit.
+multi-file rename as one undo unit. A name that would capture another binding is refused. An edit in a shared template requires every component using that occurrence to resolve it to the same declaration.
 
 ### Semantic Tokens
 

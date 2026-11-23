@@ -5151,6 +5151,13 @@ export interface SemanticTemplateDiagnosticRow extends SemanticTemplateCursorDia
   readonly template: {
     readonly compilationLane: SemanticTemplateCompilationRow['compilationLane'] | null;
     readonly source: SemanticSourceReference | null;
+    /** Component whose binding scope was missing the root, retained through code-action resolution. */
+    readonly owner?: {
+      readonly name: string;
+      readonly resourceName: string;
+      readonly declaration: SemanticSourceReference;
+      readonly sharedTemplate: boolean;
+    };
   };
   readonly handles?: {
     readonly sourceAddressHandle: AddressHandle | null;
@@ -5317,8 +5324,11 @@ export enum SemanticTemplateRenameUnavailableReason {
   TypeScriptRelatedSourceNotEditable = 'typescript-related-source-not-editable',
   SourceNotEditable = 'source-not-editable',
   InvalidNewName = 'invalid-new-name',
+  NameConflict = 'name-conflict',
   ResourceNameHasNoAuthoredSource = 'resource-name-has-no-authored-source',
   UnsupportedResourceKind = 'unsupported-resource-kind',
+  /** One physical template edit has competing or unproved meanings in its owning components. */
+  SharedTemplateTargets = 'shared-template-targets',
   /** Exact same-name authored locations remain, but their target identity cannot be proven. */
   UnresolvedCandidates = 'unresolved-candidates',
 }

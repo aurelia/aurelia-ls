@@ -4034,6 +4034,9 @@ function semanticRuntimeTemplateCodeActionIdentity(
           : { typeScriptDiagnosticCode: diagnostic.typeScriptDiagnosticCode }),
         missingInput: diagnostic.missingInput,
         selectedMemberName: diagnostic.selectedMemberName,
+        ...(diagnostic.template.owner == null ? {} : {
+          owner: [diagnostic.template.owner.resourceName, diagnostic.template.owner.name, diagnostic.template.owner.declaration.path],
+        }),
         source: source == null
           ? null
           : {
@@ -4127,6 +4130,18 @@ function semanticRuntimeTemplateCodeActionDiagnosticMatches(
 ): boolean {
   if (runtime?.["diagnosticKind"] !== sourceDiagnostic.diagnosticKind) {
     return false;
+  }
+  const owner = sourceDiagnostic.template.owner;
+  if (owner?.sharedTemplate) {
+    const related: unknown = runtime["relatedInformation"];
+    if (!Array.isArray(related) || !related.some((item: unknown) => {
+      if (item == null || typeof item !== "object" || !("code" in item) || item.code !== "template-owner" || !("source" in item)) return false;
+      const source = item.source;
+      return source != null && typeof source === "object"
+        && "path" in source && source.path === owner.declaration.path
+        && "start" in source && source.start === owner.declaration.start
+        && "end" in source && source.end === owner.declaration.end;
+    })) return false;
   }
   const authority = runtime["diagnosticAuthority"];
   if (typeof authority === "string" && authority !== sourceDiagnostic.diagnosticAuthority) {

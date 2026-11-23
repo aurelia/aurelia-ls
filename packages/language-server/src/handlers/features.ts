@@ -301,7 +301,7 @@ export function handlePrepareRename(
 
   return operation.templateRename(doc.uri, params.position).then((response) => {
     if (response.value.status !== "available") {
-      if (response.value.reason === "unresolved-candidates") {
+      if (response.value.reason === "unresolved-candidates" || response.value.reason === "shared-template-targets") {
         const candidateMapping = mapSemanticRuntimeTemplateRenameCandidates(
           response,
           (uri) => operation.documents.lookupReadableDocument(uri),
