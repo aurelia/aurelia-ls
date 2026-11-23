@@ -59,6 +59,8 @@ export class ResourceRecognitionContext {
     readonly conventionTransformEvidenceHandles: readonly EvidenceHandle[],
     /** Source-local contexts for graph-linked modules reached by the same project pass. */
     readonly contextIndex: ResourceRecognitionContextIndex | null = null,
+    /** Build providers can require both the component and its template to match a loader. */
+    readonly pairedConventionEvidence: (template: SourceFileAdmission) => readonly EvidenceHandle[] = () => conventionTransformEvidenceHandles,
   ) {
     this.expressionReader = new StaticEvaluationExpressionReader(
       evaluation.environment,

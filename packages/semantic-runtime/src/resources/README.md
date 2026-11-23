@@ -32,8 +32,7 @@ Source-address materialization should use only contexts admitted by this index. 
 resource-recognition context, leave the source span absent or surface an open seam rather than re-resolving a file name
 from the store and risking a span attached to the wrong project/source admission.
 Convention-derived resources are transform output, not a consequence of class/file shape alone. The project pass spends
-the shared `StaticProjectEvaluationPass` with tooling-config roots and a narrow Vite host adapter; it does not grow a
-second configuration evaluator. Source-local ambient declarations encountered there remain host boundaries rather than
+the shared `StaticProjectEvaluationPass` with tooling-config roots and bounded build-tool intrinsics. Source-local ambient declarations encountered there remain host boundaries rather than
 collapsing to `undefined`. The resulting static Vite configuration proves `@aurelia/vite-plugin` convention preprocessing
 for each matching source. Vite and plugin factory identity enters through the module evaluator's external-value resolver,
 so local import/export forwarding does not collapse back to syntax matching. Include/exclude patterns are applied through the same
@@ -43,9 +42,17 @@ so local import/export forwarding does not collapse back to syntax matching. Inc
 retains the tooling transform and paired-template evidence; open admission seams spend evaluator boundary reason kinds,
 and only evaluator-executed plugin calls can produce evidence or seams. A derived public name remains non-editable until
 an authored name token exists. ESM imports/exports and CommonJS `require(...)`/`module.exports` spend the same evaluator
-and admission path. This reader currently owns Vite configuration only. Webpack-loader, Gulp, Parcel, and ts-jest use the
-same Aurelia preprocessor through different configuration carriers and need their own admission readers and pressure
-fixtures before they are treated as covered. Non-static filter values remain open rather than being approximated.
+and admission path.
+
+For webpack, the project reads an evaluated default root configuration or configuration factory, including CommonJS
+exports. The `@aurelia/webpack-loader` must reach the component source and its paired HTML through `module.rules`.
+Supported predicates include webpack string prefixes, non-stateful regexes, arrays and logical conditions on the
+resource path. Parent rules constrain children and `oneOf` stops at its first matching branch. Unknown loader
+options, custom loader resolution and conditions that require an issuer or request information cannot prove a match.
+The checker can resolve `path.join` and absolute `path.resolve` calls, including CommonJS `__dirname` in a webpack
+config. When Vite and webpack both configure the project, inferred conventions require agreement on the source reach;
+explicit build-provider admissions can establish the active invocation independently. Custom CLI config paths and
+the Gulp, Parcel and ts-jest configuration carriers have no dedicated admission reader.
 An active build adapter may additionally declare its exact convention include/exclude reach and pattern-resolution
 base for one app-analysis invocation. The materializer merges that addressless external configuration evidence with
 authored tooling-config evidence, while app cache and incumbent identity retain the declaration as part of analysis

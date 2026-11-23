@@ -343,6 +343,9 @@ function recognizeConventions(
     return [];
   }
 
+  const evidence = templateAdmission == null ? context.conventionTransformEvidenceHandles : context.pairedConventionEvidence(templateAdmission);
+  if (evidence.length === 0) return [];
+
   const target = readClassTarget(classNode);
   return [
     new ResourceRecognitionObservation(
@@ -357,7 +360,7 @@ function recognizeConventions(
       ),
       [],
       [
-        ...context.conventionTransformEvidenceHandles,
+        ...evidence,
         ...(templateAdmission == null ? [] : [templateAdmission.evidenceHandle]),
       ],
     ),

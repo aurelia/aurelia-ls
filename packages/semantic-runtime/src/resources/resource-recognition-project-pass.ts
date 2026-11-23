@@ -412,11 +412,12 @@ function evaluatedResourceRecognitionContexts(
       source.admission.addressHandle,
       project.projectKey,
       source.evaluation,
-      typeSystem,
+      typeSystem?.forSourceFile(source.sourceFile.fileName) ?? null,
       project.rootDir,
       sourceFiles,
       conventionTransforms.evidenceHandlesForSource(source.admission),
       index,
+      template => conventionTransforms.evidenceHandlesForSource(source.admission, template),
     );
     index.add(context);
     contexts.set(source.moduleKey, context);

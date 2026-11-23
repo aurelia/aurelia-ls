@@ -1,5 +1,6 @@
 import path from 'node:path';
-import { isViteConfigPath } from '../kernel/source-classification.js';
+import { isViteConfigPath, isWebpackConfigPath } from '../kernel/source-classification.js';
+import { aureliaWebpackLoader, readWebpackConventionRules } from './webpack-convention-rules.js';
 
 import { createFilter } from '@rollup/pluginutils';
 import ts from 'typescript';
@@ -53,6 +54,7 @@ import {
   EvaluationObjectProperty,
   EvaluationObjectPropertyState,
   EvaluationObjectValue,
+  EvaluationStringValue,
   EvaluationUndefined,
   EvaluationValueKind,
   closedEvaluationPromiseFulfillment,
@@ -171,42 +173,44 @@ export function resourceConventionTransformAdmissionsIdentityKey(
 }
 
 export class ResourceConventionTransformAdmission {
-  private readonly filter: (id: unknown) => boolean;
-
   constructor(
     readonly evidenceHandles: readonly EvidenceHandle[],
     private readonly projectRootDir: string,
-    private readonly patternResolutionBase: string,
-    include: readonly ConventionTransformSourcePattern[],
-    exclude: readonly ConventionTransformSourcePattern[],
-  ) {
-    this.filter = createFilter(include, exclude, { resolve: patternResolutionBase });
-  }
+    private readonly filter: (sourcePath: string) => boolean,
+    private readonly requirePairedTemplateTransform = false,
+  ) {}
 
-  admits(source: SourceFileAdmission): boolean {
-    return this.filter(path.resolve(this.projectRootDir, source.path));
+  admits(source: SourceFileAdmission, pairedTemplate?: SourceFileAdmission): boolean {
+    return this.filter(path.resolve(this.projectRootDir, source.path))
+      && (!this.requirePairedTemplateTransform || pairedTemplate == null
+        || this.filter(path.resolve(this.projectRootDir, pairedTemplate.path)));
   }
 }
 
 /** Project-local convention-transform evidence indexed by the authored sources it actually reaches. */
 export class ResourceConventionTransformAdmissionIndex {
   constructor(
-    readonly admissions: readonly ResourceConventionTransformAdmission[],
+    private readonly configuredGroups: readonly (readonly ResourceConventionTransformAdmission[])[],
+    private readonly invocation: readonly ResourceConventionTransformAdmission[],
   ) {}
 
-  evidenceHandlesForSource(source: SourceFileAdmission): readonly EvidenceHandle[] {
-    return this.admissions
-      .filter((admission) => admission.admits(source))
-      .flatMap((admission) => admission.evidenceHandles);
+  evidenceHandlesForSource(source: SourceFileAdmission, pairedTemplate?: SourceFileAdmission): readonly EvidenceHandle[] {
+    const evidence = (admissions: readonly ResourceConventionTransformAdmission[]) => admissions
+      .filter(admission => admission.admits(source, pairedTemplate))
+      .flatMap(admission => admission.evidenceHandles);
+    const fromInvocation = evidence(this.invocation);
+    // With two configured build tools and no selected invocation, admit only their common reach.
+    const configured = this.configuredGroups.map(evidence);
+    return configured.every(group => group.length > 0) ? [...fromInvocation, ...configured.flat()] : fromInvocation;
   }
 }
 
 class ResourceConventionTransformRead {
   constructor(
     readonly sourceNode: ts.Node,
-    readonly include: readonly ConventionTransformSourcePattern[],
-    readonly exclude: readonly ConventionTransformSourcePattern[],
     readonly providerModuleSpecifier: string,
+    readonly filter: (sourcePath: string) => boolean,
+    readonly requirePairedTemplateTransform = false,
   ) {}
 }
 
@@ -266,6 +270,7 @@ export class ResourceConventionToolingEvaluationContext {
   private readonly plugins = new WeakMap<EvaluationObjectValue, ConventionPluginEvaluation>();
   private readonly aureliaPluginFactories = new WeakMap<ConventionToolingFactoryValue, ConventionPluginFactoryDescriptor>();
   private readonly defineConfigFactories = new WeakSet<ConventionToolingFactoryValue>();
+  private readonly pathFunctions = new WeakMap<ConventionToolingFactoryValue, 'join' | 'resolve'>();
   private readonly executedAureliaPluginCalls = new WeakSet<ts.CallExpression>();
 
   readonly runtimeHost: StaticEvaluationRuntimeHost = {
@@ -273,11 +278,18 @@ export class ResourceConventionToolingEvaluationContext {
       (value.kind !== EvaluationValueKind.Object || !this.plugins.has(value))
       && (!isConventionToolingFactoryValue(value) || (
         !this.aureliaPluginFactories.has(value)
-        && !this.defineConfigFactories.has(value)
+        && !this.defineConfigFactories.has(value) && !this.pathFunctions.has(value)
       )),
     transferValueMetadata: (source, target, transfer) =>
       this.transferValueMetadata(source, target, transfer),
     evaluateInvocation: (frame, host) => this.evaluateInvocation(frame, host),
+    resolveIdentifier: identifier => {
+      if (identifier.text !== '__dirname') return null;
+      const source = identifier.getSourceFile();
+      if (!isWebpackConfigPath(source.fileName)
+        || !(source.impliedNodeFormat === ts.ModuleKind.CommonJS || /\.c[jt]s$/iu.test(source.fileName))) return null;
+      return new EvaluationStringValue(path.dirname(source.fileName), identifier);
+    },
     resolveCommonJsRequire: (_moduleKey, moduleSpecifier, node) => {
       const value = this.resolveCommonJsRequire(moduleSpecifier, node);
       return value == null ? null : new StaticEvaluationRuntimeValueResult(value, null);
@@ -321,6 +333,8 @@ export class ResourceConventionToolingEvaluationContext {
       if (pluginFactory != null) {
         this.aureliaPluginFactories.set(target, pluginFactory);
       }
+      const pathFunction = this.pathFunctions.get(source);
+      if (pathFunction != null) this.pathFunctions.set(target, pathFunction);
       if (this.defineConfigFactories.has(source)) {
         this.defineConfigFactories.add(target);
       }
@@ -347,6 +361,17 @@ export class ResourceConventionToolingEvaluationContext {
         frame.moduleKey,
         EvaluationOpenSeamKind.DynamicCall,
       ));
+    }
+    const pathFunction = this.pathFunctions.get(callee);
+    if (pathFunction != null) {
+      const parts: string[] = [];
+      for (const arg of arguments_) {
+        if (arg.value.kind !== EvaluationValueKind.String || arg.openSeams.length) return StaticInvocationNotApplicable;
+        parts.push(arg.value.value);
+      }
+      // A relative resolve needs webpack's invocation cwd, which the project frame doesn't establish.
+      if (pathFunction === 'resolve' && !parts.some(part => path.isAbsolute(part))) return StaticInvocationNotApplicable;
+      return staticInvocationValue(new EvaluationStringValue(path[pathFunction](...parts), call));
     }
     const firstArgument = arguments_[0]
       ?? new EvaluationValueEvidence(EvaluationUndefined, []);
@@ -409,6 +434,7 @@ export class ResourceConventionToolingEvaluationContext {
     moduleSpecifier: string,
     node: ts.Node,
   ): EvaluationValue | null {
+    if (moduleSpecifier === 'path' || moduleSpecifier === 'node:path') return this.nodePathModule(node);
     const pluginFactory = AURELIA_VITE_PLUGIN_FACTORIES.get(moduleSpecifier);
     if (pluginFactory != null) {
       return this.aureliaPluginModuleValue(pluginFactory, node);
@@ -420,6 +446,14 @@ export class ResourceConventionToolingEvaluationContext {
   }
 
   private resolveExternalImport(entry: EvaluationImportEntry): EvaluationValue | null {
+    if (entry.moduleSpecifier === 'path' || entry.moduleSpecifier === 'node:path') {
+      if (entry.importKind === EvaluationImportKind.Default || entry.importKind === EvaluationImportKind.Namespace) {
+        return this.nodePathModule(entry.node);
+      }
+      if (entry.importKind === EvaluationImportKind.Named && (entry.exportName === 'join' || entry.exportName === 'resolve')) {
+        return this.nodePathFunction(entry.exportName, entry.node);
+      }
+    }
     const pluginFactory = AURELIA_VITE_PLUGIN_FACTORIES.get(entry.moduleSpecifier);
     if (pluginFactory != null) {
       if (
@@ -445,6 +479,20 @@ export class ResourceConventionToolingEvaluationContext {
     return entry.importKind === EvaluationImportKind.Namespace
       ? this.viteModuleValue(entry.moduleSpecifier, entry.node)
       : null;
+  }
+
+  private nodePathModule(node: ts.Node): EvaluationObjectValue {
+    const members = new Map<string, EvaluationObjectProperty>();
+    for (const name of ['join', 'resolve'] as const) {
+      members.set(name, new EvaluationObjectProperty(name, this.nodePathFunction(name, node), node, EvaluationObjectPropertyState.Closed));
+    }
+    return new EvaluationObjectValue(members, true, node);
+  }
+
+  private nodePathFunction(name: 'join' | 'resolve', node: ts.Node): EvaluationBoundaryValue {
+    const fn = new EvaluationBoundaryValue(EvaluationBoundaryKind.ExternalModule, `node:path.${name}`, node);
+    this.pathFunctions.set(fn, name);
+    return fn;
   }
 
   private aureliaPluginModuleValue(
@@ -498,15 +546,15 @@ export class ResourceConventionToolingEvaluationContext {
 }
 
 export const enum ResourceConventionToolingEvaluationProfileKind {
-  /** Vite configuration evaluation with Aurelia convention-plugin intrinsics. */
+  /** Stable tooling-profile identity; the revision differentiates the supported config semantics. */
   Vite = 'aurelia-vite-convention-tooling',
 }
 
-/** Static-evaluation profile for Vite configuration that controls convention-derived resource admission. */
+/** Static-evaluation profile for project tooling that controls convention-derived resource admission. */
 export const resourceConventionToolingEvaluationProfile = new StaticProjectEvaluationComputationProfile(
   ResourceConventionToolingEvaluationProfileKind.Vite,
-  '1',
-  'Vite configuration evaluation with Aurelia convention-plugin intrinsics.',
+  '2',
+  'Build configuration evaluation with Aurelia Vite plugin and webpack rule evidence.',
   () => {
     const context = new ResourceConventionToolingEvaluationContext();
     return new StaticProjectEvaluationComputationPreparation(
@@ -529,7 +577,7 @@ class ResourceConventionTransformEmission {
   ) {}
 }
 
-/** Read supported Vite configuration and publish the evidence that admits convention-derived resources. */
+/** Publish build-provider evidence for the specific authored sources that receive convention transforms. */
 export class ResourceConventionTransformAdmissionMaterializer {
   materializeAndEmit(
     store: KernelStore,
@@ -542,32 +590,41 @@ export class ResourceConventionTransformAdmissionMaterializer {
       throw new Error(`Convention-tooling evaluation belongs to another project semantic frame.`);
     }
     const baseline = evaluationAccess.readBaseline();
-    const configs = viteConfigSources(baseline);
-    const evaluation = configs.some(source => exportedViteConfig(source)?.kind === EvaluationValueKind.Function)
+    const configs = conventionConfigSources(baseline);
+    const evaluation = configs.some(source => exportedConfigValue(source)?.kind === EvaluationValueKind.Function)
       ? evaluationAccess.forkSession() : baseline;
     const toolingHost = evaluationAccess.readBaselineContext();
-    const emissions: ResourceConventionTransformEmission[] = [];
+    const configured = new Map<string, ResourceConventionTransformEmission[]>();
     const openRecords: KernelStoreRecord[] = [];
-    for (const source of evaluation === baseline ? configs : viteConfigSources(evaluation)) {
-      const exported = exportedViteConfig(source);
+    for (const source of evaluation === baseline ? configs : conventionConfigSources(evaluation)) {
+      const webpack = isWebpackConfigPath(source.admission.path);
+      const exported = exportedConfigValue(source);
       const factory = exported?.kind === EvaluationValueKind.Function
         ? new StaticEvaluator(source.evaluation.policy, source.evaluation.runtimeHost).evaluateFunctionValue(
             exported, exported.declaration, source.moduleKey,
-            [new EvaluationBoundaryObjectValue(EvaluationBoundaryKind.HostEnvironment, 'vite.config-env', new Map(), exported.declaration)],
+            webpack
+              ? ['webpack.env', 'webpack.argv'].map(name => new EvaluationBoundaryObjectValue(EvaluationBoundaryKind.HostEnvironment, name, new Map(), exported.declaration))
+              : [new EvaluationBoundaryObjectValue(EvaluationBoundaryKind.HostEnvironment, 'vite.config-env', new Map(), exported.declaration)],
             null, 'awaited',
           )
         : null;
-      const result = readConventionTransforms(
-        [...source.evaluation.invocations, ...(factory?.invocations ?? [])]
-          .map((invocation) => invocation.node)
-          .filter(ts.isCallExpression)
-          .filter((call) => toolingHost.isAureliaPluginCall(call)),
-        factory == null ? exported : factory.abruptCompletion == null ? factory.value : null,
-        toolingHost,
-      );
-      emissions.push(...result.admissions.map((read, index) =>
-        conventionTransformEmission(store, project, source.admission, source.sourceFile, read, index)
-      ));
+      const config = factory == null ? exported : factory.abruptCompletion == null ? factory.value : null;
+      const result = webpack
+        ? readWebpackTransforms(source.sourceFile, config)
+        : readConventionTransforms(
+            [...source.evaluation.invocations, ...(factory?.invocations ?? [])]
+              .map((invocation) => invocation.node)
+              .filter(ts.isCallExpression)
+              .filter((call) => toolingHost.isAureliaPluginCall(call)),
+            config,
+            toolingHost,
+            project.rootDir,
+          );
+      const provider = webpack ? 'webpack' : 'vite';
+      const group = configured.get(provider) ?? [];
+      group.push(...result.admissions.map((read, index) =>
+        conventionTransformEmission(store, project, source.admission, source.sourceFile, read, index)));
+      configured.set(provider, group);
       openRecords.push(...result.opens.flatMap((open, index) =>
         recordsForSourceOpenMaterialization(store, {
           localKey: `resource-convention-transform-open:${project.projectKey}:${source.admission.path}:${index}`,
@@ -581,11 +638,11 @@ export class ResourceConventionTransformAdmissionMaterializer {
         }).records
       ));
     }
-    emissions.push(...providerAdmissions.map((admission) =>
-      providerConventionTransformEmission(store, project, admission)
-    ));
+    const invocation = providerAdmissions.map(admission => providerConventionTransformEmission(store, project, admission));
+    const groups = [...configured.values()];
     const records = [
-      ...emissions.flatMap((emission) => emission.records),
+      ...groups.flatMap(group => group.flatMap(emission => emission.records)),
+      ...invocation.flatMap(emission => emission.records),
       ...openRecords,
     ];
     if (records.length > 0) {
@@ -594,7 +651,8 @@ export class ResourceConventionTransformAdmissionMaterializer {
       ));
     }
     return new ResourceConventionTransformAdmissionIndex(
-      emissions.map((emission) => emission.admission),
+      groups.map(group => group.map(emission => emission.admission)),
+      invocation.map(emission => emission.admission),
     );
   }
 }
@@ -619,9 +677,7 @@ function providerConventionTransformEmission(
     new ResourceConventionTransformAdmission(
       [evidenceHandle],
       project.rootDir,
-      input.patternResolutionBase,
-      input.include,
-      input.exclude,
+      createFilter(input.include, input.exclude, { resolve: input.patternResolutionBase }),
     ),
   );
 }
@@ -657,19 +713,38 @@ function conventionTransformEmission(
     new ResourceConventionTransformAdmission(
       [source.evidenceHandle, evidenceHandle],
       project.rootDir,
-      project.rootDir,
-      read.include,
-      read.exclude,
+      read.filter,
+      read.requirePairedTemplateTransform,
     ),
   );
 }
 
-function viteConfigSources(evaluation: StaticProjectEvaluationResult): readonly EvaluatedProjectSource[] {
-  return evaluation.readEvaluatedSources().filter(source =>
-    source.admission.role === SourceFileRole.ToolingConfig && isViteConfigPath(source.admission.path));
+function conventionConfigSources(evaluation: StaticProjectEvaluationResult): readonly EvaluatedProjectSource[] {
+  const tooling = evaluation.readEvaluatedSources().filter(source => source.admission.role === SourceFileRole.ToolingConfig);
+  // The default webpack CLI searches the project root's popular extensions in this order.
+  const webpack = ['js', 'mjs', 'cjs', 'ts', 'cts', 'mts']
+    .map(ext => tooling.find(source => source.admission.path === `webpack.config.${ext}`))
+    .find(source => source != null);
+  const vite = tooling.filter(source => isViteConfigPath(source.admission.path));
+  return webpack == null ? vite : [...vite, webpack];
 }
 
-function exportedViteConfig(source: EvaluatedProjectSource): EvaluationValue | null {
+function readWebpackTransforms(source: ts.SourceFile, exported: EvaluationValue | null): ResourceConventionTransformReadResult {
+  const config = exported?.kind === EvaluationValueKind.Promise ? closedEvaluationPromiseFulfillment(exported) : exported;
+  const rules = readWebpackConventionRules(config);
+  const site = rules.ruleSource?.getSourceFile() === source ? rules.ruleSource : source;
+  const admissions = !rules.hasLoader ? [] : [
+    new ResourceConventionTransformRead(site, aureliaWebpackLoader, rules.admits, true),
+  ];
+  const opens = rules.open
+    ? [new ResourceConventionTransformOpen(site,
+      'The webpack loader configuration contains rules or options whose reach cannot be established statically.',
+      [OpenSeamReasonKind.FeatureNotYetModeled])]
+    : [];
+  return new ResourceConventionTransformReadResult(admissions, opens);
+}
+
+function exportedConfigValue(source: EvaluatedProjectSource): EvaluationValue | null {
   const environment = source.evaluation.environment;
   return environment.readValue('default') ?? readStaticCommonJsExportValue(environment, 'default');
 }
@@ -678,6 +753,7 @@ function readConventionTransforms(
   calls: readonly ts.CallExpression[],
   exportedConfig: EvaluationValue | null,
   toolingHost: ResourceConventionToolingEvaluationContext,
+  projectRootDir: string,
 ): ResourceConventionTransformReadResult {
   if (calls.length === 0) {
     return new ResourceConventionTransformReadResult([], []);
@@ -721,9 +797,8 @@ function readConventionTransforms(
       case ConventionPluginOptionsState.Enabled:
         admissions.push(new ResourceConventionTransformRead(
           plugin.call,
-          options.include,
-          options.exclude,
           plugin.providerModuleSpecifier,
+          createFilter(options.include, options.exclude, { resolve: projectRootDir }),
         ));
         break;
       case ConventionPluginOptionsState.Disabled:
