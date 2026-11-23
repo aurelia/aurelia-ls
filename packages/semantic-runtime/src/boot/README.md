@@ -78,11 +78,11 @@ static-evaluation entrypoints. The classifier should stay conservative: a user-a
 app module is still app source unless it matches a known tool/artifact lane.
 
 Project discovery is also admission policy. A nested `package.json` declaring only Node's module format can scope
-JavaScript resolution inside its containing project. A nested compiler config belongs to the containing project when
-its local source files are already selected by a containing compiler config. A Vite build can also own the source of
-a referenced compiler project within the build root. Boot retains the nested compiler config path for source-specific
+JavaScript resolution inside its containing project. Within a Vite or webpack build root, a nested compiler config
+can describe source files already selected by the containing compiler config, or a source project referenced by
+the build's TypeScript solution. Boot retains that nested compiler config path for source-specific
 checker options. Named packages, declared workspace members, host project hints, native Aurelia configurations and
-separate Vite roots retain independent frames. Invalid marker files retain their frame for diagnostics. Each
+separate Vite or webpack roots retain independent frames. Invalid marker files retain their frame for diagnostics. Each
 independent child root is excluded from its parent's filesystem source discovery. Child workspace packages may
 inherit Aurelia dependency context from an
 ancestor `workspaces` manifest, but that only affects shape triage: a child package with HTML/CSS resource-surface

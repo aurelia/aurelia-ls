@@ -135,6 +135,10 @@ export function isViteConfigPath(sourcePath: string): boolean {
   return /^vite\.config\.[cm]?[jt]sx?$/u.test(basename(sourcePath).toLowerCase());
 }
 
+export function isWebpackConfigPath(sourcePath: string): boolean {
+  return /^webpack\.config\.[cm]?[jt]s$/u.test(basename(sourcePath).toLowerCase());
+}
+
 function isToolingConfigPath(baseName: string): boolean {
   return (
     /^(vite|vitest|webpack|rollup|jest|playwright|karma|tsup|eslint|prettier|postcss|tailwind|babel|commitlint)\.config\./.test(baseName) ||

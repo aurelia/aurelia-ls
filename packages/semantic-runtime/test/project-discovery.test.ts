@@ -31,6 +31,7 @@ describe('boot project discovery', () => {
       ['src/package', 'package.json', '{"name":"independent"}'],
       ['src/member', 'package.json', '{"type":"module"}'],
       ['src/other-build', 'tsconfig.json', '{}'],
+      ['src/webpack-child', 'tsconfig.json', '{}'],
       ['src/hinted', 'package.json', '{"type":"commonjs"}'],
       ['src/native', 'aurelia.project.json', '{"version":1}'],
       ['outside', 'tsconfig.json', '{"include":["index.ts"]}'],
@@ -40,10 +41,11 @@ describe('boot project discovery', () => {
       await writeWorkspaceFile(root, `${directory}/index.ts`, 'export {};');
     }
     await writeWorkspaceFile(root, 'src/other-build/vite.config.ts', 'export default {};');
+    await writeWorkspaceFile(root, 'src/webpack-child/webpack.config.cjs', 'module.exports = {};');
     const runtime = await createSemanticRuntime({ workspaceRoot: root, projectRootHints: ['src/hinted'] });
     try {
       expect(authoredProjectRootsFor(runtime, source)).toEqual([path.normalize(root)]);
-      for (const directory of ['src/package', 'src/member', 'src/other-build', 'src/hinted', 'src/native', 'outside', 'invalid']) {
+      for (const directory of ['src/package', 'src/member', 'src/other-build', 'src/webpack-child', 'src/hinted', 'src/native', 'outside', 'invalid']) {
         const independent = path.join(root, directory);
         expect(authoredProjectRootsFor(runtime, path.join(independent, 'index.ts'))).toEqual([path.normalize(independent)]);
       }
@@ -52,10 +54,10 @@ describe('boot project discovery', () => {
     }
   });
 
-  test('a Vite application can contain a source directory selected through TypeScript project references', async () => {
+  test.each(['vite.config.mts', 'webpack.config.cjs'])('%s can own source selected through TypeScript project references', async (config) => {
     const root = await createWorkspace();
     await writeWorkspaceFile(root, 'package.json', '{"name":"app"}');
-    await writeWorkspaceFile(root, 'vite.config.mts', 'export default {};');
+    await writeWorkspaceFile(root, config, config.endsWith('.cjs') ? 'module.exports = {};' : 'export default {};');
     await writeWorkspaceFile(root, 'tsconfig.json', '{"files":[],"references":[{"path":"./tsconfig.solution.json"}]}');
     await writeWorkspaceFile(root, 'tsconfig.solution.json', '{"files":[],"references":[{"path":"./src"}]}');
     await writeWorkspaceFile(root, 'src/tsconfig.json', '{"include":["*.ts"]}');
@@ -72,6 +74,7 @@ describe('boot project discovery', () => {
   test('boots every exact project marker once and gives every nested boundary its own frame', async () => {
     const workspaceRoot = await createWorkspace();
     await writeWorkspaceFile(workspaceRoot, 'package.json', JSON.stringify({ name: 'workspace' }));
+    await writeWorkspaceFile(workspaceRoot, 'tsconfig.json', '{"include":["src","projects"]}');
     await writeWorkspaceFile(workspaceRoot, 'src/root.ts', 'export const root = true;\n');
 
     const packageOnlyRoot = path.join(workspaceRoot, 'projects', 'package-only');

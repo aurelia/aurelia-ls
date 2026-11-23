@@ -1,7 +1,7 @@
 import path from 'node:path';
 import ts from 'typescript';
 import type { SemanticRuntimeProjectInputHost } from '../kernel/project-input.js';
-import { isViteConfigPath } from '../kernel/source-classification.js';
+import { isViteConfigPath, isWebpackConfigPath } from '../kernel/source-classification.js';
 import { readCompilerConfigInput } from './compiler-config-input.js';
 import {
   BootProjectDiscoveryMode,
@@ -172,12 +172,14 @@ function belongsToContainingProject(
   if (ancestors.some(ancestor => {
     const manifest = readPackageManifest(host, ancestor.rootDir);
     return manifest && manifestWorkspacesIncludeProject(manifest, ancestor.rootDir, candidate.rootDir);
-  }) || hasViteConfig(host, candidate.rootDir)) return false;
+  }) || hasBuildConfig(host, candidate.rootDir)) return false;
   if (!config) return hasManifest;
 
   const owner = ancestors[0]!;
   const parentConfig = compilerConfigMarker(owner);
-  if (!parentConfig) return false;
+  // An umbrella tsconfig can typecheck several independently bootable projects. Its
+  // file list only proves a shared application scope alongside a containing build.
+  if (!parentConfig || !hasBuildConfig(host, owner.rootDir)) return false;
   const child = readConfig(config);
   if (!child || child.errors.length > 0) return false;
   const childSources = child.fileNames.filter(file => isHostPathWithin(file, candidate.rootDir));
@@ -189,11 +191,8 @@ function belongsToContainingProject(
     const key = canonicalTypeSystemPath(file);
     if (seen.has(key)) continue;
     seen.add(key);
-    // A Vite build rooted at a solution can own source selected by one of its referenced configs.
-    if (key === canonicalTypeSystemPath(config)) {
-      if (hasViteConfig(host, owner.rootDir)) return true;
-      continue;
-    }
+    // A build rooted at a solution can own source selected by one of its referenced configs.
+    if (key === canonicalTypeSystemPath(config)) return true;
     const parent = readConfig(file);
     if (!parent || parent.errors.length > 0) continue;
     const ownerSources = new Set(parent.fileNames.map(canonicalTypeSystemPath));
@@ -206,8 +205,9 @@ function belongsToContainingProject(
   return false;
 }
 
-function hasViteConfig(host: SemanticRuntimeProjectInputHost, root: string): boolean {
-  return host.readDirectory(root).some(entry => isViteConfigPath(entry) && !host.directoryExists(path.join(root, entry)));
+function hasBuildConfig(host: SemanticRuntimeProjectInputHost, root: string): boolean {
+  return host.readDirectory(root).some(entry => (isViteConfigPath(entry) || isWebpackConfigPath(entry))
+    && !host.directoryExists(path.join(root, entry)));
 }
 
 function normalizeProjectRootHints(
