@@ -49,14 +49,18 @@ problem, the semantic diagnosis owns the squiggle and the checker fact appears
 as related information. The 0.5 release line has no severity overrides, inline
 suppression, or blanket strict mode.
 
-VS Code's built-in HTML service validates embedded style and script text without
-interpreting Aurelia interpolation. Templates use native `html` mode with those
-validators by default. Setting
-`aurelia.templateDiagnostics.suppressNative=true` for a workspace folder moves
-exactly proved templates into **Aurelia HTML** mode. This removes interpolation
-false positives such as `style="width: ${value}%"` together with legitimate
-embedded CSS/JavaScript findings. Enable it when that tradeoff fits the project,
-and replace the disabled validation with project lint or build checks.
+An owned HTML template switches to **Aurelia HTML** mode when its compiler identifies an
+interpolation in an enabled CSS or JavaScript region. For example, a style value such
+as `width: ${value}%` can render valid CSS after binding. Embedded validation uses
+the authored regions and interpolation boundaries to report CSS and JavaScript
+findings at the original ranges. `html.validate.styles`, `html.validate.scripts` and
+the CSS validation settings apply to the template. Embedded JavaScript uses the bundled
+TypeScript compiler and browser types. Project-specific and legacy jQuery declarations
+should be checked in the project's script tooling. Plain HTML and unaffected
+templates keep their ordinary native validators.
+
+Set `aurelia.templateDiagnostics.suppressNative=true` for a workspace folder to
+disable embedded CSS and JavaScript findings on all of its proved templates.
 
 Exactly owned templates keep bounded Aurelia recovery Problems for supported
 malformed tags, attributes, comments, declarations, and foreign-content CDATA
@@ -286,7 +290,7 @@ unsupported, and remote development is outside the release-tested host envelope.
 |---------|---------|-------|---------|
 | `aurelia.activationMode` | `auto` | Workspace folder | Use project-shape-confirmed automatic activation, explicit `on`, or hard subtree exclusion with `off` |
 | `aurelia.inlayHints.bindingMode` | `false` | Workspace folder | Show the resolved mode of implicit `.bind` bindings |
-| `aurelia.templateDiagnostics.suppressNative` | `false` | Workspace folder | Opt into quieter interpolation at the cost of embedded CSS/JavaScript Problems |
+| `aurelia.templateDiagnostics.suppressNative` | `false` | Workspace folder | Disable embedded CSS and JavaScript Problems in proved templates. |
 
 ## Getting Started
 

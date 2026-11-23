@@ -37,7 +37,7 @@ import type {
   SemanticTemplateResourceAvailabilityRow,
   SemanticTemplateReferenceCandidateReason,
 } from "@aurelia-ls/semantic-runtime";
-import type { Position, Range, WorkspaceEdit } from "vscode-languageserver/node";
+import type { Diagnostic, Position, Range, WorkspaceEdit } from "vscode-languageserver/node";
 
 export const AureliaProtocolRequest = {
   SupportSnapshot: "aurelia/supportSnapshot",
@@ -1158,8 +1158,18 @@ export interface AnalysisLimitationsParams {
   readonly projectSelection?: AppProjectSelectionKind;
 }
 
+/** Resource-scoped editor validation settings for a particular open template revision. */
+export interface EmbeddedValidationRequest {
+  readonly revision: string;
+  readonly styles: boolean;
+  readonly scripts: boolean;
+  readonly css?: { readonly lint?: Record<string, string | string[]> };
+  readonly javascript?: { readonly strictNullChecks?: boolean; readonly experimentalDecorators?: boolean };
+}
+
 export interface SourceOwnershipParams {
   readonly uri: string;
+  readonly embeddedValidation?: EmbeddedValidationRequest;
 }
 
 /** One exact boot-authored project admission, expressed only in URI-safe transport vocabulary. */
@@ -1171,6 +1181,11 @@ export interface SourceOwnershipOwner {
 }
 
 export interface SourceOwnershipResponse {
+  /** Exact revision examined for embedded validation. Null diagnostics keep the native language mode. */
+  readonly embeddedValidation?: {
+    readonly revision: string;
+    readonly diagnostics: readonly Diagnostic[] | null;
+  };
   readonly fingerprint: string;
   readonly sourceUri: string;
   readonly answer: RuntimeAnswerTransport;

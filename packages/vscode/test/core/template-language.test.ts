@@ -1,9 +1,59 @@
+import type { EmbeddedValidationRequest, SourceOwnershipResponse } from '@aurelia-ls/language-server/protocol';
 import { describe, expect, test, vi } from "vitest";
 import type { VscodeApi } from "../../out/vscode-api.js";
 import { OwnedTemplateLanguageController } from "../../out/template-language.js";
 import { createVscodeApi } from "../helpers/vscode-stub.js";
 
 describe("owned template language containment", () => {
+  test("projects an owned changed document only while its compiler reports an active embedded hole", async () => {
+    const uri = "file:///workspace/src/app.html";
+    const requests: EmbeddedValidationRequest[] = [];
+    const lint = new Proxy({ unknownProperties: "warning", validProperties: new Proxy(["my-prop"], {}) }, {});
+    const harness = createHarness([[uri, "html"]], key => ownership(key, true), {
+      suppressNative: false,
+      workspaceConfiguration: {
+        "file:///workspace": { "css.lint": lint, "js/ts.implicitProjectConfig.strictNullChecks": true },
+      },
+      embedded: request => {
+        requests.push(structuredClone(request));
+        return request.styles ? { revision: request.revision, diagnostics: [] } : undefined;
+      },
+    });
+    harness.controller.start();
+    const doc = harness.vscode.workspace.textDocuments[0]!;
+    doc.text = '<div style="width: ${width}%"></div>';
+    harness.recorded.fireDocumentChanged(doc);
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html"]));
+    expect(requests[0]).toMatchObject({
+      styles: true, scripts: true, css: { lint: { unknownProperties: "warning", validProperties: ["my-prop"] } },
+      javascript: { strictNullChecks: true },
+    });
+    const projected = harness.vscode.workspace.textDocuments[0]!;
+    projected.text = '<div style="width: 42%"></div>';
+    harness.recorded.fireDocumentChanged(projected);
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["html"]));
+    expect(requests).toHaveLength(1);
+    await harness.controller.disposeAsync();
+  });
+
+  test("waits for the server to observe the same source revision before projecting a validation", async () => {
+    const uri = "file:///workspace/src/app.html";
+    let stale = true;
+    const harness = createHarness([[uri, "html"]], key => ownership(key, true), {
+      suppressNative: false,
+      embedded: request => stale ? undefined : { revision: request.revision, diagnostics: [] },
+    });
+    const doc = harness.vscode.workspace.textDocuments[0]!;
+    doc.text = '<style>.active {color: ${color}}</style>';
+    harness.controller.start();
+    await vi.waitFor(() => expect(harness.requests).toHaveBeenCalledTimes(1));
+    expect(harness.languageIds()).toEqual(["html"]);
+    stale = false;
+    harness.fireAnalysis("source-text", "file:///workspace", [uri]);
+    await vi.waitFor(() => expect(harness.languageIds()).toEqual(["aurelia-html"]));
+    await harness.controller.disposeAsync();
+  });
+
   test("keeps default-disabled templates in native HTML without ownership pulls", async () => {
     const harness = createHarness([
       ["file:///workspace/src/owned.html", "html"],
@@ -799,6 +849,7 @@ function createHarness(
   answer: (uri: string) => ReturnType<typeof ownership> | Promise<ReturnType<typeof ownership>>,
   options: {
     readonly suppressNative?: boolean | "omitted";
+    readonly embedded?: (request: EmbeddedValidationRequest) => SourceOwnershipResponse["embeddedValidation"];
     readonly workspaceFolders?: Array<{ name: string; uri: string }>;
     readonly workspaceConfiguration?: Record<string, Record<string, unknown>>;
   } = {},
@@ -839,7 +890,8 @@ function createHarness(
       },
     },
     lsp: {
-      getSourceOwnership: async (uri: string) => ({
+      getSourceOwnership: async (uri: string, _token: unknown, request?: EmbeddedValidationRequest) => ({
+        embeddedValidation: request && options.embedded?.(request),
         ...(await requests(uri)),
         workspace: { key: "file:///workspace", name: "workspace", uri: "file:///workspace" },
       }),

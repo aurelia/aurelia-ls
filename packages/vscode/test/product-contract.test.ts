@@ -579,10 +579,10 @@ describe("VS Code product contract", () => {
       default: false,
       scope: "resource",
       description: [
-        "Suppress VS Code's embedded CSS and JavaScript diagnostics for proved Aurelia templates.",
-        "Keep disabled (default) to retain legitimate findings.",
-        "Enable only when removing interpolation false positives is worth losing that validation; proved templates then use Aurelia HTML mode, which can change file icons, [html]-scoped settings, snippets, formatter selection, and other editor behavior.",
-        "Bounded Aurelia recovery Problems for supported malformed tags, attributes, comments, declarations, and foreign-content CDATA remain in both modes; this is not general HTML validation.",
+        "Disable embedded CSS and JavaScript diagnostics for proved Aurelia templates.",
+        "By default, proved templates with interpolation in embedded code use Aurelia HTML mode and validate the remaining CSS and JavaScript against the document's settings.",
+        "Language mode can affect file icons, language-scoped settings, snippets and formatter selection.",
+        "Aurelia markup diagnostics remain available in either mode.",
       ].join(" "),
     }));
   });

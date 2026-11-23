@@ -5,6 +5,9 @@
  * request boundary keeps cancellation, staleness, and operational failure
  * distinct from normal semantic absence and refusal.
  */
+import { templateEmbeddedLanguageRegions } from "@aurelia-ls/semantic-runtime/embedded-languages";
+import { validateEmbeddedLanguages } from "../embedded-validation.js";
+import { aureliaWorkspaceEditContentRevision } from "../protocol.js";
 import {
   ErrorCodes,
   LSPErrorCodes,
@@ -702,11 +705,29 @@ export async function handleSourceOwnership(
   const templateOwned = sourceFilePath == null
     ? false
     : await authoredTemplateDocumentOwned(ctx, operation, sourceFilePath, answer.value.owners);
+  const request = params.embeddedValidation;
+  let embeddedValidation: SourceOwnershipResponse["embeddedValidation"];
+  if (templateOwned && answer.value.owners.length === 1 && request && (request.styles || request.scripts)) {
+    const document = operation.documents.ensureProgramDocument(params.uri);
+    const text = document?.getText();
+    if (document && text != null && aureliaWorkspaceEditContentRevision(text) === request.revision) {
+      const tokens = await operation.templateSemanticTokens(document);
+      const regions = templateEmbeddedLanguageRegions(text, tokens.value.rows);
+      const hasEnabledInterpolation = regions.some(region =>
+        region.holes.length > 0 && (region.language === "css" ? request.styles : request.scripts)
+      );
+      embeddedValidation = {
+        revision: request.revision,
+        diagnostics: hasEnabledInterpolation ? validateEmbeddedLanguages(document, regions, request) : null,
+      };
+    }
+  }
   return {
     fingerprint: generation.fingerprint,
     sourceUri: ctx.documentUris.resolve(params.uri).uri,
     answer: mapRuntimeAnswer(answer),
     templateOwned,
+    ...(embeddedValidation && { embeddedValidation }),
     owners: answer.value.owners.map((owner) => ({
       projectKey: owner.projectKey,
       rootUri: ctx.documentUris.uriForHostPath(owner.projectRootDir),

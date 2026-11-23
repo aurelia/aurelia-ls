@@ -18,6 +18,7 @@ import {
   type ResourceInventoryResponse,
   type RelatedFileSourcesResponse,
   type SourceOwnershipResponse,
+  type EmbeddedValidationRequest,
   type TemplateResourceAvailabilityResponse,
 } from "@aurelia-ls/language-server/protocol";
 import type { AureliaLanguageClient, AureliaLanguageClientSession } from "../client-core.js";
@@ -359,13 +360,14 @@ export class LspFacade implements Disposable {
   async getSourceOwnership(
     uri: string,
     token?: CancellationToken,
+    embeddedValidation?: EmbeddedValidationRequest,
   ): Promise<SourceOwnershipSnapshot | null> {
     const session = this.#sessionForUri(uri);
     if (session == null) return null;
     const response = await this.#sendRequest<SourceOwnershipResponse>(
       session,
       AureliaProtocolRequest.SourceOwnership,
-      { uri },
+      embeddedValidation == null ? { uri } : { uri, embeddedValidation },
       token,
       "read-currentness",
     );

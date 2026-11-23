@@ -1,9 +1,11 @@
 import type {
   CancellationTokenSource,
   ConfigurationChangeEvent,
+  DiagnosticCollection,
   Disposable,
   TextDocument,
 } from "vscode";
+import { aureliaWorkspaceEditContentRevision, type EmbeddedValidationRequest } from "@aurelia-ls/language-server/protocol";
 import type { ClientContext } from "./core/context.js";
 import { documentUriIdentityKey, sameDocumentUri } from "./core/uri-identity.js";
 import {
@@ -28,6 +30,7 @@ interface LanguageRequest {
   readonly uri: string;
   readonly languageId: string;
   readonly suppressNativeDiagnostics: boolean;
+  readonly embeddedValidation?: EmbeddedValidationRequest;
   readonly sessionClient: unknown;
   readonly cancellation: CancellationTokenSource;
 }
@@ -49,6 +52,7 @@ export class OwnedTemplateLanguageController implements Disposable {
   readonly #modeChanges = new Set<string>();
   readonly #modeChangeTailByDocument = new Map<string, Promise<void>>();
   readonly #modeChangeOwnerByDocument = new Map<string, symbol>();
+  #diagnostics?: DiagnosticCollection;
   #generation = 0;
   #disposed = false;
   #disposePromise: Promise<void> | null = null;
@@ -62,6 +66,15 @@ export class OwnedTemplateLanguageController implements Disposable {
     }));
     this.#subscriptions.push(ctx.vscode.workspace.onDidOpenTextDocument((document) => {
       this.#handleOpen(document);
+    }));
+    this.#subscriptions.push(ctx.vscode.workspace.onDidChangeTextDocument(({document, contentChanges}) => {
+      if (contentChanges?.length === 0 || !isTemplateLanguageId(document.languageId)) return;
+      const key = documentUriIdentityKey(ctx.vscode, document.uri);
+      if (key == null || templateDiagnosticsSuppressNative(ctx, document)) return;
+      this.#diagnostics?.delete(document.uri);
+      if (this.#controllerOwnedDocuments.has(key) || this.#cancellationByDocument.has(key) || embeddedCandidate(document.getText())) {
+        this.#schedule(document);
+      }
     }));
     this.#subscriptions.push(ctx.vscode.workspace.onDidCloseTextDocument((document) => {
       this.#handleClose(document);
@@ -102,6 +115,7 @@ export class OwnedTemplateLanguageController implements Disposable {
       if (
         !templateDiagnosticsSuppressNative(this.#ctx, document)
         && !this.#controllerOwnedDocuments.has(key)
+        && !embeddedCandidate(document.getText())
       ) {
         continue;
       }
@@ -115,7 +129,10 @@ export class OwnedTemplateLanguageController implements Disposable {
     for (const document of this.#ctx.vscode.workspace.textDocuments) {
       if (
         isTemplateLanguageId(document.languageId)
-        && event.affectsConfiguration(TEMPLATE_DIAGNOSTICS_SUPPRESS_NATIVE_CONFIGURATION, document.uri)
+        && (event.affectsConfiguration(TEMPLATE_DIAGNOSTICS_SUPPRESS_NATIVE_CONFIGURATION, document.uri)
+          || event.affectsConfiguration("html.validate", document.uri)
+          || event.affectsConfiguration("css", document.uri)
+          || event.affectsConfiguration("js/ts.implicitProjectConfig", document.uri))
       ) {
         this.#schedule(document);
       }
@@ -163,6 +180,7 @@ export class OwnedTemplateLanguageController implements Disposable {
       .map((document) => this.#setLanguage(document, HTML_LANGUAGE_ID));
     const settledRestore = await Promise.allSettled(restore);
     this.#reportRejected("template language restoration", settledRestore);
+    this.#diagnostics?.dispose();
     this.#controllerOwnedDocuments.clear();
     this.#settledOwnershipDocuments.clear();
     this.#dirtyOwnershipDocuments.clear();
@@ -182,6 +200,7 @@ export class OwnedTemplateLanguageController implements Disposable {
     // whether that close was self-induced until the API returns its exact
     // replacement; failed or displaced transitions clean the mark below.
     if (this.#modeChanges.has(key)) return;
+    this.#diagnostics?.delete(document.uri);
     this.#controllerOwnedDocuments.delete(key);
     this.#settledOwnershipDocuments.delete(key);
     this.#dirtyOwnershipDocuments.delete(key);
@@ -201,12 +220,14 @@ export class OwnedTemplateLanguageController implements Disposable {
       return;
     }
     const cancellation = new this.#ctx.vscode.CancellationTokenSource();
+    const suppressNativeDiagnostics = templateDiagnosticsSuppressNative(this.#ctx, document);
     const request: LanguageRequest = {
       generation: ++this.#generation,
       document,
       uri: document.uri.toString(),
       languageId: document.languageId,
-      suppressNativeDiagnostics: templateDiagnosticsSuppressNative(this.#ctx, document),
+      suppressNativeDiagnostics,
+      embeddedValidation: suppressNativeDiagnostics ? undefined : embeddedValidationRequest(this.#ctx, document),
       sessionClient: this.#ctx.languageClient.sessionForUri(document.uri)?.client,
       cancellation,
     };
@@ -253,7 +274,9 @@ export class OwnedTemplateLanguageController implements Disposable {
   }
 
   async #restoreControllerOwnedAfterOwnershipFailure(key: string, request: LanguageRequest): Promise<void> {
-    if (!this.#controllerOwnedDocuments.has(key) || !this.#isCurrent(key, request)) return;
+    if (!this.#isCurrent(key, request)) return;
+    this.#diagnostics?.delete(request.document.uri);
+    if (!this.#controllerOwnedDocuments.has(key)) return;
     if (request.document.languageId !== AURELIA_HTML_LANGUAGE_ID) return;
     const attempted = await this.#setLanguage(
       request.document,
@@ -275,16 +298,22 @@ export class OwnedTemplateLanguageController implements Disposable {
 
   async #resolve(key: string, request: LanguageRequest): Promise<boolean> {
     let ownership: SourceOwnershipSnapshot | null = null;
-    if (request.suppressNativeDiagnostics && request.sessionClient != null) {
-      ownership = await this.#ctx.lsp.getSourceOwnership(request.uri, request.cancellation.token);
+    if ((request.suppressNativeDiagnostics || request.embeddedValidation) && request.sessionClient != null) {
+      ownership = await this.#ctx.lsp.getSourceOwnership(request.uri, request.cancellation.token, request.embeddedValidation);
     }
     if (!this.#isCurrent(key, request)) return false;
-    const templateOwned = request.suppressNativeDiagnostics
-      && ownership != null
+    const templateOwned = ownership != null
       && sourceOwnershipTemplateOwned(ownership)
       && sameDocumentUri(this.#ctx.vscode, ownership.sourceUri, request.uri)
       && ownership.workspace.key === this.#ctx.languageClient.sessionForUri(request.document.uri)?.workspace.key;
-    const languageId = templateOwned ? AURELIA_HTML_LANGUAGE_ID : HTML_LANGUAGE_ID;
+    const selective = templateOwned && ownership?.owners.length === 1 && request.embeddedValidation;
+    if (selective && ownership?.embeddedValidation?.revision !== selective.revision) {
+      // An edit can reach the editor before the server sees didChange. The next settled analysis wave retries.
+      return false;
+    }
+    const diagnostics = selective ? ownership?.embeddedValidation?.diagnostics : null;
+    const languageId = templateOwned && (request.suppressNativeDiagnostics || diagnostics != null)
+      ? AURELIA_HTML_LANGUAGE_ID : HTML_LANGUAGE_ID;
     const mayRestore = languageId !== HTML_LANGUAGE_ID || this.#controllerOwnedDocuments.has(key);
     if (mayRestore && request.document.languageId !== languageId) {
       try {
@@ -305,9 +334,24 @@ export class OwnedTemplateLanguageController implements Disposable {
           this.#schedule(current);
         }
       }
-      return this.#isCurrentMode(key, request, languageId);
+      if (!this.#isCurrentMode(key, request, languageId)) return false;
     }
-    return this.#isCurrent(key, request);
+    if (diagnostics?.length) {
+      const { vscode } = this.#ctx;
+      this.#diagnostics ??= vscode.languages.createDiagnosticCollection("aurelia-embedded");
+      this.#diagnostics.set(request.document.uri, diagnostics.map(diagnostic => {
+        const { start, end } = diagnostic.range;
+        const range = new vscode.Range(start.line, start.character, end.line, end.character);
+        const message = typeof diagnostic.message === "string" ? diagnostic.message : diagnostic.message.value;
+        const mapped = new vscode.Diagnostic(range, message, (diagnostic.severity ?? 1) - 1);
+        mapped.source = diagnostic.source;
+        mapped.code = diagnostic.code;
+        return mapped;
+      }));
+    } else {
+      this.#diagnostics?.delete(request.document.uri);
+    }
+    return true;
   }
 
   #isCurrent(key: string, request: LanguageRequest): boolean {
@@ -329,6 +373,7 @@ export class OwnedTemplateLanguageController implements Disposable {
     );
     return current != null
       && current.languageId === languageId
+      && (!request.embeddedValidation || aureliaWorkspaceEditContentRevision(current.getText()) === request.embeddedValidation.revision)
       && templateDiagnosticsSuppressNative(this.#ctx, current) === request.suppressNativeDiagnostics
       && this.#ctx.languageClient.sessionForUri(current.uri)?.client === request.sessionClient;
   }
@@ -407,6 +452,37 @@ export class OwnedTemplateLanguageController implements Disposable {
       }
     }
   }
+}
+
+/** Cheap admission filter only. The server requires matching compiler-owned delimiters in a real embedded region. */
+function embeddedCandidate(text: string): boolean {
+  return (text.includes("${") || text.includes("&"))
+    && /(?:\bstyle\b|<script\b|\bon\w+\s*=)/iu.test(text);
+}
+
+function embeddedValidationRequest(ctx: ClientContext, document: TextDocument): EmbeddedValidationRequest | undefined {
+  const text = document.getText();
+  if (!embeddedCandidate(text)) return undefined;
+  const html = ctx.vscode.workspace.getConfiguration("html", document.uri);
+  const css = ctx.vscode.workspace.getConfiguration("css", document.uri);
+  const styles = html.get<boolean>("validate.styles", true) && css.get<boolean>("validate", true);
+  const scripts = html.get<boolean>("validate.scripts", true);
+  if (!styles && !scripts) return undefined;
+  // WorkspaceConfiguration returns proxies for objects. The Worker transport needs structured-cloneable values.
+  const lint: Record<string, string | string[]> = {};
+  for (const [key, value] of Object.entries(css.get<Record<string, unknown>>("lint", {}))) {
+    if (typeof value === "string") lint[key] = value;
+    if (Array.isArray(value) && value.every((item): item is string => typeof item === "string")) lint[key] = [...value];
+  }
+  const javascript = ctx.vscode.workspace.getConfiguration("js/ts", document.uri);
+  return {
+    revision: aureliaWorkspaceEditContentRevision(text), styles, scripts,
+    css: { lint },
+    javascript: {
+      strictNullChecks: javascript.get<boolean>("implicitProjectConfig.strictNullChecks"),
+      experimentalDecorators: javascript.get<boolean>("implicitProjectConfig.experimentalDecorators"),
+    },
+  };
 }
 
 function templateDiagnosticsSuppressNative(ctx: ClientContext, document: TextDocument): boolean {
