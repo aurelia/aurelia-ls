@@ -143,6 +143,7 @@ import {
   MultiAttrInstruction,
   nestedInstructionProductHandlesForInstructions,
   PropertyBindingInstruction,
+  RefBindingInstruction,
   SetPropertyInstruction,
   SpreadElementPropBindingInstruction,
   SpreadValueBindingInstruction,
@@ -152,6 +153,8 @@ import {
   type TemplateInstructionSequence,
 } from './instruction-ir.js';
 import { TemplateProductDetails } from './product-details.js';
+import { resolveRuntimeRefTarget } from './runtime-ref-target.js';
+import { TemplateImplicitWriteScopes } from './template-implicit-write-scopes.js';
 import { readTemplateExpressionParse } from './expression-parse-product.js';
 import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
 import {
@@ -168,6 +171,7 @@ import {
   LetBindingScopeEffect,
   LetBindingTargetContext,
   PropertyBinding,
+  RefBinding,
 } from './runtime-binding.js';
 import {
   bindingExpressionAstForParse,
@@ -415,6 +419,7 @@ export class TemplateScopeConstructionFrame {
   readonly scopeIssueRecords: KernelStoreRecord[] = [];
   readonly openSeams: OpenSeam[] = [];
   readonly flowState = new TemplateControllerFlowState();
+  readonly implicitWrites = new TemplateImplicitWriteScopes();
   currentScope: BindingScope;
   private readonly scopeSupportRecords: KernelStoreRecord[] = [];
   private readonly scopeSupportRecordHandles = new Set<string>();
@@ -582,6 +587,7 @@ export class TemplateControllerScopeMaterializer {
     const frame = TemplateScopeConstructionFrame.create(input, root, services);
     this.measure(input, 'render-targets', () => this.constructRenderTargets(frame));
     this.measure(input, 'dynamic-instruction-scopes', () => this.captureDynamicInstructionScopes(frame));
+    frame.implicitWrites.apply(frame);
     this.measure(input, 'binding-expression-scope-handoffs', () =>
       this.completeBindingExpressionScopeHandoffs(frame)
     );
@@ -1892,6 +1898,23 @@ export class TemplateControllerScopeMaterializer {
     localSuffix: string,
     controllerContext: RuntimeControllerFrame | null,
   ): BindingScope | null {
+    if (instruction instanceof RefBindingInstruction) {
+      const rendering = frame.input.runtimeBindings;
+      const bindings = rendering.readBindingsForInstruction(instruction.productHandle)
+        .filter((value): value is RefBinding => value instanceof RefBinding && (
+          controllerContext == null || rendering.requireRenderContextForBinding(value.productHandle).sourceController.productHandle === controllerContext.productHandle
+        ));
+      if (bindings.length !== 1) return null;
+      const binding = bindings[0]!;
+      const parse = frame.services.typeSupport.readParse(binding.expressionProductHandle);
+      const expression = parse == null ? null : completedTemplateExpressionAstForParse(parse);
+      const target = expression == null ? null : runtimeAssignmentTargetAstForExpression(expression);
+      if (target?.$kind !== 'AccessScope' || target.name.name === '$host') return null;
+      const resolved = resolveRuntimeRefTarget(binding, rendering, frame.input.expressionWorld.projector, frame.input.typeSystem, frame.input.localKey);
+      if (resolved.openReason != null) return null;
+      return this.applyRuntimeAssignment(frame, parent, instruction, localSuffix, target, parse?.sourceAddressHandle ?? null,
+        resolved.targetType, null, null, 'ref');
+    }
     const bindables = bindablesForInstruction(
       frame.input.expressionWorld.projector.publication,
       instruction,
@@ -1959,15 +1982,6 @@ export class TemplateControllerScopeMaterializer {
     if (target?.$kind !== 'AccessScope' || target.name.name === '$host') {
       return null;
     }
-    const lookup = parent.locate(target.name.name, target.ancestor);
-    const targetScope = lookup.scope;
-    if (targetScope == null || lookup.context == null) {
-      return null;
-    }
-    const descendants = runtimeScopeDescendants(parent, targetScope);
-    if (descendants == null) {
-      return null;
-    }
     const targetMember = runtimeAssignmentTargetMember(
       frame.input.expressionWorld.projector,
       ownerInstruction,
@@ -1987,14 +2001,45 @@ export class TemplateControllerScopeMaterializer {
           runtimeBinding,
         )
       : assignedValueTypeOverride;
+    const assignmentOnly = runtimeBindingSourceLifecycle(runtimeBinding, frame.input.expressionResourcePlan).evaluationKind === RuntimeBindingSourceEvaluationKind.AssignmentOnly;
+    return this.applyRuntimeAssignment(frame, parent, binding, localSuffix, target, parse?.sourceAddressHandle ?? null,
+      assignedValueType, targetMember, targetMemberValueType, assignmentOnly ? 'from-view' : null);
+  }
+
+  private applyRuntimeAssignment(
+    frame: TemplateScopeConstructionFrame,
+    parent: BindingScope,
+    binding: PropertyBindingInstruction | RefBindingInstruction,
+    localSuffix: string,
+    target: Extract<ExpressionAstNode, { $kind: 'AccessScope' }>,
+    parseSource: AddressHandle | null,
+    assignedValueType: CheckerTypeReference | null,
+    targetMember: CheckerTypeMember | null,
+    targetMemberValueType: CheckerTypeReference | null,
+    writer: 'ref' | 'from-view' | null,
+  ): BindingScope | null {
+    const lookup = parent.locate(target.name.name, target.ancestor);
+    const targetScope = lookup.scope;
+    if (targetScope == null || lookup.context == null) {
+      return null;
+    }
+    const descendants = runtimeScopeDescendants(parent, targetScope);
+    if (descendants == null) {
+      return null;
+    }
     const existingSlot = lookup.slot;
+    // A ref writes an already declared property according to its own setter/access contract.
+    // Source operations retain the actual assigned value for compatibility checks.
+    const implicit = existingSlot == null || frame.implicitWrites.has(targetScope, target.name.name);
+    if (writer === 'ref' && !implicit) return null;
     const targetType = assignedValueType ?? existingSlot?.targetType ?? targetMemberValueType;
     const targetTypeMemberHandle = existingSlot?.targetTypeMemberHandle ?? null;
-    const targetSource = existingSlot == null && parse != null
+    const needsWriterSource = existingSlot == null || (writer != null && implicit);
+    const targetSource = needsWriterSource && parseSource != null
       ? sourceAddressForRuntimeExpressionSpan(
           frame.input.expressionWorld.projector.publication,
           `${frame.input.localKey}:scope:${localSuffix}:runtime-assignment-target:${localKeyPart(target.name.name)}`,
-          parse.sourceAddressHandle,
+          parseSource,
           target.name.span,
         )
       : { handle: existingSlot?.sourceAddressHandle ?? null, records: [] };
@@ -2020,6 +2065,9 @@ export class TemplateControllerScopeMaterializer {
           ? existingSlot.targetTypeSourceMemberHandle
           : null,
     );
+    if (writer != null && lookup.lookupKind !== BindingScopeLookupKind.OverrideContext) {
+      frame.implicitWrites.record(targetScope, binding.productHandle, slot, existingSlot == null, writer === 'ref');
+    }
     const assignmentEmission = frame.services.scopeMaterializer.prepare(BindingScope.fromNarrowedBindingScope({
       localKey: `${frame.input.localKey}:scope:${localSuffix}:runtime-assignment`,
       ownerProductHandle: binding.productHandle,
