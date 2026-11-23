@@ -456,8 +456,20 @@ export class OwnedTemplateLanguageController implements Disposable {
 
 /** Cheap admission filter only. The server requires matching compiler-owned delimiters in a real embedded region. */
 function embeddedCandidate(text: string): boolean {
-  return (text.includes("${") || text.includes("&"))
-    && /(?:\bstyle\b|<script\b|\bon\w+\s*=)/iu.test(text);
+  // This filter only saves an ownership/semantic-token round trip. The server's HTML parser and compiler
+  // still decide whether an actual embedded value contains an Aurelia expression.
+  const possibleHole = /\$\{|&(?:#|dollar;|lbrace;|lcub;)/u;
+  if (!possibleHole.test(text)) return false;
+  const attributes = /\b(?:style|on\w+)\s*=\s*(?=("[^"]*(?:"|$)|'[^']*(?:'|$)|[^\s>]+))/giu;
+  for (const attribute of text.matchAll(attributes)) {
+    // The lookahead leaves later attribute names visible even after a quotation in a comment or recovery region.
+    if (possibleHole.test(attribute[1]!)) return true;
+  }
+  const rawTextElements = /<(script|style)(?=[\s/>])[\s\S]*?(?:<\/\1(?=[\s>])|$)/giu;
+  for (const [element] of text.matchAll(rawTextElements)) {
+    if (possibleHole.test(element)) return true;
+  }
+  return false;
 }
 
 function embeddedValidationRequest(ctx: ClientContext, document: TextDocument): EmbeddedValidationRequest | undefined {

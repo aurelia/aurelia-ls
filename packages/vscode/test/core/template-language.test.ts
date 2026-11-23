@@ -36,6 +36,23 @@ describe("owned template language containment", () => {
     await harness.controller.disposeAsync();
   });
 
+  test("does not request embedded validation for static web code beside ordinary binding text", async () => {
+    const uri = "file:///workspace/src/app.html";
+    const harness = createHarness([[uri, "html"]], key => ownership(key, true), { suppressNative: false });
+    const doc = harness.vscode.workspace.textDocuments[0]!;
+    doc.text = '<i style="color:red" onclick="run()"></i><script>let x = 1;</script><p>${title}</p>';
+    harness.controller.start();
+    harness.recorded.fireDocumentChanged(doc);
+    await settleAsyncWork();
+    expect(harness.requests).not.toHaveBeenCalled();
+    expect(harness.languageIds()).toEqual(["html"]);
+    // Encoded delimiters are real candidates and still require compiler/ownership proof.
+    doc.text = '<!-- style="example --> <div style="width: &#36;{n}%"></div>';
+    harness.recorded.fireDocumentChanged(doc);
+    await vi.waitFor(() => expect(harness.requests).toHaveBeenCalledTimes(1));
+    await harness.controller.disposeAsync();
+  });
+
   test("waits for the server to observe the same source revision before projecting a validation", async () => {
     const uri = "file:///workspace/src/app.html";
     let stale = true;
