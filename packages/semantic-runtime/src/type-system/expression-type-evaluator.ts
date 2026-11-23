@@ -74,6 +74,7 @@ import {
   CheckerExpressionTypeSynthesizer,
 } from './expression-type-synthesis.js';
 import { CheckerExpressionTypeSupport } from './expression-type-support.js';
+import { CheckerExpressionScopeNarrower } from './expression-scope-narrower.js';
 import { CheckerExpressionBranchScopeProjector } from './expression-branch-scope.js';
 import {
   CheckerExpressionMemberOwnerProjector,
@@ -137,6 +138,7 @@ export class CheckerExpressionTypeEvaluator {
   private readonly typeAccess: CheckerTypeShapeAccess;
   private readonly synthesis: CheckerExpressionTypeSynthesizer;
   private readonly support: CheckerExpressionTypeSupport;
+  readonly scopeNarrower: CheckerExpressionScopeNarrower;
   private readonly branchScopes: CheckerExpressionBranchScopeProjector;
   private readonly memberOwners: CheckerExpressionMemberOwnerProjector;
   private readonly calls: CheckerExpressionCallProjector;
@@ -159,7 +161,6 @@ export class CheckerExpressionTypeEvaluator {
     this.typeAccess = new CheckerTypeShapeAccess(store, projector);
     this.synthesis = new CheckerExpressionTypeSynthesizer(projector);
     this.support = new CheckerExpressionTypeSupport(projector, this.typeAccess, this.synthesis);
-    this.branchScopes = new CheckerExpressionBranchScopeProjector(store, projector);
     this.access = new CheckerExpressionAccessProjector(this.support, this.typeAccess, {
       evaluateNode: (context) => this.evaluateNode(context),
     });
@@ -204,6 +205,9 @@ export class CheckerExpressionTypeEvaluator {
       evaluateTaggedTemplateTag: (expression, context) =>
         this.evaluateTaggedTemplateTag(expression, context),
     });
+    this.scopeNarrower = new CheckerExpressionScopeNarrower(store, projector, (expression, context) =>
+      this.argumentContexts.callTypePredicate(expression, context));
+    this.branchScopes = new CheckerExpressionBranchScopeProjector(store, this.scopeNarrower);
     this.memberOwners = new CheckerExpressionMemberOwnerProjector({
       evaluateNode: (context) =>
         this.evaluate(context),

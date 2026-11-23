@@ -88,6 +88,16 @@ export class CheckerExpressionArgumentContextProjector {
     private readonly host: CheckerExpressionArgumentContextProjectorHost,
   ) {}
 
+  callTypePredicate(
+    expression: CallScopeExpression | CallMemberExpression | CallFunctionExpression | CallGlobalExpression,
+    context: CheckerExpressionTypeEvaluationContext,
+  ) {
+    const target = this.contextualArgumentTarget(expression, 0, context);
+    return target?.kind === 'call' && target.args != null
+      ? this.calls.callTypePredicate(target.callee.typeShape, target.args, context, target.localKey)
+      : null;
+  }
+
   contextualArgumentType(
     expression: CheckerExpressionArgumentContextExpression,
     argumentIndex: number,

@@ -5,23 +5,18 @@ import type {
 import type { AddressHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { BindingScope } from '../configuration/scope.js';
-import type { CheckerTypeProjector } from './checker-projector.js';
 import {
-  CheckerExpressionScopeNarrower,
+  type CheckerExpressionScopeNarrower,
   CheckerExpressionScopeNarrowingPolarity,
 } from './expression-scope-narrower.js';
 import { speculativeBindingScopeOverlay } from './speculative-binding-scope.js';
 
 /** Branch-local Scope projection for expression constructs that speculate on a narrowed runtime Scope. */
 export class CheckerExpressionBranchScopeProjector {
-  private readonly scopeNarrower: CheckerExpressionScopeNarrower;
-
   constructor(
     private readonly store: KernelStore,
-    projector: CheckerTypeProjector,
-  ) {
-    this.scopeNarrower = new CheckerExpressionScopeNarrower(store, projector);
-  }
+    private readonly scopeNarrower: CheckerExpressionScopeNarrower,
+  ) {}
 
   truthyScope(
     expression: ExpressionAstNode,

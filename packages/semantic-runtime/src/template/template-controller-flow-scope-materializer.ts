@@ -33,6 +33,7 @@ import {
 } from '../type-system/expression-scope-narrower.js';
 import { CheckerTypeNullishPresence } from '../type-system/checker-related-types.js';
 import type { CheckerTypeReference } from '../type-system/type-shape.js';
+import type { TemplateResourceScope } from './compiler-world.js';
 import type { RuntimeControllerFrame } from './runtime-controller.js';
 import {
   HydrateTemplateControllerInstruction,
@@ -74,6 +75,7 @@ import {
 } from './template-controller-scope-source.js';
 
 interface TemplateControllerSourceExpressionSite {
+  readonly resourceScope: TemplateResourceScope | null;
   readonly expression: ExpressionAstNode;
   readonly scope: BindingScope;
   readonly sourceAddressHandle: AddressHandle | null;
@@ -771,7 +773,7 @@ export class TemplateControllerFlowScopeMaterializer {
       );
     const narrowing = source == null
       ? null
-      : this.scopeNarrower.narrow({
+      : input.expressionWorld.evaluator(source.resourceScope).scopeNarrower.narrow({
         localKey: `${input.localKey}:scope:template-controller:${localSuffix}`,
         expression: source.expression,
         scope: source.scope,
@@ -816,6 +818,7 @@ export class TemplateControllerFlowScopeMaterializer {
     );
     if (binding == null) {
       return {
+        resourceScope: null,
         expression,
         scope: parent,
         sourceAddressHandle: instruction.sourceAddressHandle,
@@ -846,6 +849,7 @@ export class TemplateControllerFlowScopeMaterializer {
       return null;
     }
     return {
+      resourceScope: input.runtimeBindings.requireRenderContextForBinding(binding.productHandle).resourceScope,
       expression: projection.expression,
       scope: projection.scope,
       sourceAddressHandle: projection.sourceAddressHandle,

@@ -8,6 +8,7 @@ import {
   checkerCallableContextSignatures,
   checkerCallableParameterSurface,
   checkerCallableRequiresTypePredicate,
+  checkerSignatureAcceptsArgumentCount,
   checkerSignatureCandidateBasis,
   checkerSignatureParameterType,
   checkerSymbolIsRestParameter,
@@ -143,6 +144,39 @@ export class CheckerExpressionCallProjector {
       returnSourceAddressHandle,
       `Projected call return type for '${calleeType.display}'.`,
     );
+  }
+
+  /** Only a value predicate shared by all viable checker signatures can refine a runtime argument. */
+  callTypePredicate(
+    calleeType: CheckerTypeShape,
+    args: readonly CheckerExpressionCallArgument[],
+    context: CheckerExpressionTypeEvaluationContext,
+    localKey: string,
+  ): { expression: ExpressionAstNode; type: CheckerTypeReference } | null {
+    const carrier = calleeType.carrier;
+    if (carrier == null) return null;
+    const { checker, type } = carrier;
+    const signatures = type.getCallSignatures();
+    if (!signatures.some(signature => checker.getTypePredicateOfSignature(signature) != null)) return null;
+    const candidates = this.selectSignatureCandidates(checker, signatures, args, context, localKey);
+    let shared: ts.IdentifierTypePredicate | undefined;
+    for (const { signature, hasRejectedArgument } of candidates) {
+      const predicate = checker.getTypePredicateOfSignature(signature);
+      // An uninstantiated generic predicate, a this/asserts predicate, or disagreeing overloads
+      // cannot establish one concrete parameter type at this expression.
+      if (predicate?.kind !== ts.TypePredicateKind.Identifier || signature.typeParameters?.length
+        || hasRejectedArgument || !checkerSignatureAcceptsArgumentCount(signature, args.length)
+        || (shared != null && (shared.parameterIndex !== predicate.parameterIndex || shared.type !== predicate.type))) return null;
+      shared = predicate;
+    }
+    if (shared == null) return null;
+    const argument = args[shared.parameterIndex];
+    const parameter = candidates[0]?.signature.getParameters()[shared.parameterIndex];
+    if (argument == null || parameter == null) return null;
+    return {
+      expression: argument.expression,
+      type: this.projectParameterTypeReference(checker, parameter, shared.type, `${localKey}:predicate`, context.sourceAddressHandle),
+    };
   }
 
   contextualCallArgumentType(

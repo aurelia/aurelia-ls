@@ -44,6 +44,8 @@ import { readCheckerTypeShape } from './checker-type-shape-access.js';
 import { checkerRawTypeAssignable } from './checker-type-assignability.js';
 import { checkerUnionTypeOrNever } from './checker-type-union.js';
 import { checkerPropertySymbol, checkerSymbolValueType } from './checker-node-helpers.js';
+import { CheckerExpressionTypeEvaluationContext } from './expression-type-context.js';
+import type { CheckerExpressionArgumentContextProjector } from './expression-argument-context-projector.js';
 import { checkerConstructReturnTypeUnion } from './checker-signature-parameters.js';
 
 export const enum CheckerExpressionScopeNarrowingPolarity {
@@ -86,6 +88,7 @@ export class CheckerExpressionScopeNarrower {
   constructor(
     readonly store: KernelStore,
     readonly projector: CheckerTypeProjector,
+    private readonly readCallPredicate?: CheckerExpressionArgumentContextProjector['callTypePredicate'],
   ) {}
 
   narrow(input: CheckerExpressionScopeNarrowingRequest): CheckerExpressionScopeNarrowingResult | null {
@@ -140,11 +143,54 @@ export class CheckerExpressionScopeNarrower {
         return expression.operation === '!'
           ? this.narrowExpression(expression.expression, scope, invertPolarity(polarity), `${localKey}:not`, sourceAddressHandle)
           : null;
+      case 'CallScope':
+      case 'CallMember':
+      case 'CallFunction':
+      case 'CallGlobal':
+        return this.narrowCallPredicate(expression, scope, polarity, localKey, sourceAddressHandle);
       case 'Binary':
         return this.narrowBinaryExpression(expression, scope, polarity, localKey, sourceAddressHandle);
       default:
         return null;
     }
+  }
+
+  private narrowCallPredicate(
+    expression: Extract<ExpressionAstNode, { $kind: 'CallScope' | 'CallMember' | 'CallFunction' | 'CallGlobal' }>,
+    scope: BindingScope,
+    polarity: CheckerExpressionScopeNarrowingPolarity,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerExpressionScopeNarrowingResult | null {
+    if (polarity !== CheckerExpressionScopeNarrowingPolarity.Truthy && polarity !== CheckerExpressionScopeNarrowingPolarity.Falsy) return null;
+    const shortCircuit = expression.$kind === 'CallMember'
+      ? expression.optionalMember || expression.optionalCall
+      : expression.$kind !== 'CallGlobal' && (expression.optional || (expression.$kind === 'CallScope' && expression.optionalAccess));
+    if (shortCircuit && polarity === CheckerExpressionScopeNarrowingPolarity.Falsy) return null;
+
+    const predicate = this.readCallPredicate?.(expression,
+      CheckerExpressionTypeEvaluationContext.knownScope(expression, scope, localKey, sourceAddressHandle));
+    if (predicate == null) return null;
+    const target = this.narrowableEqualityTarget(predicate.expression, scope, `${localKey}:predicate-argument`);
+    if (target == null) return null;
+    const current = this.carrierForReference(target.currentType);
+    const asserted = this.carrierForReference(predicate.type);
+    if (current == null || asserted?.checker !== current.checker) return null;
+
+    let narrowed: CheckerTypeReference | null;
+    if (polarity === CheckerExpressionScopeNarrowingPolarity.Falsy) {
+      narrowed = this.excludeEqualityDomainType(target.currentType, [predicate.type], `${localKey}:not-predicate`, sourceAddressHandle);
+    } else {
+      // Keep a narrower existing subtype. A predicate can refine unknown/any just as it can a declared union.
+      narrowed = current.type.flags & ts.TypeFlags.Any ? predicate.type
+        : this.includeEqualityDomainType(target.currentType, [predicate.type], `${localKey}:predicate-domain`, sourceAddressHandle)
+          ?? predicate.type;
+    }
+    if (narrowed == null || sameCheckerTypeReference(narrowed, target.currentType)) return null;
+    const slot = target.narrowSlot(narrowed, sourceAddressHandle);
+    return target.lookupKind === BindingScopeLookupKind.OverrideContext
+      ? new CheckerExpressionScopeNarrowingResult([], [slot])
+      : new CheckerExpressionScopeNarrowingResult([slot], []);
   }
 
   private narrowBinaryExpression(
