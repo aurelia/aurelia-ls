@@ -7,8 +7,8 @@ import {
 } from './pattern-sentinels.mjs';
 
 const sourceReleaseVersion = '0.3.4';
-const publishedReleaseVersion = '0.3.3';
-const previousPublishedReleaseVersion = '0.3.2';
+const publishedReleaseVersion = '0.3.4';
+const previousPublishedReleaseVersion = '0.3.3';
 const protocolVersion = '0.3.0';
 const historicalReleaseVersion = '0.2.0';
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -292,6 +292,7 @@ if (publishedReleaseVersion === sourceReleaseVersion && historicalReleaseVersion
     rootReadme: docs.rootReadme,
     gettingStarted: docs.gettingStarted,
     readme: docs.readme,
+    release: docs.release,
     ...providerGuides,
   };
   for (const [name, content] of Object.entries(currentInstallSurfaces)) {

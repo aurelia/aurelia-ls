@@ -5,7 +5,7 @@ client. The server requires Node `>=22.13 <25` and the TypeScript peer
 `>=5.9 <7`.
 
 ```bash
-npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.3/aurelia-ls-mcp-0.3.3.tgz
+npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.4/aurelia-ls-mcp-0.3.4.tgz
 ```
 
 When npm installs the executable under the app's own `node_modules`, launch it with:

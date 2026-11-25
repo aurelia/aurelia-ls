@@ -117,7 +117,7 @@ For diagnostic-authoritative use, install the tarball as a dev
 dependency in the Aurelia app being analyzed:
 
 ```powershell
-npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.3/aurelia-ls-mcp-0.3.3.tgz
+npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.4/aurelia-ls-mcp-0.3.4.tgz
 ```
 
 Then configure the MCP server from that project:
@@ -171,7 +171,7 @@ Use the release asset URL directly in an MCP client config:
   "mcpServers": {
     "aurelia": {
       "command": "npx",
-      "args": ["-y", "https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.3/aurelia-ls-mcp-0.3.3.tgz"]
+      "args": ["-y", "https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.4/aurelia-ls-mcp-0.3.4.tgz"]
     }
   }
 }
@@ -196,7 +196,7 @@ After uploading the release asset, run a real hosted-URL smoke before sharing
 the docs:
 
 ```powershell
-npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.3/aurelia-ls-mcp-0.3.3.tgz
+npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.4/aurelia-ls-mcp-0.3.4.tgz
 ```
 
 For a full check, point an MCP client at the same URL and run

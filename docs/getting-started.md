@@ -33,7 +33,7 @@ Set `aurelia.activationMode` per workspace folder for unusual layouts:
 - `on` explicitly keeps tooling active;
 - `off` excludes the folder and its complete subtree from Aurelia tooling.
 
-VS Code 0.5.4 supports VS Code 1.91+ and filesystem-backed local workspaces.
+Version 0.5.5 of the extension supports VS Code 1.91+ and filesystem-backed local workspaces.
 Virtual workspaces are unsupported; remote development is outside the
 release-tested host envelope.
 
@@ -80,14 +80,14 @@ the full policy are described in the [extension's diagnostic reference](../packa
 curated Patterns, and bundled Aurelia docs. The MCP server makes no project-file
 writes; cache management changes only in-memory analysis state.
 
-The latest hosted release is 0.3.3. See the
+The latest hosted release is 0.3.4. See the
 [MCP package README](../packages/mcp/README.md) for the versioned protocol reference.
 
 To align MCP diagnostics with the project's TypeScript, install the hosted MCP
 release tarball inside the project being analyzed:
 
 ```bash
-npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.3/aurelia-ls-mcp-0.3.3.tgz
+npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.3.4/aurelia-ls-mcp-0.3.4.tgz
 ```
 
 Configure the MCP client to launch the app-local package:
